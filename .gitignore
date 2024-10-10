@@ -23,6 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
+.vscode
+
 .next
 src/node_modules
 src/.idea
