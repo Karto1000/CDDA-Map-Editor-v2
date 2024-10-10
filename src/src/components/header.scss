@@ -1,0 +1,136 @@
+@import "../theme.scss";
+
+@include themed($themes) {
+  .header-container {
+    .header {
+      background-color: theme-var('dark');
+
+      .header-title {
+        h1 {
+          color: theme-var('lightest');
+        }
+      }
+
+      .native-window-control {
+        svg {
+          color: theme-var("lightest");
+        }
+
+        &:hover {
+          background-color: theme-var('light');
+        }
+      }
+    }
+
+    .bottom-header {
+      background-color: theme-var('darker');
+
+      div {
+        .delete-button {
+          background-color: theme-var('delete');
+
+          &:hover {
+            background-color: theme-var('light-delete');
+          }
+
+          svg {
+            color: theme-var('lightest');
+          }
+        }
+
+        button {
+          &:hover {
+            background-color: theme-var('selected');
+          }
+
+          svg {
+            color: theme-var('lightest');
+          }
+        }
+      }
+    }
+  }
+}
+
+.header-container {
+  display: flex;
+  flex-direction: column;
+  position: relative;
+
+  .header {
+    height: 30px;
+    width: 100%;
+    user-select: none;
+    display: flex;
+    justify-content: space-between;
+
+    .header-title {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 3px 0 3px 3px;
+      gap: 6px;
+      user-select: none;
+
+      img {
+        user-select: none;
+      }
+
+      h1 {
+        font-size: 16px;
+        font-weight: 200;
+        user-select: none;
+      }
+    }
+
+    .window-control {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+
+      .native-window-control {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        width: 30px;
+        height: 30px;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #minimize {
+
+      }
+
+      #maximize {
+
+      }
+
+      #close {
+
+      }
+    }
+  }
+
+  .bottom-header {
+    height: 30px;
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+
+    div {
+      display: flex;
+
+      button {
+        display: flex;
+        width: 30px;
+        aspect-ratio: 1/1;
+        border: none;
+        background-color: transparent;
+        justify-content: center;
+        align-items: center;
+        padding: 0;
+      }
+    }
+  }
+}

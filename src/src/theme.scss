@@ -1,0 +1,44 @@
+$themes: (
+        dark: (
+                light: #282828,
+                dark: #1E1E1E,
+                darker: #0F0F0F,
+                light-blue: #86C2F4,
+                dark-blue: #23416E,
+                darkest-blue: #1E2942,
+                selected: #3B8BF3,
+                delete: #CA3336,
+                light-delete: #ed4e51,
+                lightest: #FFFFFF,
+        ),
+        light: (
+                light: #8d8d8d,
+                dark: #eeeeee,
+                darker: #f8f8f8,
+                light-blue: #86C2F4,
+                dark-blue: #23416E,
+                darkest-blue: #1E2942,
+                selected: #3B8BF3,
+                delete: #CA3336,
+                light-delete: #ed4e51,
+                lightest: #000000,
+        )
+);
+
+@mixin themed($themes) {
+  @each $theme, $map in $themes {
+    .#{$theme}-theme {
+      $theme-map: () !global;
+      @each $key, $color in $map {
+        $value: $color;
+        $theme-map: map-merge($theme-map, ($key: $value)) !global;
+      }
+      @content;
+      $theme-map: null !global;
+    }
+  }
+}
+
+@function theme-var($key) {
+  @return map-get($theme-map, $key);
+}

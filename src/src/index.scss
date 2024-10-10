@@ -1,0 +1,12 @@
+@font-face {
+  font-family: 'Unifont';
+  src: local('Unifont'), url(../public/fonts/unifont.ttf) format('ttf');
+}
+
+:root {
+  font-family: 'Unifont', sans-serif;
+}
+
+body {
+  margin: 0
+}
