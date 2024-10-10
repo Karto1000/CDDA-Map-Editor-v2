@@ -3,6 +3,13 @@
     "allowJs": true,
     "jsx": "react",
     "allowImportingTsExtensions": true,
-    "esModuleInterop": true
-  }
+    "esModuleInterop": true,
+    "types": [
+      "@webgpu/types",
+      "node"
+    ]
+  },
+  "unstable": [
+    "webgpu"
+  ]
 }

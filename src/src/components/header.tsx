@@ -4,13 +4,6 @@ import "./header.scss"
 import {useTheme} from "../hooks/useTheme.tsx";
 import Icon, {IconName} from "./icon.tsx";
 
-const decorations = {
-    minimize: `${process.env.PUBLIC_URL}/icons/decorations/minimize.svg`,
-    fullscreen: `${process.env.PUBLIC_URL}/icons/decorations/fullscreen.svg`,
-    borderedWindow: `${process.env.PUBLIC_URL}/icons/decorations/bordered-window.svg`,
-    close: `${process.env.PUBLIC_URL}/icons/decorations/close.svg`
-}
-
 export function Header() {
     const window = getCurrentWindow();
 

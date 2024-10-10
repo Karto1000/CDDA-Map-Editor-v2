@@ -7,6 +7,21 @@
   font-family: 'Unifont', sans-serif;
 }
 
-body {
-  margin: 0
+html {
+  height: 100%;
+
+  body {
+    margin: 0;
+    height: inherit;
+
+    #root {
+      height: inherit;
+
+      .app {
+        height: inherit;
+        display: flex;
+        flex-direction: column;
+      }
+    }
+  }
 }
