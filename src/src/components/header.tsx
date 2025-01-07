@@ -26,15 +26,15 @@ export function Header() {
                     <div className="native-window-control" id="minimize" onClick={async () => {
                         await window.minimize()
                     }}>
-                        <Icon name={IconName.Minimize}/>
+                        <Icon name={IconName.HideSmall} width={14} height={14} />
                     </div>
                     <div className="native-window-control" id="maximize" onClick={async () => {
                         await window.maximize()
                     }}>
-                        <Icon name={IconName.Fullscreen}/>
+                        <Icon name={IconName.WindowedSmall} width={14} height={14} />
                     </div>
                     <div className="native-window-control" id="close" onClick={() => window.close()}>
-                        <Icon name={IconName.Close}/>
+                        <Icon name={IconName.CloseSmall} width={14} height={14} />
                     </div>
 
                 </div>
@@ -42,19 +42,19 @@ export function Header() {
             <div className={`bottom-header`}>
                 <div>
                     <button>
-                        <Icon name={IconName.FloppyDisk} width={14} height={14}/>
+                        <Icon name={IconName.SaveSmall} width={14} height={14}/>
                     </button>
                     <button>
-                        <Icon name={IconName.UploadFile} width={14} height={14}/>
+                        <Icon name={IconName.ExportSmall} width={14} height={14}/>
                     </button>
                     <button>
-                        <Icon name={IconName.DownloadFile} width={14} height={14}/>
+                        <Icon name={IconName.ImportSmall} width={14} height={14}/>
                     </button>
                     <button>
-                        <Icon name={IconName.NewFolder} width={14} height={14}/>
+                        <Icon name={IconName.OpenSmall} width={14} height={14}/>
                     </button>
                     <button className={"delete-button"}>
-                        <Icon name={IconName.RecycleBin} width={14} height={14}/>
+                        <Icon name={IconName.DeleteSmall} width={14} height={14}/>
                     </button>
                 </div>
                 <div>
@@ -62,16 +62,7 @@ export function Header() {
                 </div>
                 <div>
                     <button>
-                        <Icon name={IconName.EyeOpen} width={14} height={14}/>
-                    </button>
-                    <button>
-                        <Icon name={IconName.Variation} width={14} height={14}/>
-                    </button>
-                    <button>
-                        <Icon name={IconName.Edit} width={14} height={14}/>
-                    </button>
-                    <button>
-                        <Icon name={IconName.Cog} width={14} height={14}/>
+                        <Icon name={IconName.SettingsSmall} width={14} height={14}/>
                     </button>
                 </div>
             </div>
