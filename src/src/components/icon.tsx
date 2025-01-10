@@ -17,7 +17,8 @@ import React from "react";
 type Props = {
     name: IconName,
     width?: number,
-    height?: number
+    height?: number,
+    rotation?: number
 }
 
 //===================================================================
@@ -52,11 +53,12 @@ export enum IconName {
 export default function Icon(
     {
         name,
-        width = 32,
-        height = 32
+        width = 14,
+        height = 14,
+        rotation = 0
     }: Props
 ): React.JSX.Element {
-    return <img width={width} height={height} src={`/icons/${name}.png`} alt={name}/>
+    return <img style={{rotate: `${rotation}deg`}} width={width} height={height} src={`/icons/${name}.png`} alt={name}/>
 }
 
 //===================================================================

@@ -3,9 +3,12 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import {useTheme} from "../hooks/useTheme.tsx";
 import Icon, {IconName} from "./icon.tsx";
+import {Dropdown} from "./dropdown.tsx";
+import {DropdownGroup} from "./dropdown-group.tsx";
+import {open} from "@tauri-apps/plugin-shell";
 
 export function Header() {
-    const window = getCurrentWindow();
+    const tauriWindow = getCurrentWindow();
 
     return (
         <div className={`header-container`}>
@@ -24,47 +27,201 @@ export function Header() {
 
                 <div className={"window-control"}>
                     <div className="native-window-control" id="minimize" onClick={async () => {
-                        await window.minimize()
+                        await tauriWindow.minimize()
                     }}>
-                        <Icon name={IconName.HideSmall} width={14} height={14} />
+                        <Icon name={IconName.HideSmall} width={14} height={14}/>
                     </div>
                     <div className="native-window-control" id="maximize" onClick={async () => {
-                        await window.maximize()
+                        await tauriWindow.maximize()
                     }}>
-                        <Icon name={IconName.WindowedSmall} width={14} height={14} />
+                        <Icon name={IconName.WindowedSmall} width={14} height={14}/>
                     </div>
-                    <div className="native-window-control" id="close" onClick={() => window.close()}>
-                        <Icon name={IconName.CloseSmall} width={14} height={14} />
+                    <div className="native-window-control" id="close" onClick={() => tauriWindow.close()}>
+                        <Icon name={IconName.CloseSmall} width={14} height={14}/>
                     </div>
 
                 </div>
             </div>
             <div className={`bottom-header`}>
-                <div>
-                    <button>
-                        <Icon name={IconName.SaveSmall} width={14} height={14}/>
-                    </button>
-                    <button>
-                        <Icon name={IconName.ExportSmall} width={14} height={14}/>
-                    </button>
-                    <button>
-                        <Icon name={IconName.ImportSmall} width={14} height={14}/>
-                    </button>
-                    <button>
-                        <Icon name={IconName.OpenSmall} width={14} height={14}/>
-                    </button>
-                    <button className={"delete-button"}>
-                        <Icon name={IconName.DeleteSmall} width={14} height={14}/>
-                    </button>
-                </div>
-                <div>
-
-                </div>
-                <div>
-                    <button>
-                        <Icon name={IconName.SettingsSmall} width={14} height={14}/>
-                    </button>
-                </div>
+                <DropdownGroup>
+                    <Dropdown name={"File"} groups={[
+                        [
+                            {
+                                name: "New",
+                                shortcut: "Ctrl+n"
+                            },
+                            {
+                                name: "Open",
+                                shortcut: "Ctrl+o",
+                            },
+                            {
+                                name: "Open Recent",
+                                expandable: true,
+                                subGroups: [
+                                    [
+                                        {
+                                            name: "house_01"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ],
+                        [
+                            {
+                                name: "Save",
+                                shortcut: "Ctrl+s"
+                            },
+                            {
+                                name: "Close",
+                                shortcut: "Ctr+w"
+                            },
+                            {
+                                name: "Close All",
+                                shortcut: "Ctr+Shift+w"
+                            }
+                        ],
+                        [
+                            {
+                                name: "Import",
+                                shortcut: "Ctrl+i"
+                            },
+                            {
+                                name: "Export",
+                                shortcut: "Ctrl+e"
+                            }
+                        ],
+                        [
+                            {
+                                name: "Exit"
+                            }
+                        ]
+                    ]}/>
+                    <Dropdown name={"Edit"} groups={[
+                        [
+                            {
+                                name: "Undo",
+                                shortcut: "Ctrl+z"
+                            },
+                            {
+                                name: "Redo",
+                                shortcut: "Ctrl+y"
+                            }
+                        ],
+                        [
+                            {
+                                name: "Copy",
+                                shortcut: "Ctr+c"
+                            },
+                            {
+                                name: "Paste",
+                                shortcut: "Ctr+v"
+                            }
+                        ],
+                        [
+                            {
+                                name: "Select",
+                                expandable: true,
+                                subGroups: [
+                                    [
+                                        {
+                                            name: "Rectangle",
+                                            isToggleable: true,
+                                            toggled: false
+                                        },
+                                        {
+                                            name: "Circle",
+                                            isToggleable: true,
+                                            toggled: false
+                                        }
+                                    ]
+                                ]
+                            },
+                            {
+                                name: "Draw",
+                                shortcut: "d"
+                            },
+                            {
+                                name: "Fill",
+                                shortcut: "f"
+                            },
+                            {
+                                name: "Erase",
+                                shortcut: "e"
+                            },
+                            {
+                                name: "Shape",
+                                expandable: true,
+                                subGroups: [
+                                    [
+                                        {
+                                            name: "Rectangle",
+                                            isToggleable: true,
+                                            toggled: false
+                                        },
+                                        {
+                                            name: "Circle",
+                                            isToggleable: true,
+                                            toggled: false
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    ]}/>
+                    <Dropdown name={"View"} groups={[
+                        [
+                            {
+                                name: "Show Grid",
+                                isToggleable: true,
+                                toggled: true,
+                            }
+                        ],
+                        [
+                            {
+                                name: "Tileset",
+                                expandable: true,
+                                subGroups: [
+                                    [
+                                        {
+                                            name: "UndeadPeopleTileset",
+                                            isToggleable: true,
+                                            toggled: false,
+                                        }
+                                    ],
+                                    [
+                                        {
+                                            name: "Select New"
+                                        }
+                                    ]
+                                ]
+                            }
+                        ]
+                    ]}/>
+                    <Dropdown name={"Help"} groups={[
+                        [
+                            {
+                                name: "GitHub",
+                                onClick: async () => {
+                                    await open("https://github.com/Karto1000/CDDA-Map-Editor-v2")
+                                }
+                            },
+                            {
+                                name: "CDDA",
+                                onClick: async () => {
+                                    await open("https://github.com/CleverRaven/Cataclysm-DDA");
+                                }
+                            }
+                        ],
+                        [
+                            {
+                                name: "About",
+                                onClick: () => {
+                                    alert("TBD");
+                                }
+                            }
+                        ]
+                    ]}/>
+                </DropdownGroup>
             </div>
         </div>
     )

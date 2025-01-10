@@ -26,27 +26,7 @@
       background-color: theme-var('darker');
 
       div {
-        .delete-button {
-          background-color: theme-var('delete');
-
-          &:hover {
-            background-color: theme-var('light-delete');
-          }
-
-          svg {
-            color: theme-var('lightest');
-          }
-        }
-
-        button {
-          &:hover {
-            background-color: theme-var('selected');
-          }
-
-          svg {
-            color: theme-var('lightest');
-          }
-        }
+        color: theme-var('lightest')
       }
     }
   }
@@ -97,40 +77,17 @@
         user-select: none;
         -webkit-user-select: none;
       }
-
-      #minimize {
-
-      }
-
-      #maximize {
-
-      }
-
-      #close {
-
-      }
     }
   }
 
   .bottom-header {
-    height: 30px;
+    height: 24px;
     width: 100%;
     display: flex;
-    justify-content: space-between;
+    gap: 8px;
 
     div {
       display: flex;
-
-      button {
-        display: flex;
-        width: 30px;
-        aspect-ratio: 1/1;
-        border: none;
-        background-color: transparent;
-        justify-content: center;
-        align-items: center;
-        padding: 0;
-      }
     }
   }
 }

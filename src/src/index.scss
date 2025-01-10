@@ -3,7 +3,7 @@
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
 }
 
-:root {
+:root, button, input {
   font-family: 'Unifont', sans-serif;
 }
 
