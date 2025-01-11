@@ -1,4 +1,4 @@
-import React, {forwardRef, Ref, useImperativeHandle, useRef, useState} from "react";
+import React, {forwardRef, Ref, RefObject, useImperativeHandle, useRef, useState} from "react";
 import "./dropdown.scss"
 import {useOutsideAlerter} from "../hooks/useOuterClick.ts";
 import Icon, {IconName} from "./icon.tsx";
@@ -11,7 +11,7 @@ export type DropdownItem = {
     toggled?: boolean,
     onToggle?: (state: boolean) => void,
     subGroups?: DropdownItem[][],
-    onClick?: () => void,
+    onClick?: (ref: RefObject<DropdownRef>) => void,
 }
 
 export type DropdownProps = {
@@ -81,7 +81,7 @@ export function Dropdown(
     function getDropdownMenu(sub: boolean, groups: DropdownItem[][]): React.JSX.Element {
         // Holy jank
         return <div className={`dropdown-menu ${sub ? "sub" : ""}`} ref={sub ? null : menuRef}
-                    style={{left: sub ? menuRef.current?.clientWidth : 0}}>
+                    style={{left: sub ? menuRef.current?.clientWidth : 0}} key={`menu${sub ? "-sub" : ""}`}>
             {
                 groups.map((items, gi) => (
                     <>
@@ -91,7 +91,7 @@ export function Dropdown(
                                     <div className={"dropdown-item"} key={ii}
                                          tabIndex={ii}
                                          onMouseEnter={() => onDropdownItemMouseEnter(gi, ii, item, sub)}
-                                         onClick={item.onClick}
+                                         onClick={() => item.onClick(ref)}
                                     >
                                         <div className={"dropdown-item-left"}>
                                             {item.isToggleable ?

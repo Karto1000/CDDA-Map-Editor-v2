@@ -1,13 +1,17 @@
-import React from "react";
+import React, {Dispatch, SetStateAction} from "react";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
-import {useTheme} from "../hooks/useTheme.tsx";
 import Icon, {IconName} from "./icon.tsx";
 import {Dropdown} from "./dropdown.tsx";
 import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 
-export function Header() {
+type Props = {
+    isSettingsWindowOpen: boolean,
+    setIsSettingsWindowOpen: Dispatch<SetStateAction<boolean>>,
+}
+
+export function Header(props: Props) {
     const tauriWindow = getCurrentWindow();
 
     return (
@@ -91,6 +95,14 @@ export function Header() {
                             }
                         ],
                         [
+                            {
+                                name: "Settings",
+                                shortcut: "Ctrl+Alt+s",
+                                onClick: (ref) => {
+                                    props.setIsSettingsWindowOpen(!props.isSettingsWindowOpen);
+                                    ref.current.closeMenu()
+                                }
+                            },
                             {
                                 name: "Exit"
                             }

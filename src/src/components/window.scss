@@ -1,0 +1,56 @@
+@import "../theme.scss";
+
+@include themed($themes) {
+  .window {
+    .window-control {
+      background-color: theme-var("dark-blue");
+
+      h2 {
+        color: theme-var("lightest");
+      }
+    }
+
+    .window-content {
+      background-color: theme-var("darker");
+    }
+  }
+}
+
+.window {
+  position: absolute;
+  z-index: 1000;
+  resize: both;
+  overflow: hidden;
+  min-width: min-content;
+  min-height: min-content;
+
+  .window-control {
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px;
+    gap: 8px;
+
+    .close-button {
+      background-color: transparent;
+      border: none;
+      cursor: pointer;
+      width: 14px;
+      height: 14px;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    h2 {
+      font-size: 16px;
+      font-weight: unset;
+      user-select: none;
+    }
+  }
+
+  .window-content {
+    height: 100%;
+  }
+}
