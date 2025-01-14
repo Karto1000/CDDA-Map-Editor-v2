@@ -24,8 +24,6 @@ export default function Window(props: Props) {
     const onMouseMove = useCallback((e: MouseEvent) => {
         if (!isDragging) return;
 
-        console.log(dragStartPos.current.x, position.x);
-
         setPosition({
             x: clamp((position.x + (e.clientX - dragStartPos.current.x)) / window.innerWidth, 0, 1 - windowRef.current.clientWidth / window.innerWidth),
             y: clamp((position.y + (e.clientY - dragStartPos.current.y)) / window.innerHeight, 0, 1 - windowRef.current.clientHeight / window.innerHeight),

@@ -5,7 +5,7 @@ export enum Theme {
     Light = "light"
 }
 
-export function useTheme() {
+export function useTheme(): [Theme, (theme: Theme) => void] {
     const [theme, setTheme] = useState<Theme>(Theme.Dark);
 
     useEffect(() => {

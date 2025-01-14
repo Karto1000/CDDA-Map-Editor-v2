@@ -1,7 +1,9 @@
 //===================================================================
-// Import References 
+// Import References
 //===================================================================
-import React from "react";
+import React, {useContext} from "react";
+import {Theme} from "../hooks/useTheme.tsx";
+import {ThemeContext} from "../app.tsx";
 
 //===================================================================
 // Constant Variables Definitions
@@ -58,7 +60,16 @@ export default function Icon(
         rotation = 0
     }: Props
 ): React.JSX.Element {
-    return <img style={{rotate: `${rotation}deg`}} width={width} height={height} src={`/icons/${name}.png`} alt={name}/>
+    const {theme} = useContext(ThemeContext);
+
+    const imgFilter = theme === Theme.Dark ? "invert(0%)" : "invert(100%)";
+    return <img
+        style={{rotate: `${rotation}deg`, filter: imgFilter}}
+        width={width}
+        height={height}
+        src={`/icons/${name}.png`}
+        alt={name}
+    />
 }
 
 //===================================================================
