@@ -8,7 +8,7 @@ import * as PIXI from "pixi.js";
 import {Application, Geometry, Mesh, MeshGeometry, Renderer, Shader, TextureShader, UniformGroup} from "pixi.js";
 import {ThemeContext} from "./app.tsx";
 import {getColorFromTheme} from "./hooks/useTheme.tsx";
-import {vec2} from "gl-matrix";
+import {Vec2, vec2} from "gl-matrix";
 
 //===================================================================
 // Constant Variables Definitions
@@ -18,6 +18,9 @@ enum MouseButton {
     MIDDLE = 1,
     RIGHT = 2
 }
+
+const MIN_ZOOM: number = 5;
+const MAX_ZOOM: number = 128;
 
 //===================================================================
 // Export Type Definitions
@@ -71,9 +74,28 @@ export default function Main() {
 
         const scrollListener = (e: WheelEvent) => {
             // @ts-ignore
-            uniforms.current.uniforms.uCellSize += -(e.deltaY / 25);
+            const oldSize: number = uniforms.current.uniforms.uCellSize;
             // @ts-ignore
-            uniforms.current.uniforms.uCellSize = Math.min(128, Math.max(5, uniforms.current.uniforms.uCellSize))
+            uniforms.current.uniforms.uCellSize = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, uniforms.current.uniforms.uCellSize - (e.deltaY / 50)))
+            // @ts-ignore
+            const newSize: number = uniforms.current.uniforms.uCellSize;
+
+            const mousePos = new Vec2(e.clientX, e.clientY)
+            const offset = new Vec2(uniforms.current.uniforms.uOffset[0], uniforms.current.uniforms.uOffset[1]);
+
+            const mousePosAndOffset = Vec2.create();
+            Vec2.add(mousePosAndOffset, mousePos, offset)
+
+            const oldPosition = Vec2.create();
+            Vec2.div(oldPosition, mousePosAndOffset, new Vec2(oldSize, oldSize));
+
+            const newPosition = Vec2.create();
+            Vec2.div(newPosition, mousePosAndOffset, new Vec2(newSize, newSize));
+
+            const newOffset = (newPosition.sub(oldPosition)).mul(new Vec2(newSize, newSize));
+
+            uniforms.current.uniforms.uOffset[0] -= newOffset.x
+            uniforms.current.uniforms.uOffset[1] -= newOffset.y
         }
 
         const resizeListener = (e: Event) => {
