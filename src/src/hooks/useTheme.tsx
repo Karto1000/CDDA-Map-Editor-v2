@@ -1,4 +1,5 @@
 import {useEffect, useState} from "react";
+import {Vector3} from "three";
 
 export const darkColors = {
     light: "#282828",
@@ -39,6 +40,14 @@ export const getColorFromTheme = (theme: Theme, color: string): string => {
     } else if (theme === Theme.Light) {
         return lightColors[color]
     }
+}
+
+export function hexToRBGNormalized(hex: string): Vector3 {
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    const r = parseInt(result[1], 16) / 255
+    const g = parseInt(result[2], 16) / 255
+    const b = parseInt(result[3], 16) / 255
+    return new Vector3(r, g, b)
 }
 
 export function useTheme(): [Theme, (theme: Theme) => void] {

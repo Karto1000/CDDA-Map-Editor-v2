@@ -1,4 +1,13 @@
-import {InstancedMesh, NearestFilter, Object3D, SRGBColorSpace, Texture, TextureLoader, Vector2} from "three";
+import {
+    InstancedMesh,
+    LinearMipMapNearestFilter,
+    NearestFilter,
+    Object3D,
+    SRGBColorSpace,
+    Texture,
+    TextureLoader,
+    Vector2
+} from "three";
 import {AtlasMaterial} from "./atlas-material.ts";
 
 export type TextureAtlasTile = {
@@ -39,6 +48,7 @@ export class TextureAtlas {
         this.tileHeight = config.tileHeight
         this.tilesPerRow = this.textureWidth / this.tileWidth
         this.tilesPerColumn = this.textureHeight / this.tileHeight
+
         this.atlasMaterial = new AtlasMaterial(this, texture, config.maxInstances)
         this.tiles = tiles
         this.mappedTiles = new Map()
@@ -103,7 +113,7 @@ export class TextureAtlas {
             });
 
         texture.magFilter = NearestFilter;
-        texture.minFilter = NearestFilter;
+        texture.minFilter = LinearMipMapNearestFilter;
         // https://stackoverflow.com/a/77944452
         texture.colorSpace = SRGBColorSpace
 

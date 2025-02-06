@@ -7,20 +7,18 @@ import "./main.scss"
 import {Vec2, vec2} from "gl-matrix";
 import Stats from "stats.js"
 import {
-    AmbientLight,
-    Camera, Mesh,
-    MeshBasicMaterial,
+    AmbientLight, GridHelper,
     PerspectiveCamera,
-    PlaneGeometry,
     Scene,
     Vector2,
-    WebGLRenderer
+    WebGLRenderer,
 } from "three"
 import {TextureAtlas} from "./rendering/texture-atlas.ts";
-import {getColorFromTheme, useTheme} from "./hooks/useTheme.tsx";
+import {getColorFromTheme} from "./hooks/useTheme.tsx";
 import {ThemeContext} from "./app.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {TilesetConfig} from "./lib/map_data";
+import {degToRad} from "three/src/math/MathUtils";
 
 //===================================================================
 // Constant Variables Definitions
@@ -61,23 +59,35 @@ type ScrollStart = {
 //===================================================================
 // Function Definitions
 //===================================================================
+function getCameraZForSpriteSize(canvasWidth: number, spriteSize: number, fov: number) {
+    const numSprites = canvasWidth / spriteSize;
+    const worldWidth = numSprites * spriteSize;
+    const fovRadians = (fov * Math.PI) / 180;
+    return worldWidth / (2 * Math.tan(fovRadians / 2));
+}
+
 const setupThreeJS = (
     canvas: HTMLCanvasElement,
     mainRef: HTMLDivElement,
     width: number,
     height: number
-): {stats: Stats, scene: Scene, camera: PerspectiveCamera, renderer: WebGLRenderer} => {
+): {
+    stats: Stats,
+    scene: Scene,
+    perspectiveCamera: PerspectiveCamera,
+    renderer: WebGLRenderer
+} => {
     const stats = new Stats()
     stats.showPanel(0)
-    stats.dom.style.top = "32px"
+    stats.dom.style.top = "64px"
     stats.dom.style.left = "unset"
     stats.dom.style.right = "2px"
 
     mainRef.appendChild(stats.dom)
 
     const scene = new Scene()
-    const camera = new PerspectiveCamera(75, width / height, 0.01, 7000)
-    camera.position.z = 100;
+    const perspectiveCamera = new PerspectiveCamera(75, width / height, 0.01, 7000)
+    perspectiveCamera.position.z = getCameraZForSpriteSize(width, 32, 75);
 
     const renderer = new WebGLRenderer({canvas, alpha: true})
     renderer.setSize(width, height)
@@ -88,7 +98,7 @@ const setupThreeJS = (
     return {
         stats,
         scene,
-        camera,
+        perspectiveCamera: perspectiveCamera,
         renderer
     }
 }
@@ -104,73 +114,56 @@ let isLeftPressed = false
 export default function Main() {
     const mainRef = useRef<HTMLDivElement>();
     const scrollStartRef = useRef<ScrollStart>();
-    const gridData = useRef<Grid>({
-        cellSize: 32.,
-        offset: Vec2.create(),
-        screenSize: new Vec2(window.innerWidth, window.innerHeight),
-    })
     const {theme} = useContext(ThemeContext)
 
     const canvasRef = useRef<HTMLCanvasElement>();
     const sceneRef = useRef<Scene>();
     const rendererRef = useRef<WebGLRenderer>()
-    const cameraRef = useRef<PerspectiveCamera>()
+    const perspectiveCameraRef = useRef<PerspectiveCamera>()
 
-    // Setup Threejs
+    const [isLoaded, setIsLoaded] = useState<boolean>(false)
+
+    // Setup Three.js
     useEffect(() => {
         if (!mainRef.current) return;
         if (!canvasRef.current) return;
 
-        const {stats, scene, camera, renderer} = setupThreeJS(
-            canvasRef.current,
-            mainRef.current,
-            mainRef.current.clientWidth,
-            mainRef.current.clientHeight
-        )
+        const canvasWidth = mainRef.current.clientWidth;
+        const canvasHeight = mainRef.current.clientHeight;
 
-        // const terrainAtlas = TextureAtlas.loadFromURL(
-        //     "normal_terrain.png",
-        //     {
-        //         "manhole": {
-        //             name: "manhole",
-        //             position: new Vector2(32, 9408)
-        //         },
-        //         "manhole2": {
-        //             name: "manhole2",
-        //             position: new Vector2(64, 9408)
-        //         },
-        //     },
-        //     {
-        //         atlasWidth: 512,
-        //         atlasHeight: 9472,
-        //         tileWidth: 32,
-        //         tileHeight: 32,
-        //         maxInstances: 73728,
-        //         yLayer: 0
-        //     }
-        // )
+        (async () => {
+            const {stats, scene, perspectiveCamera, renderer} = setupThreeJS(
+                canvasRef.current,
+                mainRef.current,
+                canvasWidth,
+                canvasHeight
+            )
 
-        rendererRef.current = renderer
-        cameraRef.current = camera
-        sceneRef.current = scene
+            sceneRef.current = scene
+            rendererRef.current = renderer
+            perspectiveCameraRef.current = perspectiveCamera
 
-        function run() {
-            stats.begin()
+            setIsLoaded(true)
 
-            if (isRightPressed) camera.position.x += 1
-            if (isUpPressed) camera.position.y += 1
-            if (isDownPressed) camera.position.y -= 1
-            if (isLeftPressed) camera.position.x -= 1
+            function run() {
+                stats.begin()
 
-            camera.updateProjectionMatrix()
-            renderer.render(scene, camera)
+                if (isRightPressed) perspectiveCamera.position.x += 10
+                if (isUpPressed) perspectiveCamera.position.y += 10
+                if (isDownPressed) perspectiveCamera.position.y -= 10
+                if (isLeftPressed) perspectiveCamera.position.x -= 10
 
-            stats.end()
+                perspectiveCamera.updateProjectionMatrix()
+                renderer.render(scene, perspectiveCamera)
 
-            requestAnimationFrame(run)
-        }
+                stats.end()
 
-        run()
+                requestAnimationFrame(run)
+            }
+
+            run()
+        })()
+
     }, []);
 
     // Load the tileset
@@ -182,29 +175,28 @@ export default function Main() {
 
             for (let tileInfo of metadata["tiles-new"]) {
                 console.log(`Loading ${tileInfo.file}`)
-                downloadPromises.push(invoke<ArrayBuffer>("download_spritesheet", {tileset: "MSX++UnDeadPeopleEdition", name: tileInfo.file}))
+                downloadPromises.push(invoke<ArrayBuffer>("download_spritesheet", {
+                    tileset: "MSX++UnDeadPeopleEdition",
+                    name: tileInfo.file
+                }))
             }
 
             const arrayBuffs = await Promise.all(downloadPromises)
 
-            const atlases = []
+            const atlases = {}
             for (let i = 0; i < arrayBuffs.length; i++) {
                 const arrayBuffer = arrayBuffs[i]
                 const tileInfo = metadata["tiles-new"][i]
 
-                const blob  = new Blob([arrayBuffer], { type: "image/png" });
+                const blob = new Blob([arrayBuffer], {type: "image/png"});
                 const url = URL.createObjectURL(blob)
 
-                atlases.push(TextureAtlas.loadFromURL(
+                atlases[tileInfo.file] = TextureAtlas.loadFromURL(
                     url,
                     {
-                        "manhole": {
-                            name: "manhole",
-                            position: new Vector2(32, 9408)
-                        },
-                        "manhole2": {
-                            name: "manhole2",
-                            position: new Vector2(64, 9408)
+                        "grass": {
+                            name: "grass",
+                            position: new Vector2(128, 2624)
                         },
                     },
                     {
@@ -215,7 +207,7 @@ export default function Main() {
                         maxInstances: 73728,
                         yLayer: 0
                     }
-                ))
+                )
             }
 
             const mapSizeY = 24 * 8
@@ -223,60 +215,57 @@ export default function Main() {
 
             for (let y = 0; y < mapSizeY; y++) {
                 for (let x = 0; x < mapSizeX; x++) {
-                    atlases[0].setTileAt(new Vector2(x, y), "manhole")
+                    atlases["normal_terrain.png"].setTileAt(new Vector2(x, y), "grass")
                 }
             }
 
-            for (let atlas of atlases) {
+            for (let atlasKey of Object.keys(atlases)) {
+                const atlas = atlases[atlasKey]
+
                 sceneRef.current.add(atlas.mesh)
             }
         })()
     }, []);
 
     useEffect(() => {
-        rendererRef.current.setClearColor(getColorFromTheme(theme, "darker"))
-    }, [theme]);
+        if (!isLoaded) return
 
-    // Set up the listeners
+        rendererRef.current.setClearColor(getColorFromTheme(theme, "darker"))
+
+        const gridHelper = new GridHelper(
+            1,
+            16 * 8 * 32 * 24 / 32,
+            getColorFromTheme(theme, "disabled"), getColorFromTheme(theme, "light")
+        )
+        gridHelper.scale.x = 16 * 8 * 32 * 24
+        gridHelper.scale.z = 16 * 8 * 32 * 24
+
+        gridHelper.position.x -= 16
+        gridHelper.position.y -= 16
+
+        gridHelper.rotateX(degToRad(90))
+        sceneRef.current.add(gridHelper)
+    }, [theme, isLoaded]);
+
+// Set up the listeners
     useEffect(() => {
         const scrollListener = (e: WheelEvent) => {
             const zoomScale = 5
-            const newSize: number = Math.min(MIN_ZOOM, Math.max(MAX_ZOOM, cameraRef.current.position.z + (cameraRef.current.position.z / e.deltaY * zoomScale)));
-
-            // const mousePos = new Vec2(e.clientX, e.clientY)
-            //
-            // const mousePosAndOffset = Vec2.create();
-            // Vec2.add(mousePosAndOffset, mousePos, gridData.current.offset)
-            //
-            // const oldPosition = Vec2.create();
-            // Vec2.div(oldPosition, mousePosAndOffset, new Vec2(oldSize, oldSize));
-            //
-            // const newPosition = Vec2.create();
-            // Vec2.div(newPosition, mousePosAndOffset, new Vec2(newSize, newSize));
-            //
-            // const newOffset = (newPosition.sub(oldPosition)).mul(new Vec2(newSize, newSize));
-            //
-            // gridData.current.offset[0] -= newOffset.x
-            // gridData.current.offset[1] -= newOffset.y
-            // gridData.current.cellSize = newSize;
-
-            cameraRef.current.position.z = newSize
+            const newSize: number = Math.min(MIN_ZOOM, Math.max(MAX_ZOOM, perspectiveCameraRef.current.position.z + (perspectiveCameraRef.current.position.z / e.deltaY * zoomScale)));
+            perspectiveCameraRef.current.position.z = newSize
         }
 
         const resizeListener = (e: Event) => {
-            gridData.current.screenSize = new Vec2(window.innerWidth, window.innerHeight)
-            rendererRef.current.setSize(window.innerWidth, window.innerHeight)
-            cameraRef.current.aspect = window.innerWidth / window.innerHeight
+            const newWidth = mainRef.current.clientWidth
+            const newHeight = mainRef.current.clientHeight
+
+            rendererRef.current.setSize(newWidth, newHeight)
+            perspectiveCameraRef.current.aspect = newWidth / newHeight
         }
 
         const mouseDownListener = (e: MouseEvent) => {
             if (e.button === MouseButton.MIDDLE) {
-                scrollStartRef.current = {
-                    mouseX: e.clientX,
-                    mouseY: e.clientY,
-                    offsetX: gridData.current.offset.x,
-                    offsetY: gridData.current.offset.y
-                }
+
             }
         }
 
@@ -294,10 +283,6 @@ export default function Main() {
                 e.clientY - scrollStartRef.current.mouseY
             )
 
-            gridData.current.offset = new Vec2(
-                scrollStartRef.current.offsetX - delta.x,
-                scrollStartRef.current.offsetY - delta.y
-            );
         }
 
         const keyDownListener = (e: KeyboardEvent) => {
