@@ -9,8 +9,7 @@ pub type Identifier = String;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
-    terrain: Option<Identifier>,
-    furniture: Option<Identifier>,
+    character: char,
 }
 
 #[derive(Debug, Deserialize, Clone)]

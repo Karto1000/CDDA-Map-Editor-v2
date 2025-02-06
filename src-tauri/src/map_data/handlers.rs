@@ -11,9 +11,8 @@ pub async fn get_map_data(map_data: State<'_, Mutex<MapData>>) -> Result<MapData
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaceCommand {
-    terrain: Option<Identifier>,
-    furniture: Option<Identifier>,
     position: JSONSerializableUVec2,
+    character: char,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -27,8 +26,14 @@ pub enum MapChangeEventKind {
     Delete(JSONSerializableUVec2),
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlaceTerrainEvent {
+    position: JSONSerializableUVec2,
+    identifier: Identifier,
+}
+
 #[tauri::command]
-pub async fn place_terrain(
+pub async fn place(
     app: AppHandle,
     map_data: State<'_, Mutex<MapData>>,
     command: PlaceCommand,
@@ -38,15 +43,15 @@ pub async fn place_terrain(
     lock.cells.insert(
         command.position.0.clone(),
         Cell {
-            terrain: command.terrain.clone(),
-            furniture: command.furniture.clone(),
+            character: command.character,
         },
     );
 
     app.emit(
-        "map-change",
-        MapChangEvent {
-            kind: MapChangeEventKind::Place(command),
+        "place_terrain",
+        PlaceTerrainEvent {
+            position: command.position.clone(),
+            identifier: "t_grass".to_string(),
         },
     )
     .unwrap();

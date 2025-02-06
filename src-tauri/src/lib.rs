@@ -3,7 +3,7 @@ mod map_data;
 mod util;
 
 use crate::legacy_tileset::handlers::{download_spritesheet, get_tileset_metadata};
-use crate::map_data::handlers::{get_map_data, place_terrain};
+use crate::map_data::handlers::{get_map_data, place};
 use crate::map_data::MapData;
 use image::GenericImageView;
 use serde::{Deserialize, Serialize};
@@ -22,7 +22,7 @@ pub fn run() -> () {
             get_tileset_metadata,
             download_spritesheet,
             get_map_data,
-            place_terrain
+            place
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
