@@ -7,18 +7,22 @@ import "./main.scss"
 import {Vec2, vec2} from "gl-matrix";
 import Stats from "stats.js"
 import {
-    AmbientLight, GridHelper,
-    PerspectiveCamera,
+    AmbientLight, BufferGeometry, GridHelper, Line, LineBasicMaterial, Mesh, MeshBasicMaterial,
+    PerspectiveCamera, Plane, PlaneGeometry, Ray, Raycaster,
     Scene,
-    Vector2,
+    Vector2, Vector3,
     WebGLRenderer,
 } from "three"
 import {TextureAtlas} from "./rendering/texture-atlas.ts";
 import {getColorFromTheme} from "./hooks/useTheme.tsx";
 import {ThemeContext} from "./app.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {TilesetConfig} from "./lib/map_data";
 import {degToRad} from "three/src/math/MathUtils";
+import {listen} from "@tauri-apps/api/event";
+import {PlaceTerrainEvent, TilesetConfig} from "./lib/map_data/recv";
+import {PlaceCommand} from "./lib/map_data/send";
+import {serializedVec2ToVector2} from "./lib";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 
 //===================================================================
 // Constant Variables Definitions
@@ -107,6 +111,9 @@ let isRightPressed = false
 let isUpPressed = false
 let isDownPressed = false
 let isLeftPressed = false
+let isLeftMousePressed = false
+let mousePosition = new Vector2()
+const atlases: { [file: string]: TextureAtlas } = {}
 
 //===================================================================
 // Component Definition
@@ -120,6 +127,8 @@ export default function Main() {
     const sceneRef = useRef<Scene>();
     const rendererRef = useRef<WebGLRenderer>()
     const perspectiveCameraRef = useRef<PerspectiveCamera>()
+    const events = useRef<PlaceTerrainEvent[]>([])
+    const gridHelperRef = useRef<GridHelper>()
 
     const [isLoaded, setIsLoaded] = useState<boolean>(false)
 
@@ -154,6 +163,33 @@ export default function Main() {
                 if (isLeftPressed) perspectiveCamera.position.x -= 10
 
                 perspectiveCamera.updateProjectionMatrix()
+
+                let currentEvent = events.current.pop()
+                while (currentEvent !== undefined) {
+                    atlases["normal_terrain.png"].setTileAt(serializedVec2ToVector2(currentEvent.position), currentEvent.identifier)
+                    currentEvent = events.current.pop()
+                }
+
+                if (isLeftMousePressed) {
+                    const mouseNormalized = new Vector2();
+                    const rect = renderer.domElement.getBoundingClientRect();
+                    // ABSOLUTE LEGEND #2 -> https://discourse.threejs.org/t/custom-canvas-size-with-orbitcontrols-and-raycaster/18742/2
+                    mouseNormalized.x = ( ( mousePosition.x - rect.left ) / ( rect.right - rect.left ) ) * 2 - 1;
+                    mouseNormalized.y = - ( ( mousePosition.y - rect.top ) / ( rect.bottom - rect.top) ) * 2 + 1;
+
+                    const raycaster = new Raycaster()
+                    raycaster.setFromCamera(mouseNormalized.clone(), perspectiveCamera);
+                    const planeZ = new Plane(new Vector3(0, 0, 1), 0);
+
+                    const intersection = new Vector3();
+                    const intersected = raycaster.ray.intersectPlane(planeZ, intersection);
+
+                    invoke<PlaceCommand>(
+                        "place",
+                        {command: {position: `${Math.round(intersected.x / 32)},${Math.round(intersected.y / 32)}`, character: "g"}}
+                    )
+                }
+
                 renderer.render(scene, perspectiveCamera)
 
                 stats.end()
@@ -183,7 +219,6 @@ export default function Main() {
 
             const arrayBuffs = await Promise.all(downloadPromises)
 
-            const atlases = {}
             for (let i = 0; i < arrayBuffs.length; i++) {
                 const arrayBuffer = arrayBuffs[i]
                 const tileInfo = metadata["tiles-new"][i]
@@ -194,8 +229,8 @@ export default function Main() {
                 atlases[tileInfo.file] = TextureAtlas.loadFromURL(
                     url,
                     {
-                        "grass": {
-                            name: "grass",
+                        "t_grass": {
+                            name: "t_grass",
                             position: new Vector2(128, 2624)
                         },
                     },
@@ -210,20 +245,25 @@ export default function Main() {
                 )
             }
 
-            const mapSizeY = 24 * 8
-            const mapSizeX = 24 * 16
-
-            for (let y = 0; y < mapSizeY; y++) {
-                for (let x = 0; x < mapSizeX; x++) {
-                    atlases["normal_terrain.png"].setTileAt(new Vector2(x, y), "grass")
-                }
-            }
-
             for (let atlasKey of Object.keys(atlases)) {
                 const atlas = atlases[atlasKey]
-
                 sceneRef.current.add(atlas.mesh)
             }
+
+            await listen<PlaceTerrainEvent>(
+                "place_terrain",
+                e => {
+                    const position = serializedVec2ToVector2(e.payload.position)
+                    console.log(`Set ${e.payload.identifier} to position ${position.x};${position.y}`)
+                    events.current.push(e.payload)
+                }
+            )
+
+            // await invoke<PlaceCommand>(
+            //     "place",
+            //     {command: {position: `${x},${y}`, character: "g"}}
+            // )
+
         })()
     }, []);
 
@@ -245,9 +285,10 @@ export default function Main() {
 
         gridHelper.rotateX(degToRad(90))
         sceneRef.current.add(gridHelper)
+        gridHelperRef.current = gridHelper
     }, [theme, isLoaded]);
 
-// Set up the listeners
+    // Set up the listeners
     useEffect(() => {
         const scrollListener = (e: WheelEvent) => {
             const zoomScale = 5
@@ -263,19 +304,29 @@ export default function Main() {
             perspectiveCameraRef.current.aspect = newWidth / newHeight
         }
 
-        const mouseDownListener = (e: MouseEvent) => {
+        const mouseDownListener = async (e: MouseEvent) => {
+            if (e.button === MouseButton.LEFT) {
+                isLeftMousePressed = true
+            }
+
             if (e.button === MouseButton.MIDDLE) {
 
             }
         }
 
         const mouseUpListener = (e: MouseEvent) => {
+            if (e.button === MouseButton.LEFT) {
+                isLeftMousePressed = false
+            }
             if (e.button === MouseButton.MIDDLE) {
                 scrollStartRef.current = null
             }
         }
 
         const mouseMoveListener = (e: MouseEvent) => {
+            mousePosition.x = e.clientX
+            mousePosition.y = e.clientY
+
             if (!scrollStartRef.current) return;
 
             const delta = new vec2(

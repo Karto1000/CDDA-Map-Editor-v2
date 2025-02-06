@@ -83,9 +83,9 @@ export class TextureAtlas {
         transform.position.set(position.x * this.tileWidth, position.y * this.tileHeight, this.yLayer)
         transform.updateMatrix()
 
-        this.mesh.instanceMatrix.needsUpdate = true
-
         this.mesh.setMatrixAt(mappedInstance, transform.matrix)
+        this.mesh.instanceMatrix.needsUpdate = true
+        this.mesh.computeBoundingSphere()
     }
 
     public removeTileAt(position: Vector2) {
@@ -98,8 +98,8 @@ export class TextureAtlas {
         transform.position.set(0, 0, -9999)
         transform.updateMatrix()
 
-        this.mesh.setMatrixAt(mappedInstance, transform.matrix)
         this.mesh.instanceMatrix.needsUpdate = true
+        this.mesh.setMatrixAt(mappedInstance, transform.matrix)
     }
 
     static loadFromURL(url: string, tiles: {

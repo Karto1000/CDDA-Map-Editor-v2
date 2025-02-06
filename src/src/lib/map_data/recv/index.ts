@@ -1,11 +1,6 @@
-import {Vec2} from "gl-matrix";
-
 export type Identifier = string;
-
 export type MeabyVec<T> = { Vec: T[] } | { Single: T };
-
 export type MeabyWeighted<T> = { MultiWeighted: { weight: number, sprite: T } } | { NotWeighted: T };
-
 export type ConnectionType =
     | "center"
     | "corner"
@@ -15,13 +10,11 @@ export type ConnectionType =
     | "broken"
     | "unconnected"
     | "open";
-
 export type AdditionalTile = {
     id: ConnectionType;
     fg?: MeabyVec<MeabyWeighted<MeabyVec<number>>>;
     bg?: MeabyVec<MeabyWeighted<MeabyVec<number>>>;
 };
-
 export type SpritesheetTile = {
     id: MeabyVec<Identifier>;
     fg?: MeabyVec<MeabyWeighted<number>>;
@@ -31,7 +24,6 @@ export type SpritesheetTile = {
     multitile?: boolean;
     additional_tiles?: AdditionalTile[];
 };
-
 export type TilesetInfo = {
     pixelscale: number;
     width: number;
@@ -41,7 +33,6 @@ export type TilesetInfo = {
     retract_dist_min: number;
     retract_dist_max: number;
 };
-
 export type TilesetTiles = {
     file: string;
     spritesheet_dimensions: [number, number],
@@ -49,27 +40,12 @@ export type TilesetTiles = {
     sprite_height: number
     tiles: SpritesheetTile[];
 };
-
 export type TilesetConfig = {
     tile_info: TilesetInfo[];
     "tiles-new": TilesetTiles[];
 };
 
-export enum MapChangeEventKind {
-    Place = "Place",
-    Delete = "Delete"
-}
-
-export type PlaceCommand = {
-    terrain: Identifier | null,
-    furniture: Identifier | null,
+export type PlaceTerrainEvent = {
     position: string
-}
-
-export type DeleteCommand = string;
-
-export type MapChangeEvent = {
-    kind: {
-        [key in MapChangeEventKind]: PlaceCommand
-    }
+    identifier: string
 }
