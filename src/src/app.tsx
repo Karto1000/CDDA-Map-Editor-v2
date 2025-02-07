@@ -1,8 +1,9 @@
 import React, {createContext, useState} from 'react';
 import {Header} from "./components/header.tsx";
 import {Theme, useTheme} from "./hooks/useTheme.tsx";
-import Main from "./main.tsx";
+import MainEditor from "./main.tsx";
 import Window from "./components/window.tsx";
+import {StartupMain} from "./startupMain.tsx";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
@@ -13,6 +14,7 @@ export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Them
 function App() {
     const [theme, setTheme] = useTheme();
     const [isSettingsWindowOpen, setIsSettingsWindowOpen] = useState<boolean>(false);
+    const [isDirSelected, setIsDirSelected] = useState<boolean>(false)
 
     return (
         <div className={`app ${theme}-theme`}>
@@ -27,7 +29,14 @@ function App() {
                     isSettingsWindowOpen={isSettingsWindowOpen}
                     setIsSettingsWindowOpen={setIsSettingsWindowOpen}
                 />
-                <Main/>
+                {
+                    isDirSelected &&
+                    <MainEditor/>
+                }
+                {
+                    !isDirSelected &&
+                    <StartupMain/>
+                }
             </ThemeContext.Provider>
         </div>
     );

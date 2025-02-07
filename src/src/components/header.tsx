@@ -52,19 +52,23 @@ export function Header(props: Props) {
                         [
                             {
                                 name: "New",
-                                shortcut: "Ctrl+n"
+                                shortcut: "Ctrl+n",
+                                onClick: () => {}
                             },
                             {
                                 name: "Open",
                                 shortcut: "Ctrl+o",
+                                onClick: () => {}
                             },
                             {
                                 name: "Open Recent",
                                 expandable: true,
+                                onClick: () => {},
                                 subGroups: [
                                     [
                                         {
-                                            name: "house_01"
+                                            name: "house_01",
+                                            onClick: () => {}
                                         }
                                     ]
                                 ]
@@ -73,25 +77,30 @@ export function Header(props: Props) {
                         [
                             {
                                 name: "Save",
-                                shortcut: "Ctrl+s"
+                                shortcut: "Ctrl+s",
+                                onClick: () => {}
                             },
                             {
                                 name: "Close",
-                                shortcut: "Ctr+w"
+                                shortcut: "Ctr+w",
+                                onClick: () => {}
                             },
                             {
                                 name: "Close All",
-                                shortcut: "Ctr+Shift+w"
+                                shortcut: "Ctr+Shift+w",
+                                onClick: () => {}
                             }
                         ],
                         [
                             {
                                 name: "Import",
-                                shortcut: "Ctrl+i"
+                                shortcut: "Ctrl+i",
+                                onClick: () => {}
                             },
                             {
                                 name: "Export",
-                                shortcut: "Ctrl+e"
+                                shortcut: "Ctrl+e",
+                                onClick: () => {}
                             }
                         ],
                         [
@@ -104,7 +113,8 @@ export function Header(props: Props) {
                                 }
                             },
                             {
-                                name: "Exit"
+                                name: "Exit",
+                                onClick: async () => {await tauriWindow.close()}
                             }
                         ]
                     ]}/>
@@ -112,68 +122,81 @@ export function Header(props: Props) {
                         [
                             {
                                 name: "Undo",
-                                shortcut: "Ctrl+z"
+                                shortcut: "Ctrl+z",
+                                onClick: () => {}
                             },
                             {
                                 name: "Redo",
-                                shortcut: "Ctrl+y"
+                                shortcut: "Ctrl+y",
+                                onClick: () => {}
                             }
                         ],
                         [
                             {
                                 name: "Copy",
-                                shortcut: "Ctr+c"
+                                shortcut: "Ctr+c",
+                                onClick: () => {}
                             },
                             {
                                 name: "Paste",
-                                shortcut: "Ctr+v"
+                                shortcut: "Ctr+v",
+                                onClick: () => {}
                             }
                         ],
                         [
                             {
                                 name: "Select",
                                 expandable: true,
+                                onClick: () => {},
                                 subGroups: [
                                     [
                                         {
                                             name: "Rectangle",
                                             isToggleable: true,
-                                            toggled: false
+                                            toggled: false,
+                                            onClick: () => {}
                                         },
                                         {
                                             name: "Circle",
                                             isToggleable: true,
-                                            toggled: false
+                                            toggled: false,
+                                            onClick: () => {}
                                         }
                                     ]
                                 ]
                             },
                             {
                                 name: "Draw",
-                                shortcut: "d"
+                                shortcut: "d",
+                                onClick: () => {}
                             },
                             {
                                 name: "Fill",
-                                shortcut: "f"
+                                shortcut: "f",
+                                onClick: () => {}
                             },
                             {
                                 name: "Erase",
-                                shortcut: "e"
+                                shortcut: "e",
+                                onClick: () => {}
                             },
                             {
                                 name: "Shape",
                                 expandable: true,
+                                onClick: () => {},
                                 subGroups: [
                                     [
                                         {
                                             name: "Rectangle",
                                             isToggleable: true,
-                                            toggled: false
+                                            toggled: false,
+                                            onClick: () => {}
                                         },
                                         {
                                             name: "Circle",
                                             isToggleable: true,
-                                            toggled: false
+                                            toggled: false,
+                                            onClick: () => {}
                                         }
                                     ]
                                 ]
@@ -186,23 +209,27 @@ export function Header(props: Props) {
                                 name: "Show Grid",
                                 isToggleable: true,
                                 toggled: true,
+                                onClick: () => {}
                             }
                         ],
                         [
                             {
                                 name: "Tileset",
                                 expandable: true,
+                                onClick: () => {},
                                 subGroups: [
                                     [
                                         {
                                             name: "UndeadPeopleTileset",
                                             isToggleable: true,
                                             toggled: false,
+                                            onClick: () => {}
                                         }
                                     ],
                                     [
                                         {
-                                            name: "Select New"
+                                            name: "Select New",
+                                            onClick: () => {}
                                         }
                                     ]
                                 ]

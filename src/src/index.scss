@@ -11,6 +11,11 @@ p {
   margin: 0;
 }
 
+.interactable-text {
+  color: #4682B4;
+  cursor: pointer;
+}
+
 html {
   height: 100%;
   overflow: hidden;
