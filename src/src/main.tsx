@@ -4,11 +4,10 @@
 
 import React, {useContext, useEffect, useRef, useState} from "react";
 import "./main.scss"
-import {Vec2, vec2} from "gl-matrix";
 import Stats from "stats.js"
 import {
-    AmbientLight, BufferGeometry, GridHelper, Line, LineBasicMaterial, Mesh, MeshBasicMaterial,
-    PerspectiveCamera, Plane, PlaneGeometry, Ray, Raycaster,
+    AmbientLight, GridHelper,
+    PerspectiveCamera, Plane, Raycaster,
     Scene,
     Vector2, Vector3,
     WebGLRenderer,
@@ -43,18 +42,6 @@ const MAX_ZOOM: number = 5;
 //===================================================================
 // Local Type Definitions
 //===================================================================
-type Grid = {
-    screenSize: Vec2,
-    offset: Vec2,
-    cellSize: number,
-}
-
-type ScrollStart = {
-    mouseX: number,
-    mouseY: number,
-    offsetX: number,
-    offsetY: number,
-}
 
 //===================================================================
 // Class Definitions
@@ -107,10 +94,6 @@ const setupThreeJS = (
     }
 }
 
-let isRightPressed = false
-let isUpPressed = false
-let isDownPressed = false
-let isLeftPressed = false
 let isLeftMousePressed = false
 let mousePosition = new Vector2()
 const atlases: { [file: string]: TextureAtlas } = {}
@@ -119,16 +102,16 @@ const atlases: { [file: string]: TextureAtlas } = {}
 // Component Definition
 //===================================================================
 export default function Main() {
-    const mainRef = useRef<HTMLDivElement>();
-    const scrollStartRef = useRef<ScrollStart>();
     const {theme} = useContext(ThemeContext)
 
+    const mainRef = useRef<HTMLDivElement>();
     const canvasRef = useRef<HTMLCanvasElement>();
     const sceneRef = useRef<Scene>();
     const rendererRef = useRef<WebGLRenderer>()
     const perspectiveCameraRef = useRef<PerspectiveCamera>()
     const events = useRef<PlaceTerrainEvent[]>([])
     const gridHelperRef = useRef<GridHelper>()
+    const controlsRef = useRef<OrbitControls>()
 
     const [isLoaded, setIsLoaded] = useState<boolean>(false)
 
@@ -148,19 +131,22 @@ export default function Main() {
                 canvasHeight
             )
 
+            const controls = new OrbitControls(perspectiveCamera, canvasRef.current)
+            controls.maxDistance = MIN_ZOOM
+            controls.minDistance = MAX_ZOOM
+            controls.enableRotate = false
+            controls.enableDamping = true
+            controls.zoomToCursor = true
+
             sceneRef.current = scene
             rendererRef.current = renderer
             perspectiveCameraRef.current = perspectiveCamera
+            controlsRef.current = controls
 
             setIsLoaded(true)
 
             function run() {
                 stats.begin()
-
-                if (isRightPressed) perspectiveCamera.position.x += 10
-                if (isUpPressed) perspectiveCamera.position.y += 10
-                if (isDownPressed) perspectiveCamera.position.y -= 10
-                if (isLeftPressed) perspectiveCamera.position.x -= 10
 
                 perspectiveCamera.updateProjectionMatrix()
 
@@ -174,8 +160,8 @@ export default function Main() {
                     const mouseNormalized = new Vector2();
                     const rect = renderer.domElement.getBoundingClientRect();
                     // ABSOLUTE LEGEND #2 -> https://discourse.threejs.org/t/custom-canvas-size-with-orbitcontrols-and-raycaster/18742/2
-                    mouseNormalized.x = ( ( mousePosition.x - rect.left ) / ( rect.right - rect.left ) ) * 2 - 1;
-                    mouseNormalized.y = - ( ( mousePosition.y - rect.top ) / ( rect.bottom - rect.top) ) * 2 + 1;
+                    mouseNormalized.x = ((mousePosition.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
+                    mouseNormalized.y = -((mousePosition.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
 
                     const raycaster = new Raycaster()
                     raycaster.setFromCamera(mouseNormalized.clone(), perspectiveCamera);
@@ -184,12 +170,24 @@ export default function Main() {
                     const intersection = new Vector3();
                     const intersected = raycaster.ray.intersectPlane(planeZ, intersection);
 
-                    invoke<PlaceCommand>(
-                        "place",
-                        {command: {position: `${Math.round(intersected.x / 32)},${Math.round(intersected.y / 32)}`, character: "g"}}
-                    )
+
+                    const worldCellX = Math.round(intersected.x / 32)
+                    const worldCellY = Math.round(intersected.y / 32)
+
+                    if (worldCellX >= 0 && worldCellY >= 0) {
+                        invoke<PlaceCommand>(
+                            "place",
+                            {
+                                command: {
+                                    position: `${worldCellX},${worldCellY}`,
+                                    character: "g"
+                                }
+                            }
+                        )
+                    }
                 }
 
+                controls.update()
                 renderer.render(scene, perspectiveCamera)
 
                 stats.end()
@@ -290,12 +288,6 @@ export default function Main() {
 
     // Set up the listeners
     useEffect(() => {
-        const scrollListener = (e: WheelEvent) => {
-            const zoomScale = 5
-            const newSize: number = Math.min(MIN_ZOOM, Math.max(MAX_ZOOM, perspectiveCameraRef.current.position.z + (perspectiveCameraRef.current.position.z / e.deltaY * zoomScale)));
-            perspectiveCameraRef.current.position.z = newSize
-        }
-
         const resizeListener = (e: Event) => {
             const newWidth = mainRef.current.clientWidth
             const newHeight = mainRef.current.clientHeight
@@ -308,64 +300,29 @@ export default function Main() {
             if (e.button === MouseButton.LEFT) {
                 isLeftMousePressed = true
             }
-
-            if (e.button === MouseButton.MIDDLE) {
-
-            }
         }
 
         const mouseUpListener = (e: MouseEvent) => {
             if (e.button === MouseButton.LEFT) {
                 isLeftMousePressed = false
             }
-            if (e.button === MouseButton.MIDDLE) {
-                scrollStartRef.current = null
-            }
         }
 
         const mouseMoveListener = (e: MouseEvent) => {
             mousePosition.x = e.clientX
             mousePosition.y = e.clientY
-
-            if (!scrollStartRef.current) return;
-
-            const delta = new vec2(
-                e.clientX - scrollStartRef.current.mouseX,
-                e.clientY - scrollStartRef.current.mouseY
-            )
-
         }
 
-        const keyDownListener = (e: KeyboardEvent) => {
-            if (e.key === "ArrowRight") isRightPressed = true
-            if (e.key === "ArrowUp") isUpPressed = true
-            if (e.key === "ArrowDown") isDownPressed = true
-            if (e.key === "ArrowLeft") isLeftPressed = true
-        }
-
-        const keyUpListener = (e: KeyboardEvent) => {
-            if (e.key === "ArrowRight") isRightPressed = false
-            if (e.key === "ArrowUp") isUpPressed = false
-            if (e.key === "ArrowDown") isDownPressed = false
-            if (e.key === "ArrowLeft") isLeftPressed = false
-        }
-
-        canvasRef.current.addEventListener("wheel", scrollListener);
         canvasRef.current.addEventListener("mousedown", mouseDownListener);
         canvasRef.current.addEventListener("mouseup", mouseUpListener);
         canvasRef.current.addEventListener("mousemove", mouseMoveListener);
-        canvasRef.current.addEventListener("keydown", keyDownListener)
-        canvasRef.current.addEventListener("keyup", keyUpListener)
         window.addEventListener("resize", resizeListener);
 
         const cpyRef = canvasRef.current
         return () => {
-            cpyRef.removeEventListener("wheel", scrollListener);
             cpyRef.removeEventListener("mousedown", mouseDownListener);
             cpyRef.removeEventListener("mouseup", mouseUpListener);
             cpyRef.removeEventListener("mousemove", mouseMoveListener);
-            cpyRef.removeEventListener("keydown", keyDownListener)
-            cpyRef.removeEventListener("keyup", keyUpListener)
             window.removeEventListener("resize", resizeListener);
         }
     }, []);
