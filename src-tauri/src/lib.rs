@@ -3,6 +3,7 @@ mod legacy_tileset;
 mod map_data;
 mod util;
 
+use crate::editor_data::handlers::get_editor_data;
 use crate::editor_data::EditorData;
 use crate::legacy_tileset::handlers::{download_spritesheet, get_tileset_metadata};
 use crate::map_data::handlers::{get_map_data, place};
@@ -14,15 +15,20 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use tauri::async_runtime::Mutex;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_log::{Target, TargetKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> () {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_log::Builder::new().level(LevelFilter::Debug).build())
+        .plugin(tauri_plugin_log::Builder::new()
+            .level(LevelFilter::Debug)
+            .targets(vec![Target::new(TargetKind::Webview), Target::new(TargetKind::Stdout)])
+            .build()
+        )
         .setup(|app| {
             app.manage(Mutex::new(MapData::new("Unnamed".into())));
 
@@ -127,7 +133,8 @@ pub fn run() -> () {
             get_tileset_metadata,
             download_spritesheet,
             get_map_data,
-            place
+            place,
+            get_editor_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
