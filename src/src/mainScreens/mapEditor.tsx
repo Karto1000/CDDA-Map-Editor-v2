@@ -12,16 +12,16 @@ import {
     Vector2, Vector3,
     WebGLRenderer,
 } from "three"
-import {TextureAtlas} from "./rendering/texture-atlas.ts";
-import {getColorFromTheme} from "./hooks/useTheme.tsx";
-import {ThemeContext} from "./app.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {degToRad} from "three/src/math/MathUtils";
 import {listen} from "@tauri-apps/api/event";
-import {PlaceTerrainEvent, TilesetConfig} from "./lib/map_data/recv";
-import {PlaceCommand} from "./lib/map_data/send";
-import {serializedVec2ToVector2} from "./lib";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
+import {TextureAtlas} from "../rendering/texture-atlas.ts";
+import {ThemeContext} from "../app.tsx";
+import {PlaceTerrainEvent, TilesetConfig} from "../lib/map_data/recv";
+import {serializedVec2ToVector2} from "../lib";
+import {PlaceCommand} from "../lib/map_data/send";
+import {getColorFromTheme} from "../hooks/useTheme.tsx";
 
 //===================================================================
 // Constant Variables Definitions
@@ -101,7 +101,7 @@ const atlases: { [file: string]: TextureAtlas } = {}
 //===================================================================
 // Component Definition
 //===================================================================
-export default function Main() {
+export default function MapEditor() {
     const {theme} = useContext(ThemeContext)
 
     const mainRef = useRef<HTMLDivElement>();

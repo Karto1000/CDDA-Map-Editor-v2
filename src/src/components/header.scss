@@ -11,6 +11,20 @@
         }
       }
 
+      .tab-container {
+        .tab {
+          background-color: theme-var("dark-blue");
+
+          &.opened-tab {
+            background-color: theme-var("selected");
+          }
+
+          &:has(.icon:hover) {
+            background-color: theme-var("delete");
+          }
+        }
+      }
+
       .native-window-control {
         svg {
           color: theme-var("lightest");
@@ -60,6 +74,47 @@
         font-size: 16px;
         font-weight: 200;
         user-select: none;
+      }
+    }
+
+    .tab-container {
+      display: flex;
+      height: calc(100% + 7px);
+      align-items: center;
+
+      .tab {
+        height: 100%;
+        display: flex;
+        box-sizing: border-box;
+        padding: 9px;
+        align-items: center;
+        gap: 12px;
+        cursor: pointer;
+
+        p {
+          font-size: 14px;
+          height: min-content;
+          text-align: center;
+          vertical-align: center;
+        }
+
+        .icon {
+          cursor: pointer;
+        }
+      }
+
+      #add-new-tab-button {
+        aspect-ratio: 1 / 1;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-items: center;
+        padding: 0;
+        cursor: pointer;
+
+        .icon {
+          margin: auto;
+        }
       }
     }
 

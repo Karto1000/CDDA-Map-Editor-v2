@@ -66,6 +66,7 @@ export default function Icon(
     return <img
         style={{rotate: `${rotation}deg`, filter: imgFilter}}
         width={width}
+        className={"icon"}
         height={height}
         src={`/icons/${name}.png`}
         alt={name}

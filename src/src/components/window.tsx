@@ -13,12 +13,22 @@ type Props = {
     setIsOpen: Dispatch<React.SetStateAction<boolean>>;
 
     children: React.ReactNode[] | React.ReactNode;
+
+    initialPosition?: { x: number, y: number }
 }
 
-export default function Window(props: Props) {
+export default function Window(
+    {
+        title,
+        isOpen,
+        setIsOpen,
+        children,
+        initialPosition = {x: 0, y: 0}
+    }: Props
+) {
     const [isDragging, setIsDragging] = useState(false);
-    const [position, setPosition] = useState<{ x: number; y: number }>({x: 0, y: 0});
-    const dragStartPos = useRef<{ x: number; y: number }>({x: 0, y: 0});
+    const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
+    const dragStartPos = useRef<{ x: number; y: number }>(initialPosition);
     const windowRef = useRef<HTMLDivElement | null>(null);
 
     const onMouseMove = useCallback((e: MouseEvent) => {
@@ -54,7 +64,7 @@ export default function Window(props: Props) {
         };
     }, [onMouseMove]);
 
-    if (!props.isOpen) return <></>
+    if (!isOpen) return <></>
 
     return (
         <div
@@ -63,13 +73,13 @@ export default function Window(props: Props) {
             style={{left: `${position.x * 100}%`, top: `${position.y * 100}%`}}
         >
             <div className={"window-control"} onMouseDown={onMouseDown}>
-                <h2>{props.title}</h2>
-                <button className={"close-button"} onClick={() => props.setIsOpen(false)}>
+                <h2>{title}</h2>
+                <button className={"close-button"} onClick={() => setIsOpen(false)}>
                     <Icon name={IconName.CloseSmall}/>
                 </button>
             </div>
             <div className={"window-content"}>
-                {props.children}
+                {children}
             </div>
         </div>
     )

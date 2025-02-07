@@ -1,3 +1,28 @@
+@import "theme";
+
+@include themed($themes) {
+  h1, h2, h3, h4, h5, h6 {
+    color: theme-var("lightest")
+  }
+
+  p {
+    color: theme-var("lightest")
+  }
+
+  .divider {
+    border-color: theme-var("darker");
+  }
+
+  button {
+    border: none;
+    background-color: theme-var("dark");
+
+    &:hover {
+      background-color: theme-var("darker")
+    }
+  }
+}
+
 @font-face {
   font-family: 'Unifont';
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
@@ -16,6 +41,14 @@ p {
   cursor: pointer;
 }
 
+.divider {
+  width: 100%;
+  height: 0;
+  border-bottom: 2px solid;
+  margin-top: 8px;
+  margin-bottom: 8px;
+}
+
 html {
   height: 100%;
   overflow: hidden;
@@ -31,6 +64,10 @@ html {
         height: inherit;
         display: flex;
         flex-direction: column;
+
+        main {
+          height: 100%;
+        }
       }
     }
   }

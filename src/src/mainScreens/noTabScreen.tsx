@@ -1,7 +1,7 @@
 import React from "react"
-import "./startupMain.scss"
+import "./noTabScreen.scss"
 
-export function StartupMain() {
+export function NoTabScreen() {
     function onOpenClicked() {
         alert("TBD")
     }
