@@ -3,9 +3,10 @@ use image::{ImageFormat, ImageReader};
 use std::io::Cursor;
 use std::path::PathBuf;
 use tauri::ipc::Response;
+use tauri::AppHandle;
 
 #[tauri::command(rename_all = "snake_case")]
-pub async fn get_tileset_metadata(name: String) -> Option<TilesetConfig> {
+pub async fn get_tileset_metadata(app_handle: AppHandle, name: String) -> Option<TilesetConfig> {
     let reader = TilesetReader::new(PathBuf::from(name));
     Some(reader.read().unwrap())
 }
