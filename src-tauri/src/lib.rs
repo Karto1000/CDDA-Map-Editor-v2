@@ -3,9 +3,7 @@ mod legacy_tileset;
 mod map_data;
 mod util;
 
-use crate::editor_data::handlers::{
-    cdda_installation_directory_picked, get_editor_data, tileset_picked,
-};
+use crate::editor_data::handlers::{cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked};
 use crate::editor_data::EditorData;
 use crate::legacy_tileset::handlers::{download_spritesheet, get_tileset_metadata};
 use crate::map_data::handlers::{get_map_data, place};
@@ -74,7 +72,7 @@ pub fn run() -> () {
                     info!("Reading config.json file");
                     let contents = fs::read_to_string(&config_file_path).expect("File to be valid UTF-8");
 
-                    match serde_json::from_str::<EditorData>(contents.as_str()) {
+                    let data = match serde_json::from_str::<EditorData>(contents.as_str()) {
                         Ok(d) => {
                             info!("config.json file successfully read and parsed");
                             d
@@ -102,7 +100,9 @@ pub fn run() -> () {
                             let data = match answer {
                                 true => {
                                     fs::remove_file(&config_file_path).expect("File to have been deleted");
-                                    let default_editor_data = EditorData::default();
+                                    let mut default_editor_data = EditorData::default();
+                                    default_editor_data.config.config_path = directory_path.clone();
+
                                     let serialized = serde_json::to_string_pretty(&default_editor_data).expect("Serialization to not fail");
                                     fs::write(&config_file_path, serialized).expect("Directory path to config to have been created");
                                     default_editor_data
@@ -115,13 +115,17 @@ pub fn run() -> () {
 
                             data
                         }
-                    }
+                    };
+
+                    data
                 }
                 false => {
                     info!("config.json file does not exist");
                     info!("Creating config.json file with default data");
 
-                    let default_editor_data = EditorData::default();
+                    let mut default_editor_data = EditorData::default();
+                    default_editor_data.config.config_path = directory_path.clone();
+
                     let serialized = serde_json::to_string_pretty(&default_editor_data).expect("Serialization to not fail");
                     fs::write(&config_file_path, serialized).expect("Directory path to config to have been created");
                     default_editor_data
@@ -138,7 +142,8 @@ pub fn run() -> () {
             place,
             get_editor_data,
             cdda_installation_directory_picked,
-            tileset_picked
+            tileset_picked,
+            save_editor_data
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

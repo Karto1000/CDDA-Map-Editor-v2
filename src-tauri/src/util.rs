@@ -40,3 +40,7 @@ impl<'de> Deserialize<'de> for JSONSerializableUVec2 {
         Ok(JSONSerializableUVec2(UVec2::new(x, y)))
     }
 }
+
+pub trait Save<T> {
+    fn save(&self, data: &T) -> Result<(), std::io::Error>;
+}

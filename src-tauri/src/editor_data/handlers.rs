@@ -1,4 +1,6 @@
-use crate::editor_data::EditorData;
+use crate::editor_data::{EditorData, EditorDataSaver};
+use crate::util::Save;
+use log::{error, info};
 use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
@@ -45,6 +47,7 @@ pub async fn cdda_installation_directory_picked(
 
     let mut lock = editor_data.lock().await;
     lock.available_tilesets = Some(available_tilesets);
+    lock.config.cdda_path = Some(path);
 
     Ok(())
 }
@@ -82,6 +85,32 @@ pub async fn tileset_picked(
     }
 
     lock.config.selected_tileset = Some(tileset.clone());
+
+    Ok(())
+}
+
+#[derive(Debug, thiserror::Error, Serialize)]
+pub enum SaveEditorDataError {
+    #[error("Failed to save editor data, `{0}`")]
+    SaveFailed(String),
+}
+
+#[tauri::command]
+pub async fn save_editor_data(
+    editor_data: State<'_, Mutex<EditorData>>,
+) -> Result<(), SaveEditorDataError> {
+    let lock = editor_data.lock().await;
+
+    let saver = EditorDataSaver {
+        path: lock.config.config_path.clone(),
+    };
+
+    saver.save(&lock).map_err(|e| {
+        error!("Failed to save editor data, `{0}`", e);
+        SaveEditorDataError::SaveFailed(e.to_string())
+    })?;
+
+    info!("Saved EditorData to {:?}", &lock.config.config_path);
 
     Ok(())
 }
