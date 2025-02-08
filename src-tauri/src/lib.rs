@@ -3,7 +3,9 @@ mod legacy_tileset;
 mod map_data;
 mod util;
 
-use crate::editor_data::handlers::get_editor_data;
+use crate::editor_data::handlers::{
+    cdda_installation_directory_picked, get_editor_data, tileset_picked,
+};
 use crate::editor_data::EditorData;
 use crate::legacy_tileset::handlers::{download_spritesheet, get_tileset_metadata};
 use crate::map_data::handlers::{get_map_data, place};
@@ -134,7 +136,9 @@ pub fn run() -> () {
             download_spritesheet,
             get_map_data,
             place,
-            get_editor_data
+            get_editor_data,
+            cdda_installation_directory_picked,
+            tileset_picked
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

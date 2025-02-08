@@ -29,3 +29,4 @@ glam = { version = "0.29.2", features = ["serde"] }
 anyhow = "1.0.95"
 log = "0.4.22"
 directories = "6.0.0"
+thiserror = "2.0.11"

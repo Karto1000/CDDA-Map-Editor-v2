@@ -24,4 +24,6 @@ impl Default for EditorConfig {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct EditorData {
     pub config: EditorConfig,
+
+    pub available_tilesets: Option<Vec<String>>,
 }

@@ -526,6 +526,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-log",
  "tauri-plugin-shell",
+ "thiserror 2.0.11",
 ]
 
 [[package]]
