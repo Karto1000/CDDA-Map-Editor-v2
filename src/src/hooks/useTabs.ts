@@ -1,15 +1,19 @@
-import {useState} from "react";
+import {MutableRefObject, useEffect, useRef, useState} from "react";
+import {invoke} from "@tauri-apps/api/core";
+import {EditorDataSendCommand} from "../lib/editor_data/send";
+import {listen, UnlistenFn} from "@tauri-apps/api/event";
+import {EditorDataRecvEvent} from "../lib/editor_data/recv";
+import {makeCancelable} from "../lib";
 
 export enum TabType {
-    Welcome,
-    MapEditor,
-    LiveViewer
+    Welcome = "Welcome",
+    MapEditor = "MapEditor",
+    LiveViewer = "LiveViewer"
 }
 
 export type Tab = {
     name: string,
-    icon: null,
-    type: TabType
+    tab_type: TabType
 }
 
 export type UseTabsReturn = {
@@ -17,21 +21,40 @@ export type UseTabsReturn = {
     openedTab: number,
     addTab: (tab: Tab) => void,
     removeTab: (index: number) => void,
-    setOpenedTab: (index: number) => void
+    setOpenedTab: (index: number) => void,
 }
 
 export function useTabs(): UseTabsReturn {
     const [tabs, setTabs] = useState<Tab[]>([])
     const [openTab, setOpenTab] = useState<number | null>(null)
 
-    function addTab(tab: Tab) {
-        setTabs([...tabs, tab])
+    useEffect(() => {
+        const unlistenOpened = makeCancelable(listen<Tab>(EditorDataRecvEvent.TabCreated, e => {
+            setTabs(tabs => [...tabs, e.payload])
+        }))
+
+        let unlistenClosed = makeCancelable(listen<number>(EditorDataRecvEvent.TabClosed, e => {
+            setTabs(tabs => {
+                const newTabs = [...tabs]
+                newTabs.splice(e.payload, 1)
+
+                return newTabs
+            })
+        }))
+
+        return () => {
+            unlistenOpened.cancel()
+            unlistenClosed.cancel()
+        }
+    }, []);
+
+    async function addTab(tab: Tab) {
+        await invoke(EditorDataSendCommand.CreateTab, {name: tab.name, tabType: tab.tab_type})
     }
 
-    function removeTab(index: number) {
-        const newTabs = [...tabs]
-        newTabs.splice(index, 1)
-        setTabs(newTabs)
+    async function removeTab(index: number) {
+        if (index === openTab) setOpenTab(null)
+        await invoke(EditorDataSendCommand.CloseTab, {index})
     }
 
     function setOpenedTab(index: number) {

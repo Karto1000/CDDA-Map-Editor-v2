@@ -3,7 +3,7 @@
 //===================================================================
 
 import React, {useContext, useEffect, useRef, useState} from "react";
-import "./main.scss"
+import "./mapEditor.scss"
 import Stats from "stats.js"
 import {
     AmbientLight, GridHelper,

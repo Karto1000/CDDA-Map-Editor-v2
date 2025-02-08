@@ -6,10 +6,16 @@ import {Dropdown} from "./dropdown.tsx";
 import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 import {TabContext} from "../app.tsx";
+import {TabType} from "../hooks/useTabs.ts";
+import {invoke} from "@tauri-apps/api/core";
+import {MapDataSendCommand} from "../lib/map_data/send";
 
 type Props = {
     isSettingsWindowOpen: boolean,
     setIsSettingsWindowOpen: Dispatch<SetStateAction<boolean>>,
+
+    isCreatingMapWindowOpen: boolean,
+    setIsCreatingMapWindowOpen: Dispatch<SetStateAction<boolean>>,
 }
 
 export function Header(props: Props) {
@@ -21,6 +27,21 @@ export function Header(props: Props) {
         e.stopPropagation()
 
         tabs.removeTab(index)
+    }
+
+    function onTabCreate() {
+        props.setIsCreatingMapWindowOpen(true)
+    }
+
+    async function onTabOpen(index: number) {
+        if (tabs.openedTab === index) {
+            await invoke(MapDataSendCommand.CloseMap, {})
+            tabs.setOpenedTab(null)
+        }
+        else {
+            await invoke(MapDataSendCommand.OpenMap, {index})
+            tabs.setOpenedTab(index)
+        }
     }
 
     return (
@@ -41,10 +62,8 @@ export function Header(props: Props) {
                         <div className={"tab-container"}>
                             {
                                 tabs.tabs.map((t, i) => (
-                                    <div className={`tab ${tabs.openedTab === i ? "opened-tab" : ""}`} key={i} onClick={() => {
-                                        if (tabs.openedTab === i) tabs.setOpenedTab(null)
-                                        else tabs.setOpenedTab(i)
-                                    }}>
+                                    <div className={`tab ${tabs.openedTab === i ? "opened-tab" : ""}`} key={i}
+                                         onClick={() => onTabOpen(i)}>
                                         <p>{t.name}</p>
                                         <div onClick={e => onTabClose(e, i)}>
                                             <Icon name={IconName.CloseSmall} width={12} height={12}/>
@@ -52,7 +71,7 @@ export function Header(props: Props) {
                                     </div>
                                 ))
                             }
-                            <button id={"add-new-tab-button"}>
+                            <button id={"add-new-tab-button"} onClick={onTabCreate}>
                                 <Icon name={IconName.AddSmall} width={16} height={16}/>
                             </button>
                         </div>

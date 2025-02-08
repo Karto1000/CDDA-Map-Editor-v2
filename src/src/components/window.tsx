@@ -14,7 +14,7 @@ type Props = {
 
     children: React.ReactNode[] | React.ReactNode;
 
-    initialPosition?: { x: number, y: number }
+    initialPosition?: { x: number, y: number, innerOffsetX: number, innerOffsetY: number }
 }
 
 export default function Window(
@@ -23,20 +23,29 @@ export default function Window(
         isOpen,
         setIsOpen,
         children,
-        initialPosition = {x: 0, y: 0}
+        initialPosition = {x: 0, y: 0, innerOffsetX: 0, innerOffsetY: 0}
     }: Props
 ) {
     const [isDragging, setIsDragging] = useState(false);
     const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
-    const dragStartPos = useRef<{ x: number; y: number }>(initialPosition);
+    const dragStartPos = useRef<{ x: number; y: number, innerOffsetX: number, innerOffsetY: number }>(initialPosition);
     const windowRef = useRef<HTMLDivElement | null>(null);
 
     const onMouseMove = useCallback((e: MouseEvent) => {
         if (!isDragging) return;
 
+        const normalizedX = (position.x + (e.clientX - dragStartPos.current.x)) / window.innerWidth
+        const normalizedY = (position.y + (e.clientY - dragStartPos.current.y)) / window.innerHeight
+
+        const clampMinX = dragStartPos.current.innerOffsetX / window.innerWidth
+        const clampMinY = dragStartPos.current.innerOffsetY / window.innerHeight
+
+        const clampMaxX = 1 - (windowRef.current.clientWidth - dragStartPos.current.innerOffsetX) / window.innerWidth
+        const clampMaxY = 1 - (windowRef.current.clientHeight - dragStartPos.current.innerOffsetY) / window.innerHeight
+
         setPosition({
-            x: clamp((position.x + (e.clientX - dragStartPos.current.x)) / window.innerWidth, 0, 1 - windowRef.current.clientWidth / window.innerWidth),
-            y: clamp((position.y + (e.clientY - dragStartPos.current.y)) / window.innerHeight, 0, 1 - windowRef.current.clientHeight / window.innerHeight),
+            x: clamp(normalizedX, clampMinX, clampMaxX),
+            y: clamp(normalizedY, clampMinY, clampMaxY),
         });
     }, [isDragging, position.x, position.y]);
 
@@ -50,8 +59,10 @@ export default function Window(
 
         const normalizedX = e.clientX / window.innerWidth;
         const normalizedY = e.clientY / window.innerHeight;
+        const innerOffsetX = e.clientX - windowRef.current.offsetLeft
+        const innerOffsetY = e.clientY - windowRef.current.offsetTop
 
-        dragStartPos.current = {x: normalizedX, y: normalizedY};
+        dragStartPos.current = {x: normalizedX, y: normalizedY, innerOffsetX, innerOffsetY};
     };
 
     useEffect(() => {
@@ -70,7 +81,10 @@ export default function Window(
         <div
             className={"window"}
             ref={windowRef}
-            style={{left: `${position.x * 100}%`, top: `${position.y * 100}%`}}
+            style={{
+                left: `calc(${position.x * 100}% - ${dragStartPos.current.innerOffsetX}px)`,
+                top: `calc(${position.y * 100}% - ${dragStartPos.current.innerOffsetY}px)`
+            }}
         >
             <div className={"window-control"} onMouseDown={onMouseDown}>
                 <h2>{title}</h2>

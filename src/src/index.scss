@@ -1,7 +1,7 @@
 @import "theme";
 
 @include themed($themes) {
-  h1, h2, h3, h4, h5, h6 {
+  h1, h2, h3, h4, h5, h6, p, label {
     color: theme-var("lightest")
   }
 
@@ -11,10 +11,6 @@
     ::-webkit-scrollbar {
       background-color: red
     }
-  }
-
-  p {
-    color: theme-var("lightest")
   }
 
   .divider {
@@ -36,7 +32,7 @@
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
 }
 
-:root, button, input, select, option {
+:root, button, input, select, option, label {
   font-family: 'Unifont', sans-serif;
 }
 
