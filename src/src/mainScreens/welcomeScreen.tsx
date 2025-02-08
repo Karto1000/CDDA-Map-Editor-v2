@@ -5,6 +5,7 @@ import {open} from "@tauri-apps/plugin-dialog";
 import {invoke} from "@tauri-apps/api/core";
 import {EditorData} from "../lib/editor_data/recv";
 import {TabContext} from "../app.tsx";
+import {EditorDataSendCommand} from "../lib/editor_data/send";
 
 export function WelcomeScreen() {
     const [cddaInstallDirectory, setCDDAInstallDirectory] = useState<string>()
@@ -21,7 +22,7 @@ export function WelcomeScreen() {
             // TODO: handle
             await invoke<unknown>("tileset_picked", {tileset: selectedTilset})
         })()
-    }, [selectedTilset]);
+    }, [hasPickedCDDADirectory, selectedTilset]);
 
     async function onCDDAGameSelectClick() {
         const path = await open({
@@ -40,11 +41,13 @@ export function WelcomeScreen() {
         setHasPickedCDDADirectory(true)
     }
 
-    function onSaveAndCloseClick() {
+    async function onSaveAndCloseClick() {
         if (!hasPickedCDDADirectory) {
             window.alert("You need to pick a CDDA install directory before proceeding")
             return
         }
+
+        await invoke(EditorDataSendCommand.SaveEditorData, {})
 
         tabs.setOpenedTab(null)
         tabs.removeTab(0)
@@ -60,24 +63,21 @@ export function WelcomeScreen() {
                 <p>First, please select the CDDA game installation directory</p>
                 <button
                     onClick={onCDDAGameSelectClick}>{cddaInstallDirectory ? cddaInstallDirectory : "Select your CDDA game Installation directory"}</button>
-                {
-                    availableTilesets.length > 0 &&
-                    <div>
-                        <p>Select a tileset if you want a graphical representation of your map. If you do not select
-                            one, the tiles will be displayed as the characters they are mapped to</p>
-                        <select value={selectedTilset}
-                                onChange={() => {
-                                    if (selectRef.current.selectedIndex === 0) setSelectedTileset("None")
-                                    else setSelectedTileset(availableTilesets[selectRef.current.selectedIndex])
-                                }}
-                                ref={selectRef} defaultValue={"None"}>
-                            <option>None</option>
-                            {
-                                availableTilesets.map(t => <option key={t}>{t}</option>)
-                            }
-                        </select>
-                    </div>
-                }
+                <div>
+                    <p>Select a tileset if you want a graphical representation of your map. If you do not select
+                        one, the tiles will be displayed as the characters they are mapped to</p>
+                    <select value={selectedTilset}
+                            onChange={() => {
+                                if (selectRef.current.selectedIndex === 0) setSelectedTileset("None")
+                                else setSelectedTileset(availableTilesets[selectRef.current.selectedIndex])
+                            }}
+                            ref={selectRef} defaultValue={"None"}>
+                        <option>None</option>
+                        {
+                            availableTilesets.map(t => <option key={t}>{t}</option>)
+                        }
+                    </select>
+                </div>
                 <p>
                     To get started with creating maps, click on the <span><Icon name={IconName.AddSmall}/></span> Icon
                     next to the "Welcome to the CDDA Map Editor" Tab to create a new Map</p>
