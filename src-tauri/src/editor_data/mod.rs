@@ -1,6 +1,9 @@
 pub(crate) mod handlers;
+pub(crate) mod tab;
 
+use crate::editor_data::tab::Tab;
 use crate::util::Save;
+use log::info;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::io::Error;
@@ -30,6 +33,8 @@ impl Default for EditorConfig {
 pub struct EditorData {
     pub config: EditorConfig,
 
+    pub tabs: Vec<Tab>,
+
     pub available_tilesets: Option<Vec<String>>,
 }
 
@@ -41,6 +46,7 @@ impl Save<EditorData> for EditorDataSaver {
     fn save(&self, data: &EditorData) -> Result<(), Error> {
         let serialized = serde_json::to_string_pretty(data).expect("Serialization to not fail");
         fs::write(self.path.join("config.json"), serialized)?;
+        info!("Saved EditorData to {}", self.path.display());
         Ok(())
     }
 }

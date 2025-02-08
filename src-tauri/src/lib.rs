@@ -3,11 +3,15 @@ mod legacy_tileset;
 mod map_data;
 mod util;
 
-use crate::editor_data::handlers::{cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked};
+use crate::editor_data::handlers::{
+    cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
+};
+use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::EditorData;
 use crate::legacy_tileset::handlers::{download_spritesheet, get_tileset_metadata};
-use crate::map_data::handlers::{get_map_data, place};
-use crate::map_data::MapData;
+use crate::map_data::handlers::{close_map, create_map, get_current_map_data};
+use crate::map_data::handlers::{open_map, place};
+use crate::map_data::{MapData, MapDataContainer};
 use directories::ProjectDirs;
 use image::GenericImageView;
 use log::{error, info, warn, LevelFilter};
@@ -15,9 +19,28 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fs;
 use tauri::async_runtime::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
+
+#[tauri::command]
+async fn frontend_ready(
+    app: AppHandle,
+    editor_data: State<'_, Mutex<EditorData>>,
+) -> Result<(), ()> {
+    let lock = editor_data.lock().await;
+
+    for tab in &lock.tabs {
+        info!("Opened Tab {}", &tab.name);
+        app.emit("tab_opened", tab).expect("Emit to not fail");
+    }
+
+    info!("Sent inital editor data change");
+    app.emit("editor_data_changed", lock.clone())
+        .expect("Emit to not fail");
+
+    Ok(())
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> () {
@@ -30,8 +53,6 @@ pub fn run() -> () {
             .build()
         )
         .setup(|app| {
-            app.manage(Mutex::new(MapData::new("Unnamed".into())));
-
             let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
 
             let directory_path = match project_dir {
@@ -133,17 +154,27 @@ pub fn run() -> () {
             };
 
             app.manage(Mutex::new(config));
+
+            let map_data = MapDataContainer::default();
+            app.manage(Mutex::new(map_data));
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_tileset_metadata,
             download_spritesheet,
-            get_map_data,
+            get_current_map_data,
             place,
             get_editor_data,
             cdda_installation_directory_picked,
             tileset_picked,
-            save_editor_data
+            save_editor_data,
+            create_tab,
+            close_tab,
+            frontend_ready,
+            create_map,
+            open_map,
+            close_map
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

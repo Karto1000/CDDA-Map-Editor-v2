@@ -18,6 +18,15 @@ pub struct MapData {
     cells: HashMap<UVec2, Cell>,
 }
 
+impl MapData {
+    pub fn new(name: String) -> Self {
+        MapData {
+            cells: Default::default(),
+            name,
+        }
+    }
+}
+
 impl Serialize for MapData {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -39,11 +48,8 @@ impl Serialize for MapData {
     }
 }
 
-impl MapData {
-    pub fn new(name: String) -> Self {
-        MapData {
-            cells: Default::default(),
-            name,
-        }
-    }
+#[derive(Debug, Default, Serialize, Deserialize, Clone)]
+pub struct MapDataContainer {
+    pub data: Vec<MapData>,
+    pub current_map: Option<usize>,
 }

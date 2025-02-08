@@ -110,7 +110,5 @@ pub async fn save_editor_data(
         SaveEditorDataError::SaveFailed(e.to_string())
     })?;
 
-    info!("Saved EditorData to {:?}", &lock.config.config_path);
-
     Ok(())
 }
