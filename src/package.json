@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "@tauri-apps/api": "2.0.1",
+    "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-log": "^2.2.1",
     "@tauri-apps/plugin-shell": "^2.2.0",
     "@testing-library/react": "^13.4.0",

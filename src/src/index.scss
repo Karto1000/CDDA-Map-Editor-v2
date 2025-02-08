@@ -5,6 +5,14 @@
     color: theme-var("lightest")
   }
 
+  * {
+    scrollbar-color: theme-var("selected") theme-var("darker");
+
+    ::-webkit-scrollbar {
+      background-color: red
+    }
+  }
+
   p {
     color: theme-var("lightest")
   }
@@ -13,9 +21,9 @@
     border-color: theme-var("darker");
   }
 
-  button {
-    border: none;
+  button, select {
     background-color: theme-var("dark");
+    color: theme-var("lightest");
 
     &:hover {
       background-color: theme-var("darker")
@@ -28,12 +36,17 @@
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
 }
 
-:root, button, input {
+:root, button, input, select, option {
   font-family: 'Unifont', sans-serif;
 }
 
 p {
   margin: 0;
+}
+
+button, select {
+  cursor: pointer;
+  border: none;
 }
 
 .interactable-text {

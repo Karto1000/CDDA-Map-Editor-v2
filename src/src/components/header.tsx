@@ -19,6 +19,8 @@ export function Header(props: Props) {
     function onTabClose(e: React.MouseEvent<HTMLDivElement>, index: number) {
         e.preventDefault()
         e.stopPropagation()
+
+        tabs.removeTab(index)
     }
 
     return (

@@ -6,4 +6,5 @@ export type EditorConfig = {
 
 export type EditorData = {
     config: EditorConfig
+    available_tilesets: string[]
 }

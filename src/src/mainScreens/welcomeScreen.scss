@@ -2,11 +2,27 @@
 
 @include themed($themes) {
   #welcome-main {
-    background-color: theme-var("dark");
-    background-image: radial-gradient(circle, theme-var("dark-blue") 1px, rgba(0, 0, 0, 0) 1px);
+    background-image: url("../../public/showcase-ultica.png");
+    background-repeat: no-repeat;
+    background-size: cover;
 
     &:before {
-      background: radial-gradient(circle at center, theme-var("selected"), theme-var("darker") 500px);
+      background-color: theme-var("darker");
+    }
+
+    &:after {
+      background: radial-gradient(circle at center, theme-var("darker"), rgba(theme-var("darker"), 0)) no-repeat;
+      background-size: 100%;
+    }
+
+    #introduction-container {
+      #tab-close-button {
+        background-color: theme-var("selected");
+
+        &:hover {
+          background-color: theme-var("dark-blue")
+        }
+      }
     }
   }
 }
@@ -27,24 +43,40 @@
     width: 100%;
     height: 100%;
     z-index: 0;
-    opacity: 0.2;
+    opacity: 0.8;
+    pointer-events: none;
   }
 
-  #mockup-image {
-    max-width: 690px;
-    max-height: 388px;
-    z-index: 1;
+  &:after {
+    position: absolute;
+    content: "";
+    width: 100%;
+    height: 400px;
+    top: calc(50% - 200px);
+    z-index: 0;
+    pointer-events: none;
   }
 
-  h1 {
-    margin-top: 0;
-    font-weight: 400;
+  #introduction-container {
+    padding: 8px;
     z-index: 1;
-  }
 
-  p {
-    margin-top: 16px;
-    margin-bottom: 16px;
-    z-index: 1;
+    h1 {
+      margin-top: 0;
+      font-weight: 400;
+    }
+
+    p {
+      margin-top: 16px;
+      margin-bottom: 16px;
+    }
+
+    button {
+      height: 32px;
+    }
+
+    select {
+      height: 32px;
+    }
   }
 }

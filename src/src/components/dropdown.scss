@@ -2,6 +2,8 @@
 
 @include themed($themes) {
   .dropdown {
+    z-index: 500;
+
     .dropdown-button {
       color: theme-var("lightest");
 

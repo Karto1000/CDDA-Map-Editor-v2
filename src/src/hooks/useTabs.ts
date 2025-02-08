@@ -29,7 +29,9 @@ export function useTabs(): UseTabsReturn {
     }
 
     function removeTab(index: number) {
-        setTabs([...tabs.splice(index, 1)])
+        const newTabs = [...tabs]
+        newTabs.splice(index, 1)
+        setTabs(newTabs)
     }
 
     function setOpenedTab(index: number) {

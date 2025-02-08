@@ -71,14 +71,14 @@ function App() {
                         isSettingsWindowOpen={isSettingsWindowOpen}
                         setIsSettingsWindowOpen={setIsSettingsWindowOpen}
                     />
+
+                    <Window isOpen={isSettingsWindowOpen} title={"Settings"} setIsOpen={setIsSettingsWindowOpen}>
+                        <button onClick={() => setTheme(theme === Theme.Dark ? Theme.Light : Theme.Dark)}>Switch Theme
+                        </button>
+                    </Window>
+
+                    {getMainBasedOnTab()}
                 </TabContext.Provider>
-
-                <Window isOpen={isSettingsWindowOpen} title={"Settings"} setIsOpen={setIsSettingsWindowOpen}>
-                    <button onClick={() => setTheme(theme === Theme.Dark ? Theme.Light : Theme.Dark)}>Switch Theme
-                    </button>
-                </Window>
-
-                {getMainBasedOnTab()}
             </ThemeContext.Provider>
         </div>
     );
