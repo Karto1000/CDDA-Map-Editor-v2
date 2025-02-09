@@ -49,3 +49,7 @@ export type PlaceTerrainEvent = {
     position: string
     identifier: string
 }
+
+export enum MapDataEvent {
+    OpenedMap = "opened_map"
+}

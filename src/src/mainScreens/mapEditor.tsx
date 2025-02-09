@@ -6,10 +6,14 @@ import React, {useContext, useEffect, useRef, useState} from "react";
 import "./mapEditor.scss"
 import Stats from "stats.js"
 import {
-    AmbientLight, GridHelper,
-    PerspectiveCamera, Plane, Raycaster,
+    AmbientLight,
+    GridHelper,
+    PerspectiveCamera,
+    Plane,
+    Raycaster,
     Scene,
-    Vector2, Vector3,
+    Vector2,
+    Vector3,
     WebGLRenderer,
 } from "three"
 import {invoke} from "@tauri-apps/api/core";
@@ -17,11 +21,12 @@ import {degToRad} from "three/src/math/MathUtils";
 import {listen} from "@tauri-apps/api/event";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import {TextureAtlas} from "../rendering/texture-atlas.ts";
-import {ThemeContext} from "../app.tsx";
+import {EditorDataContext, ThemeContext} from "../app.tsx";
 import {PlaceTerrainEvent, TilesetConfig} from "../lib/map_data/recv";
-import {serializedVec2ToVector2} from "../lib";
+import {BackendResponse, BackendResponseType, invokeTauri, serializedVec2ToVector2} from "../lib";
 import {PlaceCommand} from "../lib/map_data/send";
 import {getColorFromTheme} from "../hooks/useTheme.tsx";
+import {LegacyTilesetCommand} from "../lib/tileset/legacy/send";
 
 //===================================================================
 // Constant Variables Definitions
@@ -98,11 +103,16 @@ let isLeftMousePressed = false
 let mousePosition = new Vector2()
 const atlases: { [file: string]: TextureAtlas } = {}
 
+type Props = {
+    isDisplaying: boolean
+}
+
 //===================================================================
 // Component Definition
 //===================================================================
-export default function MapEditor() {
+export default function MapEditor(props: Props) {
     const {theme} = useContext(ThemeContext)
+    const editorData = useContext(EditorDataContext)
 
     const mainRef = useRef<HTMLDivElement>();
     const canvasRef = useRef<HTMLCanvasElement>();
@@ -114,6 +124,14 @@ export default function MapEditor() {
     const controlsRef = useRef<OrbitControls>()
 
     const [isLoaded, setIsLoaded] = useState<boolean>(false)
+
+    function onResize() {
+        const newWidth = mainRef.current.clientWidth
+        const newHeight = mainRef.current.clientHeight
+
+        rendererRef.current.setSize(newWidth, newHeight)
+        perspectiveCameraRef.current.aspect = newWidth / newHeight
+    }
 
     // Setup Three.js
     useEffect(() => {
@@ -202,26 +220,42 @@ export default function MapEditor() {
 
     // Load the tileset
     useEffect(() => {
-        (async () => {
-            const metadata = await invoke<TilesetConfig>("get_tileset_metadata", {name: "MSX++UnDeadPeopleEdition"})
+        if (!editorData?.config.selected_tileset) return
 
-            const downloadPromises: Promise<ArrayBuffer>[] = []
+        (async () => {
+            const metadata = await invoke<TilesetConfig>(
+                LegacyTilesetCommand.GetTilesetMetadata,
+                {name: "MSX++UnDeadPeopleEdition"}
+            )
+
+            const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
 
             for (let tileInfo of metadata["tiles-new"]) {
                 console.log(`Loading ${tileInfo.file}`)
-                downloadPromises.push(invoke<ArrayBuffer>("download_spritesheet", {
-                    tileset: "MSX++UnDeadPeopleEdition",
-                    name: tileInfo.file
-                }))
+
+                const response = invokeTauri<ArrayBuffer, unknown>(
+                    LegacyTilesetCommand.DownloadSpritesheet, {
+                        tileset: editorData.config.selected_tileset,
+                        name: tileInfo.file
+                    }
+                );
+
+                downloadPromises.push(response)
             }
 
             const arrayBuffs = await Promise.all(downloadPromises)
 
             for (let i = 0; i < arrayBuffs.length; i++) {
-                const arrayBuffer = arrayBuffs[i]
+                const response = arrayBuffs[i]
+
+                if (response.type === BackendResponseType.Error) {
+                    console.log(`Failed to load Tileset`)
+                    return
+                }
+
                 const tileInfo = metadata["tiles-new"][i]
 
-                const blob = new Blob([arrayBuffer], {type: "image/png"});
+                const blob = new Blob([response.data], {type: "image/png"});
                 const url = URL.createObjectURL(blob)
 
                 atlases[tileInfo.file] = TextureAtlas.loadFromURL(
@@ -256,14 +290,8 @@ export default function MapEditor() {
                     events.current.push(e.payload)
                 }
             )
-
-            // await invoke<PlaceCommand>(
-            //     "place",
-            //     {command: {position: `${x},${y}`, character: "g"}}
-            // )
-
         })()
-    }, []);
+    }, [editorData?.config.selected_tileset]);
 
     useEffect(() => {
         if (!isLoaded) return
@@ -288,13 +316,7 @@ export default function MapEditor() {
 
     // Set up the listeners
     useEffect(() => {
-        const resizeListener = (e: Event) => {
-            const newWidth = mainRef.current.clientWidth
-            const newHeight = mainRef.current.clientHeight
-
-            rendererRef.current.setSize(newWidth, newHeight)
-            perspectiveCameraRef.current.aspect = newWidth / newHeight
-        }
+        const resizeListener = onResize
 
         const mouseDownListener = async (e: MouseEvent) => {
             if (e.button === MouseButton.LEFT) {
@@ -327,8 +349,16 @@ export default function MapEditor() {
         }
     }, []);
 
+    useEffect(() => {
+        if (!props.isDisplaying) return
+
+        perspectiveCameraRef.current.position.z = getCameraZForSpriteSize(mainRef.current.clientWidth, 32, 75);
+
+        onResize()
+    }, [props.isDisplaying])
+
     return (
-        <main ref={mainRef}>
+        <main ref={mainRef} style={{display: props.isDisplaying ? "unset" : "none"}}>
             <canvas ref={canvasRef} tabIndex={1}/>
         </main>
     )

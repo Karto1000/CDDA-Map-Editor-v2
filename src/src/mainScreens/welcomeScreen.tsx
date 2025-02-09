@@ -4,7 +4,7 @@ import Icon, {IconName} from "../components/icon.tsx";
 import {open} from "@tauri-apps/plugin-dialog";
 import {invoke} from "@tauri-apps/api/core";
 import {EditorData} from "../lib/editor_data/recv";
-import {TabContext} from "../app.tsx";
+import {EditorDataContext, TabContext} from "../app.tsx";
 import {EditorDataSendCommand} from "../lib/editor_data/send";
 
 export function WelcomeScreen() {
@@ -20,7 +20,7 @@ export function WelcomeScreen() {
 
         (async () => {
             // TODO: handle
-            await invoke<unknown>("tileset_picked", {tileset: selectedTilset})
+            await invoke<unknown>(EditorDataSendCommand.TilesetPicked, {tileset: selectedTilset})
         })()
     }, [hasPickedCDDADirectory, selectedTilset]);
 
@@ -33,10 +33,10 @@ export function WelcomeScreen() {
         if (!path) return;
 
         // TODO: Handle
-        await invoke<unknown>("cdda_installation_directory_picked", {path})
+        await invoke<unknown>(EditorDataSendCommand.CDDAInstallationDirectoryPicked, {path})
         setCDDAInstallDirectory(path)
 
-        const data = await invoke<EditorData>("get_editor_data", {})
+        const data = await invoke<EditorData>(EditorDataSendCommand.GetEditorData, {})
         setAvailableTilesets(data.available_tilesets)
         setHasPickedCDDADirectory(true)
     }
@@ -69,7 +69,7 @@ export function WelcomeScreen() {
                     <select value={selectedTilset}
                             onChange={() => {
                                 if (selectRef.current.selectedIndex === 0) setSelectedTileset("None")
-                                else setSelectedTileset(availableTilesets[selectRef.current.selectedIndex])
+                                else setSelectedTileset(availableTilesets[selectRef.current.selectedIndex - 1])
                             }}
                             ref={selectRef} defaultValue={"None"}>
                         <option>None</option>
