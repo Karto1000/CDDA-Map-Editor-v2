@@ -5,7 +5,7 @@ use serde::Serialize;
 use std::fs;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
-use tauri::State;
+use tauri::{App, AppHandle, Emitter, State};
 
 #[tauri::command]
 pub async fn get_editor_data(editor_data: State<'_, Mutex<EditorData>>) -> Result<EditorData, ()> {
@@ -24,6 +24,7 @@ pub enum InstallationPickedError {
 #[tauri::command]
 pub async fn cdda_installation_directory_picked(
     path: PathBuf,
+    app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), InstallationPickedError> {
     let gfx_dir = fs::read_dir(&path.join("gfx")).map_err(|_| {
@@ -49,6 +50,9 @@ pub async fn cdda_installation_directory_picked(
     lock.available_tilesets = Some(available_tilesets);
     lock.config.cdda_path = Some(path);
 
+    app.emit("editor_data_changed", lock.clone())
+        .expect("Emit to not fail");
+
     Ok(())
 }
 
@@ -64,6 +68,7 @@ pub enum TilesetPickedError {
 #[tauri::command]
 pub async fn tileset_picked(
     tileset: String,
+    app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), TilesetPickedError> {
     let mut lock = editor_data.lock().await;
@@ -85,6 +90,9 @@ pub async fn tileset_picked(
     }
 
     lock.config.selected_tileset = Some(tileset.clone());
+
+    app.emit("editor_data_changed", lock.clone())
+        .expect("Emit to not fail");
 
     Ok(())
 }
