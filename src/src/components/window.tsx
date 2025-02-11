@@ -27,7 +27,6 @@ export default function Window(
     }: Props
 ) {
     const [isDragging, setIsDragging] = useState<boolean>(false);
-    const [isMouseDown, setIsMouseDown] = useState<boolean>(false)
     const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
     const [mousePosition, setMousePosition] = useState<{ x: number, y: number }>({x: 0, y: 0})
     const dragStartPos = useRef<{ x: number; y: number, innerOffsetX: number, innerOffsetY: number }>(initialPosition);
@@ -36,7 +35,7 @@ export default function Window(
     const onMouseMove = useCallback((e: MouseEvent) => {
         setMousePosition({x: e.clientX, y: e.clientY})
 
-        if (!isDragging || !isMouseDown) return;
+        if (!isDragging) return;
 
         const normalizedX = (position.x + (e.clientX - dragStartPos.current.x)) / window.innerWidth
         const normalizedY = (position.y + (e.clientY - dragStartPos.current.y)) / window.innerHeight
@@ -52,7 +51,7 @@ export default function Window(
             y: clamp(normalizedY, clampMinY, clampMaxY),
         });
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [isDragging, isMouseDown]);
+    }, [isDragging]);
 
     useEffect(() => {
         if (!isDragging) return
@@ -66,18 +65,12 @@ export default function Window(
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isDragging]);
 
-    useEffect(() => {
-        if (isMouseDown) setIsDragging(true)
-        else setIsDragging(false)
-    }, [isMouseDown]);
-
     const onMouseUp = () => {
-        setIsMouseDown(false);
         setIsDragging(false);
     };
 
-    const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        setIsMouseDown(true)
+    const onMouseDown = () => {
+        setIsDragging(true)
     };
 
     useEffect(() => {
