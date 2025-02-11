@@ -1,13 +1,17 @@
-import React from "react"
+import React, {Dispatch, SetStateAction} from "react"
 import "./noTabScreen.scss"
 
-export function NoTabScreen() {
+type Props = {
+    setIsCreatingMapWindowOpen: Dispatch<SetStateAction<boolean>>
+}
+
+export function NoTabScreen(props: Props) {
     function onOpenClicked() {
         alert("TBD")
     }
 
     function onCreateClicked() {
-        alert("TBD")
+        props.setIsCreatingMapWindowOpen(true)
     }
 
     function onImportClicked() {
@@ -18,10 +22,10 @@ export function NoTabScreen() {
         <main id={"startupMain"}>
             <div id={"centerOptions"}>
                 <div>
-                    <span className={"interactable-text"} onClick={onOpenClicked}>Open</span> an existing Project
+                    <span className={"interactable-text"} onClick={onOpenClicked}>Open</span> an existing Map
                 </div>
                 <div>
-                    <span className={"interactable-text"} onClick={onCreateClicked}>Create</span> a new Project
+                    <span className={"interactable-text"} onClick={onCreateClicked}>Create</span> a new Map
                 </div>
                 <div>
                     <span className={"interactable-text"} onClick={onImportClicked}>Import</span> a Mapgen File

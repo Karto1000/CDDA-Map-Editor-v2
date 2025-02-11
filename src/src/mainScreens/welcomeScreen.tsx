@@ -1,4 +1,4 @@
-import React, {useContext, useEffect, useRef, useState} from "react";
+import React, {Dispatch, SetStateAction, useContext, useEffect, useRef, useState} from "react";
 import "./welcomeScreen.scss"
 import Icon, {IconName} from "../components/icon.tsx";
 import {open} from "@tauri-apps/plugin-dialog";

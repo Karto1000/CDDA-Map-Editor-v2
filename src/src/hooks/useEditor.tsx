@@ -2,16 +2,15 @@ import {
     AmbientLight,
     GridHelper,
     PerspectiveCamera,
-    Scene, Vector2, Vector3,
+    Scene, Vector2,
     WebGLRenderer
 } from "three";
 import {MutableRefObject, useContext, useEffect, useRef} from "react";
 import {ThemeContext} from "../app.tsx";
 import Stats from "stats.js";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
-import {getColorFromTheme} from "../hooks/useTheme.tsx";
+import {getColorFromTheme, Theme} from "../hooks/useTheme.tsx";
 import {degToRad} from "three/src/math/MathUtils";
-import {serializedVec2ToVector2} from "../lib";
 import {Atlases} from "./useTileset.ts";
 
 const MIN_ZOOM: number = 7000;
@@ -30,12 +29,11 @@ type Props = {
     canvasContainerRef: MutableRefObject<HTMLDivElement>
     atlasesRef: MutableRefObject<Atlases>
 
+    theme: Theme
     isDisplaying: boolean
 }
 
-export function useEditor(props: Props) {
-    const {theme} = useContext(ThemeContext)
-
+export function useEditor(props: Props): void {
     const rendererRef = useRef<WebGLRenderer>()
     const cameraRef = useRef<PerspectiveCamera>()
     const controlsRef = useRef<OrbitControls>()
@@ -81,9 +79,21 @@ export function useEditor(props: Props) {
 
         setup()
 
+        function onResize() {
+            const newWidth = props.canvasContainerRef.current.clientWidth
+            const newHeight = props.canvasContainerRef.current.clientHeight
+
+            rendererRef.current.setSize(newWidth, newHeight)
+            cameraRef.current.aspect = newWidth / newHeight
+            cameraRef.current.position.z = getCameraZForSpriteSize(newWidth, 32, 75);
+        }
+
+        window.addEventListener("resize", onResize)
+
         return () => {
             props.sceneRef.current.remove(ambientLightRef.current)
             props.sceneRef.current.remove(gridHelperRef.current)
+            window.removeEventListener("resize", onResize)
         }
     }, [props.canvasContainerRef, props.canvasRef, props.sceneRef]);
 
@@ -126,16 +136,16 @@ export function useEditor(props: Props) {
         return () => {
             cancelAnimationFrame(handler)
         }
-    }, [props.canvasContainerRef, props.isDisplaying, props.sceneRef]);
+    }, [props.atlasesRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef]);
 
     // Should run when the theme changes to change colors
     useEffect(() => {
-        rendererRef.current.setClearColor(getColorFromTheme(theme, "darker"))
+        rendererRef.current.setClearColor(getColorFromTheme(props.theme, "darker"))
 
         const gridHelper = new GridHelper(
             1,
             16 * 8 * 32 * 24 / 32,
-            getColorFromTheme(theme, "disabled"), getColorFromTheme(theme, "light")
+            getColorFromTheme(props.theme, "disabled"), getColorFromTheme(props.theme, "light")
         )
         gridHelper.scale.x = 16 * 8 * 32 * 24
         gridHelper.scale.z = 16 * 8 * 32 * 24
@@ -146,5 +156,5 @@ export function useEditor(props: Props) {
         gridHelper.rotateX(degToRad(90))
         props.sceneRef.current.add(gridHelper)
         gridHelperRef.current = gridHelper
-    }, [props.sceneRef, theme]);
+    }, [props.sceneRef, props.theme]);
 }

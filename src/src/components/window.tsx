@@ -26,13 +26,17 @@ export default function Window(
         initialPosition = {x: 0, y: 0, innerOffsetX: 0, innerOffsetY: 0}
     }: Props
 ) {
-    const [isDragging, setIsDragging] = useState(false);
+    const [isDragging, setIsDragging] = useState<boolean>(false);
+    const [isMouseDown, setIsMouseDown] = useState<boolean>(false)
     const [position, setPosition] = useState<{ x: number; y: number }>(initialPosition);
+    const [mousePosition, setMousePosition] = useState<{ x: number, y: number }>({x: 0, y: 0})
     const dragStartPos = useRef<{ x: number; y: number, innerOffsetX: number, innerOffsetY: number }>(initialPosition);
     const windowRef = useRef<HTMLDivElement | null>(null);
 
     const onMouseMove = useCallback((e: MouseEvent) => {
-        if (!isDragging) return;
+        setMousePosition({x: e.clientX, y: e.clientY})
+
+        if (!isDragging || !isMouseDown) return;
 
         const normalizedX = (position.x + (e.clientX - dragStartPos.current.x)) / window.innerWidth
         const normalizedY = (position.y + (e.clientY - dragStartPos.current.y)) / window.innerHeight
@@ -47,22 +51,33 @@ export default function Window(
             x: clamp(normalizedX, clampMinX, clampMaxX),
             y: clamp(normalizedY, clampMinY, clampMaxY),
         });
-    }, [isDragging, position.x, position.y]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isDragging, isMouseDown]);
+
+    useEffect(() => {
+        if (!isDragging) return
+
+        const normalizedX = mousePosition.x / window.innerWidth;
+        const normalizedY = mousePosition.y / window.innerHeight;
+        const innerOffsetX = mousePosition.x - windowRef.current.offsetLeft
+        const innerOffsetY = mousePosition.y - windowRef.current.offsetTop
+
+        dragStartPos.current = {x: normalizedX, y: normalizedY, innerOffsetX, innerOffsetY};
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isDragging]);
+
+    useEffect(() => {
+        if (isMouseDown) setIsDragging(true)
+        else setIsDragging(false)
+    }, [isMouseDown]);
 
     const onMouseUp = () => {
+        setIsMouseDown(false);
         setIsDragging(false);
     };
 
     const onMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-        e.stopPropagation();
-        setIsDragging(true);
-
-        const normalizedX = e.clientX / window.innerWidth;
-        const normalizedY = e.clientY / window.innerHeight;
-        const innerOffsetX = e.clientX - windowRef.current.offsetLeft
-        const innerOffsetY = e.clientY - windowRef.current.offsetTop
-
-        dragStartPos.current = {x: normalizedX, y: normalizedY, innerOffsetX, innerOffsetY};
+        setIsMouseDown(true)
     };
 
     useEffect(() => {
@@ -84,11 +99,14 @@ export default function Window(
             style={{
                 left: `calc(${position.x * 100}% - ${dragStartPos.current.innerOffsetX}px)`,
                 top: `calc(${position.y * 100}% - ${dragStartPos.current.innerOffsetY}px)`
-            }}
-        >
+            }}>
             <div className={"window-control"} onMouseDown={onMouseDown}>
                 <h2>{title}</h2>
-                <button className={"close-button"} onClick={() => setIsOpen(false)}>
+                <button className={"close-button"} onMouseDown={(e) => {
+                    e.stopPropagation()
+
+                    setIsOpen(false)
+                }}>
                     <Icon name={IconName.CloseSmall}/>
                 </button>
             </div>

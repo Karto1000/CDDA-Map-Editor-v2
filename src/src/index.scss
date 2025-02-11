@@ -17,12 +17,20 @@
     border-color: theme-var("darker");
   }
 
-  button, select {
+  button, select, input {
     background-color: theme-var("dark");
     color: theme-var("lightest");
 
     &:hover {
-      background-color: theme-var("darker")
+      background-color: theme-var("selected")
+    }
+  }
+
+  input {
+    &:focus, &:hover {
+      &::placeholder {
+        color: theme-var("lightest")
+      }
     }
   }
 }
@@ -40,7 +48,7 @@ p {
   margin: 0;
 }
 
-button, select {
+button, select, input {
   cursor: pointer;
   border: none;
 }
