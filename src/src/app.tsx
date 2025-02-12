@@ -1,4 +1,4 @@
-import React, {createContext, useEffect, useState} from 'react';
+import React, {createContext, useEffect, useRef, useState} from 'react';
 import {Header} from "./components/header.tsx";
 import {Theme, useTheme} from "./hooks/useTheme.tsx";
 import Window from "./components/window.tsx";
@@ -10,7 +10,9 @@ import {WelcomeScreen} from "./mainScreens/welcomeScreen.tsx";
 import {listen} from "@tauri-apps/api/event";
 import {makeCancelable} from "./lib";
 import {MapDataSendCommand} from "./lib/map_data/send";
-import MapEditor from "./mainScreens/mapEditor.tsx";
+import {Scene} from "three";
+import {useEditor} from "./hooks/useEditor.tsx";
+import {useTileset} from "./hooks/useTileset.ts";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
@@ -30,6 +32,12 @@ function App() {
     const [isSettingsWindowOpen, setIsSettingsWindowOpen] = useState<boolean>(false);
     const [isCreatingMapWindowOpen, setIsCreatingMapWindowOpen] = useState<boolean>(false);
 
+    const mapEditorCanvasContainerRef = useRef<HTMLDivElement>()
+    const mapEditorCanvasRef = useRef<HTMLCanvasElement>();
+    const mapEditorSceneRef = useRef<Scene>(new Scene())
+
+    const atlases = useTileset(editorData, mapEditorSceneRef)
+
     useEffect(() => {
         let unlistenDataChanged = makeCancelable(listen<EditorData>(
             EditorDataRecvEvent.EditorDataChanged,
@@ -37,7 +45,7 @@ function App() {
                 setEditorData(e.payload)
 
                 if (!e.payload.config.cdda_path) {
-                    tabs.addTab(
+                    await tabs.addTab(
                         {
                             name: "Welcome to the CDDA Map Editor",
                             tab_type: TabType.Welcome,
@@ -60,13 +68,14 @@ function App() {
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
-            if (tabs.tabs[tabs.openedTab].tab_type === TabType.MapEditor)
-                return <MapEditor/>
             if (tabs.tabs[tabs.openedTab].tab_type === TabType.Welcome)
                 return <WelcomeScreen/>
+
+            if (tabs.tabs[tabs.openedTab].tab_type === TabType.MapEditor)
+                return <></>
         }
 
-        return <NoTabScreen/>
+        return <NoTabScreen setIsCreatingMapWindowOpen={setIsCreatingMapWindowOpen}/>
     }
 
     async function createMap() {
@@ -75,6 +84,18 @@ function App() {
         setIsCreatingMapWindowOpen(false)
         setCreatingMapName("")
     }
+
+    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabType.MapEditor
+    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
+
+    useEditor({
+        canvasRef: mapEditorCanvasRef,
+        sceneRef: mapEditorSceneRef,
+        canvasContainerRef: mapEditorCanvasContainerRef,
+        isDisplaying: isDisplayingMapEditor,
+        atlasesRef: atlases,
+        theme
+    })
 
     return (
         <div className={`app ${theme}-theme`}>
@@ -98,11 +119,18 @@ function App() {
                                 setIsOpen={setIsCreatingMapWindowOpen}>
                             <label htmlFor={"map-name"}>Map Name</label>
                             <input name={"map-name"} value={creatingMapName}
+                                   placeholder={"Map Name"}
                                    onChange={e => setCreatingMapName(e.target.value)}/>
                             <button onClick={createMap}>
                                 Create
                             </button>
                         </Window>
+
+                        <div ref={mapEditorCanvasContainerRef}
+                             style={{width: "100%", height: "100%", display: mapEditorCanvasDisplay}}>
+                            {/* This should always be in the dom because then we only have to load the sprites once */}
+                            <canvas ref={mapEditorCanvasRef} tabIndex={0}/>
+                        </div>
 
                         {getMainBasedOnTab()}
                     </TabContext.Provider>

@@ -32,7 +32,7 @@ async fn frontend_ready(
 
     for tab in &lock.tabs {
         info!("Opened Tab {}", &tab.name);
-        app.emit("tab_opened", tab).expect("Emit to not fail");
+        app.emit("tab_created", tab).expect("Emit to not fail");
     }
 
     info!("Sent inital editor data change");
@@ -155,7 +155,10 @@ pub fn run() -> () {
 
             app.manage(Mutex::new(config));
 
-            let map_data = MapDataContainer::default();
+            let mut map_data = MapDataContainer::default();
+            // For Testing
+            map_data.data.push(MapData::new("test".into()));
+
             app.manage(Mutex::new(map_data));
 
             Ok(())

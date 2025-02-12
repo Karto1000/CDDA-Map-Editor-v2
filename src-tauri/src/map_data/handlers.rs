@@ -13,7 +13,7 @@ pub enum GetCurrentMapDataError {
     #[error("No map has been opened")]
     NoMapOpened,
     #[error("Invalid map index")]
-    InvalidMapIndex,
+    InvalidMapIndex(usize),
 }
 
 fn get_current_map<'a>(
@@ -25,7 +25,7 @@ fn get_current_map<'a>(
     };
 
     let data = match map_data_container.data.get(map_index) {
-        None => return Err(GetCurrentMapDataError::InvalidMapIndex),
+        None => return Err(GetCurrentMapDataError::InvalidMapIndex(map_index)),
         Some(d) => d,
     };
 
@@ -41,7 +41,7 @@ fn get_current_map_mut<'a>(
     };
 
     let data = match map_data_container.data.get_mut(map_index) {
-        None => return Err(GetCurrentMapDataError::InvalidMapIndex),
+        None => return Err(GetCurrentMapDataError::InvalidMapIndex(map_index)),
         Some(d) => d,
     };
 
@@ -145,10 +145,14 @@ pub async fn create_map(
 #[tauri::command]
 pub async fn open_map(
     index: usize,
+    app: AppHandle,
     map_data_container: State<'_, Mutex<MapDataContainer>>,
 ) -> Result<(), ()> {
     let mut lock = map_data_container.lock().await;
     lock.current_map = Some(index);
+
+    app.emit("opened_map", index).expect("Function to not fail");
+
     Ok(())
 }
 

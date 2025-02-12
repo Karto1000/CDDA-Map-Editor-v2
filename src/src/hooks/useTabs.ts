@@ -19,7 +19,7 @@ export type Tab = {
 export type UseTabsReturn = {
     tabs: Tab[],
     openedTab: number,
-    addTab: (tab: Tab) => void,
+    addTab: (tab: Tab) => Promise<void>,
     removeTab: (index: number) => void,
     setOpenedTab: (index: number) => void,
 }
