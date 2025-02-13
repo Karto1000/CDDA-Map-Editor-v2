@@ -9,6 +9,7 @@ use std::fs;
 use std::io::Error;
 use std::path::PathBuf;
 use tauri::Theme;
+use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditorConfig {
@@ -16,6 +17,34 @@ pub struct EditorConfig {
     pub config_path: PathBuf,
     pub selected_tileset: Option<String>,
     pub theme: Theme,
+}
+
+#[derive(Debug, Serialize, Error)]
+pub enum CDDAPathError {
+    #[error("There was no CDDA path that was set")]
+    NoCDDAPathSet,
+}
+
+#[derive(Debug, Serialize, Error)]
+pub enum SelectedTilesetError {
+    #[error("No Tileset was selected")]
+    NoTilesetSelected,
+}
+
+impl EditorConfig {
+    pub fn get_cdda_path(&self) -> Result<PathBuf, CDDAPathError> {
+        self.cdda_path
+            .as_ref()
+            .ok_or(CDDAPathError::NoCDDAPathSet)
+            .map(Clone::clone)
+    }
+
+    pub fn get_selected_tileset(&self) -> Result<String, SelectedTilesetError> {
+        self.selected_tileset
+            .as_ref()
+            .ok_or(SelectedTilesetError::NoTilesetSelected)
+            .map(Clone::clone)
+    }
 }
 
 impl Default for EditorConfig {
