@@ -6,17 +6,26 @@ import {
     Object3D, SRGBColorSpace,
     Texture,
     TextureLoader,
-    Vector2
+    Vector2, Vector3
 } from "three";
 
 export type InstanceNumber = number;
+
+export enum SpriteLayer {
+    Fg,
+    Bg
+}
 
 export class Tilesheet {
     public readonly range: [number, number] | null
     public readonly material: AtlasMaterial
     public readonly yLayer: number
+    public readonly spritesheetInfo: TileNew
     private atlasConfig: AtlasMaterialConfig
-    public mappedTiles: Map<string, InstanceNumber>
+
+    public mappedTilesFG: Map<string, InstanceNumber>
+    public mappedTilesBG: Map<string, InstanceNumber>
+
     public mesh: InstancedMesh
 
     constructor(
@@ -29,7 +38,7 @@ export class Tilesheet {
         const tileWidth = spritesheetInfo.sprite_width || tilesetInfo.width
         const tileHeight = spritesheetInfo.sprite_height || tilesetInfo.height
 
-        let range;
+        let range: [number, number];
         if (spritesheetInfo["//"]) range = Tilesheet.getRangeFromComment(spritesheetInfo, spritesheetInfo["//"])
         else range = null
 
@@ -47,6 +56,7 @@ export class Tilesheet {
             texture,
             atlasMaterialConfig
         )
+        this.spritesheetInfo = spritesheetInfo
         this.atlasConfig = atlasMaterialConfig
         this.mesh = new InstancedMesh(
             this.material.geometry,
@@ -54,12 +64,12 @@ export class Tilesheet {
             maxInstances
         )
         this.mesh.renderOrder = this.yLayer
-        this.mappedTiles = new Map()
+        this.mappedTilesBG = new Map()
 
         for (let instance = 0; instance < this.atlasConfig.maxInstances; instance++) {
             const transform = new Object3D()
             // Kinda hacky, but it works for now
-            transform.position.set(0, 0, -9999)
+            transform.position.set(0, 0, -999999)
             transform.updateMatrix()
 
             this.mesh.setMatrixAt(instance, transform.matrix)
@@ -92,22 +102,23 @@ export class Tilesheet {
         return index >= this.range[0] && index <= this.range[1]
     }
 
-    public drawSpriteLocalIndex(index: number, position: Vector2) {
-        this.drawSpriteLocalIndexBatched([index], [position])
+    public drawSpriteLocalIndex(index: number, position: Vector3, layer: SpriteLayer) {
+        this.drawSpriteLocalIndexBatched([index], [position], [layer])
     }
 
-    public drawSpriteLocalIndexBatched(indices: number[], positions: Vector2[]) {
+    public drawSpriteLocalIndexBatched(indices: number[], positions: Vector3[], layers: SpriteLayer[]) {
         const uvMappings = {instances: [], uvs: []}
 
         for (let i = 0; i < indices.length; i++) {
             const index = indices[i]
             const position = positions[i]
+            const layer = layers[i]
 
-            let mappedInstance = this.mappedTiles.get(`${position.x}:${position.y}`)
+            let mappedInstance = this.mappedTilesBG.get(`${position.x}:${position.y}:${layer}`)
 
             if (mappedInstance === undefined) {
                 mappedInstance = this.material.getNextFreeInstance()
-                this.mappedTiles.set(`${position.x}:${position.y}`, mappedInstance)
+                this.mappedTilesBG.set(`${position.x}:${position.y}:${layer}`, mappedInstance)
                 this.material.reserveInstance(mappedInstance)
             }
 
@@ -115,10 +126,11 @@ export class Tilesheet {
             uvMappings.uvs.push(this.getCoordinatesFromIndex(index))
 
             const transform = new Object3D()
+
             transform.position.set(
                 position.x,
-                position.y,
-                this.yLayer
+                position.y - (this.spritesheetInfo.sprite_offset_y || 0) / 2,
+                position.z
             )
             transform.updateMatrix()
 
@@ -126,6 +138,26 @@ export class Tilesheet {
         }
 
         this.material.setUVSAt(uvMappings.instances, uvMappings.uvs)
+        this.mesh.instanceMatrix.needsUpdate = true
+        this.mesh.computeBoundingSphere()
+    }
+
+    public removeSprite(position: Vector2, layer: SpriteLayer) {
+        let mappedInstance = this.mappedTilesBG.get(`${position.x}:${position.y}:${layer}`)
+
+        if (!mappedInstance) return
+
+        const transform = new Object3D()
+
+        // Make it blank
+        transform.position.set(
+            0,
+            0,
+            -999999
+        )
+        transform.updateMatrix()
+
+        this.mesh.setMatrixAt(mappedInstance, transform.matrix)
         this.mesh.instanceMatrix.needsUpdate = true
         this.mesh.computeBoundingSphere()
     }

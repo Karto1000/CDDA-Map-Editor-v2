@@ -1,4 +1,4 @@
-import {InstancedBufferAttribute, MeshLambertMaterial, PlaneGeometry, Texture, Vector2} from "three";
+import {InstancedBufferAttribute, MeshLambertMaterial, NormalBlending, PlaneGeometry, Texture, Vector2} from "three";
 
 export type AtlasMaterialConfig = {
     tileWidth: number
@@ -18,7 +18,14 @@ export class AtlasMaterial {
     private setInstances: Set<number>
 
     constructor(texture: Texture, config: AtlasMaterialConfig) {
-        this.material = new MeshLambertMaterial({map: texture, transparent: true})
+        this.material = new MeshLambertMaterial({
+            map: texture,
+            transparent: true,
+            depthWrite: true,
+            depthTest: true,
+            alphaTest: 0.1,
+            blending: NormalBlending
+        })
         this.geometry = new PlaneGeometry(config.tileWidth, config.tileHeight)
         this.maxInstances = config.maxInstances
         this.uvs = new Float32Array(this.maxInstances * this.uvItemSize)
@@ -68,8 +75,9 @@ export class AtlasMaterial {
             const instance = instances[i]
             const texturePos = spritesheetTexturesPos[i]
 
-            this.uvs[instance * this.uvItemSize] = texturePos.x
-            this.uvs[instance * this.uvItemSize + 1] = texturePos.y
+            const uv = new Vector2(texturePos.x, texturePos.y)
+            this.uvs[instance * this.uvItemSize] = uv.x
+            this.uvs[instance * this.uvItemSize + 1] = uv.y
         }
 
         this.textOffsetAttribute.set(this.uvs)

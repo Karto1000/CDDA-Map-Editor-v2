@@ -88,7 +88,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                 return atlases
             }
 
-            const atlases = await loadFromBackend();
+            const atlases = await loadFromPublic();
 
             for (let atlasKey of Object.keys(atlases)) {
                 console.log(`Adding ${atlasKey} to the scene`)
