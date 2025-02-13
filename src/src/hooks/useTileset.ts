@@ -1,4 +1,4 @@
-import {MutableRefObject, useEffect, useRef} from "react";
+import {MutableRefObject, useEffect, useRef, useState} from "react";
 import {LegacyTilesetCommand} from "../lib/tileset/legacy/send";
 import {BackendResponse, BackendResponseType, invokeTauri} from "../lib";
 import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, TextureLoader, Vector2} from "three";
@@ -8,11 +8,14 @@ import {Tilesheets} from "../rendering/tilesheets.ts";
 
 export type Atlases = { [file: string]: Tilesheet }
 
-export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Scene>): MutableRefObject<Tilesheets> {
+export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Scene>): [MutableRefObject<Tilesheets>, boolean] {
     const tilesheets = useRef<Tilesheets>()
+    const [isLoaded, setIsLoaded] = useState<boolean>(false)
 
     useEffect(() => {
         if (!editorData?.config.selected_tileset) return
+
+        setIsLoaded(false);
 
         (async () => {
             const infoResponse = await invokeTauri<SpritesheetConfig, unknown>(LegacyTilesetCommand.GetInfoOfCurrentTileset, {})
@@ -94,9 +97,10 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                 sceneRef.current.add(atlas.mesh)
             }
 
+            setIsLoaded(true)
             tilesheets.current = new Tilesheets(atlases);
         })()
     }, [editorData?.config.selected_tileset, sceneRef]);
 
-    return tilesheets
+    return [tilesheets, isLoaded]
 }

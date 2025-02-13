@@ -36,7 +36,7 @@ function App() {
     const mapEditorCanvasRef = useRef<HTMLCanvasElement>();
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
-    const tilesheets = useTileset(editorData, mapEditorSceneRef)
+    const [tilesheets, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
 
     useEffect(() => {
         let unlistenDataChanged = makeCancelable(listen<EditorData>(
@@ -94,6 +94,7 @@ function App() {
         canvasContainerRef: mapEditorCanvasContainerRef,
         isDisplaying: isDisplayingMapEditor,
         tilesheetsRef: tilesheets,
+        isTilesheetLoaded,
         theme
     })
 

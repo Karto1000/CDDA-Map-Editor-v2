@@ -15,6 +15,7 @@ import {Atlases} from "./useTileset.ts";
 import {Tilesheets} from "../rendering/tilesheets.ts";
 import {DragControls} from "three/examples/jsm/controls/DragControls";
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls";
+import {isValidInputTimeValue} from "@testing-library/user-event/dist/utils";
 
 const MIN_ZOOM: number = 7000;
 const MAX_ZOOM: number = 5;
@@ -34,6 +35,7 @@ type Props = {
 
     theme: Theme
     isDisplaying: boolean
+    isTilesheetLoaded: boolean
 }
 
 export function useEditor(props: Props): void {
@@ -116,17 +118,6 @@ export function useEditor(props: Props): void {
 
         initialValueUpdate();
 
-        const indices = []
-        const positions = []
-        for (let y = 0; y < 400; y++) {
-            for (let x = 0; x < 400; x++) {
-                indices.push(y * 400 + x)
-                positions.push(new Vector2(x * 32, y * 32))
-            }
-        }
-
-        props.tilesheetsRef.current.drawSpritesBatched(indices, positions)
-
         let handler: number;
 
         function loop() {
@@ -168,4 +159,19 @@ export function useEditor(props: Props): void {
         props.sceneRef.current.add(gridHelper)
         gridHelperRef.current = gridHelper
     }, [props.sceneRef, props.theme]);
+
+    useEffect(() => {
+        if (!props.isTilesheetLoaded) return;
+
+        const indices = []
+        const positions = []
+        for (let y = 0; y < 400; y++) {
+            for (let x = 0; x < 400; x++) {
+                indices.push(y * 400 + x)
+                positions.push(new Vector2(x * 32, y * 32))
+            }
+        }
+
+        props.tilesheetsRef.current.drawSpritesBatched(indices, positions)
+    }, [props.isTilesheetLoaded]);
 }
