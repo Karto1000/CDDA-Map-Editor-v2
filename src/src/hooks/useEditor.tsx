@@ -12,6 +12,7 @@ import {OrbitControls} from "three/examples/jsm/controls/OrbitControls";
 import {getColorFromTheme, Theme} from "../hooks/useTheme.tsx";
 import {degToRad} from "three/src/math/MathUtils";
 import {Atlases} from "./useTileset.ts";
+import {Tilesheets} from "../rendering/tilesheets.ts";
 
 const MIN_ZOOM: number = 7000;
 const MAX_ZOOM: number = 5;
@@ -27,7 +28,7 @@ type Props = {
     sceneRef: MutableRefObject<Scene>,
     canvasRef: MutableRefObject<HTMLCanvasElement>
     canvasContainerRef: MutableRefObject<HTMLDivElement>
-    atlasesRef: MutableRefObject<Atlases>
+    tilesheetsRef: MutableRefObject<Tilesheets>
 
     theme: Theme
     isDisplaying: boolean
@@ -114,7 +115,7 @@ export function useEditor(props: Props): void {
 
         initialValueUpdate();
 
-        props.atlasesRef.current["normal_terrain.png"].setTileAt(new Vector2(0, 0), "t_grass")
+        props.tilesheetsRef.current.drawSprite(16420, new Vector2(0, 0))
 
         let handler: number;
 
@@ -136,7 +137,7 @@ export function useEditor(props: Props): void {
         return () => {
             cancelAnimationFrame(handler)
         }
-    }, [props.atlasesRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef]);
+    }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef]);
 
     // Should run when the theme changes to change colors
     useEffect(() => {

@@ -1,5 +1,12 @@
 import {InstancedBufferAttribute, MeshLambertMaterial, PlaneGeometry, Texture, Vector2} from "three";
-import {TextureAtlas} from "./texture-atlas.ts";
+
+export type AtlasMaterialConfig = {
+    tileWidth: number
+    tileHeight: number
+    atlasWidth: number
+    atlasHeight: number,
+    maxInstances: number
+}
 
 export class AtlasMaterial {
     public readonly material: MeshLambertMaterial
@@ -10,16 +17,16 @@ export class AtlasMaterial {
     private readonly textOffsetAttribute: InstancedBufferAttribute
     private setInstances: Set<number>
 
-    constructor(textureAtlas: TextureAtlas, texture: Texture, maxInstances: number) {
+    constructor(texture: Texture, config: AtlasMaterialConfig) {
         this.material = new MeshLambertMaterial({map: texture, transparent: true})
-        this.geometry = new PlaneGeometry(textureAtlas.tileWidth, textureAtlas.tileHeight)
-        this.maxInstances = maxInstances
+        this.geometry = new PlaneGeometry(config.tileWidth, config.tileHeight)
+        this.maxInstances = config.maxInstances
         this.uvs = new Float32Array(this.maxInstances * this.uvItemSize)
 
         // Absolute LEGEND -> https://discourse.threejs.org/t/use-texturepacker-atlas-in-an-instancedmesh/63445/6
         this.material.onBeforeCompile = shader => {
-            shader.uniforms.atlasSize = {value: new Vector2(textureAtlas.textureWidth, textureAtlas.textureHeight)}
-            shader.uniforms.texSize = {value: new Vector2(textureAtlas.tileWidth, textureAtlas.tileHeight)}
+            shader.uniforms.atlasSize = {value: new Vector2(config.atlasWidth, config.atlasHeight)}
+            shader.uniforms.texSize = {value: new Vector2(config.tileWidth, config.tileHeight)}
 
             shader.vertexShader = `
                 uniform vec2 atlasSize;
@@ -53,7 +60,6 @@ export class AtlasMaterial {
         this.uvs[instance * this.uvItemSize + 1] = spritesheetTexturePos.y
         this.textOffsetAttribute.set(this.uvs)
         this.setInstances.add(instance)
-
         this.textOffsetAttribute.needsUpdate = true
     }
 
