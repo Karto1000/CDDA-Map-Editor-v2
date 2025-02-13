@@ -56,10 +56,23 @@ export class AtlasMaterial {
     }
 
     public setUVAt(instance: number, spritesheetTexturePos: Vector2) {
-        this.uvs[instance * this.uvItemSize] = spritesheetTexturePos.x
-        this.uvs[instance * this.uvItemSize + 1] = spritesheetTexturePos.y
-        this.textOffsetAttribute.set(this.uvs)
+        this.setUVSAt([instance], [spritesheetTexturePos])
+    }
+
+    public reserveInstance(instance: number) {
         this.setInstances.add(instance)
+    }
+
+    public setUVSAt(instances: number[], spritesheetTexturesPos: Vector2[]) {
+        for (let i = 0; i < instances.length; i++) {
+            const instance = instances[i]
+            const texturePos = spritesheetTexturesPos[i]
+
+            this.uvs[instance * this.uvItemSize] = texturePos.x
+            this.uvs[instance * this.uvItemSize + 1] = texturePos.y
+        }
+
+        this.textOffsetAttribute.set(this.uvs)
         this.textOffsetAttribute.needsUpdate = true
     }
 

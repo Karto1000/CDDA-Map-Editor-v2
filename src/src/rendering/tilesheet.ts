@@ -12,7 +12,7 @@ import {
 export type InstanceNumber = number;
 
 export class Tilesheet {
-    public readonly range: [number, number]
+    public readonly range: [number, number] | null
     public readonly material: AtlasMaterial
     public readonly yLayer: number
     private atlasConfig: AtlasMaterialConfig
@@ -21,11 +21,17 @@ export class Tilesheet {
 
     constructor(
         texture: Texture,
-        tileWidth: number,
-        tileHeight: number,
-        range: [number, number]
+        tilesetInfo: TileInfo,
+        spritesheetInfo: TileNew
     ) {
-        const maxInstances = 1
+        const maxInstances = 200000
+
+        const tileWidth = spritesheetInfo.sprite_width || tilesetInfo.width
+        const tileHeight = spritesheetInfo.sprite_height || tilesetInfo.height
+
+        let range;
+        if (spritesheetInfo["//"]) range = Tilesheet.getRangeFromComment(spritesheetInfo, spritesheetInfo["//"])
+        else range = null
 
         const atlasMaterialConfig = {
             tileWidth: tileWidth,
@@ -60,6 +66,17 @@ export class Tilesheet {
         }
     }
 
+    private static getRangeFromComment(spritesheetInfo: TileNew, comment: string): [number, number] | null {
+        if (spritesheetInfo["//"]) {
+            const split = spritesheetInfo["//"].split(" to ")
+            const rangeStart = parseInt(split[0].replace("range ", ""))
+            const rangeEnd = parseInt(split[1])
+            return [rangeStart, rangeEnd]
+        }
+
+        return null;
+    }
+
     private getCoordinatesFromIndex(index: number): Vector2 {
         const localRange = index
         const tilesPerRow = this.atlasConfig.atlasWidth / this.atlasConfig.tileWidth
@@ -71,28 +88,44 @@ export class Tilesheet {
     }
 
     public isWithinRange(index: number): boolean {
+        if (!this.range) return false
         return index >= this.range[0] && index <= this.range[1]
     }
 
     public drawSpriteLocalIndex(index: number, position: Vector2) {
-        let mappedInstance = this.mappedTiles.get(`${position.x}:${position.y}`)
+        this.drawSpriteLocalIndexBatched([index], [position])
+    }
 
-        if (mappedInstance === undefined) {
-            mappedInstance = this.material.getNextFreeInstance()
-            this.mappedTiles.set(`${position.x}:${position.y}`, mappedInstance)
+    public drawSpriteLocalIndexBatched(indices: number[], positions: Vector2[]) {
+        const uvMappings = {instances: [], uvs: []}
+
+        for (let i = 0; i < indices.length; i++) {
+            const index = indices[i]
+            const position = positions[i]
+
+            let mappedInstance = this.mappedTiles.get(`${position.x}:${position.y}`)
+
+            if (mappedInstance === undefined) {
+                mappedInstance = this.material.getNextFreeInstance()
+                this.mappedTiles.set(`${position.x}:${position.y}`, mappedInstance)
+                this.material.reserveInstance(mappedInstance)
+            }
+
+            uvMappings.instances.push(mappedInstance)
+            uvMappings.uvs.push(this.getCoordinatesFromIndex(index))
+
+            const transform = new Object3D()
+            transform.position.set(
+                position.x,
+                position.y,
+                this.yLayer
+            )
+            transform.updateMatrix()
+
+            this.mesh.setMatrixAt(mappedInstance, transform.matrix)
         }
 
-        this.material.setUVAt(mappedInstance, this.getCoordinatesFromIndex(index))
-
-        const transform = new Object3D()
-        transform.position.set(
-            position.x * this.atlasConfig.tileWidth,
-            position.y * this.atlasConfig.tileHeight,
-            this.yLayer
-        )
-        transform.updateMatrix()
-
-        this.mesh.setMatrixAt(mappedInstance, transform.matrix)
+        this.material.setUVSAt(uvMappings.instances, uvMappings.uvs)
         this.mesh.instanceMatrix.needsUpdate = true
         this.mesh.computeBoundingSphere()
     }
@@ -110,24 +143,10 @@ export class Tilesheet {
         // https://stackoverflow.com/a/77944452
         texture.colorSpace = SRGBColorSpace
 
-        const tileWidth = spritesheetInfo.sprite_width || tilesetInfo.width
-        const tileHeight = spritesheetInfo.sprite_height || tilesetInfo.height
-
-        let range: [number, number];
-        if (spritesheetInfo["//"]) {
-            const split = spritesheetInfo["//"].split(" to ")
-            const rangeStart = parseInt(split[0].replace("range ", ""))
-            const rangeEnd = parseInt(split[1])
-            range = [rangeStart, rangeEnd]
-        } else {
-            range = [0, 0]
-        }
-
         return new Tilesheet(
             texture,
-            tileWidth,
-            tileHeight,
-            range
+            tilesetInfo,
+            spritesheetInfo
         )
     }
 }

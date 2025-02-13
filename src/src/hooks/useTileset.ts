@@ -1,7 +1,7 @@
 import {MutableRefObject, useEffect, useRef} from "react";
 import {LegacyTilesetCommand} from "../lib/tileset/legacy/send";
 import {BackendResponse, BackendResponseType, invokeTauri} from "../lib";
-import {Scene, Vector2} from "three";
+import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, TextureLoader, Vector2} from "three";
 import {EditorData} from "../lib/editor_data/recv";
 import {Tilesheet} from "../rendering/tilesheet.ts";
 import {Tilesheets} from "../rendering/tilesheets.ts";
@@ -21,41 +21,71 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                 return
             }
 
-            const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
+            const loadFromBackend = async (): Promise<{ [key: string]: Tilesheet }> => {
+                const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
 
-            for (let tileInfo of infoResponse.data["tiles-new"]) {
-                console.log(`Loading ${tileInfo.file}`)
+                for (let tileInfo of infoResponse.data["tiles-new"]) {
+                    console.log(`Loading ${tileInfo.file}`)
 
-                const response = invokeTauri<ArrayBuffer, unknown>(
-                    LegacyTilesetCommand.DownloadSpritesheet, {name: tileInfo.file}
-                );
+                    const response = invokeTauri<ArrayBuffer, unknown>(
+                        LegacyTilesetCommand.DownloadSpritesheet, {name: tileInfo.file}
+                    );
 
-                downloadPromises.push(response)
-            }
-
-            const arrayBuffs = await Promise.all(downloadPromises)
-            const atlases = {}
-
-            for (let i = 0; i < arrayBuffs.length; i++) {
-                const response = arrayBuffs[i]
-
-                if (response.type === BackendResponseType.Error) {
-                    console.log(`Failed to load Tileset ${response.error}`)
-                    return
+                    downloadPromises.push(response)
                 }
 
-                const spritesheetInfo = infoResponse.data["tiles-new"][i]
+                const arrayBuffs = await Promise.all(downloadPromises)
+                const atlases = {}
 
-                const blob = new Blob([response.data], {type: "image/png"});
-                const url = URL.createObjectURL(blob)
+                for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
+                    const response = arrayBuffs[i]
 
+                    if (response.type === BackendResponseType.Error) {
+                        console.log(`Failed to load Tileset ${response.error}`)
+                        return
+                    }
 
-                atlases[spritesheetInfo.file] = await Tilesheet.fromURL(
-                    url,
-                    infoResponse.data.tile_info[0],
-                    spritesheetInfo
-                )
+                    const spritesheetInfo = infoResponse.data["tiles-new"][i]
+
+                    const blob = new Blob([response.data], {type: "image/png"});
+                    const url = URL.createObjectURL(blob)
+
+                    atlases[spritesheetInfo.file] = await Tilesheet.fromURL(
+                        url,
+                        infoResponse.data.tile_info[0],
+                        spritesheetInfo
+                    )
+                }
+
+                return atlases
             }
+
+            const loadFromPublic = async (): Promise<{ [key: string]: Tilesheet }> => {
+                const atlases = {}
+
+                for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
+                    const spritesheetInfo = infoResponse.data["tiles-new"][i]
+
+                    const texture = await new TextureLoader()
+                        .loadAsync(`/MSX++UnDeadPeopleEdition/${spritesheetInfo.file}`,
+                            () => console.log(`Loading ${spritesheetInfo.file}`))
+
+                    texture.magFilter = NearestFilter;
+                    texture.minFilter = LinearMipMapNearestFilter;
+                    // https://stackoverflow.com/a/77944452
+                    texture.colorSpace = SRGBColorSpace
+
+                    atlases[spritesheetInfo.file] = new Tilesheet(
+                        texture,
+                        infoResponse.data.tile_info[0],
+                        spritesheetInfo
+                    )
+                }
+
+                return atlases
+            }
+
+            const atlases = await loadFromBackend();
 
             for (let atlasKey of Object.keys(atlases)) {
                 console.log(`Adding ${atlasKey} to the scene`)
