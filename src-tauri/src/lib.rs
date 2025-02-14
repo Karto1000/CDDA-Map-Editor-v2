@@ -8,7 +8,7 @@ use crate::editor_data::handlers::{
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::EditorData;
-use crate::legacy_tileset::handlers::{download_spritesheet, get_tileset_metadata};
+use crate::legacy_tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::map_data::handlers::{close_map, create_map, get_current_map_data};
 use crate::map_data::handlers::{open_map, place};
 use crate::map_data::{MapData, MapDataContainer};
@@ -35,7 +35,7 @@ async fn frontend_ready(
         app.emit("tab_created", tab).expect("Emit to not fail");
     }
 
-    info!("Sent inital editor data change");
+    info!("Sent initial editor data change");
     app.emit("editor_data_changed", lock.clone())
         .expect("Emit to not fail");
 
@@ -164,8 +164,8 @@ pub fn run() -> () {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            get_tileset_metadata,
             download_spritesheet,
+            get_info_of_current_tileset,
             get_current_map_data,
             place,
             get_editor_data,

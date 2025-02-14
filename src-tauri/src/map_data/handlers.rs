@@ -3,6 +3,7 @@ use crate::editor_data::tab::TabType;
 use crate::editor_data::EditorData;
 use crate::map_data::{Cell, Identifier, MapData, MapDataContainer};
 use crate::util::JSONSerializableUVec2;
+use log::info;
 use serde::{Deserialize, Deserializer, Serialize};
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
@@ -93,8 +94,14 @@ pub async fn place(
     map_data: State<'_, Mutex<MapDataContainer>>,
     command: PlaceCommand,
 ) -> Result<(), PlaceError> {
+    info!("Placing {} at {:?}", command.character, command.position);
+
     let mut lock = map_data.lock().await;
     let data = get_current_map_mut(&mut lock)?;
+
+    if data.cells.get(&command.position.0).is_some() {
+        return Ok(());
+    }
 
     data.cells.insert(
         command.position.0.clone(),

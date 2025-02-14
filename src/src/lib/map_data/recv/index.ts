@@ -51,5 +51,6 @@ export type PlaceTerrainEvent = {
 }
 
 export enum MapDataEvent {
-    OpenedMap = "opened_map"
+    OpenedMap = "opened_map",
+    PlaceTerrain = "place_terrain"
 }

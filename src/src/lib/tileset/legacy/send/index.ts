@@ -1,4 +1,4 @@
 export enum LegacyTilesetCommand {
     DownloadSpritesheet = "download_spritesheet",
-    GetTilesetMetadata = "get_tileset_metadata"
+    GetInfoOfCurrentTileset = "get_info_of_current_tileset"
 }
