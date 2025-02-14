@@ -3,6 +3,7 @@ use std::fs;
 use std::path::PathBuf;
 
 pub(crate) mod handlers;
+pub(crate) mod tile_config;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TileNew {

@@ -111,7 +111,7 @@ pub async fn place(
     );
 
     app.emit(
-        "place_terrain",
+        "place_sprite",
         PlaceTerrainEvent {
             position: command.position.clone(),
             identifier: "t_grass".to_string(),

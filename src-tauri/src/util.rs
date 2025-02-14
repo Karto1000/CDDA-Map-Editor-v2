@@ -1,6 +1,102 @@
 use glam::UVec2;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Weighted<T> {
+    pub sprite: T,
+    pub weight: i32,
+}
+
+impl<T> Weighted<T> {
+    pub fn new(sprite: T, weight: i32) -> Self {
+        Self { sprite, weight }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum MeabyVec<T> {
+    Single(T),
+    Vec(Vec<T>),
+}
+
+impl<T> MeabyVec<T> {
+    pub fn apply<F>(&mut self, fun: F)
+    where
+        F: Fn(&mut T),
+    {
+        match self {
+            MeabyVec::Single(s) => fun(s),
+            MeabyVec::Vec(v) => v.iter_mut().for_each(|v| fun(v)),
+        };
+    }
+
+    pub fn map<F, R>(self, fun: F) -> Vec<R>
+    where
+        F: Fn(T) -> R,
+    {
+        match self {
+            MeabyVec::Single(s) => vec![fun(s)],
+            MeabyVec::Vec(v) => v.into_iter().map(|v| fun(v)).collect(),
+        }
+    }
+
+    pub fn for_each<F>(&self, mut fun: F)
+    where
+        F: FnMut(&T),
+    {
+        match self {
+            MeabyVec::Single(s) => fun(s),
+            MeabyVec::Vec(v) => v.iter().for_each(fun)
+        }
+    }
+
+    pub fn vec(self) -> Vec<T> {
+        match self {
+            MeabyVec::Single(s) => vec![s],
+            MeabyVec::Vec(v) => v
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum MeabyWeighted<T> {
+    NotWeighted(T),
+    Weighted(Weighted<T>),
+}
+
+impl<T> MeabyWeighted<T> {
+    pub fn map<F, R>(self, fun: F) -> R
+    where
+        F: Fn(T) -> R,
+    {
+        match self {
+            MeabyWeighted::NotWeighted(nw) => fun(nw),
+            MeabyWeighted::Weighted(w) => fun(w.sprite)
+        }
+    }
+
+    pub fn data(self) -> T {
+        match self {
+            MeabyWeighted::NotWeighted(nw) => nw,
+            MeabyWeighted::Weighted(w) => w.sprite
+        }
+    }
+}
+
+impl<T> MeabyWeighted<T> {
+    pub fn weighted(self) -> Weighted<T> {
+        match self {
+            MeabyWeighted::NotWeighted(d) => Weighted {
+                sprite: d,
+                weight: 0,
+            },
+            MeabyWeighted::Weighted(w) => w,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct JSONSerializableUVec2(pub UVec2);
 

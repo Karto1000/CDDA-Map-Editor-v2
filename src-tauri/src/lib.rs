@@ -7,21 +7,223 @@ use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
-use crate::editor_data::EditorData;
+use crate::editor_data::{EditorConfig, EditorData};
 use crate::legacy_tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
+use crate::legacy_tileset::tile_config::reader::TileConfigReader;
+use crate::legacy_tileset::tile_config::{AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig};
 use crate::map_data::handlers::{close_map, create_map, get_current_map_data};
 use crate::map_data::handlers::{open_map, place};
 use crate::map_data::{MapData, MapDataContainer};
+use crate::util::{MeabyVec, MeabyWeighted, Weighted};
+use anyhow::anyhow;
 use directories::ProjectDirs;
 use image::GenericImageView;
 use log::{error, info, warn, LevelFilter};
 use serde::{Deserialize, Serialize};
+use std::arch::x86_64::_mm256_insert_epi8;
+use std::collections::HashMap;
 use std::error::Error;
 use std::fs;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
+
+pub type FinalIds = Option<Vec<Weighted<Vec<u32>>>>;
+
+#[derive(Debug)]
+pub struct ForeBackIds {
+    fg: FinalIds,
+    bg: FinalIds,
+}
+
+impl ForeBackIds {
+    pub fn new(fg: FinalIds, bg: FinalIds) -> Self {
+        Self { fg, bg }
+    }
+}
+
+#[derive(Debug)]
+pub enum Sprite {
+    Single {
+        ids: ForeBackIds,
+    },
+    Open {
+        ids: ForeBackIds,
+        open: ForeBackIds,
+    },
+    Broken {
+        ids: ForeBackIds,
+        broken: ForeBackIds,
+    },
+    Explosion {
+        ids: ForeBackIds,
+        center: ForeBackIds,
+        edge: ForeBackIds,
+        corner: ForeBackIds,
+    },
+    Multitile {
+        ids: ForeBackIds,
+
+        edge: Option<ForeBackIds>,
+        corner: Option<ForeBackIds>,
+        center: Option<ForeBackIds>,
+        t_connection: Option<ForeBackIds>,
+        end_piece: Option<ForeBackIds>,
+        unconnected: Option<ForeBackIds>,
+    },
+}
+
+#[derive(Debug, Hash, Eq, PartialEq)]
+pub enum ItemID {
+    Terrain(String),
+    Furniture(String),
+    VehiclePart(String),
+    Monster(String),
+    Overlay(String),
+    Art(String),
+    Field(String),
+    Bionic(String),
+    OverlayEffect(String),
+    OverlayMutation(String),
+    OverlayMutationActive(String),
+    OverlayWorn(String),
+    OverlayWielded(String),
+    Corpse(String),
+    Explosion(String),
+    // TODO: Verify if this is actually correct
+    Unknown(String),
+}
+
+impl From<String> for ItemID {
+    fn from(value: String) -> Self {
+        let (left, _) = match value.split_once("_") {
+            None => return ItemID::Unknown(value),
+            Some((left, right)) => (left, right)
+        };
+
+        // TODO: Handle _male and _female
+        let item_id = match left {
+            "t" => ItemID::Terrain(value),
+            "f" => ItemID::Furniture(value),
+            "vp" => ItemID::VehiclePart(value),
+            "overlay" => ItemID::Overlay(value),
+            "mon" => ItemID::Monster(value),
+            "bio" => ItemID::Bionic(value),
+            "art" => ItemID::Art(value),
+            "fd" => ItemID::Field(value),
+            _ => ItemID::Unknown(value),
+        };
+
+        item_id
+    }
+}
+
+fn to_weighted_vec<T>(indices: Option<MeabyVec<MeabyWeighted<MeabyVec<T>>>>) -> Option<Vec<Weighted<Vec<T>>>> {
+    indices.map(|fg| fg.map(|mw| {
+        let weighted = mw.weighted();
+        let weight = weighted.weight;
+        let vec = weighted.sprite.vec();
+        Weighted::new(vec, weight)
+    }))
+}
+
+fn get_multitile_sprite_from_additional_tiles(
+    tile: &Tile,
+    additional_tiles: &Vec<AdditionalTile>,
+) -> Result<Sprite, anyhow::Error> {
+    let mut additional_tile_ids = HashMap::new();
+
+    for additional_tile in additional_tiles {
+        let fg = to_weighted_vec(additional_tile.fg.clone());
+        let bg = to_weighted_vec(additional_tile.bg.clone());
+
+        additional_tile_ids.insert(
+            additional_tile.id.clone(),
+            ForeBackIds::new(fg, bg),
+        );
+    }
+
+    let fg = to_weighted_vec(tile.fg.clone());
+    let bg = to_weighted_vec(tile.bg.clone());
+
+    match additional_tile_ids.remove(&AdditionalTileId::Broken) {
+        None => {}
+        Some(ids) => {
+            return Ok(Sprite::Broken {
+                ids: ForeBackIds::new(fg, bg),
+                broken: ids,
+            })
+        }
+    }
+
+    match additional_tile_ids.remove(&AdditionalTileId::Open) {
+        None => {}
+        Some(ids) => {
+            return Ok(Sprite::Open {
+                ids: ForeBackIds::new(fg, bg),
+                open: ids,
+            })
+        }
+    }
+
+    Ok(Sprite::Multitile {
+        ids: ForeBackIds::new(fg, bg),
+        center: additional_tile_ids.remove(&AdditionalTileId::Center),
+        corner: additional_tile_ids.remove(&AdditionalTileId::Corner),
+        edge: additional_tile_ids.remove(&AdditionalTileId::Edge),
+        t_connection: additional_tile_ids.remove(&AdditionalTileId::TConnection),
+        unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
+        end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
+    })
+}
+
+fn get_id_map_from_config(config: TileConfig) {
+    let mut id_map = HashMap::new();
+
+    let mut normal_spritesheets = vec![];
+    for spritesheet in config.spritesheets.iter() {
+        match spritesheet {
+            Spritesheet::Normal(n) => normal_spritesheets.push(n),
+            Spritesheet::Fallback(_) => {}
+        }
+    }
+
+    for spritesheet in normal_spritesheets {
+        for tile in spritesheet.tiles.iter() {
+            let is_multitile = tile.multitile
+                .unwrap_or_else(|| false) && tile.additional_tiles.is_some();
+
+            if !is_multitile {
+                let fg = to_weighted_vec(tile.fg.clone());
+                let bg = to_weighted_vec(tile.bg.clone());
+
+                tile.id.for_each(|id| {
+                    id_map.insert(
+                        ItemID::from(id.clone()),
+                        Sprite::Single {
+                            ids: ForeBackIds::new(fg.clone(), bg.clone()),
+                        },
+                    );
+                });
+            }
+
+            if is_multitile {
+                let additional_tiles = match &tile.additional_tiles {
+                    None => unreachable!(),
+                    Some(t) => t
+                };
+
+                tile.id.for_each(|id| {
+                    id_map.insert(
+                        ItemID::from(id.clone()),
+                        get_multitile_sprite_from_additional_tiles(tile, additional_tiles).unwrap(),
+                    );
+                });
+            }
+        }
+    }
+}
 
 #[tauri::command]
 async fn frontend_ready(
@@ -160,6 +362,13 @@ pub fn run() -> () {
             map_data.data.push(MapData::new("test".into()));
 
             app.manage(Mutex::new(map_data));
+
+            let tile_config_reader = TileConfigReader {
+                path: r"C:\DEV\SelfDEV\Rust\CDDA-Map-Editor-2\src-tauri\MSX++UnDeadPeopleEdition\tile_config.json".into(),
+            };
+
+            let config = tile_config_reader.read().unwrap();
+            get_id_map_from_config(config);
 
             Ok(())
         })
