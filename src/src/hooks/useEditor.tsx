@@ -202,10 +202,19 @@ export function useEditor(props: Props) {
             handler = requestAnimationFrame(loop)
         }
 
+        const keydownListener = async (e: KeyboardEvent) => {
+            if (e.key === "s") {
+                const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentMap, {})
+            }
+        }
+
+        window.addEventListener("keydown", keydownListener)
+
         loop()
 
         return () => {
             cancelAnimationFrame(handler)
+            window.removeEventListener("keydown", keydownListener)
         }
     }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef, mousePosition, props.openedTab]);
 

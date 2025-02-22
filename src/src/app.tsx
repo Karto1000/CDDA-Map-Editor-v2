@@ -4,7 +4,7 @@ import {Theme, useTheme} from "./hooks/useTheme.ts";
 import Window from "./components/window.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {EditorData, EditorDataRecvEvent} from "./lib/editor_data/recv/index.ts";
-import {TabType, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
+import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
 import {NoTabScreen} from "./mainScreens/noTabScreen.tsx";
 import {WelcomeScreen} from "./mainScreens/welcomeScreen.tsx";
 import {listen} from "@tauri-apps/api/event";
@@ -37,7 +37,7 @@ function App() {
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
     const [tilesheets, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
-    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabType.MapEditor
+    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.MapEditor
     const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
 
     useEditor({
@@ -61,7 +61,9 @@ function App() {
                     await tabs.addTab(
                         {
                             name: "Welcome to the CDDA Map Editor",
-                            tab_type: TabType.Welcome,
+                            tab_type: {
+                                type: TabTypeKind.Welcome,
+                            }
                         }
                     )
 
@@ -81,10 +83,10 @@ function App() {
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
-            if (tabs.tabs[tabs.openedTab].tab_type === TabType.Welcome)
+            if (tabs.tabs[tabs.openedTab].tab_type.type === TabTypeKind.Welcome)
                 return <WelcomeScreen/>
 
-            if (tabs.tabs[tabs.openedTab].tab_type === TabType.MapEditor)
+            if (tabs.tabs[tabs.openedTab].tab_type.type === TabTypeKind.MapEditor)
                 return <></>
         }
 

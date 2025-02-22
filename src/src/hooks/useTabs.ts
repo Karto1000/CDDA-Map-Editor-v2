@@ -5,10 +5,31 @@ import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {EditorDataRecvEvent} from "../lib/editor_data/recv/index.ts";
 import {makeCancelable} from "../lib/index.ts";
 
-export enum TabType {
+export enum TabTypeKind {
     Welcome = "Welcome",
     MapEditor = "MapEditor",
     LiveViewer = "LiveViewer"
+}
+
+export enum SaveStateKind {
+    Saved,
+    Unsaved
+}
+
+export type SaveState = {
+    type: SaveStateKind.Saved,
+    path: string
+} | {
+    type: SaveStateKind.Unsaved
+}
+
+export type TabType = {
+    type: TabTypeKind.MapEditor,
+    state: SaveState
+} | {
+    type: TabTypeKind.Welcome
+} | {
+    type: TabTypeKind.LiveViewer
 }
 
 export type Tab = {

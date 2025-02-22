@@ -27,5 +27,6 @@ export enum MapDataSendCommand {
     CreateMap = "create_map",
     OpenMap = "open_map",
     CloseMap = "close_map",
-    GetCurrentMapData = "get_current_map_data"
+    GetCurrentMapData = "get_current_map_data",
+    SaveCurrentMap = "save_current_map"
 }
