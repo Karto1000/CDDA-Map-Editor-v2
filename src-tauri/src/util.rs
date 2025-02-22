@@ -97,7 +97,7 @@ impl<T> MeabyWeighted<T> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct JSONSerializableUVec2(pub UVec2);
 
 impl Serialize for JSONSerializableUVec2 {
@@ -139,4 +139,8 @@ impl<'de> Deserialize<'de> for JSONSerializableUVec2 {
 
 pub trait Save<T> {
     fn save(&self, data: &T) -> Result<(), std::io::Error>;
+}
+
+pub trait Load<T> {
+    fn load(&self) -> Result<T, std::io::Error>;
 }

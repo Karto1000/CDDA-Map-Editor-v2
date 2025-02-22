@@ -7,15 +7,16 @@ use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
+use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorConfig, EditorData};
 use crate::legacy_tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::legacy_tileset::tile_config::reader::TileConfigReader;
 use crate::legacy_tileset::tile_config::{AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig};
 use crate::legacy_tileset::Tilesheet;
-use crate::map_data::handlers::{close_map, create_map, get_current_map_data};
+use crate::map_data::handlers::{close_map, create_map, get_current_map_data, save_current_map};
 use crate::map_data::handlers::{open_map, place};
-use crate::map_data::{MapData, MapDataContainer};
-use crate::util::{MeabyVec, MeabyWeighted, Weighted};
+use crate::map_data::{MapData, MapDataContainer, MapDataLoader};
+use crate::util::{Load, MeabyVec, MeabyWeighted, Weighted};
 use anyhow::anyhow;
 use directories::ProjectDirs;
 use image::GenericImageView;
@@ -154,10 +155,28 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
     Ok(config)
 }
 
-fn get_map_data() -> Result<MapDataContainer, anyhow::Error> {
+fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Error> {
     let mut map_data = MapDataContainer::default();
-    // For Testing
-    map_data.data.push(MapData::new("test".into()));
+
+    for tab in editor_data.tabs.iter() {
+        match &tab.tab_type {
+            TabType::MapEditor(state) => {
+                match state {
+                    MapDataState::Saved { path } => {
+                        let loader = MapDataLoader {
+                            path: path.clone(),
+                        };
+
+                        info!("Loading map data from {:?}", path);
+                        map_data.data.push(loader.load()?)
+                    }
+                    _ => {}
+                }
+            }
+            TabType::LiveViewer => todo!(),
+            _ => {}
+        }
+    }
 
     Ok(map_data)
 }
@@ -173,7 +192,6 @@ fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, anyhow:
         Some(p) => p.clone()
     };
 
-    dbg!(cdda_path.join("gfx").join(&tileset).join("tile_config.json"));
     let tile_config_reader = TileConfigReader {
         path: cdda_path.join("gfx").join(&tileset).join("tile_config.json")
     };
@@ -203,7 +221,7 @@ pub fn run() -> () {
             let editor_data = get_saved_editor_data(app)?;
 
             info!("Loading testing map data");
-            let map_data = get_map_data()?;
+            let map_data = get_map_data(&editor_data)?;
 
             info!("Loading tilesheet");
             let tilesheet = load_tilesheet(&editor_data)?;
@@ -228,7 +246,8 @@ pub fn run() -> () {
             frontend_ready,
             create_map,
             open_map,
-            close_map
+            close_map,
+            save_current_map
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

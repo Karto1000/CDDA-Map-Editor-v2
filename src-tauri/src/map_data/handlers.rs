@@ -1,14 +1,16 @@
 use crate::editor_data::tab::handlers::create_tab;
-use crate::editor_data::tab::TabType;
-use crate::editor_data::EditorData;
+use crate::editor_data::tab::MapDataState::Saved;
+use crate::editor_data::tab::{MapDataState, TabType};
+use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::legacy_tileset::{Sprite, Tilesheet};
-use crate::map_data::{Cell, Identifier, MapData, MapDataContainer};
-use crate::util::JSONSerializableUVec2;
+use crate::map_data::{Cell, MapData, MapDataContainer, MapDataSaver};
+use crate::util::{JSONSerializableUVec2, Save};
 use glam::UVec2;
 use image::imageops::tile;
-use log::info;
+use log::{error, info, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::ops::Index;
+use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::MutexGuard;
@@ -173,7 +175,7 @@ pub async fn create_map(
         cells: Default::default(),
     });
 
-    create_tab(data.name, TabType::MapEditor, app, editor_data)
+    create_tab(data.name, TabType::MapEditor(MapDataState::Unsaved), app, editor_data)
         .await
         .expect("Function to not fail");
 
@@ -190,6 +192,14 @@ pub async fn open_map(
     let mut lock = map_data_container.lock().await;
     lock.current_map = Some(index);
 
+    let map_data = match lock.data.get(index) {
+        None => {
+            warn!("Could not find map at index {}", index);
+            return Err(());
+        }
+        Some(d) => d
+    };
+
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
         None => return Err(()),
@@ -197,8 +207,6 @@ pub async fn open_map(
     };
 
     app.emit("opened_map", index).expect("Function to not fail");
-
-    let map_data = lock.data.get(index).unwrap();
 
     let sprite = tilesheet.id_map.get("t_grass").unwrap();
     let fg = match sprite {
@@ -233,5 +241,45 @@ pub async fn open_map(
 pub async fn close_map(map_data_container: State<'_, Mutex<MapDataContainer>>) -> Result<(), ()> {
     let mut lock = map_data_container.lock().await;
     lock.current_map = None;
+    Ok(())
+}
+
+#[derive(Debug, thiserror::Error, Serialize)]
+pub enum SaveError {
+    #[error(transparent)]
+    MapError(#[from] GetCurrentMapDataError),
+
+    #[error("Failed to save map data")]
+    SaveError,
+}
+
+#[tauri::command]
+pub async fn save_current_map(
+    map_data_container: State<'_, Mutex<MapDataContainer>>,
+    editor_data: State<'_, Mutex<EditorData>>,
+) -> Result<(), SaveError> {
+    let lock = map_data_container.lock().await;
+    let map_data = get_current_map(&lock)?;
+
+    let save_path = r"C:\Users\Kartoffelbauer\Downloads\test";
+    let saver = MapDataSaver {
+        path: save_path.into(),
+    };
+
+    saver.save(&map_data).map_err(|e| {
+        error!("{}", e);
+        SaveError::SaveError
+    })?;
+
+    let mut editor_data = editor_data.lock().await;
+    let new_tab_type = TabType::MapEditor(Saved { path: PathBuf::from(save_path).join(&map_data.name) });
+    editor_data.tabs.get_mut(lock.current_map.unwrap()).unwrap().tab_type = new_tab_type;
+
+    let editor_data_saver = EditorDataSaver {
+        path: editor_data.config.config_path.clone(),
+    };
+
+    editor_data_saver.save(&editor_data).expect("Saving to not fail");
+
     Ok(())
 }
