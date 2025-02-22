@@ -1,10 +1,14 @@
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::TabType;
 use crate::editor_data::EditorData;
+use crate::legacy_tileset::{Sprite, Tilesheet};
 use crate::map_data::{Cell, Identifier, MapData, MapDataContainer};
 use crate::util::JSONSerializableUVec2;
+use glam::UVec2;
+use image::imageops::tile;
 use log::info;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::ops::Index;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::MutexGuard;
@@ -77,27 +81,43 @@ pub enum MapChangeEventKind {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlaceTerrainEvent {
+pub struct PlaceSpriteEvent {
     position: JSONSerializableUVec2,
-    identifier: Identifier,
+    index: u32,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct PlaceSpritesEvent {
+    positions: Vec<JSONSerializableUVec2>,
+    indexes: Vec<u32>,
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]
 pub enum PlaceError {
     #[error(transparent)]
     MapError(#[from] GetCurrentMapDataError),
+
+    #[error("No Tilesheet selected")]
+    NoTilesheet,
 }
 
 #[tauri::command]
 pub async fn place(
     app: AppHandle,
     map_data: State<'_, Mutex<MapDataContainer>>,
+    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
     command: PlaceCommand,
 ) -> Result<(), PlaceError> {
     info!("Placing {} at {:?}", command.character, command.position);
 
     let mut lock = map_data.lock().await;
     let data = get_current_map_mut(&mut lock)?;
+
+    let tilesheet_lock = tilesheet.lock().await;
+    let tilesheet = match tilesheet_lock.as_ref() {
+        None => return Err(PlaceError::NoTilesheet),
+        Some(t) => t
+    };
 
     if data.cells.get(&command.position.0).is_some() {
         return Ok(());
@@ -110,14 +130,25 @@ pub async fn place(
         },
     );
 
+    let sprite = tilesheet.id_map.get("t_grass").unwrap();
+    let fg = match sprite {
+        Sprite::Single { .. } => unreachable!(),
+        Sprite::Open { .. } => unreachable!(),
+        Sprite::Broken { .. } => unreachable!(),
+        Sprite::Explosion { .. } => unreachable!(),
+        Sprite::Multitile { ids, .. } => {
+            ids.fg.clone().unwrap().get(0).unwrap().sprite.get(0).unwrap().clone()
+        }
+    };
+
     app.emit(
         "place_sprite",
-        PlaceTerrainEvent {
+        PlaceSpriteEvent {
             position: command.position.clone(),
-            identifier: "t_grass".to_string(),
+            index: fg,
         },
     )
-    .unwrap();
+        .unwrap();
 
     Ok(())
 }
@@ -153,12 +184,47 @@ pub async fn create_map(
 pub async fn open_map(
     index: usize,
     app: AppHandle,
+    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
     map_data_container: State<'_, Mutex<MapDataContainer>>,
 ) -> Result<(), ()> {
     let mut lock = map_data_container.lock().await;
     lock.current_map = Some(index);
 
+    let tilesheet_lock = tilesheet.lock().await;
+    let tilesheet = match tilesheet_lock.as_ref() {
+        None => return Err(()),
+        Some(t) => t
+    };
+
     app.emit("opened_map", index).expect("Function to not fail");
+
+    let map_data = lock.data.get(index).unwrap();
+
+    let sprite = tilesheet.id_map.get("t_grass").unwrap();
+    let fg = match sprite {
+        Sprite::Single { .. } => unreachable!(),
+        Sprite::Open { .. } => unreachable!(),
+        Sprite::Broken { .. } => unreachable!(),
+        Sprite::Explosion { .. } => unreachable!(),
+        Sprite::Multitile { ids, .. } => {
+            ids.fg.clone().unwrap().get(0).unwrap().sprite.get(0).unwrap().clone()
+        }
+    };
+
+    let positions: Vec<JSONSerializableUVec2> = map_data.cells
+        .iter()
+        .map(|(pos, _)| { JSONSerializableUVec2(pos.clone()) })
+        .collect();
+
+    let indexes: Vec<u32> = vec![fg; positions.len()];
+
+    app.emit(
+        "place_sprites",
+        PlaceSpritesEvent {
+            positions,
+            indexes,
+        },
+    ).unwrap();
 
     Ok(())
 }

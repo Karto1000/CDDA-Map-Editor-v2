@@ -1,9 +1,13 @@
+use crate::legacy_tileset::tile_config::{AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig};
+use crate::util::{MeabyVec, MeabyWeighted, Weighted};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
 pub(crate) mod handlers;
 pub(crate) mod tile_config;
+
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TileNew {
@@ -49,4 +53,162 @@ impl SpritesheetConfigReader {
         let config_path = self.tileset_path.join("tile_config.json");
         serde_json::from_str(fs::read_to_string(config_path).unwrap().as_str())
     }
+}
+
+pub type FinalIds = Option<Vec<Weighted<Vec<u32>>>>;
+
+#[derive(Debug)]
+pub struct ForeBackIds {
+    pub fg: FinalIds,
+    pub bg: FinalIds,
+}
+
+impl ForeBackIds {
+    pub fn new(fg: FinalIds, bg: FinalIds) -> Self {
+        Self { fg, bg }
+    }
+}
+
+#[derive(Debug)]
+pub enum Sprite {
+    Single {
+        ids: ForeBackIds,
+    },
+    Open {
+        ids: ForeBackIds,
+        open: ForeBackIds,
+    },
+    Broken {
+        ids: ForeBackIds,
+        broken: ForeBackIds,
+    },
+    Explosion {
+        ids: ForeBackIds,
+        center: ForeBackIds,
+        edge: ForeBackIds,
+        corner: ForeBackIds,
+    },
+    Multitile {
+        ids: ForeBackIds,
+
+        edge: Option<ForeBackIds>,
+        corner: Option<ForeBackIds>,
+        center: Option<ForeBackIds>,
+        t_connection: Option<ForeBackIds>,
+        end_piece: Option<ForeBackIds>,
+        unconnected: Option<ForeBackIds>,
+    },
+}
+
+fn to_weighted_vec<T>(indices: Option<MeabyVec<MeabyWeighted<MeabyVec<T>>>>) -> Option<Vec<Weighted<Vec<T>>>> {
+    indices.map(|fg| fg.map(|mw| {
+        let weighted = mw.weighted();
+        let weight = weighted.weight;
+        let vec = weighted.sprite.vec();
+        Weighted::new(vec, weight)
+    }))
+}
+
+fn get_multitile_sprite_from_additional_tiles(
+    tile: &Tile,
+    additional_tiles: &Vec<AdditionalTile>,
+) -> Result<Sprite, anyhow::Error> {
+    let mut additional_tile_ids = HashMap::new();
+
+    for additional_tile in additional_tiles {
+        let fg = to_weighted_vec(additional_tile.fg.clone());
+        let bg = to_weighted_vec(additional_tile.bg.clone());
+
+        additional_tile_ids.insert(
+            additional_tile.id.clone(),
+            ForeBackIds::new(fg, bg),
+        );
+    }
+
+    let fg = to_weighted_vec(tile.fg.clone());
+    let bg = to_weighted_vec(tile.bg.clone());
+
+    match additional_tile_ids.remove(&AdditionalTileId::Broken) {
+        None => {}
+        Some(ids) => {
+            return Ok(Sprite::Broken {
+                ids: ForeBackIds::new(fg, bg),
+                broken: ids,
+            })
+        }
+    }
+
+    match additional_tile_ids.remove(&AdditionalTileId::Open) {
+        None => {}
+        Some(ids) => {
+            return Ok(Sprite::Open {
+                ids: ForeBackIds::new(fg, bg),
+                open: ids,
+            })
+        }
+    }
+
+    Ok(Sprite::Multitile {
+        ids: ForeBackIds::new(fg, bg),
+        center: additional_tile_ids.remove(&AdditionalTileId::Center),
+        corner: additional_tile_ids.remove(&AdditionalTileId::Corner),
+        edge: additional_tile_ids.remove(&AdditionalTileId::Edge),
+        t_connection: additional_tile_ids.remove(&AdditionalTileId::TConnection),
+        unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
+        end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
+    })
+}
+
+pub fn get_id_map_from_config(config: TileConfig) -> HashMap<String, Sprite> {
+    let mut id_map = HashMap::new();
+
+    let mut normal_spritesheets = vec![];
+    for spritesheet in config.spritesheets.iter() {
+        match spritesheet {
+            Spritesheet::Normal(n) => normal_spritesheets.push(n),
+            Spritesheet::Fallback(_) => {}
+        }
+    }
+
+    for spritesheet in normal_spritesheets {
+        for tile in spritesheet.tiles.iter() {
+            let is_multitile = tile.multitile
+                .unwrap_or_else(|| false) && tile.additional_tiles.is_some();
+
+            if !is_multitile {
+                let fg = to_weighted_vec(tile.fg.clone());
+                let bg = to_weighted_vec(tile.bg.clone());
+
+                tile.id.for_each(|id| {
+                    id_map.insert(
+                        id.clone(),
+                        Sprite::Single {
+                            ids: ForeBackIds::new(fg.clone(), bg.clone()),
+                        },
+                    );
+                });
+            }
+
+            if is_multitile {
+                let additional_tiles = match &tile.additional_tiles {
+                    None => unreachable!(),
+                    Some(t) => t
+                };
+
+                tile.id.for_each(|id| {
+                    id_map.insert(
+                        id.clone(),
+                        get_multitile_sprite_from_additional_tiles(tile, additional_tiles).unwrap(),
+                    );
+                });
+            }
+        }
+    }
+
+    id_map
+}
+
+
+pub struct Tilesheet {
+    pub id_map: HashMap<String, Sprite>,
 }
