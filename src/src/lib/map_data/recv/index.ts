@@ -52,5 +52,6 @@ export type PlaceTerrainEvent = {
 
 export enum MapDataEvent {
     OpenedMap = "opened_map",
-    PlaceTerrain = "place_terrain"
+    PlaceSprite = "place_sprite",
+    PlaceSprites = "place_sprites"
 }

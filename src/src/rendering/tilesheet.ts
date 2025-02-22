@@ -65,6 +65,7 @@ export class Tilesheet {
         )
         this.mesh.renderOrder = this.yLayer
         this.mappedTilesBG = new Map()
+        this.mappedTilesFG = new Map()
 
         for (let instance = 0; instance < this.atlasConfig.maxInstances; instance++) {
             const transform = new Object3D()
@@ -142,10 +143,21 @@ export class Tilesheet {
         this.mesh.computeBoundingSphere()
     }
 
-    public removeSprite(position: Vector2, layer: SpriteLayer) {
+    public removeSpriteAtPosition(position: Vector2, layer: SpriteLayer) {
         let mappedInstance = this.mappedTilesBG.get(`${position.x}:${position.y}:${layer}`)
 
         if (!mappedInstance) return
+
+        this.deleteInstance(mappedInstance)
+    }
+
+    private deleteInstance(instance: number) {
+        this.deleteInstances([instance])
+    }
+
+
+    private deleteInstances(instances: number[]) {
+        if (instances.length === 0) return
 
         const transform = new Object3D()
 
@@ -157,9 +169,26 @@ export class Tilesheet {
         )
         transform.updateMatrix()
 
-        this.mesh.setMatrixAt(mappedInstance, transform.matrix)
+        for (const instance of instances) {
+            this.mesh.setMatrixAt(instance, transform.matrix)
+        }
+
         this.mesh.instanceMatrix.needsUpdate = true
         this.mesh.computeBoundingSphere()
+    }
+
+    public clear() {
+        const fgInstances = this.mappedTilesFG
+            .keys()
+            .map(k => this.mappedTilesFG.get(k))
+            .toArray()
+
+        const bgInstances = this.mappedTilesBG
+            .keys()
+            .map(k => this.mappedTilesBG.get(k))
+            .toArray()
+
+        this.deleteInstances([...fgInstances, ...bgInstances])
     }
 
     public static async fromURL(

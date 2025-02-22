@@ -3,16 +3,22 @@ export enum MapChangeEventKind {
     Delete = "Delete"
 }
 
-export type PlaceCommand = {
+export type PlaceSpriteCommand = {
     position: string
-    character: string
+    index: number
 }
+
+export type PlaceSpritesCommand = {
+    positions: string[]
+    indexes: number[]
+}
+
 
 export type DeleteCommand = string;
 
 export type MapChangeEvent = {
     kind: {
-        [key in MapChangeEventKind]: PlaceCommand
+        [key in MapChangeEventKind]: PlaceSpriteCommand
     }
 }
 

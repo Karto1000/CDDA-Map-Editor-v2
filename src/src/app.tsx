@@ -1,17 +1,17 @@
 import React, {createContext, useEffect, useRef, useState} from 'react';
 import {Header} from "./components/header.tsx";
-import {Theme, useTheme} from "./hooks/useTheme.tsx";
+import {Theme, useTheme} from "./hooks/useTheme.ts";
 import Window from "./components/window.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorData, EditorDataRecvEvent} from "./lib/editor_data/recv";
+import {EditorData, EditorDataRecvEvent} from "./lib/editor_data/recv/index.ts";
 import {TabType, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
 import {NoTabScreen} from "./mainScreens/noTabScreen.tsx";
 import {WelcomeScreen} from "./mainScreens/welcomeScreen.tsx";
 import {listen} from "@tauri-apps/api/event";
-import {makeCancelable} from "./lib";
-import {MapDataSendCommand} from "./lib/map_data/send";
+import {makeCancelable} from "./lib/index.ts";
+import {MapDataSendCommand} from "./lib/map_data/send/index.ts";
 import {Scene} from "three";
-import {useEditor} from "./hooks/useEditor.tsx";
+import {useEditor, UseEditorRef} from "./hooks/useEditor.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
@@ -37,6 +37,19 @@ function App() {
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
     const [tilesheets, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
+    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabType.MapEditor
+    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
+
+    useEditor({
+        canvasRef: mapEditorCanvasRef,
+        sceneRef: mapEditorSceneRef,
+        canvasContainerRef: mapEditorCanvasContainerRef,
+        isDisplaying: isDisplayingMapEditor,
+        tilesheetsRef: tilesheets,
+        openedTab: tabs.openedTab,
+        isTilesheetLoaded,
+        theme
+    })
 
     useEffect(() => {
         let unlistenDataChanged = makeCancelable(listen<EditorData>(
@@ -84,19 +97,6 @@ function App() {
         setIsCreatingMapWindowOpen(false)
         setCreatingMapName("")
     }
-
-    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabType.MapEditor
-    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
-
-    useEditor({
-        canvasRef: mapEditorCanvasRef,
-        sceneRef: mapEditorSceneRef,
-        canvasContainerRef: mapEditorCanvasContainerRef,
-        isDisplaying: isDisplayingMapEditor,
-        tilesheetsRef: tilesheets,
-        isTilesheetLoaded,
-        theme
-    })
 
     return (
         <div className={`app ${theme}-theme`}>

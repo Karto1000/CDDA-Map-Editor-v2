@@ -9,33 +9,25 @@ import {
     Vector3,
     WebGLRenderer
 } from "three";
-import {MutableRefObject, useEffect, useRef} from "react";
+import {MutableRefObject, Ref, useContext, useEffect, useImperativeHandle, useRef} from "react";
 import Stats from "stats.js";
-import {getColorFromTheme, Theme} from "../hooks/useTheme.tsx";
-import {degToRad} from "three/src/math/MathUtils";
+import {getColorFromTheme, Theme} from "./useTheme.ts";
+import {degToRad} from "three/src/math/MathUtils.js";
 import {Tilesheets} from "../rendering/tilesheets.ts";
-import {ArcballControls} from "three/examples/jsm/controls/ArcballControls";
+import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {useMousePosition} from "./useMousePosition.ts";
-import {invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib";
-import {MapDataSendCommand, PlaceCommand} from "../lib/map_data/send";
+import {invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
+import {MapDataSendCommand, PlaceSpriteCommand, PlaceSpritesCommand} from "../lib/map_data/send/index.ts";
 import {listen} from "@tauri-apps/api/event";
-import {MapDataEvent} from "../lib/map_data/recv";
+import {MapDataEvent} from "../lib/map_data/recv/index.ts";
 import {SpriteLayer} from "../rendering/tilesheet.ts";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
 
-function getCameraZForSpriteSize(canvasWidth: number, spriteSize: number, fov: number) {
-    const numSprites = canvasWidth / spriteSize;
-    const worldWidth = numSprites * spriteSize;
-    const fovRadians = (fov * Math.PI) / 180;
-    return worldWidth / (2 * Math.tan(fovRadians / 2));
+export type UseEditorRef = {
+    clearTiles: () => void
 }
-
-function getRandomInt(max) {
-    return Math.floor(Math.random() * max);
-}
-
 
 type Props = {
     sceneRef: MutableRefObject<Scene>,
@@ -43,12 +35,13 @@ type Props = {
     canvasContainerRef: MutableRefObject<HTMLDivElement>
     tilesheetsRef: MutableRefObject<Tilesheets>
 
+    openedTab: number
     theme: Theme
     isDisplaying: boolean
     isTilesheetLoaded: boolean
 }
 
-export function useEditor(props: Props): void {
+export function useEditor(props: Props) {
     const rendererRef = useRef<WebGLRenderer>()
     const cameraRef = useRef<OrthographicCamera>()
     const controlsRef = useRef<ArcballControls>()
@@ -184,12 +177,14 @@ export function useEditor(props: Props): void {
                         }
                     }
 
-                    invokeTauri<PlaceCommand, unknown>(MapDataSendCommand.Place, args).then()
+                    invokeTauri<PlaceSpriteCommand, unknown>(MapDataSendCommand.Place, args).then()
                 }
             }
         }
 
         initialValueUpdate();
+
+        if (props.tilesheetsRef.current) props.tilesheetsRef.current.clearAll();
 
         let handler: number;
 
@@ -212,7 +207,7 @@ export function useEditor(props: Props): void {
         return () => {
             cancelAnimationFrame(handler)
         }
-    }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef, mousePosition]);
+    }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef, mousePosition, props.openedTab]);
 
     // Should run when the theme changes to change colors
     useEffect(() => {
@@ -238,45 +233,33 @@ export function useEditor(props: Props): void {
     useEffect(() => {
         if (!props.isTilesheetLoaded) return;
 
-        let unlistenFn = makeCancelable(listen<PlaceCommand>(MapDataEvent.PlaceTerrain, d => {
+        let placeUnlistenFn = makeCancelable(listen<PlaceSpriteCommand>(MapDataEvent.PlaceSprite, d => {
             const vec2 = serializedVec2ToVector2(d.payload.position)
             vec2.x *= 32;
             vec2.y *= 32;
 
-            props.tilesheetsRef.current.removeSprite(vec2, SpriteLayer.Bg)
-            props.tilesheetsRef.current.removeSprite(vec2, SpriteLayer.Fg)
-
-            props.tilesheetsRef.current.drawSprite(22366, vec2, SpriteLayer.Fg, 0)
+            props.tilesheetsRef.current.drawSprite(d.payload.index, vec2, SpriteLayer.Fg, 0)
         }))
 
-        let positions = []
-        let indices = []
-        let layers = []
-        for (let y = 0; y < 10; y++) {
-            for (let x = 0; x < 10; x++) {
-                positions.push(new Vector2(x * 32, y * 32))
-                indices.push(17066)
-                layers.push(SpriteLayer.Bg)
+        let placeMultiUnlistenFn = makeCancelable(listen<PlaceSpritesCommand>(MapDataEvent.PlaceSprites, d => {
+            const positions = d.payload.positions.map(p => {
+                const vec2 = serializedVec2ToVector2(p)
+                vec2.x *= 32;
+                vec2.y *= 32;
+                return vec2
+            })
+
+            const spriteLayers = []
+            for (const _ of positions) {
+                spriteLayers.push(0)
             }
-        }
 
-        props.tilesheetsRef.current.drawSpritesBatched(indices, positions, layers, 0)
-
-        positions = []
-        indices = []
-        layers = []
-        for (let y = 0; y < 10; y++) {
-            for (let x = 0; x < 10; x++) {
-                positions.push(new Vector2(x * 32, y * 32))
-                indices.push(15177)
-                layers.push(SpriteLayer.Fg)
-            }
-        }
-
-        props.tilesheetsRef.current.drawSpritesBatched(indices, positions, layers, 1)
+            props.tilesheetsRef.current.drawSpritesBatched(d.payload.indexes, positions, spriteLayers)
+        }))
 
         return () => {
-            unlistenFn.cancel()
+            placeUnlistenFn.cancel()
+            placeMultiUnlistenFn.cancel()
         }
     }, [props.isTilesheetLoaded, props.tilesheetsRef]);
 }

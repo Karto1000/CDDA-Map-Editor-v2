@@ -47,10 +47,17 @@ export class Tilesheets {
         }
     }
 
+    public clearAll() {
+        for (let k of Object.keys(this.tilesheets)) {
+            const tilesheet = this.tilesheets[k]
+            tilesheet.clear()
+        }
+    }
+
     public removeSprite(position: Vector2, layer: SpriteLayer) {
         for (let k of Object.keys(this.tilesheets)) {
             const tilesheet = this.tilesheets[k]
-            tilesheet.removeSprite(position, layer)
+            tilesheet.removeSpriteAtPosition(position, layer)
         }
     }
 }

@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "allowJs": true,
+    "target": "esnext",
+    "moduleResolution": "node16",
     "jsx": "react",
     "allowImportingTsExtensions": true,
     "esModuleInterop": true,

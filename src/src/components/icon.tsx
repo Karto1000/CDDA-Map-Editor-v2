@@ -2,7 +2,7 @@
 // Import References
 //===================================================================
 import React, {useContext} from "react";
-import {Theme} from "../hooks/useTheme.tsx";
+import {Theme} from "../hooks/useTheme.ts";
 import {ThemeContext} from "../app.tsx";
 
 //===================================================================

@@ -1,9 +1,9 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorDataSendCommand} from "../lib/editor_data/send";
+import {EditorDataSendCommand} from "../lib/editor_data/send/index.ts";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {EditorDataRecvEvent} from "../lib/editor_data/recv";
-import {makeCancelable} from "../lib";
+import {EditorDataRecvEvent} from "../lib/editor_data/recv/index.ts";
+import {makeCancelable} from "../lib/index.ts";
 
 export enum TabType {
     Welcome = "Welcome",
@@ -23,6 +23,7 @@ export type UseTabsReturn = {
     removeTab: (index: number) => void,
     setOpenedTab: (index: number) => void,
 }
+
 
 export function useTabs(): UseTabsReturn {
     const [tabs, setTabs] = useState<Tab[]>([])
@@ -61,5 +62,11 @@ export function useTabs(): UseTabsReturn {
         setOpenTab(index)
     }
 
-    return {tabs, addTab, removeTab, openedTab: openTab, setOpenedTab}
+    return {
+        tabs,
+        addTab,
+        removeTab,
+        openedTab: openTab,
+        setOpenedTab,
+    }
 }
