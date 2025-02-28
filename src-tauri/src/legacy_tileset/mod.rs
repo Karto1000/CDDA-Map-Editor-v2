@@ -1,5 +1,7 @@
-use crate::legacy_tileset::tile_config::{AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig};
-use crate::util::{MeabyVec, MeabyWeighted, Weighted};
+use crate::legacy_tileset::tile_config::{
+    AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
+};
+use crate::util::MeabyVec;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -7,7 +9,6 @@ use std::path::PathBuf;
 
 pub(crate) mod handlers;
 pub(crate) mod tile_config;
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TileNew {
@@ -55,7 +56,7 @@ impl SpritesheetConfigReader {
     }
 }
 
-pub type FinalIds = Option<Vec<Weighted<Vec<u32>>>>;
+pub type FinalIds = Option<Vec<WeightedSprite<Vec<u32>>>>;
 
 #[derive(Debug)]
 pub struct ForeBackIds {
@@ -100,13 +101,17 @@ pub enum Sprite {
     },
 }
 
-fn to_weighted_vec<T>(indices: Option<MeabyVec<MeabyWeighted<MeabyVec<T>>>>) -> Option<Vec<Weighted<Vec<T>>>> {
-    indices.map(|fg| fg.map(|mw| {
-        let weighted = mw.weighted();
-        let weight = weighted.weight;
-        let vec = weighted.sprite.vec();
-        Weighted::new(vec, weight)
-    }))
+fn to_weighted_vec<T>(
+    indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<T>>>>,
+) -> Option<Vec<WeightedSprite<Vec<T>>>> {
+    indices.map(|fg| {
+        fg.map(|mw| {
+            let weighted = mw.weighted();
+            let weight = weighted.weight;
+            let vec = weighted.sprite.vec();
+            WeightedSprite::new(vec, weight)
+        })
+    })
 }
 
 fn get_multitile_sprite_from_additional_tiles(
@@ -119,10 +124,7 @@ fn get_multitile_sprite_from_additional_tiles(
         let fg = to_weighted_vec(additional_tile.fg.clone());
         let bg = to_weighted_vec(additional_tile.bg.clone());
 
-        additional_tile_ids.insert(
-            additional_tile.id.clone(),
-            ForeBackIds::new(fg, bg),
-        );
+        additional_tile_ids.insert(additional_tile.id.clone(), ForeBackIds::new(fg, bg));
     }
 
     let fg = to_weighted_vec(tile.fg.clone());
@@ -172,8 +174,8 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<String, Sprite> {
 
     for spritesheet in normal_spritesheets {
         for tile in spritesheet.tiles.iter() {
-            let is_multitile = tile.multitile
-                .unwrap_or_else(|| false) && tile.additional_tiles.is_some();
+            let is_multitile =
+                tile.multitile.unwrap_or_else(|| false) && tile.additional_tiles.is_some();
 
             if !is_multitile {
                 let fg = to_weighted_vec(tile.fg.clone());
@@ -192,7 +194,7 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<String, Sprite> {
             if is_multitile {
                 let additional_tiles = match &tile.additional_tiles {
                     None => unreachable!(),
-                    Some(t) => t
+                    Some(t) => t,
                 };
 
                 tile.id.for_each(|id| {
@@ -208,7 +210,54 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<String, Sprite> {
     id_map
 }
 
-
 pub struct Tilesheet {
     pub id_map: HashMap<String, Sprite>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct WeightedSprite<T> {
+    pub sprite: T,
+    pub weight: i32,
+}
+
+impl<T> WeightedSprite<T> {
+    pub fn new(sprite: T, weight: i32) -> Self {
+        Self { sprite, weight }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum MeabyWeightedSprite<T> {
+    NotWeighted(T),
+    Weighted(WeightedSprite<T>),
+}
+
+impl<T> MeabyWeightedSprite<T> {
+    pub fn map<F, R>(self, fun: F) -> R
+    where
+        F: Fn(T) -> R,
+    {
+        match self {
+            MeabyWeightedSprite::NotWeighted(nw) => fun(nw),
+            MeabyWeightedSprite::Weighted(w) => fun(w.sprite),
+        }
+    }
+
+    pub fn data(self) -> T {
+        match self {
+            MeabyWeightedSprite::NotWeighted(nw) => nw,
+            MeabyWeightedSprite::Weighted(w) => w.sprite,
+        }
+    }
+
+    pub fn weighted(self) -> WeightedSprite<T> {
+        match self {
+            MeabyWeightedSprite::NotWeighted(d) => WeightedSprite {
+                sprite: d,
+                weight: 0,
+            },
+            MeabyWeightedSprite::Weighted(w) => w,
+        }
+    }
 }

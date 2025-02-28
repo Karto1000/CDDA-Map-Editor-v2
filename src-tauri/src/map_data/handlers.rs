@@ -3,12 +3,14 @@ use crate::editor_data::tab::MapDataState::Saved;
 use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::legacy_tileset::{Sprite, Tilesheet};
-use crate::map_data::{Cell, MapData, MapDataContainer, MapDataSaver};
+use crate::map_data::io::MapDataSaver;
+use crate::map_data::{Cell, MapData, MapDataContainer};
 use crate::util::{JSONSerializableUVec2, Save};
 use glam::UVec2;
 use image::imageops::tile;
 use log::{error, info, warn};
 use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::HashMap;
 use std::ops::Index;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
@@ -110,15 +112,13 @@ pub async fn place(
     tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
     command: PlaceCommand,
 ) -> Result<(), PlaceError> {
-    info!("Placing {} at {:?}", command.character, command.position);
-
     let mut lock = map_data.lock().await;
     let data = get_current_map_mut(&mut lock)?;
 
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
         None => return Err(PlaceError::NoTilesheet),
-        Some(t) => t
+        Some(t) => t,
     };
 
     if data.cells.get(&command.position.0).is_some() {
@@ -138,9 +138,16 @@ pub async fn place(
         Sprite::Open { .. } => unreachable!(),
         Sprite::Broken { .. } => unreachable!(),
         Sprite::Explosion { .. } => unreachable!(),
-        Sprite::Multitile { ids, .. } => {
-            ids.fg.clone().unwrap().get(0).unwrap().sprite.get(0).unwrap().clone()
-        }
+        Sprite::Multitile { ids, .. } => ids
+            .fg
+            .clone()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .sprite
+            .get(0)
+            .unwrap()
+            .clone(),
     };
 
     app.emit(
@@ -150,7 +157,7 @@ pub async fn place(
             index: fg,
         },
     )
-        .unwrap();
+    .unwrap();
 
     Ok(())
 }
@@ -170,14 +177,22 @@ pub async fn create_map(
 ) -> Result<(), ()> {
     let mut lock = map_data_container.lock().await;
 
-    lock.data.push(MapData {
-        name: data.name.clone(),
-        cells: Default::default(),
-    });
+    lock.data.push(MapData::new(
+        data.name.clone(),
+        Default::default(),
+        Default::default(),
+        vec![],
+        HashMap::new(),
+    ));
 
-    create_tab(data.name, TabType::MapEditor(MapDataState::Unsaved), app, editor_data)
-        .await
-        .expect("Function to not fail");
+    create_tab(
+        data.name,
+        TabType::MapEditor(MapDataState::Unsaved),
+        app,
+        editor_data,
+    )
+    .await
+    .expect("Function to not fail");
 
     Ok(())
 }
@@ -197,13 +212,13 @@ pub async fn open_map(
             warn!("Could not find map at index {}", index);
             return Err(());
         }
-        Some(d) => d
+        Some(d) => d,
     };
 
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
         None => return Err(()),
-        Some(t) => t
+        Some(t) => t,
     };
 
     app.emit("opened_map", index).expect("Function to not fail");
@@ -214,25 +229,28 @@ pub async fn open_map(
         Sprite::Open { .. } => unreachable!(),
         Sprite::Broken { .. } => unreachable!(),
         Sprite::Explosion { .. } => unreachable!(),
-        Sprite::Multitile { ids, .. } => {
-            ids.fg.clone().unwrap().get(0).unwrap().sprite.get(0).unwrap().clone()
-        }
+        Sprite::Multitile { ids, .. } => ids
+            .fg
+            .clone()
+            .unwrap()
+            .get(0)
+            .unwrap()
+            .sprite
+            .get(0)
+            .unwrap()
+            .clone(),
     };
 
-    let positions: Vec<JSONSerializableUVec2> = map_data.cells
+    let positions: Vec<JSONSerializableUVec2> = map_data
+        .cells
         .iter()
-        .map(|(pos, _)| { JSONSerializableUVec2(pos.clone()) })
+        .map(|(pos, _)| JSONSerializableUVec2(pos.clone()))
         .collect();
 
     let indexes: Vec<u32> = vec![fg; positions.len()];
 
-    app.emit(
-        "place_sprites",
-        PlaceSpritesEvent {
-            positions,
-            indexes,
-        },
-    ).unwrap();
+    app.emit("place_sprites", PlaceSpritesEvent { positions, indexes })
+        .unwrap();
 
     Ok(())
 }
@@ -272,14 +290,22 @@ pub async fn save_current_map(
     })?;
 
     let mut editor_data = editor_data.lock().await;
-    let new_tab_type = TabType::MapEditor(Saved { path: PathBuf::from(save_path).join(&map_data.name) });
-    editor_data.tabs.get_mut(lock.current_map.unwrap()).unwrap().tab_type = new_tab_type;
+    let new_tab_type = TabType::MapEditor(Saved {
+        path: PathBuf::from(save_path).join(&map_data.name),
+    });
+    editor_data
+        .tabs
+        .get_mut(lock.current_map.unwrap())
+        .unwrap()
+        .tab_type = new_tab_type;
 
     let editor_data_saver = EditorDataSaver {
         path: editor_data.config.config_path.clone(),
     };
 
-    editor_data_saver.save(&editor_data).expect("Saving to not fail");
+    editor_data_saver
+        .save(&editor_data)
+        .expect("Saving to not fail");
 
     Ok(())
 }

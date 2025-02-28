@@ -1,15 +1,16 @@
 pub(crate) mod handlers;
+pub(crate) mod importing;
+pub(crate) mod io;
 
-use crate::util::{JSONSerializableUVec2, Load, Save};
+use crate::palettes::{Palette, Parameter};
+use crate::util::{
+    CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Load, MapGenValue, ParameterIdentifier,
+    Save,
+};
 use glam::UVec2;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufReader, Error};
-use std::path::PathBuf;
-
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
     character: char,
@@ -17,16 +18,83 @@ pub struct Cell {
 
 #[derive(Debug, Clone)]
 pub struct MapData {
-    name: String,
-    cells: HashMap<UVec2, Cell>,
+    pub name: String,
+    pub cells: HashMap<UVec2, Cell>,
+
+    pub calculated_parameters: HashMap<ParameterIdentifier, CDDAIdentifier>,
+
+    pub parameters: HashMap<ParameterIdentifier, Parameter>,
+    pub terrain: HashMap<char, MapGenValue>,
+
+    pub palettes: Vec<MapGenValue>,
 }
 
 impl MapData {
-    pub fn new(name: String) -> Self {
-        MapData {
-            cells: Default::default(),
+    pub fn new(
+        name: String,
+        cells: HashMap<UVec2, Cell>,
+        terrain: HashMap<char, MapGenValue>,
+        palettes: Vec<MapGenValue>,
+        parameters: HashMap<ParameterIdentifier, Parameter>,
+    ) -> Self {
+        Self {
+            calculated_parameters: Default::default(),
+            parameters,
+            palettes,
+            terrain,
             name,
+            cells,
         }
+    }
+
+    pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, Palette>) {
+        let mut calculated_parameters = HashMap::new();
+
+        for (id, parameter) in self.parameters.iter() {
+            calculated_parameters.insert(
+                id.clone(),
+                parameter.default.distribution.get(&calculated_parameters),
+            );
+        }
+
+        for mapgen_value in self.palettes.iter() {
+            let id = mapgen_value.get_identifier(&calculated_parameters);
+            let palette = all_palettes.get(&id).unwrap();
+
+            palette
+                .calculate_parameters(all_palettes)
+                .into_iter()
+                .for_each(|(palette_id, ident)| {
+                    calculated_parameters.insert(palette_id, ident);
+                });
+        }
+
+        self.calculated_parameters = calculated_parameters
+    }
+
+    pub fn get_terrain(
+        &self,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, Palette>,
+    ) -> Option<CDDAIdentifier> {
+        // If we find the terrain in the current map's terrain field, return that
+        if let Some(id) = self.terrain.get(character) {
+            return Some(id.get_identifier(&self.calculated_parameters));
+        };
+
+        // If we don't find it, search the palettes from top to bottom
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) =
+                palette.get_terrain(character, &self.calculated_parameters, all_palettes)
+            {
+                return Some(id);
+            }
+        }
+
+        None
     }
 }
 
@@ -55,6 +123,9 @@ impl Serialize for MapData {
 pub struct MapDataIntermediate {
     pub name: String,
     pub cells: HashMap<JSONSerializableUVec2, Cell>,
+    pub parameters: Option<HashMap<ParameterIdentifier, Parameter>>,
+    pub palettes: Vec<MapGenValue>,
+    pub terrain: HashMap<char, MapGenValue>,
 }
 
 impl Into<MapData> for MapDataIntermediate {
@@ -65,10 +136,13 @@ impl Into<MapData> for MapDataIntermediate {
             .map(|(key, value)| (key.0, value))
             .collect::<HashMap<UVec2, Cell>>();
 
-        MapData {
-            name: self.name,
+        MapData::new(
+            self.name,
             cells,
-        }
+            self.terrain,
+            self.palettes,
+            self.parameters.unwrap_or_else(|| HashMap::new()),
+        )
     }
 }
 
@@ -86,26 +160,4 @@ impl<'de> Deserialize<'de> for MapData {
 pub struct MapDataContainer {
     pub data: Vec<MapData>,
     pub current_map: Option<usize>,
-}
-
-pub struct MapDataLoader {
-    pub path: PathBuf,
-}
-
-impl Load<MapData> for MapDataLoader {
-    fn load(&self) -> Result<MapData, Error> {
-        let reader = BufReader::new(File::open(&self.path)?);
-        serde_json::from_reader(reader).map_err(|e| e.into())
-    }
-}
-
-pub struct MapDataSaver {
-    pub path: PathBuf,
-}
-
-impl Save<MapData> for MapDataSaver {
-    fn save(&self, data: &MapData) -> Result<(), Error> {
-        let mut file = File::create(&self.path.join(&data.name))?;
-        serde_json::to_writer(&mut file, data).map_err(|e| e.into())
-    }
 }

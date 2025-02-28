@@ -1,6 +1,7 @@
 mod editor_data;
 mod legacy_tileset;
 mod map_data;
+mod palettes;
 mod util;
 
 use crate::editor_data::handlers::{
@@ -11,26 +12,28 @@ use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorConfig, EditorData};
 use crate::legacy_tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::legacy_tileset::tile_config::reader::TileConfigReader;
-use crate::legacy_tileset::tile_config::{AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig};
+use crate::legacy_tileset::tile_config::{
+    AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
+};
 use crate::legacy_tileset::Tilesheet;
 use crate::map_data::handlers::{close_map, create_map, get_current_map_data, save_current_map};
 use crate::map_data::handlers::{open_map, place};
-use crate::map_data::{MapData, MapDataContainer, MapDataLoader};
-use crate::util::{Load, MeabyVec, MeabyWeighted, Weighted};
-use anyhow::anyhow;
+use crate::map_data::{MapData, MapDataContainer};
+use crate::palettes::Palette;
+use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec};
 use directories::ProjectDirs;
-use image::GenericImageView;
-use log::{error, info, warn, LevelFilter};
+use image::{load, GenericImageView};
+use log::{debug, error, info, warn, LevelFilter};
+use map_data::importing::MapDataImporter;
+use palettes::io::PaletteLoader;
 use serde::{Deserialize, Serialize};
-use std::arch::x86_64::_mm256_insert_epi8;
 use std::collections::HashMap;
-use std::error::Error;
 use std::fs;
-use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
+use walkdir::WalkDir;
 
 #[tauri::command]
 async fn frontend_ready(
@@ -75,13 +78,19 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
         }
         Some(dir) => {
             let local_dir = dir.config_local_dir();
-            info!("Got Path for CDDA-Map-Editor config directory at {:?}", local_dir);
+            info!(
+                "Got Path for CDDA-Map-Editor config directory at {:?}",
+                local_dir
+            );
             local_dir.to_path_buf()
         }
     };
 
     if !fs::exists(&directory_path).expect("IO Error to not occur") {
-        info!("Created CDDA-Map-Editor config directory at {:?}", directory_path);
+        info!(
+            "Created CDDA-Map-Editor config directory at {:?}",
+            directory_path
+        );
         fs::create_dir_all(&directory_path)?;
     }
 
@@ -100,7 +109,8 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
                 Err(e) => {
                     error!("{}", e.to_string());
 
-                    let full_message = format!(r#"
+                    let full_message = format!(
+                        r#"
                                An error occurred while reading the config.json file at {:?}.
                                This is likely due to the file containing unexpected or invalid data.
 
@@ -108,9 +118,12 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
                                your current configuration and reset it to the default state.
 
                                Do you want to continue?
-                            "#, config_file_path);
+                            "#,
+                        config_file_path
+                    );
 
-                    let answer = app.dialog()
+                    let answer = app
+                        .dialog()
                         .message(full_message)
                         .title("Failed to read config.json file")
                         .kind(MessageDialogKind::Warning)
@@ -123,8 +136,10 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
                             let mut default_editor_data = EditorData::default();
                             default_editor_data.config.config_path = directory_path.clone();
 
-                            let serialized = serde_json::to_string_pretty(&default_editor_data).expect("Serialization to not fail");
-                            fs::write(&config_file_path, serialized).expect("Directory path to config to have been created");
+                            let serialized = serde_json::to_string_pretty(&default_editor_data)
+                                .expect("Serialization to not fail");
+                            fs::write(&config_file_path, serialized)
+                                .expect("Directory path to config to have been created");
                             default_editor_data
                         }
                         false => {
@@ -146,8 +161,10 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
             let mut default_editor_data = EditorData::default();
             default_editor_data.config.config_path = directory_path.clone();
 
-            let serialized = serde_json::to_string_pretty(&default_editor_data).expect("Serialization to not fail");
-            fs::write(&config_file_path, serialized).expect("Directory path to config to have been created");
+            let serialized = serde_json::to_string_pretty(&default_editor_data)
+                .expect("Serialization to not fail");
+            fs::write(&config_file_path, serialized)
+                .expect("Directory path to config to have been created");
             default_editor_data
         }
     };
@@ -155,28 +172,38 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
     Ok(config)
 }
 
-fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Error> {
+fn get_map_data(
+    editor_data: &EditorData,
+    all_palettes: &HashMap<CDDAIdentifier, Palette>,
+) -> Result<MapDataContainer, anyhow::Error> {
     let mut map_data = MapDataContainer::default();
 
-    for tab in editor_data.tabs.iter() {
-        match &tab.tab_type {
-            TabType::MapEditor(state) => {
-                match state {
-                    MapDataState::Saved { path } => {
-                        let loader = MapDataLoader {
-                            path: path.clone(),
-                        };
+    let importer = MapDataImporter {
+        path: r"C:\CDDA\testing\data\json\mapgen\house\house01.json".into(),
+        om_terrain: "house_01".into(),
+    };
+    let mut loaded = importer.load()?;
+    loaded.calculate_parameters(all_palettes);
+    dbg!(&loaded.calculated_parameters);
+    dbg!(&loaded.get_terrain(&'-', all_palettes));
 
-                        info!("Loading map data from {:?}", path);
-                        map_data.data.push(loader.load()?)
-                    }
-                    _ => {}
-                }
-            }
-            TabType::LiveViewer => todo!(),
-            _ => {}
-        }
-    }
+    map_data.data.push(loaded);
+
+    // for tab in editor_data.tabs.iter() {
+    //     match &tab.tab_type {
+    //         TabType::MapEditor(state) => match state {
+    //             MapDataState::Saved { path } => {
+    //                 let loader = MapDataLoader { path: path.clone() };
+    //
+    //                 info!("Loading map data from {:?}", path);
+    //                 map_data.data.push(loader.load()?)
+    //             }
+    //             _ => {}
+    //         },
+    //         TabType::LiveViewer => todo!(),
+    //         _ => {}
+    //     }
+    // }
 
     Ok(map_data)
 }
@@ -184,26 +211,82 @@ fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Er
 fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, anyhow::Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
-        Some(t) => t.clone()
+        Some(t) => t.clone(),
     };
 
     let cdda_path = match &editor_data.config.cdda_path {
         None => return Ok(None),
-        Some(p) => p.clone()
+        Some(p) => p.clone(),
     };
 
     let tile_config_reader = TileConfigReader {
-        path: cdda_path.join("gfx").join(&tileset).join("tile_config.json")
+        path: cdda_path
+            .join("gfx")
+            .join(&tileset)
+            .join("tile_config.json"),
     };
 
     let config = tile_config_reader.read()?;
     let id_map = legacy_tileset::get_id_map_from_config(config);
 
-    let tilesheet = Tilesheet {
-        id_map
-    };
+    let tilesheet = Tilesheet { id_map };
 
     Ok(Some(tilesheet))
+}
+
+pub fn load_palettes(
+    editor_data: &EditorData,
+) -> Result<Option<HashMap<CDDAIdentifier, Palette>>, anyhow::Error> {
+    let cdda_path = match &editor_data.config.cdda_path {
+        None => return Ok(None),
+        Some(p) => p.clone(),
+    };
+
+    let mut palette_map = HashMap::new();
+
+    let mapgen_path = cdda_path.join("data").join("json").join("mapgen_palettes");
+    for entry in WalkDir::new(mapgen_path).min_depth(1) {
+        let entry = entry?;
+
+        if !entry.file_type().is_file() {
+            debug!(
+                "Skipping directory {:?} during palette loading; Reason: Entry is not a file",
+                entry.path()
+            );
+            continue;
+        };
+
+        let extension = match entry.path().extension() {
+            None => {
+                debug!(
+                    "Skipping file {:?} during palette loading; Reason: File does not appear to have an extension",
+                    entry.path()
+                );
+                continue;
+            }
+            Some(e) => e,
+        };
+
+        if extension != "json" {
+            debug!(
+                "Skipping file {:?} during palette loading; Reason: file does not end in json",
+                entry.path()
+            );
+            continue;
+        }
+
+        let palette_loader = PaletteLoader {
+            path: entry.path().to_path_buf(),
+        };
+
+        let palettes = palette_loader.load()?;
+
+        for palette in palettes {
+            palette_map.insert(palette.id.clone(), palette);
+        }
+    }
+
+    Ok(Some(palette_map))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -211,17 +294,25 @@ pub fn run() -> () {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_log::Builder::new()
-            .level(LevelFilter::Debug)
-            .targets(vec![Target::new(TargetKind::Webview), Target::new(TargetKind::Stdout)])
-            .build()
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .level(LevelFilter::Debug)
+                .targets(vec![
+                    Target::new(TargetKind::Webview),
+                    Target::new(TargetKind::Stdout),
+                ])
+                .build(),
         )
         .setup(|app| {
             info!("loading Editor data config");
             let editor_data = get_saved_editor_data(app)?;
 
+            info!("Loading Palettes");
+            let palettes = load_palettes(&editor_data)?
+                .unwrap_or_else(|| HashMap::<CDDAIdentifier, Palette>::new());
+
             info!("Loading testing map data");
-            let map_data = get_map_data(&editor_data)?;
+            let map_data = get_map_data(&editor_data, &palettes)?;
 
             info!("Loading tilesheet");
             let tilesheet = load_tilesheet(&editor_data)?;
@@ -229,6 +320,7 @@ pub fn run() -> () {
             app.manage(Mutex::new(tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
+            app.manage(Mutex::new(palettes));
 
             Ok(())
         })
@@ -252,4 +344,3 @@ pub fn run() -> () {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
-

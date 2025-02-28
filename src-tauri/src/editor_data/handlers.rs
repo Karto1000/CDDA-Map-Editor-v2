@@ -1,11 +1,14 @@
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::util::Save;
+use crate::load_palettes;
+use crate::palettes::Palette;
+use crate::util::{CDDAIdentifier, Save};
 use log::{error, info};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
-use tauri::{App, AppHandle, Emitter, State};
+use tauri::{App, AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn get_editor_data(editor_data: State<'_, Mutex<EditorData>>) -> Result<EditorData, ()> {
@@ -49,6 +52,17 @@ pub async fn cdda_installation_directory_picked(
     let mut lock = editor_data.lock().await;
     lock.available_tilesets = Some(available_tilesets);
     lock.config.cdda_path = Some(path);
+
+    match load_palettes(&lock).map_err(|_| {
+        InstallationPickedError::InvalidCDDADirectory("Failed to get palettes".into())
+    })? {
+        None => {
+            app.manage(Mutex::new(HashMap::<CDDAIdentifier, Palette>::new()));
+        }
+        Some(p) => {
+            app.manage(Mutex::new(p));
+        }
+    };
 
     app.emit("editor_data_changed", lock.clone())
         .expect("Emit to not fail");
