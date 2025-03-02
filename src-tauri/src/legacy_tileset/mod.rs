@@ -1,7 +1,10 @@
 use crate::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
 };
-use crate::util::MeabyVec;
+use crate::util::{CDDAIdentifier, MeabyVec};
+use rand::distr::weighted::WeightedIndex;
+use rand::distr::Distribution;
+use rand::rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -161,7 +164,7 @@ fn get_multitile_sprite_from_additional_tiles(
     })
 }
 
-pub fn get_id_map_from_config(config: TileConfig) -> HashMap<String, Sprite> {
+pub fn get_id_map_from_config(config: TileConfig) -> HashMap<CDDAIdentifier, Sprite> {
     let mut id_map = HashMap::new();
 
     let mut normal_spritesheets = vec![];
@@ -211,7 +214,11 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<String, Sprite> {
 }
 
 pub struct Tilesheet {
-    pub id_map: HashMap<String, Sprite>,
+    pub id_map: HashMap<CDDAIdentifier, Sprite>,
+}
+
+pub trait GetRandom<T> {
+    fn get_random(&self) -> &T;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -223,6 +230,20 @@ pub struct WeightedSprite<T> {
 impl<T> WeightedSprite<T> {
     pub fn new(sprite: T, weight: i32) -> Self {
         Self { sprite, weight }
+    }
+}
+
+impl<T> GetRandom<T> for Vec<WeightedSprite<T>> {
+    fn get_random(&self) -> &T {
+        let mut weights = vec![];
+        self.iter().for_each(|v| weights.push(v.weight));
+
+        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+        let mut rng = rng();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+
+        &self.get(chosen_index).unwrap().sprite
     }
 }
 
@@ -255,7 +276,7 @@ impl<T> MeabyWeightedSprite<T> {
         match self {
             MeabyWeightedSprite::NotWeighted(d) => WeightedSprite {
                 sprite: d,
-                weight: 0,
+                weight: 1,
             },
             MeabyWeightedSprite::Weighted(w) => w,
         }

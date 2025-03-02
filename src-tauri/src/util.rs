@@ -1,3 +1,4 @@
+use derive_more::with_trait::Display;
 use glam::UVec2;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
@@ -7,8 +8,10 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 
-pub type CDDAIdentifier = String;
-pub type ParameterIdentifier = String;
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
+pub struct CDDAIdentifier(pub String);
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
+pub struct ParameterIdentifier(pub String);
 pub type Comment = Option<String>;
 
 pub trait GetIdentifier {
@@ -25,7 +28,7 @@ impl GetIdentifier for MeabyParam {
     ) -> CDDAIdentifier {
         match self {
             MeabyParam::Param { param, fallback } => calculated_parameters
-                .get(param)
+                .get(&param)
                 .map(|p| p.clone())
                 .unwrap_or(fallback.clone()),
             MeabyParam::Normal(n) => n.clone(),
@@ -43,17 +46,6 @@ impl GetIdentifier for CDDAIdentifier {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Switch {
-    param: ParameterIdentifier,
-    fallback: CDDAIdentifier,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Distribution {
-    pub distribution: MeabyVec<MeabyWeighted<CDDAIdentifier>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MeabyParam {
     Param {
@@ -61,80 +53,6 @@ pub enum MeabyParam {
         fallback: CDDAIdentifier,
     },
     Normal(CDDAIdentifier),
-}
-
-// https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-values
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MapGenValue {
-    String(CDDAIdentifier),
-    Distribution(MeabyVec<MeabyWeighted<MeabyParam>>),
-    Param {
-        param: ParameterIdentifier,
-        fallback: Option<CDDAIdentifier>,
-    },
-    Switch {
-        switch: Switch,
-        cases: HashMap<ParameterIdentifier, CDDAIdentifier>,
-    },
-}
-
-impl GetIdentifier for MapGenValue {
-    fn get_identifier(
-        &self,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier {
-        match self {
-            MapGenValue::String(s) => s.clone(),
-            MapGenValue::Distribution(d) => d.get(calculated_parameters),
-            MapGenValue::Param { param, fallback } => calculated_parameters
-                .get(param)
-                .map(|p| p.clone())
-                .unwrap_or_else(|| fallback.clone().expect("Fallback to exist")),
-            MapGenValue::Switch { switch, cases } => {
-                let id = calculated_parameters
-                    .get(&switch.param)
-                    .map(|p| p.clone())
-                    .unwrap_or_else(|| switch.fallback.clone());
-
-                cases.get(&id).expect("MapTo to exist").clone()
-            }
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CataVariant {
-    ItemGroupId,
-    ItypeId,
-    MatypeId,
-    MtypeId,
-    MongroupId,
-    MutagenTechnique,
-    MutationCategoryId,
-    NestedMapgenId,
-    NpcTemplateId,
-    OterId,
-    OterTypeStrId,
-    OvermapSpecialId,
-    PaletteId,
-    Point,
-    Tripoint,
-    ProfessionId,
-    ProficiencyId,
-    SkillId,
-    SpeciesId,
-    SpellId,
-    TerId,
-    TerFurnTransformId,
-    TerStrId,
-    TraitId,
-    TrapId,
-    TrapStrId,
-    VgroupId,
-    WidgetId,
-    ZoneTypeId,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

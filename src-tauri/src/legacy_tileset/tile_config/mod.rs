@@ -1,7 +1,7 @@
 pub(crate) mod reader;
 
 use crate::legacy_tileset::{MeabyWeightedSprite, TileInfo};
-use crate::util::MeabyVec;
+use crate::util::{CDDAIdentifier, MeabyVec};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer};
 
@@ -90,7 +90,7 @@ pub struct AdditionalTile {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tile {
-    pub id: MeabyVec<String>,
+    pub id: MeabyVec<CDDAIdentifier>,
     pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<u32>>>>,
     pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<u32>>>>,
     pub rotates: Option<bool>,

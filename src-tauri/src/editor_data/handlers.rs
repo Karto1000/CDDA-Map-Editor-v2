@@ -1,8 +1,10 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::palettes::CDDAPalette;
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::load_palettes;
-use crate::palettes::Palette;
+use crate::load_cdda_json_data;
 use crate::util::{CDDAIdentifier, Save};
-use log::{error, info};
+use anyhow::Error;
+use log::{error, info, warn};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
@@ -53,16 +55,17 @@ pub async fn cdda_installation_directory_picked(
     lock.available_tilesets = Some(available_tilesets);
     lock.config.cdda_path = Some(path);
 
-    match load_palettes(&lock).map_err(|_| {
-        InstallationPickedError::InvalidCDDADirectory("Failed to get palettes".into())
-    })? {
-        None => {
-            app.manage(Mutex::new(HashMap::<CDDAIdentifier, Palette>::new()));
+    match load_cdda_json_data(&lock) {
+        Ok(data) => {
+            app.manage(Mutex::new(data));
         }
-        Some(p) => {
-            app.manage(Mutex::new(p));
+        Err(e) => {
+            warn!("{}", e);
+            return Err(InstallationPickedError::InvalidCDDADirectory(
+                "Failed to load json data".into(),
+            ));
         }
-    };
+    }
 
     app.emit("editor_data_changed", lock.clone())
         .expect("Emit to not fail");

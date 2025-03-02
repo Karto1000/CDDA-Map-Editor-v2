@@ -2,52 +2,66 @@ pub(crate) mod handlers;
 pub(crate) mod importing;
 pub(crate) mod io;
 
-use crate::palettes::{Palette, Parameter};
+use crate::cdda_data::palettes::{CDDAPalette, Parameter};
+use crate::cdda_data::MapGenValue;
 use crate::util::{
-    CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Load, MapGenValue, ParameterIdentifier,
+    CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Load, MeabyParam, ParameterIdentifier,
     Save,
 };
 use glam::UVec2;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
-    character: char,
+    pub character: char,
 }
 
 #[derive(Debug, Clone)]
 pub struct MapData {
     pub name: String,
     pub cells: HashMap<UVec2, Cell>,
+    pub fill: Option<MeabyParam>,
 
     pub calculated_parameters: HashMap<ParameterIdentifier, CDDAIdentifier>,
-
     pub parameters: HashMap<ParameterIdentifier, Parameter>,
+
     pub terrain: HashMap<char, MapGenValue>,
+    pub furniture: HashMap<char, MapGenValue>,
 
     pub palettes: Vec<MapGenValue>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CDDAIdentifierGroup {
+    pub terrain: Option<CDDAIdentifier>,
+    pub furniture: Option<CDDAIdentifier>,
 }
 
 impl MapData {
     pub fn new(
         name: String,
+        fill: Option<MeabyParam>,
         cells: HashMap<UVec2, Cell>,
         terrain: HashMap<char, MapGenValue>,
+        furniture: HashMap<char, MapGenValue>,
         palettes: Vec<MapGenValue>,
         parameters: HashMap<ParameterIdentifier, Parameter>,
     ) -> Self {
         Self {
             calculated_parameters: Default::default(),
+            fill,
             parameters,
             palettes,
             terrain,
+            furniture,
             name,
             cells,
         }
     }
 
-    pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, Palette>) {
+    pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>) {
         let mut calculated_parameters = HashMap::new();
 
         for (id, parameter) in self.parameters.iter() {
@@ -75,7 +89,7 @@ impl MapData {
     pub fn get_terrain(
         &self,
         character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, Palette>,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
     ) -> Option<CDDAIdentifier> {
         // If we find the terrain in the current map's terrain field, return that
         if let Some(id) = self.terrain.get(character) {
@@ -95,6 +109,40 @@ impl MapData {
         }
 
         None
+    }
+
+    pub fn get_furniture(
+        &self,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+    ) -> Option<CDDAIdentifier> {
+        if let Some(id) = self.furniture.get(character) {
+            return Some(id.get_identifier(&self.calculated_parameters));
+        };
+
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) =
+                palette.get_furniture(character, &self.calculated_parameters, all_palettes)
+            {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_identifiers(
+        &self,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+    ) -> CDDAIdentifierGroup {
+        let terrain = self.get_terrain(character, all_palettes);
+        let furniture = self.get_furniture(character, all_palettes);
+
+        CDDAIdentifierGroup { terrain, furniture }
     }
 }
 
@@ -122,10 +170,12 @@ impl Serialize for MapData {
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapDataIntermediate {
     pub name: String,
+    pub fill: Option<MeabyParam>,
     pub cells: HashMap<JSONSerializableUVec2, Cell>,
     pub parameters: Option<HashMap<ParameterIdentifier, Parameter>>,
     pub palettes: Vec<MapGenValue>,
     pub terrain: HashMap<char, MapGenValue>,
+    pub furniture: HashMap<char, MapGenValue>,
 }
 
 impl Into<MapData> for MapDataIntermediate {
@@ -138,8 +188,10 @@ impl Into<MapData> for MapDataIntermediate {
 
         MapData::new(
             self.name,
+            self.fill,
             cells,
             self.terrain,
+            self.furniture,
             self.palettes,
             self.parameters.unwrap_or_else(|| HashMap::new()),
         )

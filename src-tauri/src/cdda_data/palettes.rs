@@ -1,11 +1,10 @@
-pub(crate) mod io;
-
-use crate::util::{
-    CDDAIdentifier, CataVariant, Comment, Distribution, GetIdentifier, Load, MapGenValue,
-    ParameterIdentifier,
-};
+use crate::cdda_data::{CataVariant, Distribution, MapGenValue};
+use crate::util::{CDDAIdentifier, Comment, GetIdentifier, ParameterIdentifier};
 use serde::Deserialize;
 use std::collections::HashMap;
+
+pub type Palettes = HashMap<CDDAIdentifier, CDDAPalette>;
+
 #[derive(Debug, Clone, Default, Deserialize)]
 pub enum ParameterScope {
     // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-parameters
@@ -34,16 +33,8 @@ pub struct Parameter {
     pub default: Distribution,
 }
 
-#[derive(Debug, Deserialize)]
-pub enum PaletteType {
-    #[serde(rename = "palette")]
-    Palette,
-}
-
-#[derive(Debug, Deserialize)]
-pub struct Palette {
-    #[serde(rename = "type")]
-    pub ty: PaletteType,
+#[derive(Debug, Clone, Deserialize)]
+pub struct CDDAPalette {
     pub id: CDDAIdentifier,
 
     #[serde(rename = "//")]
@@ -62,10 +53,10 @@ pub struct Palette {
     pub terrain: HashMap<char, MapGenValue>,
 }
 
-impl Palette {
+impl CDDAPalette {
     pub fn calculate_parameters(
         &self,
-        all_palettes: &HashMap<CDDAIdentifier, Palette>,
+        all_palettes: &Palettes,
     ) -> HashMap<ParameterIdentifier, CDDAIdentifier> {
         let mut calculated_parameters: HashMap<ParameterIdentifier, CDDAIdentifier> =
             HashMap::new();
@@ -97,7 +88,7 @@ impl Palette {
         &self,
         character: &char,
         calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
-        all_palettes: &HashMap<CDDAIdentifier, Palette>,
+        all_palettes: &Palettes,
     ) -> Option<CDDAIdentifier> {
         if let Some(id) = self.terrain.get(character) {
             return Some(id.get_identifier(calculated_parameters));
@@ -109,6 +100,30 @@ impl Palette {
             let palette = all_palettes.get(&palette_id).expect("Palette to exist");
 
             if let Some(id) = palette.get_terrain(character, calculated_parameters, all_palettes) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_furniture(
+        &self,
+        character: &char,
+        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        all_palettes: &Palettes,
+    ) -> Option<CDDAIdentifier> {
+        if let Some(id) = self.furniture.get(character) {
+            return Some(id.get_identifier(calculated_parameters));
+        };
+
+        // If we don't find it, search the palettes from top to bottom
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) = palette.get_furniture(character, calculated_parameters, all_palettes)
+            {
                 return Some(id);
             }
         }

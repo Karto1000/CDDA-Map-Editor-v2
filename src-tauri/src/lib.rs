@@ -1,9 +1,11 @@
+mod cdda_data;
 mod editor_data;
 mod legacy_tileset;
 mod map_data;
-mod palettes;
 mod util;
 
+use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
+use crate::cdda_data::palettes::{CDDAPalette, Palettes};
 use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
@@ -19,13 +21,12 @@ use crate::legacy_tileset::Tilesheet;
 use crate::map_data::handlers::{close_map, create_map, get_current_map_data, save_current_map};
 use crate::map_data::handlers::{open_map, place};
 use crate::map_data::{MapData, MapDataContainer};
-use crate::palettes::Palette;
 use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec};
+use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
 use image::{load, GenericImageView};
 use log::{debug, error, info, warn, LevelFilter};
 use map_data::importing::MapDataImporter;
-use palettes::io::PaletteLoader;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -172,22 +173,10 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
     Ok(config)
 }
 
-fn get_map_data(
-    editor_data: &EditorData,
-    all_palettes: &HashMap<CDDAIdentifier, Palette>,
-) -> Result<MapDataContainer, anyhow::Error> {
+fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Error> {
     let mut map_data = MapDataContainer::default();
 
-    let importer = MapDataImporter {
-        path: r"C:\CDDA\testing\data\json\mapgen\house\house01.json".into(),
-        om_terrain: "house_01".into(),
-    };
-    let mut loaded = importer.load()?;
-    loaded.calculate_parameters(all_palettes);
-    dbg!(&loaded.calculated_parameters);
-    dbg!(&loaded.get_terrain(&'-', all_palettes));
-
-    map_data.data.push(loaded);
+    // map_data.data.push(loaded);
 
     // for tab in editor_data.tabs.iter() {
     //     match &tab.tab_type {
@@ -234,59 +223,21 @@ fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, anyhow:
     Ok(Some(tilesheet))
 }
 
-pub fn load_palettes(
+pub fn load_cdda_json_data(
     editor_data: &EditorData,
-) -> Result<Option<HashMap<CDDAIdentifier, Palette>>, anyhow::Error> {
-    let cdda_path = match &editor_data.config.cdda_path {
-        None => return Ok(None),
-        Some(p) => p.clone(),
+) -> Result<DeserializedCDDAJsonData, anyhow::Error> {
+    let cdda_path = editor_data
+        .config
+        .cdda_path
+        .clone()
+        .ok_or(anyhow!("No CDDA Path supplied"))?
+        .clone();
+
+    let data_loader = CDDADataLoader {
+        json_path: cdda_path.join(&editor_data.config.json_data_path),
     };
 
-    let mut palette_map = HashMap::new();
-
-    let mapgen_path = cdda_path.join("data").join("json").join("mapgen_palettes");
-    for entry in WalkDir::new(mapgen_path).min_depth(1) {
-        let entry = entry?;
-
-        if !entry.file_type().is_file() {
-            debug!(
-                "Skipping directory {:?} during palette loading; Reason: Entry is not a file",
-                entry.path()
-            );
-            continue;
-        };
-
-        let extension = match entry.path().extension() {
-            None => {
-                debug!(
-                    "Skipping file {:?} during palette loading; Reason: File does not appear to have an extension",
-                    entry.path()
-                );
-                continue;
-            }
-            Some(e) => e,
-        };
-
-        if extension != "json" {
-            debug!(
-                "Skipping file {:?} during palette loading; Reason: file does not end in json",
-                entry.path()
-            );
-            continue;
-        }
-
-        let palette_loader = PaletteLoader {
-            path: entry.path().to_path_buf(),
-        };
-
-        let palettes = palette_loader.load()?;
-
-        for palette in palettes {
-            palette_map.insert(palette.id.clone(), palette);
-        }
-    }
-
-    Ok(Some(palette_map))
+    data_loader.load()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -304,15 +255,33 @@ pub fn run() -> () {
                 .build(),
         )
         .setup(|app| {
-            info!("loading Editor data config");
+            info!("Loading Editor data config");
             let editor_data = get_saved_editor_data(app)?;
 
-            info!("Loading Palettes");
-            let palettes = load_palettes(&editor_data)?
-                .unwrap_or_else(|| HashMap::<CDDAIdentifier, Palette>::new());
+            info!("Loading map data");
+            let mut map_data = get_map_data(&editor_data)?;
 
-            info!("Loading testing map data");
-            let map_data = get_map_data(&editor_data, &palettes)?;
+            info!("trying to load CDDA Json Data");
+            match load_cdda_json_data(&editor_data) {
+                Ok(cdda_json_data) => {
+                    info!("Loading testing map data");
+
+                    let importer = MapDataImporter {
+                        path: r"C:\CDDA\testing\data\json\mapgen\house\house01.json".into(),
+                        om_terrain: "house_01".into(),
+                    };
+                    let mut loaded = importer.load()?;
+                    loaded.calculate_parameters(&cdda_json_data.palettes);
+                    map_data.data.push(loaded);
+
+                    app.manage(Mutex::new(Some(cdda_json_data)));
+                }
+                Err(e) => {
+                    warn!("Failed to load editor data");
+
+                    app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(None));
+                }
+            };
 
             info!("Loading tilesheet");
             let tilesheet = load_tilesheet(&editor_data)?;
@@ -320,7 +289,6 @@ pub fn run() -> () {
             app.manage(Mutex::new(tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
-            app.manage(Mutex::new(palettes));
 
             Ok(())
         })

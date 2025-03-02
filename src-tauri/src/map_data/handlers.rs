@@ -1,17 +1,19 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::palettes::Palettes;
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::MapDataState::Saved;
 use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::legacy_tileset::{Sprite, Tilesheet};
+use crate::legacy_tileset::{FinalIds, GetRandom, Sprite, Tilesheet};
 use crate::map_data::io::MapDataSaver;
 use crate::map_data::{Cell, MapData, MapDataContainer};
-use crate::util::{JSONSerializableUVec2, Save};
+use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, MeabyParam, Save};
 use glam::UVec2;
 use image::imageops::tile;
 use log::{error, info, warn};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
-use std::ops::Index;
+use std::ops::{Deref, Index};
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
@@ -132,7 +134,10 @@ pub async fn place(
         },
     );
 
-    let sprite = tilesheet.id_map.get("t_grass").unwrap();
+    let sprite = tilesheet
+        .id_map
+        .get(&CDDAIdentifier("t_grass".into()))
+        .unwrap();
     let fg = match sprite {
         Sprite::Single { .. } => unreachable!(),
         Sprite::Open { .. } => unreachable!(),
@@ -181,8 +186,10 @@ pub async fn create_map(
         data.name.clone(),
         Default::default(),
         Default::default(),
-        vec![],
-        HashMap::new(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
+        Default::default(),
     ));
 
     create_tab(
@@ -203,8 +210,16 @@ pub async fn open_map(
     app: AppHandle,
     tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
     map_data_container: State<'_, Mutex<MapDataContainer>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), ()> {
     let mut lock = map_data_container.lock().await;
+
+    let guard = json_data.lock().await;
+    let json_data = match guard.deref() {
+        None => return Err(()),
+        Some(d) => d,
+    };
+
     lock.current_map = Some(index);
 
     let map_data = match lock.data.get(index) {
@@ -223,31 +238,84 @@ pub async fn open_map(
 
     app.emit("opened_map", index).expect("Function to not fail");
 
-    let sprite = tilesheet.id_map.get("t_grass").unwrap();
-    let fg = match sprite {
-        Sprite::Single { .. } => unreachable!(),
-        Sprite::Open { .. } => unreachable!(),
-        Sprite::Broken { .. } => unreachable!(),
-        Sprite::Explosion { .. } => unreachable!(),
-        Sprite::Multitile { ids, .. } => ids
-            .fg
-            .clone()
-            .unwrap()
-            .get(0)
-            .unwrap()
-            .sprite
-            .get(0)
-            .unwrap()
-            .clone(),
+    let mut indexes = vec![];
+    let mut positions = vec![];
+
+    let fill_sprite = match &map_data.fill {
+        None => None,
+        Some(id) => {
+            let id = id.get_identifier(&map_data.calculated_parameters);
+
+            match tilesheet.id_map.get(&id) {
+                None => None,
+                Some(s) => Some(s),
+            }
+        }
     };
 
-    let positions: Vec<JSONSerializableUVec2> = map_data
-        .cells
-        .iter()
-        .map(|(pos, _)| JSONSerializableUVec2(pos.clone()))
-        .collect();
+    map_data.cells.iter().for_each(|(p, char)| {
+        match fill_sprite {
+            None => {}
+            Some(fill_sprite) => {
+                if char.character == ' ' {
+                    let tilesheet_id = match fill_sprite {
+                        Sprite::Single { ids } => match &ids.fg {
+                            None => 0,
+                            Some(v) => v.get_random().get(0).unwrap().clone(),
+                        },
+                        Sprite::Open { .. } => 0,
+                        Sprite::Broken { .. } => 0,
+                        Sprite::Explosion { .. } => 0,
+                        Sprite::Multitile { .. } => 0,
+                    };
 
-    let indexes: Vec<u32> = vec![fg; positions.len()];
+                    positions.push(JSONSerializableUVec2(p.clone()));
+                    indexes.push(tilesheet_id);
+                    return;
+                }
+            }
+        };
+
+        let identifiers = map_data.get_identifiers(&char.character, &json_data.palettes);
+
+        if identifiers.terrain.is_none() && identifiers.furniture.is_none() {
+            warn!("No sprites found for char {:?}", char);
+            return;
+        }
+
+        for o_id in [identifiers.terrain, identifiers.furniture] {
+            let id = match o_id {
+                None => continue,
+                Some(id) => id,
+            };
+
+            let sprite = match tilesheet.id_map.get(&id) {
+                None => {
+                    warn!("Could not find {} in tilesheet ids", id);
+                    positions.push(JSONSerializableUVec2(p.clone()));
+                    indexes.push(0);
+                    return;
+                }
+                Some(s) => s,
+            };
+
+            let tilesheet_id = match sprite {
+                Sprite::Single { ids } => match &ids.fg {
+                    None => 0,
+                    Some(v) => v.get_random().get(0).unwrap().clone(),
+                },
+                Sprite::Open { .. } => 0,
+                Sprite::Broken { .. } => 0,
+                Sprite::Explosion { .. } => 0,
+                Sprite::Multitile { .. } => 0,
+            };
+
+            positions.push(JSONSerializableUVec2(p.clone()));
+            indexes.push(tilesheet_id);
+        }
+    });
+
+    assert_eq!(indexes.len(), positions.len());
 
     app.emit("place_sprites", PlaceSpritesEvent { positions, indexes })
         .unwrap();

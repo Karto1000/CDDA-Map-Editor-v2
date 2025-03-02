@@ -11,9 +11,12 @@ use std::path::PathBuf;
 use tauri::Theme;
 use thiserror::Error;
 
+pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditorConfig {
     pub cdda_path: Option<PathBuf>,
+    pub json_data_path: PathBuf,
     pub config_path: PathBuf,
     pub selected_tileset: Option<String>,
     pub theme: Theme,
@@ -53,6 +56,7 @@ impl Default for EditorConfig {
             cdda_path: None,
             config_path: Default::default(),
             selected_tileset: None,
+            json_data_path: DEFAULT_CDDA_DATA_JSON_PATH.into(),
             theme: Theme::Dark,
         }
     }
