@@ -21,6 +21,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
             const infoResponse = await invokeTauri<SpritesheetConfig, unknown>(LegacyTilesetCommand.GetInfoOfCurrentTileset, {})
 
             if (infoResponse.type === BackendResponseType.Error) {
+                console.error(infoResponse.error)
                 return
             }
 

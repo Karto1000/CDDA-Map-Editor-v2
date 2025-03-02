@@ -11,7 +11,7 @@ import {listen} from "@tauri-apps/api/event";
 import {makeCancelable} from "./lib/index.ts";
 import {MapDataSendCommand} from "./lib/map_data/send/index.ts";
 import {Scene} from "three";
-import {useEditor, UseEditorRef} from "./hooks/useEditor.tsx";
+import {useEditor} from "./hooks/useEditor.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
@@ -57,7 +57,11 @@ function App() {
             async (e) => {
                 setEditorData(e.payload)
 
-                if (!e.payload.config.cdda_path) {
+                const welcomeTab = e.payload.tabs.find(t => t.tab_type.type === TabTypeKind.Welcome)
+
+                if (welcomeTab) tabs.setOpenedTab(e.payload.tabs.indexOf(welcomeTab))
+
+                if (!e.payload.config.cdda_path && !welcomeTab) {
                     await tabs.addTab(
                         {
                             name: "Welcome to the CDDA Map Editor",

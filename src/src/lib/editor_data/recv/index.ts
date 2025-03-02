@@ -1,3 +1,5 @@
+import {Tab} from "../../../hooks/useTabs.js";
+
 export enum EditorDataRecvEvent {
     EditorDataChanged = "editor_data_changed",
     TabCreated = "tab_created",
@@ -12,5 +14,6 @@ export type EditorConfig = {
 
 export type EditorData = {
     config: EditorConfig
-    available_tilesets: string[]
+    available_tilesets: string[],
+    tabs: Tab[]
 }
