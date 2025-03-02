@@ -1,5 +1,4 @@
-use crate::cdda_data::Distribution;
-use crate::util::CDDAIdentifier;
+use crate::util::{CDDAIdentifier, Weighted};
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -115,7 +114,7 @@ pub struct OvermapFeatureFlagSettings {
 pub struct CDDARegionSettings {
     pub id: CDDAIdentifier,
     pub default_oter: Vec<String>,
-    pub default_groundcover: Vec<Distribution>,
+    pub default_groundcover: Vec<Weighted<CDDAIdentifier>>,
     pub region_terrain_and_furniture: RegionTerrainAndFurniture,
     pub river_scale: f32,
 }

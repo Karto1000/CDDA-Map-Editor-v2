@@ -1,5 +1,5 @@
 use crate::legacy_tileset::tile_config::{
-    AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
+    AdditionalTile, AdditionalTileId, Rotations, Spritesheet, Tile, TileConfig,
 };
 use crate::util::{CDDAIdentifier, MeabyVec};
 use rand::distr::weighted::WeightedIndex;
@@ -59,17 +59,18 @@ impl SpritesheetConfigReader {
     }
 }
 
-pub type FinalIds = Option<Vec<WeightedSprite<Vec<u32>>>>;
+pub type FinalIds = Option<Vec<WeightedSprite<Rotations<u32>>>>;
 
 #[derive(Debug)]
 pub struct ForeBackIds {
+    pub rotates: bool,
     pub fg: FinalIds,
     pub bg: FinalIds,
 }
 
 impl ForeBackIds {
-    pub fn new(fg: FinalIds, bg: FinalIds) -> Self {
-        Self { fg, bg }
+    pub fn new(fg: FinalIds, bg: FinalIds, rotates: bool) -> Self {
+        Self { fg, bg, rotates }
     }
 }
 
@@ -104,17 +105,63 @@ pub enum Sprite {
     },
 }
 
+impl Sprite {
+    pub fn get_fg_id(&self) -> Option<u32> {
+        match self {
+            Sprite::Single { ids } => match &ids.fg {
+                None => None,
+                Some(v) => {
+                    if v.len() == 0 {
+                        return None;
+                    }
+
+                    let random_choice = v.get_random();
+                    Some(random_choice.up())
+                }
+            },
+            Sprite::Multitile { center, .. } => {
+                if let Some(center) = center {
+                    return match &center.fg {
+                        None => None,
+                        Some(v) => {
+                            if v.len() == 0 {
+                                return None;
+                            }
+
+                            let random_choice = v.get_random();
+                            return Some(random_choice.up());
+                        }
+                    };
+                }
+
+                None
+            }
+            _ => None,
+        }
+    }
+
+    pub fn get_bg_id(&self) -> Option<u32> {
+        match self {
+            Sprite::Single { ids } => match &ids.bg {
+                None => None,
+                Some(v) => {
+                    if v.len() == 0 {
+                        return None;
+                    }
+
+                    let random_choice = v.get_random();
+                    Some(random_choice.up())
+                }
+            },
+            _ => None,
+        }
+    }
+}
+
 fn to_weighted_vec<T>(
-    indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<T>>>>,
-) -> Option<Vec<WeightedSprite<Vec<T>>>> {
-    indices.map(|fg| {
-        fg.map(|mw| {
-            let weighted = mw.weighted();
-            let weight = weighted.weight;
-            let vec = weighted.sprite.vec();
-            WeightedSprite::new(vec, weight)
-        })
-    })
+    indices: Option<MeabyVec<MeabyWeightedSprite<Rotations<T>>>>,
+) -> Option<Vec<WeightedSprite<Rotations<T>>>> {
+    indices.map(|fg| fg.map(|mw| mw.weighted()))
 }
 
 fn get_multitile_sprite_from_additional_tiles(
@@ -127,17 +174,20 @@ fn get_multitile_sprite_from_additional_tiles(
         let fg = to_weighted_vec(additional_tile.fg.clone());
         let bg = to_weighted_vec(additional_tile.bg.clone());
 
-        additional_tile_ids.insert(additional_tile.id.clone(), ForeBackIds::new(fg, bg));
+        additional_tile_ids.insert(
+            additional_tile.id.clone(),
+            ForeBackIds::new(fg, bg, additional_tile.rotates.unwrap_or(true)),
+        );
     }
 
-    let fg = to_weighted_vec(tile.fg.clone());
-    let bg = to_weighted_vec(tile.bg.clone());
+    let fg = to_weighted_vec::<u32>(tile.fg.clone());
+    let bg = to_weighted_vec::<u32>(tile.bg.clone());
 
     match additional_tile_ids.remove(&AdditionalTileId::Broken) {
         None => {}
         Some(ids) => {
             return Ok(Sprite::Broken {
-                ids: ForeBackIds::new(fg, bg),
+                ids: ForeBackIds::new(fg, bg, ids.rotates),
                 broken: ids,
             })
         }
@@ -147,14 +197,14 @@ fn get_multitile_sprite_from_additional_tiles(
         None => {}
         Some(ids) => {
             return Ok(Sprite::Open {
-                ids: ForeBackIds::new(fg, bg),
+                ids: ForeBackIds::new(fg, bg, ids.rotates),
                 open: ids,
             })
         }
     }
 
     Ok(Sprite::Multitile {
-        ids: ForeBackIds::new(fg, bg),
+        ids: ForeBackIds::new(fg, bg, tile.rotates.unwrap_or(true)),
         center: additional_tile_ids.remove(&AdditionalTileId::Center),
         corner: additional_tile_ids.remove(&AdditionalTileId::Corner),
         edge: additional_tile_ids.remove(&AdditionalTileId::Edge),
@@ -188,7 +238,11 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<CDDAIdentifier, Spr
                     id_map.insert(
                         id.clone(),
                         Sprite::Single {
-                            ids: ForeBackIds::new(fg.clone(), bg.clone()),
+                            ids: ForeBackIds::new(
+                                fg.clone(),
+                                bg.clone(),
+                                tile.rotates.unwrap_or(true),
+                            ),
                         },
                     );
                 });

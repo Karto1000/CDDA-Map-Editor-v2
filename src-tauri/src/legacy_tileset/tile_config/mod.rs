@@ -3,7 +3,7 @@ pub(crate) mod reader;
 use crate::legacy_tileset::{MeabyWeightedSprite, TileInfo};
 use crate::util::{CDDAIdentifier, MeabyVec};
 use serde::de::Error;
-use serde::{Deserialize, Deserializer};
+use serde::{Deserialize, Deserializer, Serialize};
 
 pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
     deserializer: D,
@@ -27,6 +27,25 @@ pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
         .map_err(|_| Error::custom(format!("Failed to parse {} as u32", left)))?;
 
     Ok((from, to))
+}
+
+// https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/TILESET.md#rotations
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum Rotations<T> {
+    None(T),
+    Horizontal((T, T)),
+    Full((T, T, T, T)),
+}
+
+impl<T: Clone> Rotations<T> {
+    pub fn up(&self) -> T {
+        match self {
+            Rotations::None(d) => d.clone(),
+            Rotations::Horizontal((l, r)) => todo!("Don't know what to do here"),
+            Rotations::Full((u, _, _, _)) => u.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,15 +103,16 @@ pub enum AdditionalTileId {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AdditionalTile {
     pub id: AdditionalTileId,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<u32>>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<u32>>>>,
+    pub rotates: Option<bool>,
+    pub fg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
+    pub bg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tile {
     pub id: MeabyVec<CDDAIdentifier>,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<u32>>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<u32>>>>,
+    pub fg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
+    pub bg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
     pub rotates: Option<bool>,
     pub multitile: Option<bool>,
     pub additional_tiles: Option<Vec<AdditionalTile>>,

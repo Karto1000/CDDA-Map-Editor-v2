@@ -1,5 +1,6 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
+use crate::cdda_data::region_settings::RegionIdentifier;
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::MapDataState::Saved;
 use crate::editor_data::tab::{MapDataState, TabType};
@@ -143,16 +144,7 @@ pub async fn place(
         Sprite::Open { .. } => unreachable!(),
         Sprite::Broken { .. } => unreachable!(),
         Sprite::Explosion { .. } => unreachable!(),
-        Sprite::Multitile { ids, .. } => ids
-            .fg
-            .clone()
-            .unwrap()
-            .get(0)
-            .unwrap()
-            .sprite
-            .get(0)
-            .unwrap()
-            .clone(),
+        Sprite::Multitile { ids, .. } => ids.fg.clone().unwrap().get(0).unwrap().sprite.up(),
     };
 
     app.emit(
@@ -261,12 +253,12 @@ pub async fn open_map(
                     let tilesheet_id = match fill_sprite {
                         Sprite::Single { ids } => match &ids.fg {
                             None => 0,
-                            Some(v) => v.get_random().get(0).unwrap().clone(),
+                            Some(v) => v.get_random().clone().up(),
                         },
                         Sprite::Open { .. } => 0,
                         Sprite::Broken { .. } => 0,
                         Sprite::Explosion { .. } => 0,
-                        Sprite::Multitile { .. } => 0,
+                        Sprite::Multitile { .. } => 2,
                     };
 
                     positions.push(JSONSerializableUVec2(p.clone()));
@@ -284,34 +276,46 @@ pub async fn open_map(
         }
 
         for o_id in [identifiers.terrain, identifiers.furniture] {
-            let id = match o_id {
+            let mut id = match o_id {
                 None => continue,
                 Some(id) => id,
             };
 
+            // If it starts with t_region, we know it is a regional setting
+            if id.0.starts_with("t_region") {
+                let settings = json_data
+                    .region_settings
+                    .get(&CDDAIdentifier("default".into()))
+                    .expect("Region settings to exist");
+
+                id = settings
+                    .region_terrain_and_furniture
+                    .terrain
+                    .get(&RegionIdentifier(id.0))
+                    .unwrap()
+                    .keys()
+                    .last()
+                    .unwrap()
+                    .clone();
+
+                dbg!(&id);
+            }
+
             let sprite = match tilesheet.id_map.get(&id) {
                 None => {
                     warn!("Could not find {} in tilesheet ids", id);
-                    positions.push(JSONSerializableUVec2(p.clone()));
-                    indexes.push(0);
                     return;
                 }
                 Some(s) => s,
             };
 
-            let tilesheet_id = match sprite {
-                Sprite::Single { ids } => match &ids.fg {
-                    None => 0,
-                    Some(v) => v.get_random().get(0).unwrap().clone(),
-                },
-                Sprite::Open { .. } => 0,
-                Sprite::Broken { .. } => 0,
-                Sprite::Explosion { .. } => 0,
-                Sprite::Multitile { .. } => 0,
+            match sprite.get_fg_id() {
+                None => {}
+                Some(fg_id) => {
+                    positions.push(JSONSerializableUVec2(p.clone()));
+                    indexes.push(fg_id);
+                }
             };
-
-            positions.push(JSONSerializableUVec2(p.clone()));
-            indexes.push(tilesheet_id);
         }
     });
 

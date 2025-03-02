@@ -6,6 +6,7 @@ mod util;
 
 use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
 use crate::cdda_data::palettes::{CDDAPalette, Palettes};
+use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
@@ -30,6 +31,8 @@ use map_data::importing::MapDataImporter;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
+use std::fs::File;
+use std::io::BufReader;
 use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
@@ -267,8 +270,8 @@ pub fn run() -> () {
                     info!("Loading testing map data");
 
                     let importer = MapDataImporter {
-                        path: r"C:\CDDA\testing\data\json\mapgen\house\house01.json".into(),
-                        om_terrain: "house_01".into(),
+                        path: r"C:\CDDA\testing\data\json\mapgen\basic\field.json".into(),
+                        om_terrain: "field".into(),
                     };
                     let mut loaded = importer.load()?;
                     loaded.calculate_parameters(&cdda_json_data.palettes);
