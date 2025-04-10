@@ -38,14 +38,6 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
         for entry in walkdir {
             let entry = entry?;
 
-            if entry.path()
-                == Path::new(
-                    r"C:\CDDA\testing\data\json\furniture_and_terrain\furniture-tools.json",
-                )
-            {
-                dbg!("NOW");
-            }
-
             let extension = match entry.path().extension() {
                 None => {
                     warn!("Entry {:?} does not have an extension", entry.path());
