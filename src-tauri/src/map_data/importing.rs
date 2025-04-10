@@ -1,4 +1,4 @@
-use crate::cdda_data::map_data::CDDAMapData;
+use crate::cdda_data::map_data::{CDDAMapData, OmTerrain};
 use crate::map_data::MapData;
 use crate::util::Load;
 use anyhow::anyhow;
@@ -19,13 +19,16 @@ impl Load<MapData> for MapDataImporter {
 
         let importing_map_data = importing_map_datas
             .into_iter()
-            .find(|md| {
-                md.om_terrain
-                    .clone()
-                    .vec()
-                    .into_iter()
-                    .find(|om_terrain| om_terrain == &self.om_terrain)
-                    .is_some()
+            .find(|md| match &md.om_terrain {
+                OmTerrain::Single(s) => &self.om_terrain == s,
+                OmTerrain::Duplicate(duplicate) => {
+                    duplicate.iter().find(|d| *d == &self.om_terrain).is_some()
+                }
+                OmTerrain::Nested(n) => n
+                    .iter()
+                    .flatten()
+                    .find(|s| *s == &self.om_terrain)
+                    .is_some(),
             })
             .ok_or(anyhow!("Could not find map data"))?;
 

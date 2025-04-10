@@ -10,13 +10,14 @@ use crate::map_data::io::MapDataSaver;
 use crate::map_data::{Cell, MapData, MapDataContainer};
 use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, MeabyParam, Save};
 use glam::UVec2;
-use image::imageops::tile;
+use image::imageops::{index_colors, tile};
 use log::{error, info, warn};
+use rand::fill;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::ops::{Deref, Index};
 use std::path::PathBuf;
-use tauri::async_runtime::Mutex;
+use tauri::async_runtime::{set, Mutex};
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::MutexGuard;
 
@@ -230,6 +231,11 @@ pub async fn open_map(
 
     app.emit("opened_map", index).expect("Function to not fail");
 
+    let region_settings = json_data
+        .region_settings
+        .get(&CDDAIdentifier("default".into()))
+        .expect("Region settings to exist");
+
     let mut indexes = vec![];
     let mut positions = vec![];
 
@@ -238,10 +244,7 @@ pub async fn open_map(
         Some(id) => {
             let id = id.get_identifier(&map_data.calculated_parameters);
 
-            match tilesheet.id_map.get(&id) {
-                None => None,
-                Some(s) => Some(s),
-            }
+            tilesheet.id_map.get(&id.as_final_id(&region_settings))
         }
     };
 
@@ -250,19 +253,16 @@ pub async fn open_map(
             None => {}
             Some(fill_sprite) => {
                 if char.character == ' ' {
-                    let tilesheet_id = match fill_sprite {
-                        Sprite::Single { ids } => match &ids.fg {
-                            None => 0,
-                            Some(v) => v.get_random().clone().up(),
-                        },
-                        Sprite::Open { .. } => 0,
-                        Sprite::Broken { .. } => 0,
-                        Sprite::Explosion { .. } => 0,
-                        Sprite::Multitile { .. } => 2,
-                    };
+                    if let Some(fg_id) = fill_sprite.get_fg_id() {
+                        positions.push(JSONSerializableUVec2(p.clone()));
+                        indexes.push(fg_id);
+                    }
 
-                    positions.push(JSONSerializableUVec2(p.clone()));
-                    indexes.push(tilesheet_id);
+                    if let Some(bg_id) = fill_sprite.get_bg_id() {
+                        positions.push(JSONSerializableUVec2(p.clone()));
+                        indexes.push(bg_id);
+                    }
+
                     return;
                 }
             }
@@ -276,30 +276,10 @@ pub async fn open_map(
         }
 
         for o_id in [identifiers.terrain, identifiers.furniture] {
-            let mut id = match o_id {
+            let id = match o_id {
                 None => continue,
-                Some(id) => id,
+                Some(id) => id.as_final_id(region_settings),
             };
-
-            // If it starts with t_region, we know it is a regional setting
-            if id.0.starts_with("t_region") {
-                let settings = json_data
-                    .region_settings
-                    .get(&CDDAIdentifier("default".into()))
-                    .expect("Region settings to exist");
-
-                id = settings
-                    .region_terrain_and_furniture
-                    .terrain
-                    .get(&RegionIdentifier(id.0))
-                    .unwrap()
-                    .keys()
-                    .last()
-                    .unwrap()
-                    .clone();
-
-                dbg!(&id);
-            }
 
             let sprite = match tilesheet.id_map.get(&id) {
                 None => {
@@ -309,13 +289,15 @@ pub async fn open_map(
                 Some(s) => s,
             };
 
-            match sprite.get_fg_id() {
-                None => {}
-                Some(fg_id) => {
-                    positions.push(JSONSerializableUVec2(p.clone()));
-                    indexes.push(fg_id);
-                }
-            };
+            if let Some(fg_id) = sprite.get_fg_id() {
+                positions.push(JSONSerializableUVec2(p.clone()));
+                indexes.push(fg_id);
+            }
+
+            if let Some(bg_id) = sprite.get_bg_id() {
+                positions.push(JSONSerializableUVec2(p.clone()));
+                indexes.push(bg_id);
+            }
         }
     });
 

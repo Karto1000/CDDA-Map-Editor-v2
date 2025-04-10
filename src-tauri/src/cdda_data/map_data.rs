@@ -1,10 +1,21 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::MapGenValue;
 use crate::map_data::{Cell, MapData};
-use crate::util::{MeabyParam, MeabyVec, ParameterIdentifier};
+use crate::util::{MeabyParam, ParameterIdentifier};
 use glam::UVec2;
 use serde::Deserialize;
 use std::collections::HashMap;
+
+pub const DEFAULT_MAP_WIDTH: usize = 24;
+pub const DEFAULT_MAP_HEIGHT: usize = 24;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum OmTerrain {
+    Single(String),
+    Duplicate(Vec<String>),
+    Nested(Vec<Vec<String>>),
+}
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CDDAMapDataObject {
@@ -23,7 +34,7 @@ pub struct CDDAMapDataObject {
 #[derive(Debug, Clone, Deserialize)]
 pub struct CDDAMapData {
     pub method: String,
-    pub om_terrain: MeabyVec<String>,
+    pub om_terrain: OmTerrain,
     pub weight: Option<i32>,
     pub object: CDDAMapDataObject,
 }

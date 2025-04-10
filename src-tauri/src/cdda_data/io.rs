@@ -1,4 +1,6 @@
-use crate::cdda_data::map_data::CDDAMapData;
+use crate::cdda_data::map_data::{
+    CDDAMapData, CDDAMapDataObject, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
+};
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::CDDAJsonEntry;
@@ -58,13 +60,64 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
             for des_entry in des {
                 match des_entry {
-                    CDDAJsonEntry::Mapgen(mg) => {
-                        for om_terrain in mg.om_terrain.clone().vec().into_iter() {
+                    CDDAJsonEntry::Mapgen(mut mg) => match &mg.om_terrain {
+                        OmTerrain::Single(id) => {
                             cdda_data
                                 .mapgens
-                                .insert(CDDAIdentifier(om_terrain), mg.clone());
+                                .insert(CDDAIdentifier(id.clone()), mg.clone());
                         }
-                    }
+                        OmTerrain::Duplicate(duplicate) => {
+                            for id in duplicate.iter() {
+                                cdda_data
+                                    .mapgens
+                                    .insert(CDDAIdentifier(id.clone()), mg.clone());
+                            }
+                        }
+                        OmTerrain::Nested(nested) => {
+                            for (row, vec) in nested.iter().enumerate() {
+                                for (column, om_terrain) in vec.iter().enumerate() {
+                                    let rows = mg
+                                        .object
+                                        .rows
+                                        // Get correct range of rows for this om_terrain from row..row + DEFAULT_MAP_HEIGHT
+                                        .get(
+                                            row * DEFAULT_MAP_HEIGHT
+                                                ..row * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT,
+                                        )
+                                        .expect("Row to not be out of bounds")
+                                        .iter()
+                                        .map(|colstring| {
+                                            colstring
+                                                .chars()
+                                                .skip(column * DEFAULT_MAP_WIDTH)
+                                                .take(
+                                                    column * DEFAULT_MAP_WIDTH + DEFAULT_MAP_WIDTH,
+                                                )
+                                                .collect()
+                                        })
+                                        .collect();
+
+                                    let mapgen = CDDAMapData {
+                                        method: mg.method.clone(),
+                                        om_terrain: OmTerrain::Single(om_terrain.clone()),
+                                        weight: mg.weight.clone(),
+                                        object: CDDAMapDataObject {
+                                            fill_ter: mg.object.fill_ter.clone(),
+                                            rows,
+                                            palettes: mg.object.palettes.clone(),
+                                            terrain: mg.object.terrain.clone(),
+                                            furniture: mg.object.furniture.clone(),
+                                            parameters: mg.object.parameters.clone(),
+                                        },
+                                    };
+
+                                    cdda_data
+                                        .mapgens
+                                        .insert(CDDAIdentifier(om_terrain.clone()), mapgen);
+                                }
+                            }
+                        }
+                    },
                     CDDAJsonEntry::RegionSettings(rs) => {
                         cdda_data.region_settings.insert(rs.id.clone(), rs);
                     }

@@ -1,3 +1,4 @@
+use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use derive_more::with_trait::Display;
 use glam::UVec2;
 use rand::distr::weighted::WeightedIndex;
@@ -10,6 +11,28 @@ use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct CDDAIdentifier(pub String);
+
+impl CDDAIdentifier {
+    /// This function is used to get the "final" id of the CDDA Identifier. This is used
+    /// because a CDDA Identifier might be a region setting id which means that we have to do some other calculations
+    pub fn as_final_id(&self, region_setting: &CDDARegionSettings) -> CDDAIdentifier {
+        // If it starts with t_region, we know it is a regional setting
+        if self.0.starts_with("t_region") {
+            return region_setting
+                .region_terrain_and_furniture
+                .terrain
+                .get(&RegionIdentifier(self.0.clone()))
+                .unwrap()
+                .keys()
+                .last()
+                .unwrap()
+                .clone();
+        }
+
+        self.clone()
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct ParameterIdentifier(pub String);
 pub type Comment = Option<String>;
