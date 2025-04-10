@@ -1,6 +1,10 @@
 import {SpriteLayer, Tilesheet} from "./tilesheet.ts";
 import {Vector2, Vector3} from "three";
 
+const MAX_DEPTH = 999997
+const TILE_SIZE = 32
+const MAX_ROW = 300
+
 export class Tilesheets {
     public tilesheets: { [name: string]: Tilesheet }
 
@@ -30,10 +34,14 @@ export class Tilesheets {
                 batches[k].indices.push(index - tilesheet.range[0]);
                 batches[k].layers.push(layers[i])
 
+                const worldY = position.y / TILE_SIZE
+                const worldX = position.x / TILE_SIZE
+
                 const newPosition = new Vector3(
                     position.x,
                     position.y,
-                    999997 - (position.x / 32) - (position.y / 32 * 300) + z
+                    // + 1 to always add an offset because if we didn't, a few sprites would not show up
+                    (MAX_DEPTH - MAX_ROW * (worldY + 1)) + worldX + z
                 )
                 batches[k].positions.push(newPosition)
 

@@ -11,6 +11,7 @@ export type PlaceSpriteCommand = {
 export type PlaceSpritesCommand = {
     positions: string[]
     indexes: number[]
+    sprite_layers: number[]
 }
 
 

@@ -247,6 +247,7 @@ export function useEditor(props: Props) {
             vec2.x *= 32;
             vec2.y *= 32;
 
+            // TODO: Make this work with FG and BG
             props.tilesheetsRef.current.drawSprite(d.payload.index, vec2, SpriteLayer.Fg, 0)
         }))
 
@@ -258,12 +259,7 @@ export function useEditor(props: Props) {
                 return vec2
             })
 
-            const spriteLayers = []
-            for (const _ of positions) {
-                spriteLayers.push(0)
-            }
-
-            props.tilesheetsRef.current.drawSpritesBatched(d.payload.indexes, positions, spriteLayers)
+            props.tilesheetsRef.current.drawSpritesBatched(d.payload.indexes, positions, d.payload.sprite_layers)
         }))
 
         return () => {
