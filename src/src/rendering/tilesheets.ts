@@ -3,7 +3,7 @@ import {Vector2, Vector3} from "three";
 
 const MAX_DEPTH = 999997
 const TILE_SIZE = 32
-const MAX_ROW = 300
+const MAX_ROW = 1000
 
 export class Tilesheets {
     public tilesheets: { [name: string]: Tilesheet }
@@ -31,8 +31,12 @@ export class Tilesheets {
                     batches[k] = {indices: [], positions: [], layers: []}
                 }
 
+                // 0 -> bg
+                // 1 -> fg
+                const currentLayer = layers[i]
+
                 batches[k].indices.push(index - tilesheet.range[0]);
-                batches[k].layers.push(layers[i])
+                batches[k].layers.push(currentLayer)
 
                 const worldY = position.y / TILE_SIZE
                 const worldX = position.x / TILE_SIZE
@@ -41,7 +45,7 @@ export class Tilesheets {
                     position.x,
                     position.y,
                     // + 1 to always add an offset because if we didn't, a few sprites would not show up
-                    (MAX_DEPTH - MAX_ROW * (worldY + 1)) + worldX + z
+                    (MAX_DEPTH - MAX_ROW * (worldY + 1)) + worldX + z + currentLayer
                 )
                 batches[k].positions.push(newPosition)
 
