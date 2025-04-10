@@ -270,8 +270,10 @@ pub fn run() -> () {
                     info!("Loading testing map data");
 
                     let importer = MapDataImporter {
-                        path: r"C:\CDDA\testing\data\json\mapgen\mall\mall_ground.json".into(),
-                        om_terrain: "mall_a_10".into(),
+                        path:
+                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                                .into(),
+                        om_terrain: "nuclear_plant_0_0_0".into(),
                     };
                     let mut loaded = importer.load()?;
                     loaded.calculate_parameters(&cdda_json_data.palettes);

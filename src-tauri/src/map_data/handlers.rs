@@ -98,6 +98,7 @@ pub struct PlaceSpriteEvent {
 pub struct PlaceSpritesEvent {
     positions: Vec<JSONSerializableUVec2>,
     indexes: Vec<u32>,
+    sprite_layers: Vec<u32>,
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]
@@ -238,13 +239,18 @@ pub async fn open_map(
 
     let mut indexes = vec![];
     let mut positions = vec![];
+    let mut sprite_layers = vec![];
 
     let fill_sprite = match &map_data.fill {
         None => None,
         Some(id) => {
             let id = id.get_identifier(&map_data.calculated_parameters);
 
-            tilesheet.id_map.get(&id.as_final_id(&region_settings))
+            tilesheet.id_map.get(&id.as_final_id(
+                &region_settings,
+                &json_data.terrain,
+                &json_data.furniture,
+            ))
         }
     };
 
@@ -256,11 +262,13 @@ pub async fn open_map(
                     if let Some(fg_id) = fill_sprite.get_fg_id() {
                         positions.push(JSONSerializableUVec2(p.clone()));
                         indexes.push(fg_id);
+                        sprite_layers.push(1)
                     }
 
                     if let Some(bg_id) = fill_sprite.get_bg_id() {
                         positions.push(JSONSerializableUVec2(p.clone()));
                         indexes.push(bg_id);
+                        sprite_layers.push(0)
                     }
 
                     return;
@@ -278,7 +286,9 @@ pub async fn open_map(
         for o_id in [identifiers.terrain, identifiers.furniture] {
             let id = match o_id {
                 None => continue,
-                Some(id) => id.as_final_id(region_settings),
+                Some(id) => {
+                    id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
+                }
             };
 
             let sprite = match tilesheet.id_map.get(&id) {
@@ -292,19 +302,28 @@ pub async fn open_map(
             if let Some(fg_id) = sprite.get_fg_id() {
                 positions.push(JSONSerializableUVec2(p.clone()));
                 indexes.push(fg_id);
+                sprite_layers.push(1)
             }
 
             if let Some(bg_id) = sprite.get_bg_id() {
                 positions.push(JSONSerializableUVec2(p.clone()));
                 indexes.push(bg_id);
+                sprite_layers.push(0)
             }
         }
     });
 
     assert_eq!(indexes.len(), positions.len());
 
-    app.emit("place_sprites", PlaceSpritesEvent { positions, indexes })
-        .unwrap();
+    app.emit(
+        "place_sprites",
+        PlaceSpritesEvent {
+            positions,
+            indexes,
+            sprite_layers,
+        },
+    )
+    .unwrap();
 
     Ok(())
 }

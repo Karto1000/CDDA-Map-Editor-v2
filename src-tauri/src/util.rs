@@ -1,4 +1,6 @@
+use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
+use crate::cdda_data::terrain::CDDATerrain;
 use derive_more::with_trait::Display;
 use glam::UVec2;
 use rand::distr::weighted::WeightedIndex;
@@ -9,24 +11,81 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 
+pub trait GetRandom<T> {
+    fn get_random(&self) -> &T;
+}
+
+impl<T> GetRandom<T> for HashMap<T, i32> {
+    fn get_random(&self) -> &T {
+        let mut weights = vec![];
+
+        let mut vec = self.iter().collect::<Vec<(&T, &i32)>>();
+        vec.iter().for_each(|(_, w)| weights.push(**w));
+
+        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+        let mut rng = rng();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+        let item = vec.remove(chosen_index);
+
+        &item.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct CDDAIdentifier(pub String);
 
 impl CDDAIdentifier {
     /// This function is used to get the "final" id of the CDDA Identifier. This is used
     /// because a CDDA Identifier might be a region setting id which means that we have to do some other calculations
-    pub fn as_final_id(&self, region_setting: &CDDARegionSettings) -> CDDAIdentifier {
+    /// Additionally there can be liquids which have a 'look_like' property that dictates what they look like.
+    /// These are not defined in the tilesheet, but instead in terrain-liquids.json in data/json
+    pub fn as_final_id(
+        &self,
+        region_setting: &CDDARegionSettings,
+        terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
+        furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
+    ) -> CDDAIdentifier {
         // If it starts with t_region, we know it is a regional setting
         if self.0.starts_with("t_region") {
-            return region_setting
-                .region_terrain_and_furniture
-                .terrain
-                .get(&RegionIdentifier(self.0.clone()))
-                .unwrap()
-                .keys()
-                .last()
-                .unwrap()
-                .clone();
+            if self.0.starts_with("f_") {
+                return region_setting
+                    .region_terrain_and_furniture
+                    .furniture
+                    .get(&RegionIdentifier(self.0.clone()))
+                    .expect("Furniture Region identifier to exist")
+                    .get_random()
+                    .as_final_id(region_setting, terrain, furniture);
+            } else if self.0.starts_with("t_") {
+                return region_setting
+                    .region_terrain_and_furniture
+                    .terrain
+                    .get(&RegionIdentifier(self.0.clone()))
+                    .expect("Terrain Region identifier to exist")
+                    .get_random()
+                    .as_final_id(region_setting, terrain, furniture);
+            }
+        }
+
+        // Terrain and Furniture can have a "looks_like" property which dictates what the tile looks like.
+        // The tiles with this property do not have a corresponding entry in the tilesheet which
+        // means that we have to check this here dynamically
+        match terrain.get(self) {
+            None => {}
+            Some(s) => match &s.looks_like {
+                None => {}
+                Some(ident) => {
+                    return ident.as_final_id(region_setting, terrain, furniture);
+                }
+            },
+        }
+
+        match furniture.get(self) {
+            None => {}
+            Some(f) => match &f.looks_like {
+                None => {}
+                Some(ident) => return ident.as_final_id(region_setting, terrain, furniture),
+            },
         }
 
         self.clone()

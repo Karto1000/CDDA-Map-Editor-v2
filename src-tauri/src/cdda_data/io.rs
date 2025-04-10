@@ -1,17 +1,19 @@
+use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::map_data::{
     CDDAMapData, CDDAMapDataObject, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
+use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::CDDAJsonEntry;
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
-use log::{info, warn};
+use log::{debug, error, info, warn};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
 #[derive(Default)]
@@ -19,6 +21,8 @@ pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
     pub mapgens: HashMap<CDDAIdentifier, CDDAMapData>,
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
+    pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
+    pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
 }
 
 pub struct CDDADataLoader {
@@ -33,6 +37,14 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
         for entry in walkdir {
             let entry = entry?;
+
+            if entry.path()
+                == Path::new(
+                    r"C:\CDDA\testing\data\json\furniture_and_terrain\furniture-tools.json",
+                )
+            {
+                dbg!("NOW");
+            }
 
             let extension = match entry.path().extension() {
                 None => {
@@ -53,20 +65,26 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
             let des = match serde_json::from_reader::<BufReader<File>, Vec<CDDAJsonEntry>>(reader) {
                 Ok(des) => des,
                 Err(e) => {
-                    warn!("Failed to deserialize {:?}, error: {}", entry.path(), e);
+                    error!("Failed to deserialize {:?}, error: {}", entry.path(), e);
                     continue;
                 }
             };
 
             for des_entry in des {
                 match des_entry {
-                    CDDAJsonEntry::Mapgen(mut mg) => match &mg.om_terrain {
+                    CDDAJsonEntry::Mapgen(mg) => match &mg.om_terrain {
                         OmTerrain::Single(id) => {
+                            debug!("Found Single Mapgen '{}' in {:?}", id, entry.path());
                             cdda_data
                                 .mapgens
                                 .insert(CDDAIdentifier(id.clone()), mg.clone());
                         }
                         OmTerrain::Duplicate(duplicate) => {
+                            debug!(
+                                "Found Duplicate Mapgen '{:?}' in {:?}",
+                                duplicate,
+                                entry.path()
+                            );
                             for id in duplicate.iter() {
                                 cdda_data
                                     .mapgens
@@ -74,6 +92,8 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             }
                         }
                         OmTerrain::Nested(nested) => {
+                            debug!("Found Nested Mapgen '{:?}' in {:?}", nested, entry.path());
+
                             for (row, vec) in nested.iter().enumerate() {
                                 for (column, om_terrain) in vec.iter().enumerate() {
                                     let rows = mg
@@ -119,10 +139,24 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                         }
                     },
                     CDDAJsonEntry::RegionSettings(rs) => {
+                        debug!("Found Region setting {} in {:?}", rs.id, entry.path());
                         cdda_data.region_settings.insert(rs.id.clone(), rs);
                     }
                     CDDAJsonEntry::Palette(p) => {
+                        debug!("Found Palette {} in {:?}", p.id, entry.path());
                         cdda_data.palettes.insert(p.id.clone(), p);
+                    }
+                    CDDAJsonEntry::Terrain(terrain) => {
+                        debug!("Found Terrain entry {} in {:?}", terrain.id, entry.path());
+                        cdda_data.terrain.insert(terrain.id.clone(), terrain);
+                    }
+                    CDDAJsonEntry::Furniture(furniture) => {
+                        debug!(
+                            "Found Furniture entry {} in {:?}",
+                            furniture.id,
+                            entry.path()
+                        );
+                        cdda_data.furniture.insert(furniture.id.clone(), furniture);
                     }
                 }
             }

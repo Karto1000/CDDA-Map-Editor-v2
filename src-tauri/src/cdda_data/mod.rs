@@ -1,11 +1,15 @@
+pub(crate) mod furniture;
 pub(crate) mod io;
 pub(crate) mod map_data;
 pub(crate) mod palettes;
 pub(crate) mod region_settings;
+pub(crate) mod terrain;
 
+use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::map_data::CDDAMapData;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
+use crate::cdda_data::terrain::CDDATerrain;
 use crate::util::{
     CDDAIdentifier, GetIdentifier, MeabyParam, MeabyVec, MeabyWeighted, ParameterIdentifier,
 };
@@ -57,6 +61,8 @@ pub enum CDDAJsonEntry {
     Mapgen(CDDAMapData),
     RegionSettings(CDDARegionSettings),
     Palette(CDDAPalette),
+    Terrain(CDDATerrain),
+    Furniture(CDDAFurniture),
 }
 
 #[derive(Debug, Clone, Display, Serialize, Deserialize)]

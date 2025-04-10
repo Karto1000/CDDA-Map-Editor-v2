@@ -43,7 +43,9 @@ impl CDDAMapData {
     pub fn into(self, name: String) -> MapData {
         let mut cells = HashMap::new();
 
-        for (row_index, row) in self.object.rows.into_iter().enumerate() {
+        // We need to reverse the iterators direction since we want the last row of the rows to
+        // be at the bottom left so basically 0, 0
+        for (row_index, row) in self.object.rows.into_iter().rev().enumerate() {
             for (column_index, character) in row.chars().enumerate() {
                 cells.insert(
                     UVec2::new(column_index as u32, row_index as u32),
