@@ -5,8 +5,8 @@ pub(crate) mod io;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::MapGenValue;
 use crate::util::{
-    CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Load, MeabyParam, ParameterIdentifier,
-    Save,
+    CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Load,
+    ParameterIdentifier, Save,
 };
 use glam::UVec2;
 use serde::ser::{SerializeMap, SerializeStruct};
@@ -22,7 +22,7 @@ pub struct Cell {
 pub struct MapData {
     pub name: String,
     pub cells: HashMap<UVec2, Cell>,
-    pub fill: Option<MeabyParam>,
+    pub fill: Option<DistributionInner>,
 
     pub calculated_parameters: HashMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: HashMap<ParameterIdentifier, Parameter>,
@@ -42,7 +42,7 @@ pub struct CDDAIdentifierGroup {
 impl MapData {
     pub fn new(
         name: String,
-        fill: Option<MeabyParam>,
+        fill: Option<DistributionInner>,
         cells: HashMap<UVec2, Cell>,
         terrain: HashMap<char, MapGenValue>,
         furniture: HashMap<char, MapGenValue>,
@@ -170,7 +170,7 @@ impl Serialize for MapData {
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapDataIntermediate {
     pub name: String,
-    pub fill: Option<MeabyParam>,
+    pub fill: Option<DistributionInner>,
     pub cells: HashMap<JSONSerializableUVec2, Cell>,
     pub parameters: Option<HashMap<ParameterIdentifier, Parameter>>,
     pub palettes: Vec<MapGenValue>,

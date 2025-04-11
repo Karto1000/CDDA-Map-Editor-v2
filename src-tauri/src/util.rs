@@ -1,6 +1,7 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
+use crate::cdda_data::Switch;
 use derive_more::with_trait::Display;
 use glam::UVec2;
 use rand::distr::weighted::WeightedIndex;
@@ -103,17 +104,20 @@ pub trait GetIdentifier {
     ) -> CDDAIdentifier;
 }
 
-impl GetIdentifier for MeabyParam {
+impl GetIdentifier for DistributionInner {
     fn get_identifier(
         &self,
         calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
-            MeabyParam::Param { param, fallback } => calculated_parameters
+            DistributionInner::Param { param, fallback } => calculated_parameters
                 .get(&param)
                 .map(|p| p.clone())
                 .unwrap_or(fallback.clone()),
-            MeabyParam::Normal(n) => n.clone(),
+            DistributionInner::Normal(n) => n.clone(),
+            DistributionInner::Switch { switch, cases } => {
+                panic!()
+            }
         }
     }
 }
@@ -129,10 +133,14 @@ impl GetIdentifier for CDDAIdentifier {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum MeabyParam {
+pub enum DistributionInner {
     Param {
         param: ParameterIdentifier,
         fallback: CDDAIdentifier,
+    },
+    Switch {
+        switch: Switch,
+        cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
     },
     Normal(CDDAIdentifier),
 }

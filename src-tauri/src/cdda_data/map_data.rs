@@ -1,7 +1,7 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::MapGenValue;
 use crate::map_data::{Cell, MapData};
-use crate::util::{MeabyParam, ParameterIdentifier};
+use crate::util::{DistributionInner, ParameterIdentifier};
 use glam::UVec2;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -19,7 +19,7 @@ pub enum OmTerrain {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CDDAMapDataObject {
-    pub fill_ter: Option<MeabyParam>,
+    pub fill_ter: Option<DistributionInner>,
     pub rows: Vec<String>,
     #[serde(default)]
     pub palettes: Vec<MapGenValue>,

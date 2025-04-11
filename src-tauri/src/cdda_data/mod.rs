@@ -10,9 +10,7 @@ use crate::cdda_data::map_data::CDDAMapData;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
-use crate::util::{
-    CDDAIdentifier, GetIdentifier, MeabyParam, MeabyVec, MeabyWeighted, ParameterIdentifier,
-};
+use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
 use derive_more::Display;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -39,6 +37,13 @@ where
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum CDDAString {
+    String(String),
+    StringMap { str: String },
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub enum IdOrAbstract {
     #[serde(rename = "id")]
     Id(CDDAIdentifier),
@@ -58,11 +63,185 @@ pub struct UnknownEntry {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
+    // TODO: Handle update_mapgen_id
     Mapgen(CDDAMapData),
     RegionSettings(CDDARegionSettings),
     Palette(CDDAPalette),
     Terrain(CDDATerrain),
     Furniture(CDDAFurniture),
+    // TODO: Look at what this is
+    ConnectGroup,
+    WeatherType,
+    FieldType,
+    #[serde(rename = "LOOT_ZONE")]
+    LootZone,
+    WeaponCategory,
+    Vitamin,
+    VehicleGroup,
+    Vehicle,
+    VehiclePart,
+    Uncraft,
+    Widget,
+    StartLocation,
+    MissionDefinition,
+    Speech,
+    #[serde(rename = "SPECIES")]
+    Species,
+    Snippet,
+    Scenario,
+    RotatableSymbol,
+    Requirement,
+    Trap,
+    SpeedDescription,
+    ScentType,
+    VehiclePlacement,
+    #[serde(rename = "MAGAZINE")]
+    Magazine,
+    #[serde(rename = "GUNMOD")]
+    GunMod,
+    #[serde(rename = "GUN")]
+    Gun,
+    #[serde(rename = "GENERIC")]
+    Generic,
+    #[serde(rename = "COMESTIBLE")]
+    Comestible,
+    #[serde(rename = "AMMO")]
+    Ammo,
+    #[serde(rename = "BOOK")]
+    Book,
+    #[serde(rename = "ARMOR")]
+    Armor,
+    #[serde(rename = "PET_ARMOR")]
+    PetArmor,
+    #[serde(rename = "TOOL_ARMOR")]
+    ToolArmor,
+    EffectType,
+    #[serde(rename = "TOOL")]
+    Tool,
+    AmmunitionType,
+    ItemGroup,
+    HitRange,
+    Profession,
+    HarvestDropType,
+    Harvest,
+    Gate,
+    Recipe,
+    EventStatistic,
+    Technique,
+    Skill,
+    SkillDisplayType,
+    Score,
+    Fault,
+    FaultFix,
+    EndScreen,
+    EffectOnCondition,
+    Enchantment,
+    Emit,
+    Achievement,
+    AddictionType,
+    AmmoEffect,
+    Anatomy,
+    #[serde(rename = "SPELL")]
+    Spell,
+    RelicProcgenData,
+    AsciiArt,
+    AttackVector,
+    Bionic,
+    #[serde(rename = "monstergroup")]
+    MonsterGroup,
+    TerFurnTransform,
+    JmathFunction,
+    JsonFlag,
+    VehiclePartCategory,
+    ToolQuality,
+    VehicleSpawn,
+    RecipeCategory,
+    Practice,
+    NestedCategory,
+    RecipeGroup,
+    EventTransformation,
+    Proficiency,
+    ProficiencyCategory,
+    ProfessionGroup,
+    ProfessionItemSubstitutions,
+    ActivityType,
+    OterVision,
+    OvermapLocation,
+    OvermapTerrain,
+    OvermapSpecial,
+    OvermapLandUseCode,
+    OvermapConnection,
+    CityBuilding,
+    MapExtra,
+    #[serde(rename = "MIGRATION")]
+    Migration,
+    TrapMigration,
+    #[serde(rename = "TRAIT_MIGRATION")]
+    TraitMigration,
+    OvermapSpecialMigration,
+    OterIdMigration,
+    BodyPart,
+    NpcClass,
+    TerFurnMigration,
+    VehiclePartMigration,
+    CampMigration,
+    TemperatureRemovalBlacklist,
+    #[serde(rename = "SCENARIO_BLACKLIST")]
+    ScenarioBlacklist,
+    ChargeRemovalBlacklist,
+    TalkTopic,
+    Mutation,
+    Npc,
+    TraitGroup,
+    ShopkeeperConsumption,
+    ShopkeeperBlacklist,
+    ShopkeeperConsumptionRates,
+    Behavior,
+    VarMigration,
+    Faction,
+    MutationType,
+    OverlayOrder,
+    MutationCategory,
+    MovementMode,
+    MoraleType,
+    MoodFace,
+    WeakpointSet,
+    #[serde(rename = "MONSTER_BLACKLIST")]
+    MonsterBlacklist,
+    MonsterAttack,
+    #[serde(rename = "MONSTER_FACTION")]
+    MonsterFaction,
+    #[serde(rename = "MONSTER")]
+    Monster,
+    MartialArt,
+    MonsterFlag,
+    Material,
+    LimbScore,
+    #[serde(rename = "ITEM_CATEGORY")]
+    ItemCategory,
+    ItemAction,
+    #[serde(rename = "WHEEL")]
+    Wheel,
+    #[serde(rename = "ENGINE")]
+    Engine,
+    #[serde(rename = "TOOLMOD")]
+    ToolMod,
+    #[serde(rename = "BIONIC_ITEM")]
+    BionicItem,
+    Dream,
+    DiseaseType,
+    Construction,
+    DamageType,
+    ConstructionGroup,
+    ConstructionCategory,
+    DamageInfoOrder,
+    Conduct,
+    ClothingMod,
+    ClimbingAid,
+    CharacterMod,
+    ButcheryRequirement,
+    SubBodyPart,
+    BodyGraph,
 }
 
 #[derive(Debug, Clone, Display, Serialize, Deserialize)]
@@ -78,13 +257,54 @@ pub enum CataVariant {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Switch {
-    param: ParameterIdentifier,
-    fallback: CDDAIdentifier,
+    pub param: ParameterIdentifier,
+    pub fallback: CDDAIdentifier,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Distribution {
     pub distribution: MeabyVec<MeabyWeighted<CDDAIdentifier>>,
+}
+
+// TODO: Kind of a hacky solution to a stackoverflow problem that i experienced when using
+// a self-referencing MapGenValue enum
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DistributionInner {
+    String(CDDAIdentifier),
+    Param {
+        param: ParameterIdentifier,
+        fallback: Option<CDDAIdentifier>,
+    },
+    Switch {
+        switch: Switch,
+        cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
+    },
+    Distribution(MeabyVec<MeabyWeighted<CDDAIdentifier>>),
+}
+
+impl GetIdentifier for DistributionInner {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> CDDAIdentifier {
+        match self {
+            DistributionInner::String(s) => s.clone(),
+            DistributionInner::Distribution(d) => d.get(calculated_parameters),
+            DistributionInner::Param { param, fallback } => calculated_parameters
+                .get(param)
+                .map(|p| p.clone())
+                .unwrap_or_else(|| fallback.clone().expect("Fallback to exist")),
+            DistributionInner::Switch { switch, cases } => {
+                let id = calculated_parameters
+                    .get(&switch.param)
+                    .map(|p| p.clone())
+                    .unwrap_or_else(|| switch.fallback.clone());
+
+                cases.get(&id).expect("MapTo to exist").clone()
+            }
+        }
+    }
 }
 
 // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-values
@@ -100,7 +320,11 @@ pub enum MapGenValue {
         switch: Switch,
         cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
     },
-    Distribution(MeabyVec<MeabyWeighted<MeabyParam>>),
+    // TODO: We could probably use a MapGenValue instead of this DistributionInner type, but that would
+    // require a Box<> since we don't know the size. I tried this but for some reason it causes a Stack Overflow
+    // because serde keeps infinitely calling the Deserialize function even though it should deserialize to the String variant.
+    // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde
+    Distribution(MeabyVec<MeabyWeighted<DistributionInner>>),
 }
 
 impl GetIdentifier for MapGenValue {
@@ -125,4 +349,48 @@ impl GetIdentifier for MapGenValue {
             }
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum ConnectGroup {
+    None,
+    Sand,
+    // TODO: These need to be documented in the CDDA Connect Group JSON Info Doc
+    // ------
+    Mud,
+    PavementZebra,
+    Dirtmound,
+    Claymound,
+    Sandmound,
+    Sandglass,
+    Sandpile,
+    Brickfloor,
+    Marblefloor,
+    BeachFormations,
+    Gravelpile,
+    Lixatube,
+    // ------
+    Wall,
+    PitDeep,
+    Chainfence,
+    Linoleum,
+    Woodfence,
+    Carpet,
+    Railing,
+    Concrete,
+    Poolwater,
+    Clay,
+    Water,
+    Dirt,
+    Pavement,
+    Rockfloor,
+    PavementMarking,
+    Mulchfloor,
+    Rail,
+    Metalfloor,
+    Counter,
+    Woodfloor,
+    CanvasWall,
+    Indoorfloor,
 }

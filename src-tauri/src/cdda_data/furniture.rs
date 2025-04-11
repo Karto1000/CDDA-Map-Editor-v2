@@ -1,11 +1,15 @@
-use crate::util::CDDAIdentifier;
+use crate::cdda_data::{CDDAString, ConnectGroup};
+use crate::util::{CDDAIdentifier, MeabyVec};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CDDAFurniture {
     pub id: CDDAIdentifier,
-    pub name: Option<String>,
-    pub description: Option<String>,
-    pub symbol: char,
+    pub name: Option<CDDAString>,
+    pub description: Option<CDDAString>,
+    pub symbol: Option<char>,
     pub looks_like: Option<CDDAIdentifier>,
+    pub color: Option<MeabyVec<String>>,
+    pub connect_groups: Option<MeabyVec<ConnectGroup>>,
+    pub connects_to: Option<MeabyVec<ConnectGroup>>,
 }

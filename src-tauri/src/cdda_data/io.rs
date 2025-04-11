@@ -40,7 +40,10 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
             let extension = match entry.path().extension() {
                 None => {
-                    warn!("Entry {:?} does not have an extension", entry.path());
+                    info!(
+                        "Skipping entry {:?} because it does not have an extension",
+                        entry.path()
+                    );
                     continue;
                 }
                 Some(e) => e,
@@ -53,6 +56,10 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
             info!("Reading and parsing json file at {:?}", entry.path());
             let reader = BufReader::new(File::open(entry.path())?);
+
+            if entry.path() == PathBuf::from(r"C:\CDDA\testing\data/json\mapgen\abandoned01.json") {
+                dbg!("NOW");
+            }
 
             let des = match serde_json::from_reader::<BufReader<File>, Vec<CDDAJsonEntry>>(reader) {
                 Ok(des) => des,
@@ -150,10 +157,30 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                         );
                         cdda_data.furniture.insert(furniture.id.clone(), furniture);
                     }
+                    _ => {
+                        info!("Unused JSON entry in {:?}", entry.path());
+                    }
                 }
             }
         }
 
         Ok(cdda_data)
+    }
+}
+
+mod tests {
+    use crate::cdda_data::io::CDDADataLoader;
+    use crate::util::Load;
+    use std::path::PathBuf;
+
+    const CDDA_TEST_JSON_PATH: &'static str = r"C:\CDDA\testing\data\json";
+
+    #[test]
+    fn test_load_cdda_data() {
+        let data_loader = CDDADataLoader {
+            json_path: PathBuf::from(CDDA_TEST_JSON_PATH),
+        };
+
+        data_loader.load().expect("Loading to not fail");
     }
 }

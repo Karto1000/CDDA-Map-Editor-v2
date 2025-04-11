@@ -8,7 +8,7 @@ use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::legacy_tileset::{FinalIds, GetRandom, Sprite, Tilesheet};
 use crate::map_data::io::MapDataSaver;
 use crate::map_data::{Cell, MapData, MapDataContainer};
-use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, MeabyParam, Save};
+use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Save};
 use glam::UVec2;
 use image::imageops::{index_colors, tile};
 use log::{error, info, warn};
