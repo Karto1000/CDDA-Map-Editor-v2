@@ -57,10 +57,6 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
             info!("Reading and parsing json file at {:?}", entry.path());
             let reader = BufReader::new(File::open(entry.path())?);
 
-            if entry.path() == PathBuf::from(r"C:\CDDA\testing\data/json\mapgen\abandoned01.json") {
-                dbg!("NOW");
-            }
-
             let des = match serde_json::from_reader::<BufReader<File>, Vec<CDDAJsonEntry>>(reader) {
                 Ok(des) => des,
                 Err(e) => {

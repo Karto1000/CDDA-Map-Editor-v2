@@ -61,6 +61,13 @@ pub struct UnknownEntry {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct ConnectGroup {
+    pub id: CDDAIdentifier,
+    #[serde(rename = "type")]
+    pub ty: CataVariant,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
@@ -69,8 +76,9 @@ pub enum CDDAJsonEntry {
     Palette(CDDAPalette),
     Terrain(CDDATerrain),
     Furniture(CDDAFurniture),
-    // TODO: Look at what this is
-    ConnectGroup,
+    ConnectGroup(ConnectGroup),
+
+    // -- UNUSED
     WeatherType,
     FieldType,
     #[serde(rename = "LOOT_ZONE")]
@@ -251,6 +259,7 @@ pub enum CataVariant {
     Palette,
     RegionSettings,
     Mapgen,
+    ConnectGroup,
     #[serde(other)]
     Other,
 }
@@ -266,7 +275,7 @@ pub struct Distribution {
     pub distribution: MeabyVec<MeabyWeighted<CDDAIdentifier>>,
 }
 
-// TODO: Kind of a hacky solution to a stackoverflow problem that i experienced when using
+// TODO: Kind of a hacky solution to a Stack Overflow problem that i experienced when using
 // a self-referencing MapGenValue enum
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
@@ -280,7 +289,11 @@ pub enum DistributionInner {
         switch: Switch,
         cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
     },
-    Distribution(MeabyVec<MeabyWeighted<CDDAIdentifier>>),
+    // The distribution inside another distribution must have the 'distribution'
+    // property. This is why we're using the Distribution struct here
+    //                 --- Here ---
+    // "palettes": [ { "distribution": [ [ "cabin_palette", 1 ], [ "cabin_palette_abandoned", 1 ] ] } ],
+    Distribution(Distribution),
 }
 
 impl GetIdentifier for DistributionInner {
@@ -290,7 +303,7 @@ impl GetIdentifier for DistributionInner {
     ) -> CDDAIdentifier {
         match self {
             DistributionInner::String(s) => s.clone(),
-            DistributionInner::Distribution(d) => d.get(calculated_parameters),
+            DistributionInner::Distribution(d) => d.distribution.get(calculated_parameters),
             DistributionInner::Param { param, fallback } => calculated_parameters
                 .get(param)
                 .map(|p| p.clone())
@@ -323,7 +336,7 @@ pub enum MapGenValue {
     // TODO: We could probably use a MapGenValue instead of this DistributionInner type, but that would
     // require a Box<> since we don't know the size. I tried this but for some reason it causes a Stack Overflow
     // because serde keeps infinitely calling the Deserialize function even though it should deserialize to the String variant.
-    // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde
+    // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde.
     Distribution(MeabyVec<MeabyWeighted<DistributionInner>>),
 }
 
@@ -349,48 +362,4 @@ impl GetIdentifier for MapGenValue {
             }
         }
     }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
-pub enum ConnectGroup {
-    None,
-    Sand,
-    // TODO: These need to be documented in the CDDA Connect Group JSON Info Doc
-    // ------
-    Mud,
-    PavementZebra,
-    Dirtmound,
-    Claymound,
-    Sandmound,
-    Sandglass,
-    Sandpile,
-    Brickfloor,
-    Marblefloor,
-    BeachFormations,
-    Gravelpile,
-    Lixatube,
-    // ------
-    Wall,
-    PitDeep,
-    Chainfence,
-    Linoleum,
-    Woodfence,
-    Carpet,
-    Railing,
-    Concrete,
-    Poolwater,
-    Clay,
-    Water,
-    Dirt,
-    Pavement,
-    Rockfloor,
-    PavementMarking,
-    Mulchfloor,
-    Rail,
-    Metalfloor,
-    Counter,
-    Woodfloor,
-    CanvasWall,
-    Indoorfloor,
 }

@@ -1,4 +1,4 @@
-use crate::cdda_data::{CDDAString, ConnectGroup};
+use crate::cdda_data::CDDAString;
 use crate::util::{CDDAIdentifier, MeabyVec};
 use serde::Deserialize;
 
@@ -10,6 +10,6 @@ pub struct CDDATerrain {
     pub symbol: Option<char>,
     pub looks_like: Option<CDDAIdentifier>,
     pub color: Option<MeabyVec<String>>,
-    pub connect_groups: Option<MeabyVec<ConnectGroup>>,
-    pub connects_to: Option<MeabyVec<ConnectGroup>>,
+    pub connect_groups: Option<MeabyVec<CDDAIdentifier>>,
+    pub connects_to: Option<MeabyVec<CDDAIdentifier>>,
 }
