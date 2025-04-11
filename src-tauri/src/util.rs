@@ -68,27 +68,6 @@ impl CDDAIdentifier {
             }
         }
 
-        // Terrain and Furniture can have a "looks_like" property which dictates what the tile looks like.
-        // The tiles with this property do not have a corresponding entry in the tilesheet which
-        // means that we have to check this here dynamically
-        match terrain.get(self) {
-            None => {}
-            Some(s) => match &s.looks_like {
-                None => {}
-                Some(ident) => {
-                    return ident.as_final_id(region_setting, terrain, furniture);
-                }
-            },
-        }
-
-        match furniture.get(self) {
-            None => {}
-            Some(f) => match &f.looks_like {
-                None => {}
-                Some(ident) => return ident.as_final_id(region_setting, terrain, furniture),
-            },
-        }
-
         self.clone()
     }
 }

@@ -1,7 +1,10 @@
+use crate::cdda_data::furniture::CDDAFurniture;
+use crate::cdda_data::terrain::CDDATerrain;
 use crate::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, Rotations, Spritesheet, Tile, TileConfig,
 };
 use crate::util::{CDDAIdentifier, MeabyVec};
+use log::info;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use rand::rng;
@@ -269,6 +272,75 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<CDDAIdentifier, Spr
 
 pub struct Tilesheet {
     pub id_map: HashMap<CDDAIdentifier, Sprite>,
+}
+
+impl Tilesheet {
+    fn get_looks_sprite(
+        &self,
+        id: &CDDAIdentifier,
+        terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
+        furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
+    ) -> Option<&Sprite> {
+        // id of a similar item that this item looks like. The tileset loader will try to load the
+        // tile for that item if this item doesn't have a tile. looks_like entries are implicitly
+        // chained, so if 'throne' has looks_like 'big_chair' and 'big_chair' has looks_like 'chair',
+        // a throne will be displayed using the chair tile if tiles for throne and big_chair do not exist.
+        // If a tileset can't find a tile for any item in the looks_like chain, it will default to the ascii symbol.
+
+        // The tiles with this property do not have a corresponding entry in the tilesheet which
+        // means that we have to check this here dynamically
+        match terrain.get(&id) {
+            None => {}
+            Some(s) => {
+                return match &s.looks_like {
+                    None => None,
+                    Some(ident) => {
+                        // "looks_like entries are implicitly chained"
+                        match self.id_map.get(ident) {
+                            None => self.get_looks_sprite(ident, terrain, furniture),
+                            Some(s) => Some(s),
+                        }
+                    }
+                };
+            }
+        };
+
+        // Do again with furniture
+        match furniture.get(&id) {
+            None => None,
+            Some(s) => match &s.looks_like {
+                None => None,
+                Some(ident) => match self.id_map.get(ident) {
+                    None => self.get_looks_sprite(ident, terrain, furniture),
+                    Some(s) => Some(s),
+                },
+            },
+        }
+    }
+
+    pub fn get_sprite(
+        &self,
+        id: &CDDAIdentifier,
+        terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
+        furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
+    ) -> &Sprite {
+        match self.id_map.get(&id) {
+            None => {
+                info!(
+                    "Could not find {} in tilesheet ids, trying to use looks_like property",
+                    id
+                );
+
+                self.get_looks_sprite(&id, terrain, furniture)
+                    .unwrap_or_else(|| {
+                        // If a tileset can't find a tile for any item in the looks_like chain,
+                        // it will default to the ascii symbol.
+                        todo!()
+                    })
+            }
+            Some(s) => s,
+        }
+    }
 }
 
 pub trait GetRandom<T> {
