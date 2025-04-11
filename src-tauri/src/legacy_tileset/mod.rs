@@ -119,10 +119,11 @@ impl Sprite {
                     }
 
                     let random_choice = v.get_random();
-                    Some(random_choice.up())
+                    Some(random_choice.right())
                 }
             },
             Sprite::Multitile { center, .. } => {
+                // TODO: Handle multitiles
                 if let Some(center) = center {
                     return match &center.fg {
                         None => None,
@@ -132,7 +133,7 @@ impl Sprite {
                             }
 
                             let random_choice = v.get_random();
-                            return Some(random_choice.up());
+                            return Some(random_choice.right());
                         }
                     };
                 }
@@ -153,9 +154,27 @@ impl Sprite {
                     }
 
                     let random_choice = v.get_random();
-                    Some(random_choice.up())
+                    Some(random_choice.right())
                 }
             },
+            Sprite::Multitile { center, .. } => {
+                // TODO: Handle multitiles
+                if let Some(center) = center {
+                    return match &center.bg {
+                        None => None,
+                        Some(v) => {
+                            if v.len() == 0 {
+                                return None;
+                            }
+
+                            let random_choice = v.get_random();
+                            return Some(random_choice.right());
+                        }
+                    };
+                }
+
+                None
+            }
             _ => None,
         }
     }
@@ -179,7 +198,7 @@ fn get_multitile_sprite_from_additional_tiles(
 
         additional_tile_ids.insert(
             additional_tile.id.clone(),
-            ForeBackIds::new(fg, bg, additional_tile.rotates.unwrap_or(true)),
+            ForeBackIds::new(fg, bg, additional_tile.rotates.unwrap_or(false)),
         );
     }
 
@@ -207,7 +226,7 @@ fn get_multitile_sprite_from_additional_tiles(
     }
 
     Ok(Sprite::Multitile {
-        ids: ForeBackIds::new(fg, bg, tile.rotates.unwrap_or(true)),
+        ids: ForeBackIds::new(fg, bg, tile.rotates.unwrap_or(false)),
         center: additional_tile_ids.remove(&AdditionalTileId::Center),
         corner: additional_tile_ids.remove(&AdditionalTileId::Corner),
         edge: additional_tile_ids.remove(&AdditionalTileId::Edge),
@@ -244,7 +263,7 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<CDDAIdentifier, Spr
                             ids: ForeBackIds::new(
                                 fg.clone(),
                                 bg.clone(),
-                                tile.rotates.unwrap_or(true),
+                                tile.rotates.unwrap_or(false),
                             ),
                         },
                     );
@@ -275,7 +294,7 @@ pub struct Tilesheet {
 }
 
 impl Tilesheet {
-    fn get_looks_sprite(
+    fn get_looks_like_sprite(
         &self,
         id: &CDDAIdentifier,
         terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
@@ -297,7 +316,7 @@ impl Tilesheet {
                     Some(ident) => {
                         // "looks_like entries are implicitly chained"
                         match self.id_map.get(ident) {
-                            None => self.get_looks_sprite(ident, terrain, furniture),
+                            None => self.get_looks_like_sprite(ident, terrain, furniture),
                             Some(s) => Some(s),
                         }
                     }
@@ -311,7 +330,7 @@ impl Tilesheet {
             Some(s) => match &s.looks_like {
                 None => None,
                 Some(ident) => match self.id_map.get(ident) {
-                    None => self.get_looks_sprite(ident, terrain, furniture),
+                    None => self.get_looks_like_sprite(ident, terrain, furniture),
                     Some(s) => Some(s),
                 },
             },
@@ -331,7 +350,7 @@ impl Tilesheet {
                     id
                 );
 
-                self.get_looks_sprite(&id, terrain, furniture)
+                self.get_looks_like_sprite(&id, terrain, furniture)
                     .unwrap_or_else(|| {
                         // If a tileset can't find a tile for any item in the looks_like chain,
                         // it will default to the ascii symbol.

@@ -46,6 +46,14 @@ impl<T: Clone> Rotations<T> {
             Rotations::Full((u, _, _, _)) => u.clone(),
         }
     }
+
+    pub fn right(&self) -> T {
+        match self {
+            Rotations::None(d) => d.clone(),
+            Rotations::Horizontal((_, r)) => r.clone(),
+            Rotations::Full((_, r, _, _)) => r.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
