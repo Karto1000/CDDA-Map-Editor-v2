@@ -1,10 +1,10 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
-import {LegacyTilesetCommand} from "../lib/tileset/legacy/send/index.ts";
 import {BackendResponse, BackendResponseType, invokeTauri} from "../lib/index.ts";
 import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, TextureLoader, Vector2} from "three";
-import {EditorData} from "../lib/editor_data/recv/index.ts";
 import {Tilesheet} from "../rendering/tilesheet.ts";
 import {Tilesheets} from "../rendering/tilesheets.ts";
+import {EditorData} from "../lib/editor_data.ts";
+import {LegacyTilesetCommand, SpritesheetConfig} from "../lib/tileset/legacy.ts";
 
 export type Atlases = { [file: string]: Tilesheet }
 

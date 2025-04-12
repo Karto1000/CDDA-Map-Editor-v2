@@ -1,9 +1,8 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorDataSendCommand} from "../lib/editor_data/send/index.ts";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {EditorDataRecvEvent} from "../lib/editor_data/recv/index.ts";
 import {makeCancelable} from "../lib/index.ts";
+import {EditorDataRecvEvent, EditorDataSendCommand} from "../lib/editor_data.ts";
 
 export enum TabTypeKind {
     Welcome = "Welcome",

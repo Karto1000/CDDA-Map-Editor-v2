@@ -7,7 +7,8 @@ import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 import {TabContext} from "../app.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {MapDataSendCommand} from "../lib/map_data/send/index.ts";
+
+import {MapDataSendCommand} from "../lib/map_data.ts";
 
 type Props = {
     isSettingsWindowOpen: boolean,

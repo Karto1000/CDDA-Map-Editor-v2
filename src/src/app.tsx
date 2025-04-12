@@ -3,16 +3,16 @@ import {Header} from "./components/header.tsx";
 import {Theme, useTheme} from "./hooks/useTheme.ts";
 import Window from "./components/window.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorData, EditorDataRecvEvent} from "./lib/editor_data/recv/index.ts";
 import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
 import {NoTabScreen} from "./mainScreens/noTabScreen.tsx";
 import {WelcomeScreen} from "./mainScreens/welcomeScreen.tsx";
 import {listen} from "@tauri-apps/api/event";
 import {makeCancelable} from "./lib/index.ts";
-import {MapDataSendCommand} from "./lib/map_data/send/index.ts";
 import {Scene} from "three";
 import {useEditor} from "./hooks/useEditor.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
+import {EditorData, EditorDataRecvEvent} from "./lib/editor_data.ts";
+import {MapDataSendCommand} from "./lib/map_data.ts";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
