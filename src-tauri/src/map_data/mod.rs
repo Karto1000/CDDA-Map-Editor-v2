@@ -14,8 +14,6 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
-pub const FG_LAYER: u32 = 1;
-pub const BG_LAYER: u32 = 0;
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {

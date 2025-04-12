@@ -131,7 +131,7 @@ pub enum MeabyVec<T> {
     Vec(Vec<T>),
 }
 
-impl<T> MeabyVec<T> {
+impl<T: Clone> MeabyVec<T> {
     pub fn apply<F>(&mut self, fun: F)
     where
         F: Fn(&mut T),
@@ -162,10 +162,17 @@ impl<T> MeabyVec<T> {
         }
     }
 
-    pub fn vec(self) -> Vec<T> {
+    pub fn into_vec(self) -> Vec<T> {
         match self {
             MeabyVec::Single(s) => vec![s],
             MeabyVec::Vec(v) => v,
+        }
+    }
+
+    pub fn into_single(self) -> Option<T> {
+        match self {
+            MeabyVec::Single(s) => Some(s),
+            MeabyVec::Vec(v) => v.first().map(|v| v.clone()),
         }
     }
 }
@@ -173,7 +180,7 @@ impl<T> MeabyVec<T> {
 impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
     pub fn get(&self, parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>) -> CDDAIdentifier {
         let mut weights = vec![];
-        let mut self_vec = self.clone().vec();
+        let mut self_vec = self.clone().into_vec();
 
         self.for_each(|v| weights.push(v.weight_or_one()));
 

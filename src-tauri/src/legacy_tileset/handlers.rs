@@ -1,5 +1,6 @@
 use crate::editor_data::{CDDAPathError, EditorData, SelectedTilesetError};
-use crate::legacy_tileset::{SpritesheetConfig, SpritesheetConfigReader};
+use crate::legacy_tileset::io::SpritesheetConfigReader;
+use crate::legacy_tileset::SpritesheetConfig;
 use image::{ImageError, ImageFormat, ImageReader};
 use log::info;
 use serde::Serialize;

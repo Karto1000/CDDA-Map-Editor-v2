@@ -200,7 +200,7 @@ fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Er
     Ok(map_data)
 }
 
-fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, anyhow::Error> {
+fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
         Some(t) => t.clone(),

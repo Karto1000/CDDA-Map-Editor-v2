@@ -1,6 +1,6 @@
 pub(crate) mod reader;
 
-use crate::legacy_tileset::{MeabyWeightedSprite, TileInfo};
+use crate::legacy_tileset::{MeabyWeightedSprite, SpriteIndex, TileInfo};
 use crate::util::{CDDAIdentifier, MeabyVec};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -27,33 +27,6 @@ pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
         .map_err(|_| Error::custom(format!("Failed to parse {} as u32", left)))?;
 
     Ok((from, to))
-}
-
-// https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/TILESET.md#rotations
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Rotations<T> {
-    None(T),
-    Horizontal((T, T)),
-    Full((T, T, T, T)),
-}
-
-impl<T: Clone> Rotations<T> {
-    pub fn up(&self) -> T {
-        match self {
-            Rotations::None(d) => d.clone(),
-            Rotations::Horizontal((l, r)) => todo!("Don't know what to do here"),
-            Rotations::Full((u, _, _, _)) => u.clone(),
-        }
-    }
-
-    pub fn right(&self) -> T {
-        match self {
-            Rotations::None(d) => d.clone(),
-            Rotations::Horizontal((_, r)) => r.clone(),
-            Rotations::Full((_, r, _, _)) => r.clone(),
-        }
-    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -112,16 +85,18 @@ pub enum AdditionalTileId {
 pub struct AdditionalTile {
     pub id: AdditionalTileId,
     pub rotates: Option<bool>,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
+    pub animated: Option<bool>,
+    pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
+    pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Tile {
     pub id: MeabyVec<CDDAIdentifier>,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<Rotations<u32>>>>,
+    pub fg: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
+    pub bg: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
     pub rotates: Option<bool>,
+    pub animated: Option<bool>,
     pub multitile: Option<bool>,
     pub additional_tiles: Option<Vec<AdditionalTile>>,
 }

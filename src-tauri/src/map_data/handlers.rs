@@ -5,9 +5,9 @@ use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::MapDataState::Saved;
 use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::legacy_tileset::{FinalIds, GetRandom, Sprite, Tilesheet};
+use crate::legacy_tileset::{FinalIds, GetRandom, Sprite, SpriteIndex, SpriteLayer, Tilesheet};
 use crate::map_data::io::MapDataSaver;
-use crate::map_data::{Cell, MapData, MapDataContainer, BG_LAYER, FG_LAYER, SPECIAL_EMPTY_CHAR};
+use crate::map_data::{Cell, MapData, MapDataContainer, SPECIAL_EMPTY_CHAR};
 use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Save};
 use glam::UVec2;
 use image::imageops::{index_colors, tile};
@@ -15,12 +15,19 @@ use log::{debug, error, info, warn};
 use rand::fill;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::mem::discriminant;
 use std::ops::{Deref, Index};
 use std::path::PathBuf;
 use tauri::async_runtime::{set, Mutex};
+use tauri::utils::display_path;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::MutexGuard;
 use tokio::task::id;
+
+mod events {
+    pub const OPENED_MAP: &'static str = "opened_map";
+    pub const PLACE_SPRITES: &'static str = "place_sprites";
+}
 
 #[derive(Debug, thiserror::Error, Serialize)]
 pub enum GetCurrentMapDataError {
@@ -97,9 +104,8 @@ pub struct PlaceSpriteEvent {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaceSpritesEvent {
-    positions: Vec<JSONSerializableUVec2>,
-    indexes: Vec<u32>,
-    sprite_layers: Vec<u32>,
+    static_sprites: Vec<StaticSprite>,
+    animated_sprites: Vec<AnimatedSprite>,
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]
@@ -138,26 +144,26 @@ pub async fn place(
         },
     );
 
-    let sprite = tilesheet
-        .id_map
-        .get(&CDDAIdentifier("t_grass".into()))
-        .unwrap();
-    let fg = match sprite {
-        Sprite::Single { .. } => unreachable!(),
-        Sprite::Open { .. } => unreachable!(),
-        Sprite::Broken { .. } => unreachable!(),
-        Sprite::Explosion { .. } => unreachable!(),
-        Sprite::Multitile { ids, .. } => ids.fg.clone().unwrap().get(0).unwrap().sprite.up(),
-    };
-
-    app.emit(
-        "place_sprite",
-        PlaceSpriteEvent {
-            position: command.position.clone(),
-            index: fg,
-        },
-    )
-    .unwrap();
+    // let sprite = tilesheet
+    //     .id_map
+    //     .get(&CDDAIdentifier("t_grass".into()))
+    //     .unwrap();
+    // let fg = match sprite {
+    //     Sprite::Single { .. } => unreachable!(),
+    //     Sprite::Open { .. } => unreachable!(),
+    //     Sprite::Broken { .. } => unreachable!(),
+    //     Sprite::Explosion { .. } => unreachable!(),
+    //     Sprite::Multitile { ids, .. } => ids.fg.clone().unwrap().get(0).unwrap().sprite,
+    // };
+    //
+    // app.emit(
+    //     "place_sprite",
+    //     PlaceSpriteEvent {
+    //         position: command.position.clone(),
+    //         index: fg,
+    //     },
+    // )
+    // .unwrap();
 
     Ok(())
 }
@@ -199,6 +205,20 @@ pub async fn create_map(
     Ok(())
 }
 
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct StaticSprite {
+    pub position: JSONSerializableUVec2,
+    pub index: u32,
+    pub layer: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct AnimatedSprite {
+    pub position: JSONSerializableUVec2,
+    pub indices: Vec<u32>,
+    pub layer: u32,
+}
+
 #[tauri::command]
 pub async fn open_map(
     index: usize,
@@ -231,16 +251,13 @@ pub async fn open_map(
         Some(t) => t,
     };
 
-    app.emit("opened_map", index).expect("Function to not fail");
+    app.emit(events::OPENED_MAP, index)
+        .expect("Function to not fail");
 
     let region_settings = json_data
         .region_settings
         .get(&CDDAIdentifier("default".into()))
         .expect("Region settings to exist");
-
-    let mut indexes = vec![];
-    let mut positions = vec![];
-    let mut sprite_layers = vec![];
 
     let fill_terrain_sprite = match &map_data.fill {
         None => None,
@@ -251,19 +268,22 @@ pub async fn open_map(
         }
     };
 
-    map_data.cells.iter().for_each(|(p, char)| {
-        let mut identifiers = map_data.get_identifiers(&char.character, &json_data.palettes);
+    let mut static_sprites = vec![];
+    let mut animated_sprites = vec![];
+
+    map_data.cells.iter().for_each(|(p, cell)| {
+        let mut identifiers = map_data.get_identifiers(&cell.character, &json_data.palettes);
 
         match identifiers.terrain {
             None => {
                 debug!(
                     "No terrain found for {}, trying to use fill_sprite",
-                    char.character
+                    cell.character
                 );
 
                 match &fill_terrain_sprite {
                     None => {
-                        warn!("terrain was not defined for {}", char.character);
+                        warn!("terrain was not defined for {}", cell.character);
                         todo!();
                     }
                     Some(fill_sprite) => {
@@ -275,7 +295,7 @@ pub async fn open_map(
         }
 
         if identifiers.terrain.is_none() && identifiers.furniture.is_none() {
-            warn!("No sprites found for char {:?}", char);
+            warn!("No sprites found for char {:?}", cell);
             return;
         }
 
@@ -293,28 +313,61 @@ pub async fn open_map(
 
             let sprite = tilesheet.get_sprite(&id, &json_data.terrain, &json_data.furniture);
 
-            if let Some(fg_id) = sprite.get_fg_id() {
-                positions.push(JSONSerializableUVec2(p.clone()));
-                indexes.push(fg_id);
-                sprite_layers.push((layer as u32) * 2 + FG_LAYER);
+            match sprite.get_fg_id() {
+                None => {}
+                Some(id) => match sprite.is_animated() {
+                    true => {
+                        let display_sprite = AnimatedSprite {
+                            position: JSONSerializableUVec2(p.clone()),
+                            layer: (layer as u32) * 2 + SpriteLayer::Fg as u32,
+                            indices: id.into_vec(),
+                        };
+
+                        animated_sprites.push(display_sprite)
+                    }
+                    false => {
+                        let display_sprite = StaticSprite {
+                            position: JSONSerializableUVec2(p.clone()),
+                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                            index: id.into_single().unwrap(),
+                        };
+
+                        static_sprites.push(display_sprite);
+                    }
+                },
             }
 
-            if let Some(bg_id) = sprite.get_bg_id() {
-                positions.push(JSONSerializableUVec2(p.clone()));
-                indexes.push(bg_id);
-                sprite_layers.push((layer as u32) * 2 + BG_LAYER);
+            match sprite.get_bg_id() {
+                None => {}
+                Some(id) => match sprite.is_animated() {
+                    true => {
+                        let display_sprite = AnimatedSprite {
+                            position: JSONSerializableUVec2(p.clone()),
+                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                            indices: id.into_vec(),
+                        };
+
+                        animated_sprites.push(display_sprite);
+                    }
+                    false => {
+                        let display_sprite = StaticSprite {
+                            position: JSONSerializableUVec2(p.clone()),
+                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                            index: id.into_single().unwrap(),
+                        };
+
+                        static_sprites.push(display_sprite);
+                    }
+                },
             }
         }
     });
 
-    assert_eq!(indexes.len(), positions.len());
-
     app.emit(
-        "place_sprites",
+        events::PLACE_SPRITES,
         PlaceSpritesEvent {
-            positions,
-            indexes,
-            sprite_layers,
+            static_sprites,
+            animated_sprites,
         },
     )
     .unwrap();
