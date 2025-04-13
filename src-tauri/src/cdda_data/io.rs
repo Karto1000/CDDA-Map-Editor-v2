@@ -1,15 +1,15 @@
-use crate::cdda_data::furniture::CDDAFurniture;
+use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
 use crate::cdda_data::map_data::{
     CDDAMapData, CDDAMapDataObject, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::CDDAJsonEntry;
+use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
+use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
 use log::{debug, error, info, warn};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::BufReader;
@@ -23,6 +23,158 @@ pub struct DeserializedCDDAJsonData {
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
+}
+
+impl DeserializedCDDAJsonData {
+    pub fn get_connect_groups(
+        &self,
+        id: Option<CDDAIdentifier>,
+        layer: &TileLayer,
+    ) -> HashSet<CDDAIdentifier> {
+        id.map(|id| {
+            match layer {
+                TileLayer::Terrain => {
+                    // TODO: Figure out what to do when terrain does not exist
+                    let id = self
+                        .terrain
+                        .get(&id)
+                        .expect(format!("Terrain for {} to exist", id).as_str());
+                    id.connect_groups
+                        .clone()
+                        .map(|cg| HashSet::from_iter(cg.into_vec()))
+                        .unwrap_or_default()
+                }
+                TileLayer::Furniture => {
+                    let id = self
+                        .furniture
+                        .get(&id)
+                        .expect(format!("Furniture for {} to exist", id).as_str());
+                    id.connect_groups
+                        .clone()
+                        .map(|cg| HashSet::from_iter(cg.into_vec()))
+                        .unwrap_or_default()
+                }
+            }
+        })
+        .unwrap_or_default()
+    }
+
+    pub fn get_flags(&self, id: Option<CDDAIdentifier>, layer: &TileLayer) -> Vec<String> {
+        id.map(|id| match layer {
+            TileLayer::Terrain => {
+                let terrain = self
+                    .terrain
+                    .get(&id)
+                    .expect(format!("Terrain for {} to exist", id).as_str());
+                terrain.flags.clone().unwrap_or_default()
+            }
+            TileLayer::Furniture => {
+                let furniture = self
+                    .furniture
+                    .get(&id)
+                    .expect(format!("Terrain for {} to exist", id).as_str());
+                furniture.flags.clone().unwrap_or_default()
+            }
+        })
+        .unwrap_or_default()
+    }
+
+    pub fn get_connects_to(
+        &self,
+        id: Option<CDDAIdentifier>,
+        layer: &TileLayer,
+    ) -> HashSet<CDDAIdentifier> {
+        id.map(|id| {
+            match layer {
+                TileLayer::Terrain => {
+                    // TODO: Figure out what to do when terrain does not exist
+                    let id = self
+                        .terrain
+                        .get(&id)
+                        .expect(format!("Terrain for {} to exist", id).as_str());
+                    id.connects_to
+                        .clone()
+                        .map(|cg| HashSet::from_iter(cg.into_vec()))
+                        .unwrap_or_default()
+                }
+                TileLayer::Furniture => {
+                    let id = self
+                        .furniture
+                        .get(&id)
+                        .expect(format!("Furniture for {} to exist", id).as_str());
+                    id.connects_to
+                        .clone()
+                        .map(|cg| HashSet::from_iter(cg.into_vec()))
+                        .unwrap_or_default()
+                }
+            }
+        })
+        .unwrap_or_default()
+    }
+
+    fn calculate_copy_property_of_terrain(&self, terrain: CDDATerrain) -> CDDATerrain {
+        match &terrain.copy_from {
+            None => terrain,
+            Some(copy_from_id) => {
+                let mut copy_from_terrain = match self.terrain.get(copy_from_id) {
+                    None => {
+                        warn!(
+                            "Could not copy {} for {} due to it not existing",
+                            copy_from_id, terrain.id
+                        );
+                        return terrain;
+                    }
+                    Some(t) => t.clone(),
+                };
+
+                if copy_from_terrain.copy_from.is_some() {
+                    copy_from_terrain = self.calculate_copy_property_of_terrain(copy_from_terrain);
+                }
+
+                CDDATerrain::merge_with_precedence(&copy_from_terrain, &terrain)
+            }
+        }
+    }
+
+    pub fn calculate_operations(&mut self) {
+        let mut updated_terrain: HashMap<CDDAIdentifier, CDDATerrain> = HashMap::new();
+        for (copy_to_id, to) in self.terrain.iter() {
+            let mut new_terrain = self.terrain.get(copy_to_id).expect("To Exist").clone();
+
+            new_terrain = self.calculate_copy_property_of_terrain(new_terrain);
+
+            match &to.extend {
+                None => {}
+                Some(extend) => match &extend.flags {
+                    None => {}
+                    Some(new_flags) => {
+                        let mut old_flags = new_terrain.flags.clone().unwrap_or_default();
+                        old_flags.extend(new_flags.clone());
+                        new_terrain.flags = Some(old_flags)
+                    }
+                },
+            };
+
+            match &to.delete {
+                None => {}
+                Some(delete) => match &delete.flags {
+                    None => {}
+                    Some(new_flags) => {
+                        let old_flags = new_terrain.flags.clone().unwrap_or_default();
+                        let new_flags = old_flags
+                            .into_iter()
+                            .filter(|f| new_flags.iter().find(|nf| *nf == f).is_some())
+                            .collect();
+                        new_terrain.flags = Some(new_flags)
+                    }
+                },
+            };
+
+            updated_terrain.insert(copy_to_id.clone(), new_terrain);
+        }
+
+        self.terrain.extend(updated_terrain);
+    }
 }
 
 pub struct CDDADataLoader {
@@ -142,16 +294,26 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                         cdda_data.palettes.insert(p.id.clone(), p);
                     }
                     CDDAJsonEntry::Terrain(terrain) => {
-                        debug!("Found Terrain entry {} in {:?}", terrain.id, entry.path());
-                        cdda_data.terrain.insert(terrain.id.clone(), terrain);
-                    }
-                    CDDAJsonEntry::Furniture(furniture) => {
+                        let new_terrain: CDDATerrain = terrain.into();
                         debug!(
-                            "Found Furniture entry {} in {:?}",
-                            furniture.id,
+                            "Found Terrain entry {} in {:?}",
+                            new_terrain.id,
                             entry.path()
                         );
-                        cdda_data.furniture.insert(furniture.id.clone(), furniture);
+                        cdda_data
+                            .terrain
+                            .insert(new_terrain.id.clone(), new_terrain);
+                    }
+                    CDDAJsonEntry::Furniture(furniture) => {
+                        let new_furniture: CDDAFurniture = furniture.into();
+                        debug!(
+                            "Found Furniture entry {} in {:?}",
+                            new_furniture.id,
+                            entry.path()
+                        );
+                        cdda_data
+                            .furniture
+                            .insert(new_furniture.id.clone(), new_furniture);
                     }
                     _ => {
                         info!("Unused JSON entry in {:?}", entry.path());
@@ -159,6 +321,8 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                 }
             }
         }
+
+        cdda_data.calculate_operations();
 
         Ok(cdda_data)
     }

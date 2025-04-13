@@ -1,20 +1,24 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
 use crate::cdda_data::region_settings::RegionIdentifier;
+use crate::cdda_data::TileLayer;
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::MapDataState::Saved;
 use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::legacy_tileset::{FinalIds, GetRandom, Sprite, SpriteIndex, SpriteLayer, Tilesheet};
+use crate::legacy_tileset::{
+    FinalIds, GetRandom, MappedSprite, Sprite, SpriteIndex, SpriteLayer, Tilesheet,
+};
 use crate::map_data::io::MapDataSaver;
 use crate::map_data::{Cell, MapData, MapDataContainer, SPECIAL_EMPTY_CHAR};
 use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Save};
-use glam::UVec2;
+use glam::{UVec2, Vec2};
 use image::imageops::{index_colors, tile};
 use log::{debug, error, info, warn};
 use rand::fill;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
+use std::convert::identity;
 use std::mem::discriminant;
 use std::ops::{Deref, Index};
 use std::path::PathBuf;
@@ -219,6 +223,20 @@ struct AnimatedSprite {
     pub layer: u32,
 }
 
+fn get_id_from_mapped_sprites(
+    mapped_sprites_lock: &MutexGuard<HashMap<UVec2, MappedSprite>>,
+    cords: &UVec2,
+    layer: &TileLayer,
+) -> Option<CDDAIdentifier> {
+    mapped_sprites_lock
+        .get(cords)
+        .map(|v| match layer {
+            TileLayer::Terrain => v.terrain.clone(),
+            TileLayer::Furniture => v.furniture.clone(),
+        })
+        .flatten()
+}
+
 #[tauri::command]
 pub async fn open_map(
     index: usize,
@@ -226,6 +244,7 @@ pub async fn open_map(
     tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
     map_data_container: State<'_, Mutex<MapDataContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<UVec2, MappedSprite>>>,
 ) -> Result<(), ()> {
     let mut lock = map_data_container.lock().await;
 
@@ -268,13 +287,47 @@ pub async fn open_map(
         }
     };
 
+    let mut mapped_sprites_lock = mapped_sprites.lock().await;
+
     let mut static_sprites = vec![];
     let mut animated_sprites = vec![];
 
-    map_data.cells.iter().for_each(|(p, cell)| {
-        let mut identifiers = map_data.get_identifiers(&cell.character, &json_data.palettes);
+    // Store the identifiers here since they use random numbers to determine them and if we used
+    // this function in the next iteration through map_data, we would get other identifiers
+    let mut identifiers = HashMap::new();
 
-        match identifiers.terrain {
+    // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
+    // the function relies on the mapped sprite of this sprite to already exist
+    map_data.cells.iter().for_each(|(p, cell)| {
+        let identifier_group = map_data.get_identifiers(&cell.character, &json_data.palettes);
+
+        let mut mapped_sprite = MappedSprite::default();
+
+        for (layer, o_id) in [
+            (TileLayer::Terrain, &identifier_group.terrain),
+            (TileLayer::Furniture, &identifier_group.furniture),
+        ] {
+            let id = match o_id {
+                None => continue,
+                Some(id) => {
+                    id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
+                }
+            };
+
+            match layer {
+                TileLayer::Terrain => mapped_sprite.terrain = Some(id.clone()),
+                TileLayer::Furniture => mapped_sprite.furniture = Some(id.clone()),
+            };
+        }
+
+        mapped_sprites_lock.insert(p.clone(), mapped_sprite);
+        identifiers.insert(p, identifier_group);
+    });
+
+    map_data.cells.iter().for_each(|(p, cell)| {
+        let mut identifier_group = identifiers.remove(p).expect("Identifier group to exist");
+
+        match identifier_group.terrain {
             None => {
                 debug!(
                     "No terrain found for {}, trying to use fill_sprite",
@@ -287,23 +340,23 @@ pub async fn open_map(
                         todo!();
                     }
                     Some(fill_sprite) => {
-                        identifiers.terrain = Some(fill_sprite.clone());
+                        identifier_group.terrain = Some(fill_sprite.clone());
                     }
                 };
             }
             Some(_) => {}
         }
 
-        if identifiers.terrain.is_none() && identifiers.furniture.is_none() {
+        if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
             warn!("No sprites found for char {:?}", cell);
             return;
         }
 
         // Layer here is done so furniture is above terrain
-        for (layer, o_id) in [identifiers.terrain, identifiers.furniture]
-            .into_iter()
-            .enumerate()
-        {
+        for (layer, o_id) in [
+            (TileLayer::Terrain, identifier_group.terrain),
+            (TileLayer::Furniture, identifier_group.furniture),
+        ] {
             let id = match o_id {
                 None => continue,
                 Some(id) => {
@@ -311,15 +364,39 @@ pub async fn open_map(
                 }
             };
 
+            let top_cords = p + UVec2::new(0, 1);
+            let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
+
+            let right_cords = p + UVec2::new(1, 0);
+            let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
+
+            // We need this to protect against underflow of coordinates since they're stored as a UVec2
+            let bottom = match p.y > 0 {
+                true => {
+                    let bottom_cords = p - UVec2::new(0, 1);
+                    get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
+                }
+                false => None,
+            };
+
+            let left = match p.x > 0 {
+                true => {
+                    let left_cords = p - UVec2::new(1, 0);
+                    get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
+                }
+                false => None,
+            };
+
             let sprite = tilesheet.get_sprite(&id, &json_data.terrain, &json_data.furniture);
 
-            match sprite.get_fg_id() {
+            match sprite.get_fg_id(&id, json_data, &layer, top, right, bottom, left) {
                 None => {}
+                // TODO: Mapped Sprite
                 Some(id) => match sprite.is_animated() {
                     true => {
                         let display_sprite = AnimatedSprite {
                             position: JSONSerializableUVec2(p.clone()),
-                            layer: (layer as u32) * 2 + SpriteLayer::Fg as u32,
+                            layer: (layer.clone() as u32) * 2 + SpriteLayer::Fg as u32,
                             indices: id.into_vec(),
                         };
 
@@ -328,7 +405,7 @@ pub async fn open_map(
                     false => {
                         let display_sprite = StaticSprite {
                             position: JSONSerializableUVec2(p.clone()),
-                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                            layer: (layer.clone() as u32) * 2 + SpriteLayer::Bg as u32,
                             index: id.into_single().unwrap(),
                         };
 

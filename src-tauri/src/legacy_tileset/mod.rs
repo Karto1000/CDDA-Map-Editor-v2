@@ -1,5 +1,7 @@
 use crate::cdda_data::furniture::CDDAFurniture;
+use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::terrain::CDDATerrain;
+use crate::cdda_data::{ConnectGroup, TileLayer};
 use crate::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
 };
@@ -9,9 +11,8 @@ use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use rand::rng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
-use std::path::PathBuf;
+use serde_json::json;
+use std::collections::{HashMap, HashSet};
 
 pub(crate) mod handlers;
 mod io;
@@ -22,9 +23,23 @@ pub type FinalIds = Option<Vec<WeightedSprite<SpriteIndex>>>;
 pub type AdditionalTileIds = Option<Vec<WeightedSprite<Vec<SpriteIndex>>>>;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum CardinalDirection {
+    North = 0,
+    East = 1,
+    South = 2,
+    West = 3,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum SpriteLayer {
     Bg = 0,
     Fg = 1,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedSprite {
+    pub terrain: Option<CDDAIdentifier>,
+    pub furniture: Option<CDDAIdentifier>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -121,44 +136,300 @@ impl Sprite {
         }
     }
 
-    pub fn get_fg_id(&self) -> Option<MeabyVec<SpriteIndex>> {
+    fn get_random_animated_sprite(
+        ids: &Vec<WeightedSprite<SpriteIndex>>,
+    ) -> Option<MeabyVec<SpriteIndex>> {
+        if ids.len() == 0 {
+            return None;
+        }
+
+        Some(MeabyVec::Vec(
+            ids.to_vec().into_iter().map(|v| v.sprite).collect(),
+        ))
+    }
+
+    fn get_random_sprite(ids: &Vec<WeightedSprite<SpriteIndex>>) -> Option<MeabyVec<SpriteIndex>> {
+        if ids.len() == 0 {
+            return None;
+        }
+
+        Some(MeabyVec::Single(ids.get_random().clone()))
+    }
+
+    fn get_random_additional_tile_sprite(
+        direction: CardinalDirection,
+        ids: &Vec<WeightedSprite<Vec<SpriteIndex>>>,
+    ) -> Option<MeabyVec<SpriteIndex>> {
+        if ids.len() == 0 {
+            return None;
+        }
+
+        Some(MeabyVec::Single(
+            ids.get_random()
+                .get(direction.clone() as usize)
+                .expect(format!("t_connection to have a {:?} sprite", direction).as_str())
+                .clone(),
+        ))
+    }
+
+    pub fn get_fg_id(
+        &self,
+        this_id: &CDDAIdentifier,
+        json_data: &DeserializedCDDAJsonData,
+        layer: &TileLayer,
+        top: Option<CDDAIdentifier>,
+        right: Option<CDDAIdentifier>,
+        bottom: Option<CDDAIdentifier>,
+        left: Option<CDDAIdentifier>,
+    ) -> Option<MeabyVec<SpriteIndex>> {
         match self {
             Sprite::Single { ids, animated, .. } => match *animated {
                 true => match &ids.fg {
                     None => None,
-                    Some(fg) => {
-                        if fg.len() == 0 {
-                            return None;
-                        }
-
-                        Some(MeabyVec::Vec(
-                            fg.to_vec().into_iter().map(|v| v.sprite).collect(),
-                        ))
-                    }
+                    Some(fg) => Self::get_random_animated_sprite(fg),
                 },
                 false => match &ids.fg {
                     None => None,
-                    Some(fg) => {
-                        if fg.len() == 0 {
-                            return None;
-                        }
-
-                        Some(MeabyVec::Single(fg.get_random().clone()))
-                    }
+                    Some(fg) => Self::get_random_sprite(fg),
                 },
             },
-            Sprite::Multitile { ids, animated, .. } => match *animated {
-                true => None,
-                false => match &ids.fg {
-                    None => None,
-                    Some(fg) => {
-                        if fg.len() == 0 {
-                            return None;
-                        }
+            Sprite::Multitile {
+                ids,
+                animated,
+                center,
+                corner,
+                t_connection,
+                edge,
+                unconnected,
+                end_piece,
+                ..
+            } => match *animated {
+                true => todo!(),
+                false => {
+                    let mut this_connects_to =
+                        json_data.get_connects_to(Some(this_id.clone()), layer);
+                    let mut top_connect_groups = json_data.get_connect_groups(top.clone(), layer);
+                    let mut right_connect_groups =
+                        json_data.get_connect_groups(right.clone(), layer);
+                    let mut bottom_connect_groups =
+                        json_data.get_connect_groups(bottom.clone(), layer);
+                    let mut left_connect_groups = json_data.get_connect_groups(left.clone(), layer);
 
-                        Some(MeabyVec::Single(fg.get_random().clone()))
+                    let this_flags = json_data.get_flags(Some(this_id.clone()), layer);
+                    let top_flags = json_data.get_flags(top, layer);
+                    let right_flags = json_data.get_flags(right, layer);
+                    let bottom_flags = json_data.get_flags(bottom, layer);
+                    let left_flags = json_data.get_flags(left, layer);
+
+                    fn edit_connection_groups(
+                        flags: &Vec<String>,
+                        connection: &mut HashSet<CDDAIdentifier>,
+                    ) {
+                        // "WALL is implied by the flags WALL and CONNECT_WITH_WALL"
+                        // TODO: I assume that the flag WIRED_WALL also implies this although this is
+                        // not mentioned anywhere
+                        if flags.contains(&"WALL".to_string())
+                            || flags.contains(&"CONNECT_WITH_WALL".to_string())
+                            || flags.contains(&"WIRED_WALL".to_string())
+                        {
+                            connection.insert(CDDAIdentifier("WALL".to_string()));
+                        }
                     }
-                },
+
+                    edit_connection_groups(&this_flags, &mut this_connects_to);
+                    edit_connection_groups(&top_flags, &mut top_connect_groups);
+                    edit_connection_groups(&right_flags, &mut right_connect_groups);
+                    edit_connection_groups(&bottom_flags, &mut bottom_connect_groups);
+                    edit_connection_groups(&left_flags, &mut left_connect_groups);
+
+                    let matching_list = (
+                        this_connects_to
+                            .intersection(&top_connect_groups)
+                            .next()
+                            .is_some(),
+                        this_connects_to
+                            .intersection(&right_connect_groups)
+                            .next()
+                            .is_some(),
+                        this_connects_to
+                            .intersection(&bottom_connect_groups)
+                            .next()
+                            .is_some(),
+                        this_connects_to
+                            .intersection(&left_connect_groups)
+                            .next()
+                            .is_some(),
+                    );
+
+                    match matching_list {
+                        (true, true, true, true) => match center {
+                            None => None,
+                            Some(center) => match &center.ids.fg {
+                                None => None,
+                                // TODO: Kind of weird but since the first elements index is 0 and
+                                // the CardinalDirection North is mapped to 0, we can use North here
+                                // instead of copying the contents of the function into this match arm
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::North,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, true, true, false) => match t_connection {
+                            None => None,
+                            Some(t_connection) => match &t_connection.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::East,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, true, false, true) => match t_connection {
+                            None => None,
+                            Some(t_connection) => match &t_connection.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::South,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, false, true, true) => match t_connection {
+                            None => None,
+                            Some(t_connection) => match &t_connection.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::West,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, true, true, true) => match t_connection {
+                            None => None,
+                            Some(t_connection) => match &t_connection.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::North,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, true, false, false) => match corner {
+                            None => None,
+                            Some(corner) => match &corner.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::East,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, false, false, true) => match corner {
+                            None => None,
+                            Some(corner) => match &corner.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::South,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, true, true, false) => match corner {
+                            None => None,
+                            Some(corner) => match &corner.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::North,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, false, true, true) => match corner {
+                            None => None,
+                            Some(corner) => match &corner.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::West,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, false, false, false) => match end_piece {
+                            None => None,
+                            Some(end_piece) => match &end_piece.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::South,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, true, false, false) => match end_piece {
+                            None => None,
+                            Some(end_piece) => match &end_piece.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::East,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, false, true, false) => match end_piece {
+                            None => None,
+                            Some(end_piece) => match &end_piece.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::North,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, false, false, true) => match end_piece {
+                            None => None,
+                            Some(end_piece) => match &end_piece.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    CardinalDirection::West,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, true, false, true) => match edge {
+                            None => None,
+                            Some(edge) => match &edge.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    // East-West
+                                    CardinalDirection::East,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (true, false, true, false) => match edge {
+                            None => None,
+                            Some(edge) => match &edge.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    // North-South
+                                    CardinalDirection::North,
+                                    fg,
+                                ),
+                            },
+                        },
+                        (false, false, false, false) => match unconnected {
+                            None => None,
+                            Some(unconnected) => match &unconnected.ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_additional_tile_sprite(
+                                    // First
+                                    CardinalDirection::North,
+                                    fg,
+                                ),
+                            },
+                        },
+                    }
+                }
             },
             Sprite::Open { .. } => todo!(),
             Sprite::Broken { .. } => todo!(),
@@ -170,38 +441,18 @@ impl Sprite {
             Sprite::Single { ids, animated, .. } => match *animated {
                 true => match &ids.bg {
                     None => None,
-                    Some(bg) => {
-                        if bg.len() == 0 {
-                            return None;
-                        }
-
-                        Some(MeabyVec::Vec(
-                            bg.to_vec().into_iter().map(|v| v.sprite).collect(),
-                        ))
-                    }
+                    Some(bg) => Self::get_random_animated_sprite(bg),
                 },
                 false => match &ids.bg {
                     None => None,
-                    Some(bg) => {
-                        if bg.len() == 0 {
-                            return None;
-                        }
-
-                        Some(MeabyVec::Single(bg.get_random().clone()))
-                    }
+                    Some(bg) => Self::get_random_sprite(bg),
                 },
             },
             Sprite::Multitile { ids, animated, .. } => match *animated {
                 true => None,
                 false => match &ids.bg {
                     None => None,
-                    Some(bg) => {
-                        if bg.len() == 0 {
-                            return None;
-                        }
-
-                        Some(MeabyVec::Single(bg.get_random().clone()))
-                    }
+                    Some(bg) => Self::get_random_sprite(bg),
                 },
             },
             Sprite::Open { .. } => todo!(),

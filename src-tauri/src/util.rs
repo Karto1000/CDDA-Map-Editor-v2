@@ -324,3 +324,25 @@ pub trait Save<T> {
 pub trait Load<T> {
     fn load(&self) -> Result<T, anyhow::Error>;
 }
+
+#[macro_export]
+macro_rules! impl_merge_with_precedence {
+    // First parameter: Struct name, second: normal fields, third: Option fields
+    ($struct_name:ident, $( $field:ident ),*; $( $opt_field:ident ),*) => {
+        impl $struct_name {
+            pub fn merge_with_precedence(base: &Self, override_: &Self) -> Self {
+                Self {
+                    // Handle non-Option fields: Just copy the value from override_
+                    $(
+                        $field: override_.$field.clone(),
+                    )*
+
+                    // Handle Option<T> fields: Use the value from override_ if Some, else keep base value
+                    $(
+                        $opt_field: override_.$opt_field.clone().or_else(|| base.$opt_field.clone()),
+                    )*
+                }
+            }
+        }
+    };
+}

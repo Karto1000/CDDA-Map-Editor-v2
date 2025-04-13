@@ -18,13 +18,14 @@ use crate::legacy_tileset::tile_config::reader::TileConfigReader;
 use crate::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
 };
-use crate::legacy_tileset::Tilesheet;
+use crate::legacy_tileset::{MappedSprite, Tilesheet};
 use crate::map_data::handlers::{close_map, create_map, get_current_map_data, save_current_map};
 use crate::map_data::handlers::{open_map, place};
 use crate::map_data::{MapData, MapDataContainer};
 use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec};
 use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
+use glam::UVec2;
 use image::{load, GenericImageView};
 use log::{debug, error, info, warn, LevelFilter};
 use map_data::importing::MapDataImporter;
@@ -294,6 +295,7 @@ pub fn run() -> () {
             app.manage(Mutex::new(tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
+            app.manage::<Mutex<HashMap<UVec2, MappedSprite>>>(Mutex::new(HashMap::new()));
 
             Ok(())
         })

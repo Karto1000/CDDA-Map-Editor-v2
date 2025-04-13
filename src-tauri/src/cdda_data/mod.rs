@@ -5,11 +5,11 @@ pub(crate) mod palettes;
 pub(crate) mod region_settings;
 pub(crate) mod terrain;
 
-use crate::cdda_data::furniture::CDDAFurniture;
+use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::map_data::CDDAMapData;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::terrain::CDDATerrain;
+use crate::cdda_data::terrain::CDDATerrainIntermediate;
 use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
 use derive_more::Display;
 use serde::de::{Error, Visitor};
@@ -34,6 +34,22 @@ where
     }
 
     Ok(comments)
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CDDAExtendOp {
+    pub flags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CDDADeleteOp {
+    pub flags: Option<Vec<String>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub enum TileLayer {
+    Terrain = 0,
+    Furniture = 1,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -74,8 +90,8 @@ pub enum CDDAJsonEntry {
     Mapgen(CDDAMapData),
     RegionSettings(CDDARegionSettings),
     Palette(CDDAPalette),
-    Terrain(CDDATerrain),
-    Furniture(CDDAFurniture),
+    Terrain(CDDATerrainIntermediate),
+    Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
 
     // -- UNUSED
