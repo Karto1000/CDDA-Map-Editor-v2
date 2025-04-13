@@ -281,7 +281,19 @@ export function useEditor(props: Props) {
         }
       })
 
+      const drawFallbackSprites: DrawStaticSprite[] = d.payload.fallback_sprites.map(ds => {
+        const vec2 = serializedVec2ToVector2(ds.position)
+        vec2.x *= 32;
+        vec2.y *= 32;
 
+        return {
+          ...ds,
+          layer: 1,
+          position: vec2,
+        }
+      })
+
+      props.tilesheetsRef.current.drawFallbackSpritesBatched(drawFallbackSprites)
       props.tilesheetsRef.current.drawStaticSpritesBatched(drawStaticSprites)
       props.tilesheetsRef.current.drawAnimatedSpritesBatched(drawAnimatedSprites)
     }))

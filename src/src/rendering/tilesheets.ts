@@ -25,10 +25,12 @@ type SavedAnimatedSprite = DrawAnimatedSprite & {
 
 export class Tilesheets {
   public tilesheets: { [name: string]: Tilesheet }
+  public fallback: Tilesheet
   private animatedSprites: SavedAnimatedSprite[]
 
-  constructor(tilesheets: { [name: string]: Tilesheet }) {
+  constructor(tilesheets: { [name: string]: Tilesheet }, fallback: Tilesheet) {
     this.tilesheets = tilesheets
+    this.fallback = fallback
   }
 
   public updateAnimatedSprites() {
@@ -132,6 +134,34 @@ export class Tilesheets {
       const batch = batches[k]
       this.tilesheets[k].drawSpriteLocalIndexBatched(batch)
     }
+  }
+
+  public drawFallbackSpritesBatched(staticSprites: DrawStaticSprite[]) {
+    const batch = []
+
+    for (const drawSprite of staticSprites) {
+      const index = drawSprite.index
+
+      const worldY = drawSprite.position.y / TILE_SIZE
+      const worldX = drawSprite.position.x / TILE_SIZE
+
+      const newPosition = new Vector3(
+        drawSprite.position.x,
+        drawSprite.position.y,
+        // + 1 to always add an offset because if we didn't, a few sprites would not show up
+        (MAX_DEPTH - MAX_ROW * (worldY + 1)) + worldX + drawSprite.layer
+      )
+
+      const drawLocalSprite: DrawLocalSprite = {
+        index: index,
+        layer: drawSprite.layer,
+        position: newPosition
+      }
+
+      batch.push(drawLocalSprite)
+    }
+
+    this.fallback.drawSpriteLocalIndexBatched(batch)
   }
 
   public clearAll() {

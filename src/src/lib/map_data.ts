@@ -77,9 +77,15 @@ export type AnimatedSprite = {
   layer: number
 }
 
+export type FallbackSprite = {
+  position: string,
+  index: number
+}
+
 export type PlaceSpritesCommand = {
   static_sprites: StaticSprite[]
   animated_sprites: AnimatedSprite[]
+  fallback_sprites: FallbackSprite[]
 }
 export type DeleteCommand = string;
 export type MapChangeEvent = {
