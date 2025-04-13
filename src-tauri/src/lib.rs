@@ -220,9 +220,7 @@ fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, Error> 
     };
 
     let config = tile_config_reader.read()?;
-    let id_map = legacy_tileset::get_id_map_from_config(config);
-
-    let tilesheet = Tilesheet { id_map };
+    let tilesheet = legacy_tileset::get_tilesheet_from_config(config);
 
     Ok(Some(tilesheet))
 }
@@ -272,9 +270,9 @@ pub fn run() -> () {
 
                     let importer = MapDataImporter {
                         path:
-                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z1.json"
                                 .into(),
-                        om_terrain: "nuclear_plant_0_0_0".into(),
+                        om_terrain: "nuclear_plant_0_0_1".into(),
                     };
                     let mut loaded = importer.load()?;
                     loaded.calculate_parameters(&cdda_json_data.palettes);

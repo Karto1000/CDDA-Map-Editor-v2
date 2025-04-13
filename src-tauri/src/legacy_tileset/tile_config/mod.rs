@@ -108,11 +108,11 @@ pub struct FallbackSpritesheet {
     // TODO: Idk what this is for
     pub tiles: Vec<()>,
 
-    pub ascii: Vec<AsciiTile>,
+    pub ascii: Vec<AsciiCharGroup>,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AsciiTile {
+pub struct AsciiCharGroup {
     pub offset: i32,
     pub bold: bool,
     pub color: String,

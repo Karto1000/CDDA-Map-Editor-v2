@@ -14,7 +14,11 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::{Path, PathBuf};
+use std::string::ToString;
 use walkdir::WalkDir;
+
+const NULL_TERRAIN: &'static str = "t_null";
+const NULL_FURNITURE: &'static str = "f_null";
 
 #[derive(Default)]
 pub struct DeserializedCDDAJsonData {
@@ -35,6 +39,10 @@ impl DeserializedCDDAJsonData {
             match layer {
                 TileLayer::Terrain => {
                     // TODO: Figure out what to do when terrain does not exist
+                    if id == CDDAIdentifier(NULL_TERRAIN.to_string()) {
+                        return HashSet::new();
+                    };
+
                     let id = self
                         .terrain
                         .get(&id)
@@ -45,6 +53,10 @@ impl DeserializedCDDAJsonData {
                         .unwrap_or_default()
                 }
                 TileLayer::Furniture => {
+                    if id == CDDAIdentifier(NULL_FURNITURE.to_string()) {
+                        return HashSet::new();
+                    };
+
                     let id = self
                         .furniture
                         .get(&id)
@@ -62,6 +74,10 @@ impl DeserializedCDDAJsonData {
     pub fn get_flags(&self, id: Option<CDDAIdentifier>, layer: &TileLayer) -> Vec<String> {
         id.map(|id| match layer {
             TileLayer::Terrain => {
+                if id == CDDAIdentifier(NULL_TERRAIN.to_string()) {
+                    return vec![];
+                };
+
                 let terrain = self
                     .terrain
                     .get(&id)
@@ -69,6 +85,10 @@ impl DeserializedCDDAJsonData {
                 terrain.flags.clone().unwrap_or_default()
             }
             TileLayer::Furniture => {
+                if id == CDDAIdentifier(NULL_FURNITURE.to_string()) {
+                    return vec![];
+                };
+
                 let furniture = self
                     .furniture
                     .get(&id)

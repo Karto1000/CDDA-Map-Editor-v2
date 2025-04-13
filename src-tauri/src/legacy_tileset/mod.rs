@@ -3,7 +3,7 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::{ConnectGroup, TileLayer};
 use crate::legacy_tileset::tile_config::{
-    AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
+    AdditionalTile, AdditionalTileId, FallbackSpritesheet, Spritesheet, Tile, TileConfig,
 };
 use crate::util::{CDDAIdentifier, MeabyVec};
 use log::info;
@@ -21,6 +21,72 @@ pub(crate) mod tile_config;
 pub type SpriteIndex = u32;
 pub type FinalIds = Option<Vec<WeightedSprite<SpriteIndex>>>;
 pub type AdditionalTileIds = Option<Vec<WeightedSprite<Vec<SpriteIndex>>>>;
+
+const FALLBACK_TILE_ROW_SIZE: usize = 16;
+const FALLBACK_TILE_WIDTH: usize = 32;
+const FALLBACK_TILE_MAPPING: &'static [(&'static str, u32)] = &[
+    // Ignore some textures at the start and end of each color
+    ("!", 33),
+    ("#", 35),
+    ("$", 36),
+    ("%", 37),
+    ("&", 38),
+    ("(", 40),
+    (")", 41),
+    ("*", 42),
+    ("+", 43),
+    ("0", 48),
+    ("1", 49),
+    ("2", 50),
+    ("3", 51),
+    ("4", 52),
+    ("5", 53),
+    ("6", 54),
+    ("7", 55),
+    ("8", 56),
+    ("9", 57),
+    (":", 58),
+    (";", 59),
+    ("<", 60),
+    ("=", 61),
+    ("?", 62),
+    ("@", 63),
+    ("A", 64),
+    ("B", 65),
+    ("C", 66),
+    ("D", 67),
+    ("E", 68),
+    ("F", 69),
+    ("G", 70),
+    ("H", 71),
+    ("I", 72),
+    ("J", 73),
+    ("K", 74),
+    ("L", 75),
+    ("M", 76),
+    ("N", 77),
+    ("O", 78),
+    ("P", 79),
+    ("Q", 80),
+    ("R", 81),
+    ("S", 82),
+    ("T", 83),
+    ("U", 84),
+    ("V", 85),
+    ("W", 86),
+    ("X", 87),
+    ("Y", 88),
+    ("Z", 89),
+    ("[", 90),
+    (r"\", 91),
+    ("]", 92),
+    ("^", 93),
+    ("_", 94),
+    ("`", 95),
+    ("{", 122),
+    ("}", 124),
+    ("|", 178),
+];
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum CardinalDirection {
@@ -76,11 +142,11 @@ pub struct SpritesheetConfig {
 #[derive(Debug)]
 pub struct ForeBackIds<T> {
     pub fg: T,
-    pub bg: T,
+    pub bg: FinalIds,
 }
 
 impl<T> ForeBackIds<T> {
-    pub fn new(fg: T, bg: T) -> Self {
+    pub fn new(fg: T, bg: FinalIds) -> Self {
         Self { fg, bg }
     }
 }
@@ -172,6 +238,85 @@ impl Sprite {
         ))
     }
 
+    fn edit_connection_groups(flags: &Vec<String>, connection: &mut HashSet<CDDAIdentifier>) {
+        // "WALL is implied by the flags WALL and CONNECT_WITH_WALL"
+        // TODO: I assume that the flag WIRED_WALL also implies this although this is
+        // not mentioned anywhere
+        if flags.contains(&"WALL".to_string())
+            || flags.contains(&"CONNECT_WITH_WALL".to_string())
+            || flags.contains(&"WIRED_WALL".to_string())
+        {
+            connection.insert(CDDAIdentifier("WALL".to_string()));
+        }
+
+        // "INDOORFLOOR is implied by the flag INDOORS"
+        if flags.contains(&"INDOORS".to_string()) {
+            connection.insert(CDDAIdentifier("INDOORFLOOR".to_string()));
+        }
+    }
+
+    fn get_matching_list(
+        this_id: &CDDAIdentifier,
+        layer: &TileLayer,
+        json_data: &DeserializedCDDAJsonData,
+        top: Option<CDDAIdentifier>,
+        right: Option<CDDAIdentifier>,
+        bottom: Option<CDDAIdentifier>,
+        left: Option<CDDAIdentifier>,
+    ) -> (bool, bool, bool, bool) {
+        let mut this_connects_to = json_data.get_connects_to(Some(this_id.clone()), layer);
+        let mut top_connect_groups = json_data.get_connect_groups(top.clone(), layer);
+        let mut right_connect_groups = json_data.get_connect_groups(right.clone(), layer);
+        let mut bottom_connect_groups = json_data.get_connect_groups(bottom.clone(), layer);
+        let mut left_connect_groups = json_data.get_connect_groups(left.clone(), layer);
+
+        let this_flags = json_data.get_flags(Some(this_id.clone()), layer);
+        let top_flags = json_data.get_flags(top.clone(), layer);
+        let right_flags = json_data.get_flags(right.clone(), layer);
+        let bottom_flags = json_data.get_flags(bottom.clone(), layer);
+        let left_flags = json_data.get_flags(left.clone(), layer);
+
+        Self::edit_connection_groups(&this_flags, &mut this_connects_to);
+        Self::edit_connection_groups(&top_flags, &mut top_connect_groups);
+        Self::edit_connection_groups(&right_flags, &mut right_connect_groups);
+        Self::edit_connection_groups(&bottom_flags, &mut bottom_connect_groups);
+        Self::edit_connection_groups(&left_flags, &mut left_connect_groups);
+
+        let can_connect_top = this_connects_to
+            .intersection(&top_connect_groups)
+            .next()
+            // We have the second check here since the tile can also connect to itself
+            // TODO: I think there's a no self connect flag to toggle this behaviour
+            // although im not sure
+            .is_some()
+            || this_id == &top.unwrap_or(CDDAIdentifier("".to_string()));
+
+        let can_connect_right = this_connects_to
+            .intersection(&right_connect_groups)
+            .next()
+            .is_some()
+            || this_id == &right.unwrap_or(CDDAIdentifier("".to_string()));
+
+        let can_connect_bottom = this_connects_to
+            .intersection(&bottom_connect_groups)
+            .next()
+            .is_some()
+            || this_id == &bottom.unwrap_or(CDDAIdentifier("".to_string()));
+
+        let can_connect_left = this_connects_to
+            .intersection(&left_connect_groups)
+            .next()
+            .is_some()
+            || this_id == &left.unwrap_or(CDDAIdentifier("".to_string()));
+
+        (
+            can_connect_top,
+            can_connect_right,
+            can_connect_bottom,
+            can_connect_left,
+        )
+    }
+
     pub fn get_fg_id(
         &self,
         this_id: &CDDAIdentifier,
@@ -194,7 +339,6 @@ impl Sprite {
                 },
             },
             Sprite::Multitile {
-                ids,
                 animated,
                 center,
                 corner,
@@ -206,59 +350,8 @@ impl Sprite {
             } => match *animated {
                 true => todo!(),
                 false => {
-                    let mut this_connects_to =
-                        json_data.get_connects_to(Some(this_id.clone()), layer);
-                    let mut top_connect_groups = json_data.get_connect_groups(top.clone(), layer);
-                    let mut right_connect_groups =
-                        json_data.get_connect_groups(right.clone(), layer);
-                    let mut bottom_connect_groups =
-                        json_data.get_connect_groups(bottom.clone(), layer);
-                    let mut left_connect_groups = json_data.get_connect_groups(left.clone(), layer);
-
-                    let this_flags = json_data.get_flags(Some(this_id.clone()), layer);
-                    let top_flags = json_data.get_flags(top, layer);
-                    let right_flags = json_data.get_flags(right, layer);
-                    let bottom_flags = json_data.get_flags(bottom, layer);
-                    let left_flags = json_data.get_flags(left, layer);
-
-                    fn edit_connection_groups(
-                        flags: &Vec<String>,
-                        connection: &mut HashSet<CDDAIdentifier>,
-                    ) {
-                        // "WALL is implied by the flags WALL and CONNECT_WITH_WALL"
-                        // TODO: I assume that the flag WIRED_WALL also implies this although this is
-                        // not mentioned anywhere
-                        if flags.contains(&"WALL".to_string())
-                            || flags.contains(&"CONNECT_WITH_WALL".to_string())
-                            || flags.contains(&"WIRED_WALL".to_string())
-                        {
-                            connection.insert(CDDAIdentifier("WALL".to_string()));
-                        }
-                    }
-
-                    edit_connection_groups(&this_flags, &mut this_connects_to);
-                    edit_connection_groups(&top_flags, &mut top_connect_groups);
-                    edit_connection_groups(&right_flags, &mut right_connect_groups);
-                    edit_connection_groups(&bottom_flags, &mut bottom_connect_groups);
-                    edit_connection_groups(&left_flags, &mut left_connect_groups);
-
-                    let matching_list = (
-                        this_connects_to
-                            .intersection(&top_connect_groups)
-                            .next()
-                            .is_some(),
-                        this_connects_to
-                            .intersection(&right_connect_groups)
-                            .next()
-                            .is_some(),
-                        this_connects_to
-                            .intersection(&bottom_connect_groups)
-                            .next()
-                            .is_some(),
-                        this_connects_to
-                            .intersection(&left_connect_groups)
-                            .next()
-                            .is_some(),
+                    let matching_list = Self::get_matching_list(
+                        this_id, layer, json_data, top, right, bottom, left,
                     );
 
                     match matching_list {
@@ -436,7 +529,16 @@ impl Sprite {
         }
     }
 
-    pub fn get_bg_id(&self) -> Option<MeabyVec<SpriteIndex>> {
+    pub fn get_bg_id(
+        &self,
+        this_id: &CDDAIdentifier,
+        json_data: &DeserializedCDDAJsonData,
+        layer: &TileLayer,
+        top: Option<CDDAIdentifier>,
+        right: Option<CDDAIdentifier>,
+        bottom: Option<CDDAIdentifier>,
+        left: Option<CDDAIdentifier>,
+    ) -> Option<MeabyVec<SpriteIndex>> {
         match self {
             Sprite::Single { ids, animated, .. } => match *animated {
                 true => match &ids.bg {
@@ -448,17 +550,86 @@ impl Sprite {
                     Some(bg) => Self::get_random_sprite(bg),
                 },
             },
-            Sprite::Multitile { ids, animated, .. } => match *animated {
-                true => None,
-                false => match &ids.bg {
-                    None => None,
-                    Some(bg) => Self::get_random_sprite(bg),
-                },
+            Sprite::Multitile {
+                animated,
+                center,
+                corner,
+                t_connection,
+                edge,
+                unconnected,
+                end_piece,
+                ..
+            } => match *animated {
+                true => todo!(),
+                false => {
+                    let matching_list = Self::get_matching_list(
+                        this_id, layer, json_data, top, right, bottom, left,
+                    );
+
+                    match matching_list {
+                        (true, true, true, true) => match center {
+                            None => None,
+                            Some(center) => match &center.ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                        },
+                        (true, true, true, false)
+                        | (true, true, false, true)
+                        | (true, false, true, true)
+                        | (false, true, true, true) => match t_connection {
+                            None => None,
+                            Some(t_connection) => match &t_connection.ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                        },
+                        (true, true, false, false)
+                        | (true, false, false, true)
+                        | (false, true, true, false)
+                        | (false, false, true, true) => match corner {
+                            None => None,
+                            Some(corner) => match &corner.ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                        },
+                        (true, false, false, false)
+                        | (false, true, false, false)
+                        | (false, false, true, false)
+                        | (false, false, false, true) => match end_piece {
+                            None => None,
+                            Some(end_piece) => match &end_piece.ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                        },
+                        (false, true, false, true) | (true, false, true, false) => match edge {
+                            None => None,
+                            Some(edge) => match &edge.ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                        },
+                        (false, false, false, false) => match unconnected {
+                            None => None,
+                            Some(unconnected) => match &unconnected.ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                        },
+                    }
+                }
             },
             Sprite::Open { .. } => todo!(),
             Sprite::Broken { .. } => todo!(),
         }
     }
+}
+
+#[derive(Debug)]
+pub struct FallbackSprite {
+    symbol: char,
 }
 
 fn to_weighted_vec(
@@ -518,7 +689,7 @@ fn get_multitile_sprite_from_additional_tiles(
             }
             _ => {
                 let fg = to_weighted_vec_additional(additional_tile.fg.clone());
-                let bg = to_weighted_vec_additional(additional_tile.bg.clone());
+                let bg = to_weighted_vec_additional_exception(additional_tile.bg.clone());
 
                 additional_tile_ids.insert(
                     additional_tile.id.clone(),
@@ -572,14 +743,17 @@ fn get_multitile_sprite_from_additional_tiles(
     })
 }
 
-pub fn get_id_map_from_config(config: TileConfig) -> HashMap<CDDAIdentifier, Sprite> {
+pub fn get_tilesheet_from_config(config: TileConfig) -> Tilesheet {
     let mut id_map = HashMap::new();
+    let mut fallback_map = HashMap::new();
 
     let mut normal_spritesheets = vec![];
+    let mut fallback_spritesheet = None;
+
     for spritesheet in config.spritesheets.iter() {
         match spritesheet {
             Spritesheet::Normal(n) => normal_spritesheets.push(n),
-            Spritesheet::Fallback(_) => {}
+            Spritesheet::Fallback(f) => fallback_spritesheet = Some(f),
         }
     }
 
@@ -620,11 +794,32 @@ pub fn get_id_map_from_config(config: TileConfig) -> HashMap<CDDAIdentifier, Spr
         }
     }
 
-    id_map
+    let fallback_spritesheet = fallback_spritesheet.expect("Fallback spritesheet to exist");
+
+    for ascii_group in fallback_spritesheet.ascii.iter() {
+        for (character, offset) in FALLBACK_TILE_MAPPING {
+            fallback_map.insert(
+                format!("{}_{}", character, ascii_group.color),
+                (offset / FALLBACK_TILE_ROW_SIZE as u32) + offset,
+            );
+        }
+    }
+
+    Tilesheet {
+        id_map,
+        fallback_map,
+    }
+}
+
+#[derive(Debug)]
+pub enum SpriteKind<'a> {
+    Exists(&'a Sprite),
+    Fallback(SpriteIndex),
 }
 
 pub struct Tilesheet {
     pub id_map: HashMap<CDDAIdentifier, Sprite>,
+    pub fallback_map: HashMap<String, SpriteIndex>,
 }
 
 impl Tilesheet {
@@ -674,9 +869,8 @@ impl Tilesheet {
     pub fn get_sprite(
         &self,
         id: &CDDAIdentifier,
-        terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
-        furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
-    ) -> &Sprite {
+        json_data: &DeserializedCDDAJsonData,
+    ) -> SpriteKind {
         match self.id_map.get(&id) {
             None => {
                 info!(
@@ -684,14 +878,54 @@ impl Tilesheet {
                     id
                 );
 
-                self.get_looks_like_sprite(&id, terrain, furniture)
-                    .unwrap_or_else(|| {
-                        // If a tileset can't find a tile for any item in the looks_like chain,
-                        // it will default to the ascii symbol.
-                        todo!()
-                    })
+                match self.get_looks_like_sprite(&id, &json_data.terrain, &json_data.furniture) {
+                    None => {
+                        match json_data.terrain.get(id) {
+                            None => {}
+                            Some(t) => {
+                                return SpriteKind::Fallback(
+                                    self.fallback_map
+                                        .get(&format!(
+                                            "{}_{}",
+                                            t.symbol.unwrap_or('?'),
+                                            t.color
+                                                .clone()
+                                                .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                                                .into_single()
+                                                .unwrap_or("WHITE".to_string())
+                                        ))
+                                        .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
+                                        .clone(),
+                                )
+                            }
+                        }
+
+                        match json_data.furniture.get(id) {
+                            None => {}
+                            Some(f) => {
+                                return SpriteKind::Fallback(
+                                    self.fallback_map
+                                        .get(&format!(
+                                            "{}_{}",
+                                            f.symbol.unwrap_or('?'),
+                                            f.color
+                                                .clone()
+                                                .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                                                .into_single()
+                                                .unwrap_or("WHITE".to_string())
+                                        ))
+                                        .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
+                                        .clone(),
+                                )
+                            }
+                        };
+
+                        SpriteKind::Fallback(FALLBACK_TILE_MAPPING.first().unwrap().1)
+                    }
+                    Some(s) => SpriteKind::Exists(s),
+                }
             }
-            Some(s) => s,
+            Some(s) => SpriteKind::Exists(s),
         }
     }
 }
