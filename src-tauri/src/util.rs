@@ -11,6 +11,7 @@ use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
+use std::str::FromStr;
 
 pub trait GetRandom<T> {
     fn get_random(&self) -> &T;
@@ -35,6 +36,12 @@ impl<T> GetRandom<T> for HashMap<T, i32> {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct CDDAIdentifier(pub String);
+
+impl From<&str> for CDDAIdentifier {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
 
 impl CDDAIdentifier {
     /// This function is used to get the "final" id of the CDDA Identifier. This is used

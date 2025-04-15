@@ -12,12 +12,12 @@ use crate::editor_data::handlers::{
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::tab::{ProjectState, TabType};
-use crate::editor_data::{EditorConfig, EditorData};
+use crate::editor_data::{EditorConfig, EditorData, Project};
 use crate::map_data::handlers::open_project;
 use crate::map_data::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
-use crate::map_data::{MapData, ProjectContainer};
+use crate::map_data::{MapData, ProjectContainer, DEFAULT_MAP_DATA_SIZE};
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::tile_config::{
@@ -25,10 +25,10 @@ use crate::tileset::legacy_tileset::tile_config::{
 };
 use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::TilesheetKind;
-use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec};
+use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, Load, MeabyVec};
 use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
-use glam::UVec2;
+use glam::{UVec2, UVec3};
 use image::{load, GenericImageView};
 use log::{debug, error, info, warn, LevelFilter};
 use map_data::importing::MapDataImporter;
@@ -272,13 +272,21 @@ pub fn run() -> () {
                 Ok(cdda_json_data) => {
                     info!("Loading testing map data");
 
-                    let importer = MapDataImporter {
-                        path:
-                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
-                                .into(),
-                        om_terrain: "nuclear_plant_0_0_0".into(),
-                    };
-                    let mut loaded = importer.load()?;
+                    // let importer = MapDataImporter {
+                    //     path:
+                    //         r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                    //             .into(),
+                    //     om_terrain: "nuclear_plant_0_0_0".into(),
+                    // };
+                    // let mut loaded = importer.load()?;
+                    let mut loaded = Project::new("Test".to_string(), DEFAULT_MAP_DATA_SIZE);
+
+                    let mut data_1 = MapData::default();
+                    data_1.fill = Some(DistributionInner::Normal(CDDAIdentifier(
+                        "t_rock_floor".to_string(),
+                    )));
+
+                    loaded.maps.insert(1, data_1);
 
                     loaded.maps.iter_mut().for_each(|(_, loaded)| {
                         loaded.calculate_parameters(&cdda_json_data.palettes)
@@ -301,7 +309,7 @@ pub fn run() -> () {
             app.manage(Mutex::new(tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
-            app.manage::<Mutex<HashMap<UVec2, MappedSprite>>>(Mutex::new(HashMap::new()));
+            app.manage::<Mutex<HashMap<UVec3, MappedSprite>>>(Mutex::new(HashMap::new()));
 
             Ok(())
         })

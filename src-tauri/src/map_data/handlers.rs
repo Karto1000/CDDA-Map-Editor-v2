@@ -9,7 +9,7 @@ use crate::map_data::{MapData, ProjectContainer};
 use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex, SpriteLayer};
 use crate::tileset::{SpriteKind, Tilesheet, TilesheetKind};
 use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Save};
-use glam::UVec2;
+use glam::{UVec2, UVec3};
 use image::imageops::tile;
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
@@ -153,6 +153,7 @@ struct StaticSprite {
     pub position: JSONSerializableUVec2,
     pub index: u32,
     pub layer: u32,
+    pub z: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -160,17 +161,19 @@ struct AnimatedSprite {
     pub position: JSONSerializableUVec2,
     pub indices: Vec<u32>,
     pub layer: u32,
+    pub z: i32,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct FallbackSprite {
     pub position: JSONSerializableUVec2,
     pub index: u32,
+    pub z: i32,
 }
 
 fn get_id_from_mapped_sprites(
-    mapped_sprites_lock: &MutexGuard<HashMap<UVec2, MappedSprite>>,
-    cords: &UVec2,
+    mapped_sprites_lock: &MutexGuard<HashMap<UVec3, MappedSprite>>,
+    cords: &UVec3,
     layer: &TileLayer,
 ) -> Option<CDDAIdentifier> {
     mapped_sprites_lock
@@ -189,7 +192,7 @@ pub async fn open_project(
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
     project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    mapped_sprites: State<'_, Mutex<HashMap<UVec2, MappedSprite>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<UVec3, MappedSprite>>>,
 ) -> Result<(), ()> {
     let mut lock = project_container.lock().await;
 
@@ -209,11 +212,6 @@ pub async fn open_project(
         Some(d) => d,
     };
 
-    let map_data = project
-        .maps
-        .get(&0)
-        .expect("Map data at z-level 0 must exist");
-
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
         None => return Err(()),
@@ -228,194 +226,203 @@ pub async fn open_project(
         .get(&CDDAIdentifier("default".into()))
         .expect("Region settings to exist");
 
-    let fill_terrain_sprite = match &map_data.fill {
-        None => None,
-        Some(id) => {
-            let id = id.get_identifier(&map_data.calculated_parameters);
-
-            Some(id.as_final_id(&region_settings, &json_data.terrain, &json_data.furniture))
-        }
-    };
-
-    let mut mapped_sprites_lock = mapped_sprites.lock().await;
-
     let mut static_sprites = vec![];
     let mut animated_sprites = vec![];
     let mut fallback_sprites = vec![];
 
-    // Store the identifiers here since they use random numbers to determine them and if we used
-    // this function in the next iteration through map_data, we would get other identifiers
-    let mut identifiers = HashMap::new();
+    for (z, map_data) in project.maps.iter() {
+        let fill_terrain_sprite = match &map_data.fill {
+            None => None,
+            Some(id) => {
+                let id = id.get_identifier(&map_data.calculated_parameters);
 
-    // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
-    // the function relies on the mapped sprite of this sprite to already exist
-    map_data.cells.iter().for_each(|(p, cell)| {
-        let mut identifier_group = map_data.get_identifiers(&cell.character, &json_data.palettes);
+                Some(id.as_final_id(&region_settings, &json_data.terrain, &json_data.furniture))
+            }
+        };
 
-        match identifier_group.terrain {
-            None => {
-                debug!(
-                    "No terrain found for {}, trying to use fill_sprite",
-                    cell.character
-                );
+        let mut mapped_sprites_lock = mapped_sprites.lock().await;
 
-                match &fill_terrain_sprite {
-                    None => {
-                        warn!("terrain was not defined for {}", cell.character);
-                        todo!();
+        // Store the identifiers here since they use random numbers to determine them and if we used
+        // this function in the next iteration through map_data, we would get other identifiers
+        let mut identifiers = HashMap::new();
+
+        // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
+        // the function relies on the mapped sprite of this sprite to already exist
+        map_data.cells.iter().for_each(|(p, cell)| {
+            let mut identifier_group =
+                map_data.get_identifiers(&cell.character, &json_data.palettes);
+
+            match identifier_group.terrain {
+                None => {
+                    debug!(
+                        "No terrain found for {}, trying to use fill_sprite",
+                        cell.character
+                    );
+
+                    match &fill_terrain_sprite {
+                        None => {
+                            warn!("terrain was not defined for {}", cell.character);
+                            todo!();
+                        }
+                        Some(fill_sprite) => {
+                            identifier_group.terrain = Some(fill_sprite.clone());
+                        }
+                    };
+                }
+                Some(_) => {}
+            }
+
+            let mut mapped_sprite = MappedSprite::default();
+            let mut new_identifier_group = identifier_group.clone();
+
+            for (layer, o_id) in [
+                (TileLayer::Terrain, &identifier_group.terrain),
+                (TileLayer::Furniture, &identifier_group.furniture),
+            ] {
+                let id = match o_id {
+                    None => continue,
+                    Some(id) => {
+                        id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
                     }
-                    Some(fill_sprite) => {
-                        identifier_group.terrain = Some(fill_sprite.clone());
+                };
+
+                match layer {
+                    TileLayer::Terrain => {
+                        mapped_sprite.terrain = Some(id.clone());
+                        new_identifier_group.terrain = Some(id.clone());
+                    }
+                    TileLayer::Furniture => {
+                        mapped_sprite.furniture = Some(id.clone());
+                        new_identifier_group.furniture = Some(id.clone());
                     }
                 };
             }
-            Some(_) => {}
-        }
 
-        let mut mapped_sprite = MappedSprite::default();
-        let mut new_identifier_group = identifier_group.clone();
+            mapped_sprites_lock.insert(UVec3::new(p.x, p.y, *z as u32), mapped_sprite);
+            identifiers.insert(p, new_identifier_group);
+        });
 
-        for (layer, o_id) in [
-            (TileLayer::Terrain, &identifier_group.terrain),
-            (TileLayer::Furniture, &identifier_group.furniture),
-        ] {
-            let id = match o_id {
-                None => continue,
-                Some(id) => {
-                    id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
-                }
-            };
+        map_data.cells.iter().for_each(|(p, cell)| {
+            let identifier_group = identifiers.remove(p).expect("Identifier group to exist");
+            let mapped_sprite_coords = UVec3::new(p.x, p.y, *z as u32);
 
-            match layer {
-                TileLayer::Terrain => {
-                    mapped_sprite.terrain = Some(id.clone());
-                    new_identifier_group.terrain = Some(id.clone());
-                }
-                TileLayer::Furniture => {
-                    mapped_sprite.furniture = Some(id.clone());
-                    new_identifier_group.furniture = Some(id.clone());
-                }
-            };
-        }
-
-        mapped_sprites_lock.insert(p.clone(), mapped_sprite);
-        identifiers.insert(p, new_identifier_group);
-    });
-
-    map_data.cells.iter().for_each(|(p, cell)| {
-        let identifier_group = identifiers.remove(p).expect("Identifier group to exist");
-
-        if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
-            warn!("No sprites found for char {:?}", cell);
-            return;
-        }
-
-        // Layer here is done so furniture is above terrain
-        for (layer, o_id) in [
-            (TileLayer::Terrain, identifier_group.terrain),
-            (TileLayer::Furniture, identifier_group.furniture),
-        ] {
-            let id = match o_id {
-                None => continue,
-                Some(id) => {
-                    id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
-                }
-            };
-
-            let top_cords = p + UVec2::new(0, 1);
-            let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
-
-            let right_cords = p + UVec2::new(1, 0);
-            let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
-
-            // We need this to protect against underflow of coordinates since they're stored as a UVec2
-            let bottom = match p.y > 0 {
-                true => {
-                    let bottom_cords = p - UVec2::new(0, 1);
-                    get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
-                }
-                false => None,
-            };
-
-            let left = match p.x > 0 {
-                true => {
-                    let left_cords = p - UVec2::new(1, 0);
-                    get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
-                }
-                false => None,
-            };
-
-            let sprite_kind = match tilesheet {
-                TilesheetKind::Legacy(l) => l.get_sprite(&id, &json_data),
-                TilesheetKind::Current(c) => c.get_sprite(&id, &json_data),
-            };
-
-            match sprite_kind {
-                SpriteKind::Exists(sprite) => {
-                    match sprite.get_fg_id(
-                        &id,
-                        json_data,
-                        &layer,
-                        top.clone(),
-                        right.clone(),
-                        bottom.clone(),
-                        left.clone(),
-                    ) {
-                        None => {}
-                        // TODO: Mapped Sprite
-                        Some(id) => match sprite.is_animated() {
-                            true => {
-                                let display_sprite = AnimatedSprite {
-                                    position: JSONSerializableUVec2(p.clone()),
-                                    layer: (layer.clone() as u32) * 2 + SpriteLayer::Fg as u32,
-                                    indices: id.into_vec(),
-                                };
-
-                                animated_sprites.push(display_sprite)
-                            }
-                            false => {
-                                let display_sprite = StaticSprite {
-                                    position: JSONSerializableUVec2(p.clone()),
-                                    layer: (layer.clone() as u32) * 2 + SpriteLayer::Bg as u32,
-                                    index: id.into_single().unwrap(),
-                                };
-
-                                static_sprites.push(display_sprite);
-                            }
-                        },
-                    }
-
-                    match sprite.get_bg_id(&id, json_data, &layer, top, right, bottom, left) {
-                        None => {}
-                        Some(id) => match sprite.is_animated() {
-                            true => {
-                                let display_sprite = AnimatedSprite {
-                                    position: JSONSerializableUVec2(p.clone()),
-                                    layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                                    indices: id.into_vec(),
-                                };
-
-                                animated_sprites.push(display_sprite);
-                            }
-                            false => {
-                                let display_sprite = StaticSprite {
-                                    position: JSONSerializableUVec2(p.clone()),
-                                    layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                                    index: id.into_single().unwrap(),
-                                };
-
-                                static_sprites.push(display_sprite);
-                            }
-                        },
-                    }
-                }
-                SpriteKind::Fallback(sprite_index) => fallback_sprites.push(FallbackSprite {
-                    position: JSONSerializableUVec2(p.clone()),
-                    index: sprite_index,
-                }),
+            if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
+                warn!("No sprites found for char {:?}", cell);
+                return;
             }
-        }
-    });
+
+            // Layer here is done so furniture is above terrain
+            for (layer, o_id) in [
+                (TileLayer::Terrain, identifier_group.terrain),
+                (TileLayer::Furniture, identifier_group.furniture),
+            ] {
+                let id = match o_id {
+                    None => continue,
+                    Some(id) => {
+                        id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
+                    }
+                };
+
+                let top_cords = mapped_sprite_coords + UVec3::new(0, 1, 0);
+                let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
+
+                let right_cords = mapped_sprite_coords + UVec3::new(1, 0, 0);
+                let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
+
+                // We need this to protect against underflow of coordinates since they're stored as a UVec2
+                let bottom = match p.y > 0 {
+                    true => {
+                        let bottom_cords = mapped_sprite_coords - UVec3::new(0, 1, 0);
+                        get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
+                    }
+                    false => None,
+                };
+
+                let left = match p.x > 0 {
+                    true => {
+                        let left_cords = mapped_sprite_coords - UVec3::new(1, 0, 0);
+                        get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
+                    }
+                    false => None,
+                };
+
+                let sprite_kind = match tilesheet {
+                    TilesheetKind::Legacy(l) => l.get_sprite(&id, &json_data),
+                    TilesheetKind::Current(c) => c.get_sprite(&id, &json_data),
+                };
+
+                match sprite_kind {
+                    SpriteKind::Exists(sprite) => {
+                        match sprite.get_fg_id(
+                            &id,
+                            json_data,
+                            &layer,
+                            top.clone(),
+                            right.clone(),
+                            bottom.clone(),
+                            left.clone(),
+                        ) {
+                            None => {}
+                            // TODO: Mapped Sprite
+                            Some(id) => match sprite.is_animated() {
+                                true => {
+                                    let display_sprite = AnimatedSprite {
+                                        position: JSONSerializableUVec2(p.clone()),
+                                        layer: (layer.clone() as u32) * 2 + SpriteLayer::Fg as u32,
+                                        indices: id.into_vec(),
+                                        z: *z,
+                                    };
+
+                                    animated_sprites.push(display_sprite)
+                                }
+                                false => {
+                                    let display_sprite = StaticSprite {
+                                        position: JSONSerializableUVec2(p.clone()),
+                                        layer: (layer.clone() as u32) * 2 + SpriteLayer::Bg as u32,
+                                        index: id.into_single().unwrap(),
+                                        z: *z,
+                                    };
+
+                                    static_sprites.push(display_sprite);
+                                }
+                            },
+                        }
+
+                        match sprite.get_bg_id(&id, json_data, &layer, top, right, bottom, left) {
+                            None => {}
+                            Some(id) => match sprite.is_animated() {
+                                true => {
+                                    let display_sprite = AnimatedSprite {
+                                        position: JSONSerializableUVec2(p.clone()),
+                                        layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                                        indices: id.into_vec(),
+                                        z: *z,
+                                    };
+
+                                    animated_sprites.push(display_sprite);
+                                }
+                                false => {
+                                    let display_sprite = StaticSprite {
+                                        position: JSONSerializableUVec2(p.clone()),
+                                        layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                                        index: id.into_single().unwrap(),
+                                        z: *z,
+                                    };
+
+                                    static_sprites.push(display_sprite);
+                                }
+                            },
+                        }
+                    }
+                    SpriteKind::Fallback(sprite_index) => fallback_sprites.push(FallbackSprite {
+                        position: JSONSerializableUVec2(p.clone()),
+                        index: sprite_index,
+                        z: *z,
+                    }),
+                }
+            }
+        });
+    }
 
     app.emit(
         events::PLACE_SPRITES,
@@ -433,7 +440,7 @@ pub async fn open_project(
 #[tauri::command]
 pub async fn close_project(
     project_container: State<'_, Mutex<ProjectContainer>>,
-    mapped_sprites: State<'_, Mutex<HashMap<UVec2, MappedSprite>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<UVec3, MappedSprite>>>,
 ) -> Result<(), ()> {
     let mut lock = project_container.lock().await;
     lock.current_project = None;

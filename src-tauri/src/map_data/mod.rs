@@ -23,7 +23,7 @@ pub struct Cell {
     pub character: char,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct MapData {
     pub cells: HashMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
@@ -35,6 +35,29 @@ pub struct MapData {
     pub furniture: HashMap<char, MapGenValue>,
 
     pub palettes: Vec<MapGenValue>,
+}
+
+impl Default for MapData {
+    fn default() -> Self {
+        let mut cells = HashMap::new();
+
+        for y in 0..24 {
+            for x in 0..24 {
+                cells.insert(UVec2::new(x, y), Cell { character: ' ' });
+            }
+        }
+        let fill = Some(DistributionInner::Normal(CDDAIdentifier::from("t_grass")));
+
+        Self {
+            cells,
+            fill,
+            calculated_parameters: Default::default(),
+            parameters: Default::default(),
+            terrain: Default::default(),
+            furniture: Default::default(),
+            palettes: Default::default(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default)]

@@ -28,6 +28,7 @@ pub struct Project {
 impl Project {
     pub fn new(name: String, size: UVec2) -> Self {
         let mut maps = HashMap::new();
+
         maps.insert(0, MapData::default());
 
         Self { name, maps, size }
