@@ -1,6 +1,6 @@
 export type TileNew = {
   file: string;
-  "//"?: string;
+  "//"?: [number, number];
   sprite_width?: number;
   sprite_height?: number;
   sprite_offset_x?: number;

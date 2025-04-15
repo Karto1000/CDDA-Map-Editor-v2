@@ -46,7 +46,7 @@ export class Tilesheet {
     const tileHeight = spritesheetInfo.sprite_height || tilesetInfo.height
 
     let range: [number, number];
-    if (spritesheetInfo["//"]) range = Tilesheet.getRangeFromComment(spritesheetInfo, spritesheetInfo["//"])
+    if (spritesheetInfo["//"]) range = spritesheetInfo["//"]
     else range = null
 
     const atlasMaterialConfig = {
@@ -82,17 +82,6 @@ export class Tilesheet {
 
       this.mesh.setMatrixAt(instance, transform.matrix)
     }
-  }
-
-  private static getRangeFromComment(spritesheetInfo: TileNew, comment: string): [number, number] | null {
-    if (spritesheetInfo["//"]) {
-      const split = spritesheetInfo["//"].split(" to ")
-      const rangeStart = parseInt(split[0].replace("range ", ""))
-      const rangeEnd = parseInt(split[1])
-      return [rangeStart, rangeEnd]
-    }
-
-    return null;
   }
 
   private getCoordinatesFromIndex(index: number): Vector2 {
