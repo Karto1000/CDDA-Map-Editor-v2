@@ -69,17 +69,20 @@ export type StaticSprite = {
   position: string
   index: number
   layer: number
+  z: number
 }
 
 export type AnimatedSprite = {
   position: string
   indices: number[],
   layer: number
+  z: number
 }
 
 export type FallbackSprite = {
   position: string,
   index: number
+  z: number
 }
 
 export type PlaceSpritesCommand = {

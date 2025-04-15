@@ -31,7 +31,7 @@ export class Tilesheet {
   private atlasConfig: AtlasMaterialConfig
 
   public mappedTilesFG: Map<string, InstanceNumber>
-  public mappedTilesBG: Map<string, InstanceNumber>
+  public mappedTiles: Map<string, InstanceNumber>
 
   public mesh: InstancedMesh
 
@@ -71,8 +71,7 @@ export class Tilesheet {
       maxInstances
     )
     this.mesh.renderOrder = this.yLayer
-    this.mappedTilesBG = new Map()
-    this.mappedTilesFG = new Map()
+    this.mappedTiles = new Map()
 
     for (let instance = 0; instance < this.atlasConfig.maxInstances; instance++) {
       const transform = new Object3D()
@@ -100,16 +99,18 @@ export class Tilesheet {
   }
 
   public drawSpriteLocalIndexBatched(drawLocalSprites: DrawLocalSprite[]) {
+    if (drawLocalSprites.length === 0) return
+
     const uvMappings = {instances: [], uvs: []}
 
     for (const drawSprite of drawLocalSprites) {
       const id = `${drawSprite.position.x}:${drawSprite.position.y}:${drawSprite.layer}`
 
-      let mappedInstance = this.mappedTilesBG.get(id)
+      let mappedInstance = this.mappedTiles.get(id)
 
       if (mappedInstance === undefined) {
         mappedInstance = this.material.getNextFreeInstance()
-        this.mappedTilesBG.set(id, mappedInstance)
+        this.mappedTiles.set(id, mappedInstance)
         this.material.reserveInstance(mappedInstance)
       }
 
@@ -134,7 +135,7 @@ export class Tilesheet {
   }
 
   public removeSpriteAtPosition(position: Vector2, layer: SpriteLayer) {
-    let mappedInstance = this.mappedTilesBG.get(`${position.x}:${position.y}:${layer}`)
+    let mappedInstance = this.mappedTiles.get(`${position.x}:${position.y}:${layer}`)
 
     if (!mappedInstance) return
 
@@ -148,7 +149,7 @@ export class Tilesheet {
       const position = positions[i]
       const layer = layers[i]
 
-      mappedInstances.push(this.mappedTilesBG.get(`${position.x}:${position.y}:${layer}`))
+      mappedInstances.push(this.mappedTiles.get(`${position.x}:${position.y}:${layer}`))
     }
 
     this.deleteInstances(mappedInstances)
@@ -173,8 +174,7 @@ export class Tilesheet {
     transform.updateMatrix()
 
     for (const instance of instances) {
-      this.mappedTilesBG.delete(`${instance}`)
-      this.mappedTilesFG.delete(`${instance}`)
+      this.mappedTiles.delete(`${instance}`)
       this.mesh.setMatrixAt(instance, transform.matrix)
     }
 
@@ -183,17 +183,12 @@ export class Tilesheet {
   }
 
   public clear() {
-    const fgInstances = this.mappedTilesFG
+    const tiles = this.mappedTiles
       .keys()
-      .map(k => this.mappedTilesFG.get(k))
+      .map(k => this.mappedTiles.get(k))
       .toArray()
 
-    const bgInstances = this.mappedTilesBG
-      .keys()
-      .map(k => this.mappedTilesBG.get(k))
-      .toArray()
-
-    this.deleteInstances([...fgInstances, ...bgInstances])
+    this.deleteInstances([...tiles])
   }
 
   public static async fromURL(

@@ -9,7 +9,7 @@ import {
   Vector3,
   WebGLRenderer
 } from "three";
-import {MutableRefObject, Ref, useContext, useEffect, useImperativeHandle, useRef} from "react";
+import {MutableRefObject, Ref, useContext, useEffect, useImperativeHandle, useRef, useState} from "react";
 import Stats from "stats.js";
 import {getColorFromTheme, Theme} from "./useTheme.ts";
 import {degToRad} from "three/src/math/MathUtils.js";
@@ -55,6 +55,7 @@ export function useEditor(props: Props) {
   const ambientLightRef = useRef<AmbientLight>()
   const statsRef = useRef<Stats>()
 
+  const [currentZLayer, setCurrentZLayer] = useState<number>(0)
   const isLeftMousePressedRef = useRef<boolean>(false)
   const mousePosition = useMousePosition(props.canvasRef)
 
@@ -209,19 +210,10 @@ export function useEditor(props: Props) {
       handler = requestAnimationFrame(loop)
     }
 
-    const keydownListener = async (e: KeyboardEvent) => {
-      if (e.key === "s") {
-        const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentProject, {})
-      }
-    }
-
-    window.addEventListener("keydown", keydownListener)
-
     loop()
 
     return () => {
       cancelAnimationFrame(handler)
-      window.removeEventListener("keydown", keydownListener)
     }
   }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef, mousePosition, props.openedTab]);
 
@@ -244,6 +236,34 @@ export function useEditor(props: Props) {
     props.sceneRef.current.add(gridHelper)
     gridHelperRef.current = gridHelper
   }, [props.sceneRef, props.theme]);
+
+  useEffect(() => {
+    const keydownListener = async (e: KeyboardEvent) => {
+      e.preventDefault()
+
+      if (e.key === "s") {
+        const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentProject, {})
+      }
+
+      if (e.key === "PageUp") {
+        const newZLayer = currentZLayer + 1
+        setCurrentZLayer(newZLayer)
+        props.tilesheetsRef.current.switchZLevel(newZLayer)
+      }
+
+      if (e.key === "PageDown") {
+        const newZLayer = currentZLayer - 1
+        setCurrentZLayer(newZLayer)
+        props.tilesheetsRef.current.switchZLevel(newZLayer)
+      }
+    }
+
+    window.addEventListener("keydown", keydownListener)
+
+    return () => {
+      window.removeEventListener("keydown", keydownListener)
+    }
+  }, [currentZLayer, props.tilesheetsRef]);
 
   // Should run when the tilesheet has finished loading
   useEffect(() => {
@@ -288,7 +308,7 @@ export function useEditor(props: Props) {
 
         return {
           ...ds,
-          layer: 1,
+          layer: 0,
           position: vec2,
         }
       })
