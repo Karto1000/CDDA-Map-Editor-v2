@@ -4,6 +4,7 @@ pub(crate) mod io;
 
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::MapGenValue;
+use crate::editor_data::Project;
 use crate::util::{
     CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Load,
     ParameterIdentifier, Save,
@@ -12,17 +13,18 @@ use glam::UVec2;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::str::FromStr;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
+pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
     pub character: char,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct MapData {
-    pub name: String,
     pub cells: HashMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
 
@@ -35,7 +37,7 @@ pub struct MapData {
     pub palettes: Vec<MapGenValue>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct CDDAIdentifierGroup {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
@@ -43,7 +45,6 @@ pub struct CDDAIdentifierGroup {
 
 impl MapData {
     pub fn new(
-        name: String,
         fill: Option<DistributionInner>,
         cells: HashMap<UVec2, Cell>,
         terrain: HashMap<char, MapGenValue>,
@@ -58,7 +59,6 @@ impl MapData {
             palettes,
             terrain,
             furniture,
-            name,
             cells,
         }
     }
@@ -163,7 +163,6 @@ impl Serialize for MapData {
         let mut state = serializer.serialize_struct("MapData", 2 + serialized_cells.len())?;
 
         state.serialize_field("cells", &serialized_cells)?;
-        state.serialize_field("name", &self.name)?;
 
         state.end()
     }
@@ -189,7 +188,6 @@ impl Into<MapData> for MapDataIntermediate {
             .collect::<HashMap<UVec2, Cell>>();
 
         MapData::new(
-            self.name,
             self.fill,
             cells,
             self.terrain,
@@ -211,7 +209,7 @@ impl<'de> Deserialize<'de> for MapData {
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct MapDataContainer {
-    pub data: Vec<MapData>,
-    pub current_map: Option<usize>,
+pub struct ProjectContainer {
+    pub data: Vec<Project>,
+    pub current_project: Option<usize>,
 }

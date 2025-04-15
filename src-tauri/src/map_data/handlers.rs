@@ -1,33 +1,25 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::palettes::Palettes;
-use crate::cdda_data::region_settings::RegionIdentifier;
 use crate::cdda_data::TileLayer;
 use crate::editor_data::tab::handlers::create_tab;
-use crate::editor_data::tab::MapDataState::Saved;
-use crate::editor_data::tab::{MapDataState, TabType};
-use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::map_data::io::MapDataSaver;
-use crate::map_data::{Cell, MapData, MapDataContainer, SPECIAL_EMPTY_CHAR};
-use crate::tileset::legacy_tileset::LegacyTilesheet;
-use crate::tileset::legacy_tileset::{FinalIds, MappedSprite, SpriteIndex, SpriteLayer};
-use crate::tileset::{GetRandom, Sprite, SpriteKind, Tilesheet, TilesheetKind};
-use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Save};
-use glam::{UVec2, Vec2};
-use image::imageops::{index_colors, tile};
-use log::{debug, error, info, warn};
-use rand::fill;
-use serde::{Deserialize, Deserializer, Serialize};
+use crate::editor_data::tab::ProjectState::Saved;
+use crate::editor_data::tab::{ProjectState, TabType};
+use crate::editor_data::{EditorData, EditorDataSaver, Project};
+use crate::map_data::io::ProjectSaver;
+use crate::map_data::{MapData, ProjectContainer};
+use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex, SpriteLayer};
+use crate::tileset::{SpriteKind, Tilesheet, TilesheetKind};
+use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Save};
+use glam::UVec2;
+use image::imageops::tile;
+use log::{debug, error, warn};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::convert::identity;
-use std::mem::discriminant;
-use std::ops::{Deref, Index};
+use std::ops::Deref;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tauri::async_runtime::{set, Mutex};
-use tauri::utils::display_path;
+use std::str::FromStr;
+use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use tokio::sync::MutexGuard;
-use tokio::task::id;
 
 mod events {
     pub const OPENED_MAP: &'static str = "opened_map";
@@ -42,15 +34,15 @@ pub enum GetCurrentMapDataError {
     InvalidMapIndex(usize),
 }
 
-fn get_current_map<'a>(
-    map_data_container: &'a MutexGuard<MapDataContainer>,
-) -> Result<&'a MapData, GetCurrentMapDataError> {
-    let map_index = match map_data_container.current_map {
+fn get_current_project<'a>(
+    project_container: &'a MutexGuard<ProjectContainer>,
+) -> Result<&'a Project, GetCurrentMapDataError> {
+    let map_index = match project_container.current_project {
         None => return Err(GetCurrentMapDataError::NoMapOpened),
         Some(i) => i,
     };
 
-    let data = match map_data_container.data.get(map_index) {
+    let data = match project_container.data.get(map_index) {
         None => return Err(GetCurrentMapDataError::InvalidMapIndex(map_index)),
         Some(d) => d,
     };
@@ -58,15 +50,15 @@ fn get_current_map<'a>(
     Ok(data)
 }
 
-fn get_current_map_mut<'a>(
-    map_data_container: &'a mut MutexGuard<MapDataContainer>,
-) -> Result<&'a mut MapData, GetCurrentMapDataError> {
-    let map_index = match map_data_container.current_map {
+fn get_current_project_mut<'a>(
+    project_container: &'a mut MutexGuard<ProjectContainer>,
+) -> Result<&'a mut Project, GetCurrentMapDataError> {
+    let map_index = match project_container.current_project {
         None => return Err(GetCurrentMapDataError::NoMapOpened),
         Some(i) => i,
     };
 
-    let data = match map_data_container.data.get_mut(map_index) {
+    let data = match project_container.data.get_mut(map_index) {
         None => return Err(GetCurrentMapDataError::InvalidMapIndex(map_index)),
         Some(d) => d,
     };
@@ -75,11 +67,11 @@ fn get_current_map_mut<'a>(
 }
 
 #[tauri::command]
-pub async fn get_current_map_data(
-    map_data: State<'_, Mutex<MapDataContainer>>,
-) -> Result<MapData, GetCurrentMapDataError> {
+pub async fn get_current_project_data(
+    map_data: State<'_, Mutex<ProjectContainer>>,
+) -> Result<Project, GetCurrentMapDataError> {
     let lock = map_data.lock().await;
-    let data = get_current_map(&lock)?;
+    let data = get_current_project(&lock)?;
 
     Ok(data.clone())
 }
@@ -121,27 +113,32 @@ pub struct CreateMapData {
 }
 
 #[tauri::command]
-pub async fn create_map(
+pub async fn create_project(
     app: AppHandle,
     data: CreateMapData,
-    map_data_container: State<'_, Mutex<MapDataContainer>>,
+    project_container: State<'_, Mutex<ProjectContainer>>,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), ()> {
-    let mut lock = map_data_container.lock().await;
+    let mut lock = project_container.lock().await;
 
-    lock.data.push(MapData::new(
-        data.name.clone(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-        Default::default(),
-    ));
+    let project_name = lock.data.iter().fold(data.name, |name, project| {
+        if project.name == name {
+            let (name, num) = name.rsplit_once("_").unwrap_or((name.as_str(), "0"));
+            let number: u32 = num.parse().unwrap_or(0) + 1;
+            let new_name = format!("{}_{}", name, number);
+
+            return new_name;
+        }
+
+        name
+    });
+
+    let project = Project::new(project_name, data.size.0);
+    lock.data.push(project.clone());
 
     create_tab(
-        data.name,
-        TabType::MapEditor(MapDataState::Unsaved),
+        project.name,
+        TabType::MapEditor(ProjectState::Unsaved),
         app,
         editor_data,
     )
@@ -186,15 +183,15 @@ fn get_id_from_mapped_sprites(
 }
 
 #[tauri::command]
-pub async fn open_map(
+pub async fn open_project(
     index: usize,
     app: AppHandle,
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
-    map_data_container: State<'_, Mutex<MapDataContainer>>,
+    project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     mapped_sprites: State<'_, Mutex<HashMap<UVec2, MappedSprite>>>,
 ) -> Result<(), ()> {
-    let mut lock = map_data_container.lock().await;
+    let mut lock = project_container.lock().await;
 
     let guard = json_data.lock().await;
     let json_data = match guard.deref() {
@@ -202,15 +199,20 @@ pub async fn open_map(
         Some(d) => d,
     };
 
-    lock.current_map = Some(index);
+    lock.current_project = Some(index);
 
-    let map_data = match lock.data.get(index) {
+    let project = match lock.data.get(index) {
         None => {
             warn!("Could not find map at index {}", index);
             return Err(());
         }
         Some(d) => d,
     };
+
+    let map_data = project
+        .maps
+        .get(&0)
+        .expect("Map data at z-level 0 must exist");
 
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
@@ -429,12 +431,12 @@ pub async fn open_map(
 }
 
 #[tauri::command]
-pub async fn close_map(
-    map_data_container: State<'_, Mutex<MapDataContainer>>,
+pub async fn close_project(
+    project_container: State<'_, Mutex<ProjectContainer>>,
     mapped_sprites: State<'_, Mutex<HashMap<UVec2, MappedSprite>>>,
 ) -> Result<(), ()> {
-    let mut lock = map_data_container.lock().await;
-    lock.current_map = None;
+    let mut lock = project_container.lock().await;
+    lock.current_project = None;
     mapped_sprites.lock().await.clear();
     Ok(())
 }
@@ -449,22 +451,22 @@ pub enum SaveError {
 }
 
 #[tauri::command]
-pub async fn save_current_map(
-    map_data_container: State<'_, Mutex<MapDataContainer>>,
+pub async fn save_current_project(
+    project_container: State<'_, Mutex<ProjectContainer>>,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), SaveError> {
-    let lock = map_data_container.lock().await;
-    let map_data = get_current_map(&lock)?;
+    let lock = project_container.lock().await;
+    let map_data = get_current_project(&lock)?;
 
     let save_path = r"C:\Users\Kartoffelbauer\Downloads\test";
-    let saver = MapDataSaver {
+    let saver = ProjectSaver {
         path: save_path.into(),
     };
 
-    saver.save(&map_data).map_err(|e| {
-        error!("{}", e);
-        SaveError::SaveError
-    })?;
+    // saver.save(&map_data).map_err(|e| {
+    //     error!("{}", e);
+    //     SaveError::SaveError
+    // })?;
 
     let mut editor_data = editor_data.lock().await;
     let new_tab_type = TabType::MapEditor(Saved {
@@ -472,7 +474,7 @@ pub async fn save_current_map(
     });
     editor_data
         .tabs
-        .get_mut(lock.current_map.unwrap())
+        .get_mut(lock.current_project.unwrap())
         .unwrap()
         .tab_type = new_tab_type;
 

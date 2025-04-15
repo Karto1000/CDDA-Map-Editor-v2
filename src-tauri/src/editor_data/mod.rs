@@ -1,10 +1,13 @@
 pub(crate) mod handlers;
 pub(crate) mod tab;
 
-use crate::editor_data::tab::Tab;
+use crate::editor_data::tab::{ProjectState, Tab};
+use crate::map_data::{MapData, DEFAULT_MAP_DATA_SIZE};
 use crate::util::Save;
+use glam::UVec2;
 use log::info;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Error;
 use std::path::PathBuf;
@@ -12,6 +15,37 @@ use tauri::Theme;
 use thiserror::Error;
 
 pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
+
+pub type ZLevel = i32;
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    pub name: String,
+    pub maps: HashMap<ZLevel, MapData>,
+    pub size: UVec2,
+}
+
+impl Project {
+    pub fn new(name: String, size: UVec2) -> Self {
+        let mut maps = HashMap::new();
+        maps.insert(0, MapData::default());
+
+        Self { name, maps, size }
+    }
+}
+
+impl Default for Project {
+    fn default() -> Self {
+        let mut maps = HashMap::new();
+        maps.insert(0, MapData::default());
+
+        Self {
+            name: "Unnamed".to_string(),
+            maps,
+            size: DEFAULT_MAP_DATA_SIZE,
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EditorConfig {

@@ -11,11 +11,13 @@ use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
-use crate::editor_data::tab::{MapDataState, TabType};
+use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorConfig, EditorData};
-use crate::map_data::handlers::open_map;
-use crate::map_data::handlers::{close_map, create_map, get_current_map_data, save_current_map};
-use crate::map_data::{MapData, MapDataContainer};
+use crate::map_data::handlers::open_project;
+use crate::map_data::handlers::{
+    close_project, create_project, get_current_project_data, save_current_project,
+};
+use crate::map_data::{MapData, ProjectContainer};
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::tile_config::{
@@ -179,8 +181,8 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
     Ok(config)
 }
 
-fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Error> {
-    let mut map_data = MapDataContainer::default();
+fn get_map_data(editor_data: &EditorData) -> Result<ProjectContainer, anyhow::Error> {
+    let mut map_data = ProjectContainer::default();
 
     // map_data.data.push(loaded);
 
@@ -272,12 +274,16 @@ pub fn run() -> () {
 
                     let importer = MapDataImporter {
                         path:
-                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z1.json"
+                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
                                 .into(),
-                        om_terrain: "nuclear_plant_0_0_1".into(),
+                        om_terrain: "nuclear_plant_0_0_0".into(),
                     };
                     let mut loaded = importer.load()?;
-                    loaded.calculate_parameters(&cdda_json_data.palettes);
+
+                    loaded.maps.iter_mut().for_each(|(_, loaded)| {
+                        loaded.calculate_parameters(&cdda_json_data.palettes)
+                    });
+
                     map_data.data.push(loaded);
 
                     app.manage(Mutex::new(Some(cdda_json_data)));
@@ -302,7 +308,7 @@ pub fn run() -> () {
         .invoke_handler(tauri::generate_handler![
             download_spritesheet,
             get_info_of_current_tileset,
-            get_current_map_data,
+            get_current_project_data,
             get_editor_data,
             cdda_installation_directory_picked,
             tileset_picked,
@@ -310,10 +316,10 @@ pub fn run() -> () {
             create_tab,
             close_tab,
             frontend_ready,
-            create_map,
-            open_map,
-            close_map,
-            save_current_map
+            create_project,
+            open_project,
+            close_project,
+            save_current_project
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

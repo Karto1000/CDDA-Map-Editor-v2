@@ -39,8 +39,8 @@ pub struct CDDAMapData {
     pub object: CDDAMapDataObject,
 }
 
-impl CDDAMapData {
-    pub fn into(self, name: String) -> MapData {
+impl Into<MapData> for CDDAMapData {
+    fn into(self) -> MapData {
         let mut cells = HashMap::new();
 
         // We need to reverse the iterators direction since we want the last row of the rows to
@@ -55,7 +55,6 @@ impl CDDAMapData {
         }
 
         MapData::new(
-            name,
             self.object.fill_ter,
             cells,
             self.object.terrain,

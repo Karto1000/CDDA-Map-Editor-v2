@@ -8,13 +8,13 @@ use std::path::PathBuf;
 pub enum TabType {
     #[default]
     Welcome,
-    MapEditor(MapDataState),
+    MapEditor(ProjectState),
     LiveViewer,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(tag = "state")]
-pub enum MapDataState {
+pub enum ProjectState {
     #[default]
     Unsaved,
     Saved {

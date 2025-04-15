@@ -1,3 +1,4 @@
+use crate::editor_data::Project;
 use crate::map_data::MapData;
 use crate::util::{Load, Save};
 use std::fs::File;
@@ -15,12 +16,12 @@ impl Load<MapData> for MapDataLoader {
     }
 }
 
-pub struct MapDataSaver {
+pub struct ProjectSaver {
     pub path: PathBuf,
 }
 
-impl Save<MapData> for MapDataSaver {
-    fn save(&self, data: &MapData) -> Result<(), Error> {
+impl Save<Project> for ProjectSaver {
+    fn save(&self, data: &Project) -> Result<(), Error> {
         let mut file = File::create(&self.path.join(&data.name))?;
         serde_json::to_writer(&mut file, data).map_err(|e| e.into())
     }
