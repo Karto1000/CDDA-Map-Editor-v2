@@ -272,25 +272,13 @@ pub fn run() -> () {
                 Ok(cdda_json_data) => {
                     info!("Loading testing map data");
 
-                    // let importer = MapDataImporter {
-                    //     path:
-                    //         r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
-                    //             .into(),
-                    //     om_terrain: "nuclear_plant_0_0_0".into(),
-                    // };
-                    // let mut loaded = importer.load()?;
-                    let mut loaded = Project::new("Test".to_string(), DEFAULT_MAP_DATA_SIZE);
-
-                    let mut data_1 = MapData::default();
-                    data_1.fill = Some(DistributionInner::Normal(CDDAIdentifier(
-                        "t_rock_floor".to_string(),
-                    )));
-
-                    loaded.maps.insert(1, data_1);
-
-                    loaded.maps.iter_mut().for_each(|(_, loaded)| {
-                        loaded.calculate_parameters(&cdda_json_data.palettes)
-                    });
+                    let importer = MapDataImporter {
+                        path:
+                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                                .into(),
+                        om_terrain: "nuclear_plant_0_0_0".into(),
+                    };
+                    let loaded = importer.load()?;
 
                     map_data.data.push(loaded);
 

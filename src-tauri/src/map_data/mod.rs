@@ -6,24 +6,129 @@ use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::MapGenValue;
 use crate::editor_data::Project;
 use crate::util::{
-    CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Load,
-    ParameterIdentifier, Save,
+    CDDAIdentifier, DistributionInner, GetIdentifier, Load, ParameterIdentifier, Save,
 };
 use glam::UVec2;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::str::FromStr;
+use strum_macros::EnumString;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CommonPointFields {
+    pub coordinates: UVec2,
+    pub z: i32,
+    pub chance: u32,
+    pub repeat: (u32, u32),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum PlaceableSetType {
+    Terrain,
+    Furniture,
+    Trap,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum RemovableSetType {
+    Item,
+    Field,
+    Trap,
+    Creature,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum SetPoint {
+    Place {
+        id: CDDAIdentifier,
+        ty: PlaceableSetType,
+        common: CommonPointFields,
+    },
+    Remove {
+        ty: RemovableSetType,
+        common: CommonPointFields,
+    },
+    Radiation {
+        common: CommonPointFields,
+        amount: (u32, u32),
+    },
+    Variable {
+        id: CDDAIdentifier,
+        common: CommonPointFields,
+    },
+    Bash {
+        common: CommonPointFields,
+    },
+    Burn {
+        common: CommonPointFields,
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CommonLineFields {
+    pub coordinates_from: UVec2,
+    pub coordinates_to: UVec2,
+
+    pub z: i32,
+    pub chance: u32,
+    pub repeat: (u32, u32),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum SetLine {
+    Place {
+        id: CDDAIdentifier,
+        ty: PlaceableSetType,
+        common: CommonLineFields,
+    },
+    Remove {
+        ty: RemovableSetType,
+        common: CommonLineFields,
+    },
+    Radiation {
+        common: CommonLineFields,
+        amount: (u32, u32),
+    },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CommonSquareFields {
+    pub top_left: UVec2,
+    pub bottom_right: UVec2,
+    pub z: i32,
+    pub chance: u32,
+    pub repeat: (u32, u32),
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum SetSquare {
+    Place {
+        id: CDDAIdentifier,
+        ty: PlaceableSetType,
+        common: CommonSquareFields,
+    },
+    Remove {
+        ty: RemovableSetType,
+        common: CommonSquareFields,
+    },
+    Radiation {
+        common: CommonSquareFields,
+        amount: (u32, u32),
+    },
+}
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
     pub character: char,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Deserialize)]
 pub struct MapData {
     pub cells: HashMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
@@ -35,6 +140,10 @@ pub struct MapData {
     pub furniture: HashMap<char, MapGenValue>,
 
     pub palettes: Vec<MapGenValue>,
+
+    pub set_point: Vec<SetPoint>,
+    pub set_line: Vec<SetLine>,
+    pub set_square: Vec<SetSquare>,
 }
 
 impl Default for MapData {
@@ -56,6 +165,9 @@ impl Default for MapData {
             terrain: Default::default(),
             furniture: Default::default(),
             palettes: Default::default(),
+            set_line: Default::default(),
+            set_point: Default::default(),
+            set_square: Default::default(),
         }
     }
 }
@@ -74,6 +186,9 @@ impl MapData {
         furniture: HashMap<char, MapGenValue>,
         palettes: Vec<MapGenValue>,
         parameters: HashMap<ParameterIdentifier, Parameter>,
+        set_point: Vec<SetPoint>,
+        set_line: Vec<SetLine>,
+        set_square: Vec<SetSquare>,
     ) -> Self {
         Self {
             calculated_parameters: Default::default(),
@@ -83,6 +198,9 @@ impl MapData {
             terrain,
             furniture,
             cells,
+            set_square,
+            set_point,
+            set_line,
         }
     }
 
@@ -188,46 +306,6 @@ impl Serialize for MapData {
         state.serialize_field("cells", &serialized_cells)?;
 
         state.end()
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct MapDataIntermediate {
-    pub name: String,
-    pub fill: Option<DistributionInner>,
-    pub cells: HashMap<JSONSerializableUVec2, Cell>,
-    pub parameters: Option<HashMap<ParameterIdentifier, Parameter>>,
-    pub palettes: Vec<MapGenValue>,
-    pub terrain: HashMap<char, MapGenValue>,
-    pub furniture: HashMap<char, MapGenValue>,
-}
-
-impl Into<MapData> for MapDataIntermediate {
-    fn into(self) -> MapData {
-        let cells = self
-            .cells
-            .into_iter()
-            .map(|(key, value)| (key.0, value))
-            .collect::<HashMap<UVec2, Cell>>();
-
-        MapData::new(
-            self.fill,
-            cells,
-            self.terrain,
-            self.furniture,
-            self.palettes,
-            self.parameters.unwrap_or_else(|| HashMap::new()),
-        )
-    }
-}
-
-impl<'de> Deserialize<'de> for MapData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let intermediate: MapDataIntermediate = Deserialize::deserialize(deserializer)?;
-        Ok(intermediate.into())
     }
 }
 

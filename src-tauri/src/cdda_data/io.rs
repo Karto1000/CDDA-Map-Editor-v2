@@ -295,6 +295,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                             terrain: mg.object.terrain.clone(),
                                             furniture: mg.object.furniture.clone(),
                                             parameters: mg.object.parameters.clone(),
+                                            set: mg.object.set.clone(),
                                         },
                                     };
 

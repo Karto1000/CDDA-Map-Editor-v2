@@ -353,3 +353,30 @@ macro_rules! impl_merge_with_precedence {
         }
     };
 }
+
+// https://stackoverflow.com/a/49806368
+#[macro_export]
+macro_rules! skip_err {
+    ($res:expr) => {
+        match $res {
+            Ok(val) => val,
+            Err(e) => {
+                warn!("Error for value: {:?}, Err: {:?}; Skipping", $res, e);
+                continue;
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! skip_none {
+    ($res:expr) => {
+        match $res {
+            Some(val) => val,
+            None => {
+                warn!("Missing value for {:?}; Skipping", $res);
+                continue;
+            }
+        }
+    };
+}
