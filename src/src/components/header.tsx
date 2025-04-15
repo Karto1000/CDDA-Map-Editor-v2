@@ -36,11 +36,11 @@ export function Header(props: Props) {
     async function onTabOpen(index: number) {
         if (tabs.openedTab === index) {
             tabs.setOpenedTab(null)
-            await invoke(MapDataSendCommand.CloseMap, {})
+            await invoke(MapDataSendCommand.CloseProject, {})
         }
         else {
             tabs.setOpenedTab(index)
-            await invoke(MapDataSendCommand.OpenMap, {index})
+            await invoke(MapDataSendCommand.OpenProject, {index})
         }
     }
 

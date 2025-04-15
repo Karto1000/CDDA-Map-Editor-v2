@@ -183,7 +183,7 @@ export function useEditor(props: Props) {
             }
           }
 
-          invokeTauri<PlaceSpriteCommand, unknown>(MapDataSendCommand.Place, args).then()
+          // invokeTauri<PlaceSpriteCommand, unknown>(MapDataSendCommand.Place, args).then()
         }
       }
     }
@@ -211,7 +211,7 @@ export function useEditor(props: Props) {
 
     const keydownListener = async (e: KeyboardEvent) => {
       if (e.key === "s") {
-        const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentMap, {})
+        const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentProject, {})
       }
     }
 

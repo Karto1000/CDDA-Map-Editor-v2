@@ -95,10 +95,9 @@ export type MapChangeEvent = {
 }
 
 export enum MapDataSendCommand {
-  Place = "place",
-  CreateMap = "create_map",
-  OpenMap = "open_map",
-  CloseMap = "close_map",
-  GetCurrentMapData = "get_current_map_data",
-  SaveCurrentMap = "save_current_map"
+  CreateProject = "create_project",
+  OpenProject = "open_project",
+  CloseProject = "close_project",
+  GetCurrentProjectData = "get_current_map_data",
+  SaveCurrentProject = "save_current_project"
 }

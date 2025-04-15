@@ -98,7 +98,7 @@ function App() {
     }
 
     async function createMap() {
-        await invoke(MapDataSendCommand.CreateMap, {data: {name: creatingMapName, size: "24,24"}})
+        await invoke(MapDataSendCommand.CreateProject, {data: {name: creatingMapName, size: "24,24"}})
 
         setIsCreatingMapWindowOpen(false)
         setCreatingMapName("")
