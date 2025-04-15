@@ -6,9 +6,9 @@ import {Dropdown} from "./dropdown.tsx";
 import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 import {TabContext} from "../app.tsx";
-import {TabType} from "../hooks/useTabs.ts";
 import {invoke} from "@tauri-apps/api/core";
-import {MapDataSendCommand} from "../lib/map_data/send";
+
+import {MapDataSendCommand} from "../lib/map_data.ts";
 
 type Props = {
     isSettingsWindowOpen: boolean,
@@ -35,12 +35,12 @@ export function Header(props: Props) {
 
     async function onTabOpen(index: number) {
         if (tabs.openedTab === index) {
-            await invoke(MapDataSendCommand.CloseMap, {})
             tabs.setOpenedTab(null)
+            await invoke(MapDataSendCommand.CloseProject, {})
         }
         else {
-            await invoke(MapDataSendCommand.OpenMap, {index})
             tabs.setOpenedTab(index)
+            await invoke(MapDataSendCommand.OpenProject, {index})
         }
     }
 

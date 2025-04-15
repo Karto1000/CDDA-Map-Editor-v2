@@ -1,8 +1,10 @@
 use crate::editor_data::{CDDAPathError, EditorData, SelectedTilesetError};
-use crate::legacy_tileset::{SpritesheetConfig, SpritesheetConfigReader};
+use crate::tileset::io::TilesheetConfigLoader;
+use crate::util::Load;
 use image::{ImageError, ImageFormat, ImageReader};
 use log::info;
 use serde::Serialize;
+use serde_json::Value;
 use std::ffi::OsStr;
 use std::fs;
 use std::io::Cursor;
@@ -19,11 +21,10 @@ pub enum GetSpritesheetsError {
     #[error(transparent)]
     TilesetError(#[from] SelectedTilesetError),
 }
-
 #[tauri::command]
 pub async fn get_info_of_current_tileset(
     editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<SpritesheetConfig, GetSpritesheetsError> {
+) -> Result<Value, GetSpritesheetsError> {
     let lock = editor_data.lock().await;
 
     let selected_tileset = lock.config.get_selected_tileset()?;
@@ -31,8 +32,8 @@ pub async fn get_info_of_current_tileset(
 
     let tileset_path = cdda_path.join("gfx").join(selected_tileset);
 
-    let config_reader = SpritesheetConfigReader::new(tileset_path);
-    let info = config_reader.read().unwrap();
+    let config_reader = TilesheetConfigLoader::new(tileset_path);
+    let info = config_reader.load_serde_value().unwrap();
 
     Ok(info)
 }

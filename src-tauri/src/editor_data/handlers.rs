@@ -1,11 +1,16 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::palettes::CDDAPalette;
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::util::Save;
-use log::{error, info};
+use crate::load_cdda_json_data;
+use crate::util::{CDDAIdentifier, Save};
+use anyhow::Error;
+use log::{error, info, warn};
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
-use tauri::{App, AppHandle, Emitter, State};
+use tauri::{App, AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn get_editor_data(editor_data: State<'_, Mutex<EditorData>>) -> Result<EditorData, ()> {
@@ -49,6 +54,18 @@ pub async fn cdda_installation_directory_picked(
     let mut lock = editor_data.lock().await;
     lock.available_tilesets = Some(available_tilesets);
     lock.config.cdda_path = Some(path);
+
+    match load_cdda_json_data(&lock) {
+        Ok(data) => {
+            app.manage(Mutex::new(data));
+        }
+        Err(e) => {
+            warn!("{}", e);
+            return Err(InstallationPickedError::InvalidCDDADirectory(
+                "Failed to load json data".into(),
+            ));
+        }
+    }
 
     app.emit("editor_data_changed", lock.clone())
         .expect("Emit to not fail");

@@ -1,18 +1,18 @@
 import React, {createContext, useEffect, useRef, useState} from 'react';
 import {Header} from "./components/header.tsx";
-import {Theme, useTheme} from "./hooks/useTheme.tsx";
+import {Theme, useTheme} from "./hooks/useTheme.ts";
 import Window from "./components/window.tsx";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorData, EditorDataRecvEvent} from "./lib/editor_data/recv";
-import {TabType, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
+import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
 import {NoTabScreen} from "./mainScreens/noTabScreen.tsx";
 import {WelcomeScreen} from "./mainScreens/welcomeScreen.tsx";
 import {listen} from "@tauri-apps/api/event";
-import {makeCancelable} from "./lib";
-import {MapDataSendCommand} from "./lib/map_data/send";
+import {makeCancelable} from "./lib/index.ts";
 import {Scene} from "three";
 import {useEditor} from "./hooks/useEditor.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
+import {EditorData, EditorDataRecvEvent} from "./lib/editor_data.ts";
+import {MapDataSendCommand} from "./lib/map_data.ts";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
@@ -37,6 +37,19 @@ function App() {
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
     const [tilesheets, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
+    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.MapEditor
+    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
+
+    useEditor({
+        canvasRef: mapEditorCanvasRef,
+        sceneRef: mapEditorSceneRef,
+        canvasContainerRef: mapEditorCanvasContainerRef,
+        isDisplaying: isDisplayingMapEditor,
+        tilesheetsRef: tilesheets,
+        openedTab: tabs.openedTab,
+        isTilesheetLoaded,
+        theme
+    })
 
     useEffect(() => {
         let unlistenDataChanged = makeCancelable(listen<EditorData>(
@@ -44,11 +57,17 @@ function App() {
             async (e) => {
                 setEditorData(e.payload)
 
-                if (!e.payload.config.cdda_path) {
+                const welcomeTab = e.payload.tabs.find(t => t.tab_type.type === TabTypeKind.Welcome)
+
+                if (welcomeTab) tabs.setOpenedTab(e.payload.tabs.indexOf(welcomeTab))
+
+                if (!e.payload.config.cdda_path && !welcomeTab) {
                     await tabs.addTab(
                         {
                             name: "Welcome to the CDDA Map Editor",
-                            tab_type: TabType.Welcome,
+                            tab_type: {
+                                type: TabTypeKind.Welcome,
+                            }
                         }
                     )
 
@@ -68,10 +87,10 @@ function App() {
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
-            if (tabs.tabs[tabs.openedTab].tab_type === TabType.Welcome)
+            if (tabs.tabs[tabs.openedTab].tab_type.type === TabTypeKind.Welcome)
                 return <WelcomeScreen/>
 
-            if (tabs.tabs[tabs.openedTab].tab_type === TabType.MapEditor)
+            if (tabs.tabs[tabs.openedTab].tab_type.type === TabTypeKind.MapEditor)
                 return <></>
         }
 
@@ -79,24 +98,11 @@ function App() {
     }
 
     async function createMap() {
-        await invoke(MapDataSendCommand.CreateMap, {data: {name: creatingMapName, size: "24,24"}})
+        await invoke(MapDataSendCommand.CreateProject, {data: {name: creatingMapName, size: "24,24"}})
 
         setIsCreatingMapWindowOpen(false)
         setCreatingMapName("")
     }
-
-    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabType.MapEditor
-    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
-
-    useEditor({
-        canvasRef: mapEditorCanvasRef,
-        sceneRef: mapEditorSceneRef,
-        canvasContainerRef: mapEditorCanvasContainerRef,
-        isDisplaying: isDisplayingMapEditor,
-        tilesheetsRef: tilesheets,
-        isTilesheetLoaded,
-        theme
-    })
 
     return (
         <div className={`app ${theme}-theme`}>

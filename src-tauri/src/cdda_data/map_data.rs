@@ -1,0 +1,66 @@
+use crate::cdda_data::palettes::Parameter;
+use crate::cdda_data::MapGenValue;
+use crate::map_data::{Cell, MapData};
+use crate::util::{DistributionInner, ParameterIdentifier};
+use glam::UVec2;
+use serde::Deserialize;
+use std::collections::HashMap;
+
+pub const DEFAULT_MAP_WIDTH: usize = 24;
+pub const DEFAULT_MAP_HEIGHT: usize = 24;
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum OmTerrain {
+    Single(String),
+    Duplicate(Vec<String>),
+    Nested(Vec<Vec<String>>),
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CDDAMapDataObject {
+    pub fill_ter: Option<DistributionInner>,
+    pub rows: Vec<String>,
+    #[serde(default)]
+    pub palettes: Vec<MapGenValue>,
+    #[serde(default)]
+    pub terrain: HashMap<char, MapGenValue>,
+    #[serde(default)]
+    pub furniture: HashMap<char, MapGenValue>,
+    #[serde(default)]
+    pub parameters: HashMap<ParameterIdentifier, Parameter>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CDDAMapData {
+    pub method: String,
+    pub om_terrain: OmTerrain,
+    pub weight: Option<i32>,
+    pub object: CDDAMapDataObject,
+}
+
+impl Into<MapData> for CDDAMapData {
+    fn into(self) -> MapData {
+        let mut cells = HashMap::new();
+
+        // We need to reverse the iterators direction since we want the last row of the rows to
+        // be at the bottom left so basically 0, 0
+        for (row_index, row) in self.object.rows.into_iter().rev().enumerate() {
+            for (column_index, character) in row.chars().enumerate() {
+                cells.insert(
+                    UVec2::new(column_index as u32, row_index as u32),
+                    Cell { character },
+                );
+            }
+        }
+
+        MapData::new(
+            self.object.fill_ter,
+            cells,
+            self.object.terrain,
+            self.object.furniture,
+            self.object.palettes,
+            self.object.parameters,
+        )
+    }
+}

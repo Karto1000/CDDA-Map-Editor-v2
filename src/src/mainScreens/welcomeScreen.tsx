@@ -3,9 +3,8 @@ import "./welcomeScreen.scss"
 import Icon, {IconName} from "../components/icon.tsx";
 import {open} from "@tauri-apps/plugin-dialog";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorData} from "../lib/editor_data/recv";
 import {EditorDataContext, TabContext} from "../app.tsx";
-import {EditorDataSendCommand} from "../lib/editor_data/send";
+import {EditorData, EditorDataSendCommand} from "../lib/editor_data.ts";
 
 export function WelcomeScreen() {
     const [cddaInstallDirectory, setCDDAInstallDirectory] = useState<string>()

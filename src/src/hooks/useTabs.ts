@@ -1,14 +1,34 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorDataSendCommand} from "../lib/editor_data/send";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {EditorDataRecvEvent} from "../lib/editor_data/recv";
-import {makeCancelable} from "../lib";
+import {makeCancelable} from "../lib/index.ts";
+import {EditorDataRecvEvent, EditorDataSendCommand} from "../lib/editor_data.ts";
 
-export enum TabType {
+export enum TabTypeKind {
     Welcome = "Welcome",
     MapEditor = "MapEditor",
     LiveViewer = "LiveViewer"
+}
+
+export enum SaveStateKind {
+    Saved,
+    Unsaved
+}
+
+export type SaveState = {
+    type: SaveStateKind.Saved,
+    path: string
+} | {
+    type: SaveStateKind.Unsaved
+}
+
+export type TabType = {
+    type: TabTypeKind.MapEditor,
+    state: SaveState
+} | {
+    type: TabTypeKind.Welcome
+} | {
+    type: TabTypeKind.LiveViewer
 }
 
 export type Tab = {
@@ -23,6 +43,7 @@ export type UseTabsReturn = {
     removeTab: (index: number) => void,
     setOpenedTab: (index: number) => void,
 }
+
 
 export function useTabs(): UseTabsReturn {
     const [tabs, setTabs] = useState<Tab[]>([])
@@ -61,5 +82,11 @@ export function useTabs(): UseTabsReturn {
         setOpenTab(index)
     }
 
-    return {tabs, addTab, removeTab, openedTab: openTab, setOpenedTab}
+    return {
+        tabs,
+        addTab,
+        removeTab,
+        openedTab: openTab,
+        setOpenedTab,
+    }
 }

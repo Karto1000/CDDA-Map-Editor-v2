@@ -1,10 +1,10 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
-import {LegacyTilesetCommand} from "../lib/tileset/legacy/send";
-import {BackendResponse, BackendResponseType, invokeTauri} from "../lib";
+import {BackendResponse, BackendResponseType, invokeTauri} from "../lib/index.ts";
 import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, TextureLoader, Vector2} from "three";
-import {EditorData} from "../lib/editor_data/recv";
 import {Tilesheet} from "../rendering/tilesheet.ts";
 import {Tilesheets} from "../rendering/tilesheets.ts";
+import {EditorData} from "../lib/editor_data.ts";
+import {LegacyTilesetCommand, SpritesheetConfig} from "../lib/tileset/legacy.ts";
 
 export type Atlases = { [file: string]: Tilesheet }
 
@@ -21,10 +21,11 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
             const infoResponse = await invokeTauri<SpritesheetConfig, unknown>(LegacyTilesetCommand.GetInfoOfCurrentTileset, {})
 
             if (infoResponse.type === BackendResponseType.Error) {
+                console.error(infoResponse.error)
                 return
             }
 
-            const loadFromBackend = async (): Promise<{ [key: string]: Tilesheet }> => {
+            const loadFromBackend = async (): Promise<{ atlases: { [key: string]: Tilesheet }, fallback: Tilesheet}> => {
                 const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
 
                 for (let tileInfo of infoResponse.data["tiles-new"]) {
@@ -39,6 +40,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
 
                 const arrayBuffs = await Promise.all(downloadPromises)
                 const atlases = {}
+                let fallback;
 
                 for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
                     const response = arrayBuffs[i]
@@ -53,6 +55,11 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     const blob = new Blob([response.data], {type: "image/png"});
                     const url = URL.createObjectURL(blob)
 
+                    if (spritesheetInfo.file === "fallback.png") {
+                        fallback = Tilesheet.fromURL(url, infoResponse.data.tile_info[0], spritesheetInfo)
+                        continue
+                    }
+
                     atlases[spritesheetInfo.file] = await Tilesheet.fromURL(
                         url,
                         infoResponse.data.tile_info[0],
@@ -60,11 +67,12 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     )
                 }
 
-                return atlases
+                return { atlases, fallback }
             }
 
-            const loadFromPublic = async (): Promise<{ [key: string]: Tilesheet }> => {
+            const loadFromPublic = async (): Promise<{ atlases: { [key: string]: Tilesheet}, fallback: Tilesheet }> => {
                 const atlases = {}
+                let fallback: Tilesheet;
 
                 for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
                     const spritesheetInfo = infoResponse.data["tiles-new"][i]
@@ -78,6 +86,11 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     // https://stackoverflow.com/a/77944452
                     texture.colorSpace = SRGBColorSpace
 
+                    if (spritesheetInfo.file === "fallback.png") {
+                        fallback = new Tilesheet(texture, infoResponse.data.tile_info[0], spritesheetInfo)
+                        continue
+                    }
+
                     atlases[spritesheetInfo.file] = new Tilesheet(
                         texture,
                         infoResponse.data.tile_info[0],
@@ -85,20 +98,22 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     )
                 }
 
-                return atlases
+                console.log(atlases, fallback)
+                return { atlases, fallback }
             }
 
             const atlases = await loadFromPublic();
 
-            for (let atlasKey of Object.keys(atlases)) {
+            sceneRef.current.add(atlases.fallback.mesh)
+            for (let atlasKey of Object.keys(atlases.atlases)) {
                 console.log(`Adding ${atlasKey} to the scene`)
 
-                const atlas = atlases[atlasKey]
+                const atlas = atlases.atlases[atlasKey]
                 sceneRef.current.add(atlas.mesh)
             }
 
             setIsLoaded(true)
-            tilesheets.current = new Tilesheets(atlases);
+            tilesheets.current = new Tilesheets(atlases.atlases, atlases.fallback);
         })()
     }, [editorData?.config.selected_tileset, sceneRef]);
 

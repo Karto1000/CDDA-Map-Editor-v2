@@ -2,6 +2,7 @@
   "name": "src",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "dependencies": {
     "@tauri-apps/api": "2.0.1",
     "@tauri-apps/plugin-dialog": "^2.2.0",
