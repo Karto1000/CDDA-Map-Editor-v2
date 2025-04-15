@@ -2,29 +2,148 @@ pub(crate) mod handlers;
 pub(crate) mod importing;
 pub(crate) mod io;
 
+use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
-use crate::cdda_data::MapGenValue;
+use crate::cdda_data::{MapGenValue, TileLayer};
 use crate::editor_data::Project;
+use crate::map_data::handlers::{get_bg_from_sprite, get_fg_from_sprite, SpriteType};
+use crate::tileset::legacy_tileset::MappedSprite;
+use crate::tileset::{Tilesheet, TilesheetKind};
 use crate::util::{
     CDDAIdentifier, DistributionInner, GetIdentifier, Load, ParameterIdentifier, Save,
 };
-use glam::UVec2;
+use dyn_clone::{clone_trait_object, DynClone};
+use glam::{IVec3, UVec2};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt::Debug;
 use std::str::FromStr;
+use std::sync::Arc;
 use strum_macros::EnumString;
+use tokio::sync::MutexGuard;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CommonPointFields {
-    pub coordinates: UVec2,
-    pub z: i32,
-    pub chance: u32,
-    pub repeat: (u32, u32),
+pub trait Set: Debug + DynClone + Send + Sync {
+    fn coordinates(&self) -> Vec<UVec2>;
+    fn operation(&self) -> &SetOperation;
+
+    fn map_ids(
+        &self,
+        coordinates: &UVec2,
+        z: i32,
+        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    ) {
+        match self.operation() {
+            SetOperation::Place { ty, id } => {
+                let mut mapped_sprite = MappedSprite::default();
+
+                match ty {
+                    PlaceableSetType::Terrain => {
+                        mapped_sprite.terrain = Some(id.clone());
+                    }
+                    PlaceableSetType::Furniture => {
+                        mapped_sprite.furniture = Some(id.clone());
+                    }
+                    PlaceableSetType::Trap => {
+                        mapped_sprite.trap = Some(id.clone());
+                    }
+                };
+
+                mapped_sprites_lock.insert(
+                    IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
+                    mapped_sprite.clone(),
+                );
+            }
+            SetOperation::Remove { .. } => {}
+            SetOperation::Radiation { .. } => {}
+            SetOperation::Variable { .. } => {}
+            SetOperation::Bash { .. } => {}
+            SetOperation::Burn { .. } => {}
+        }
+    }
+    fn get_fg_and_bg(
+        &self,
+        coordinates: UVec2,
+        z: i32,
+        tilesheet: &TilesheetKind,
+        json_data: &DeserializedCDDAJsonData,
+        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    ) -> (Option<SpriteType>, Option<SpriteType>) {
+        match self.operation() {
+            SetOperation::Place { ty, id } => {
+                let sprite_kind = match tilesheet {
+                    TilesheetKind::Legacy(l) => l.get_sprite(id, json_data),
+                    TilesheetKind::Current(c) => c.get_sprite(id, json_data),
+                };
+
+                let layer = match ty {
+                    PlaceableSetType::Terrain => TileLayer::Terrain,
+                    PlaceableSetType::Furniture => TileLayer::Furniture,
+                    PlaceableSetType::Trap => TileLayer::Trap,
+                };
+
+                let fg = get_fg_from_sprite(
+                    id,
+                    IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
+                    json_data,
+                    layer.clone(),
+                    &sprite_kind,
+                    mapped_sprites_lock,
+                );
+
+                let bg = get_bg_from_sprite(
+                    id,
+                    IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
+                    json_data,
+                    layer.clone(),
+                    &sprite_kind,
+                    mapped_sprites_lock,
+                );
+
+                (fg, bg)
+            }
+            SetOperation::Remove { .. } => (None, None),
+            SetOperation::Radiation { .. } => (None, None),
+            SetOperation::Variable { .. } => (None, None),
+            SetOperation::Bash { .. } => (None, None),
+            SetOperation::Burn { .. } => (None, None),
+        }
+    }
+
+    fn get_sprites(
+        &self,
+        z: i32,
+        tilesheet: &TilesheetKind,
+        json_data: &DeserializedCDDAJsonData,
+        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    ) -> Vec<SpriteType> {
+        let mut sprites = vec![];
+
+        // Like before, we need to map the ids before we generate the sprites
+        for coordinates in self.coordinates() {
+            self.map_ids(&coordinates, z, mapped_sprites_lock)
+        }
+
+        for coordinates in self.coordinates() {
+            let (fg, bg) =
+                self.get_fg_and_bg(coordinates, z, tilesheet, json_data, mapped_sprites_lock);
+
+            if let Some(fg) = fg {
+                sprites.push(fg);
+            }
+
+            if let Some(bg) = bg {
+                sprites.push(bg)
+            }
+        }
+        sprites
+    }
 }
+
+clone_trait_object!(Set);
 
 #[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
 #[strum(serialize_all = "snake_case")]
@@ -43,84 +162,91 @@ pub enum RemovableSetType {
     Creature,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum SetPoint {
+#[derive(Debug, Clone)]
+pub enum SetOperation {
     Place {
         id: CDDAIdentifier,
         ty: PlaceableSetType,
-        common: CommonPointFields,
     },
     Remove {
         ty: RemovableSetType,
-        common: CommonPointFields,
     },
     Radiation {
-        common: CommonPointFields,
         amount: (u32, u32),
     },
     Variable {
         id: CDDAIdentifier,
-        common: CommonPointFields,
     },
-    Bash {
-        common: CommonPointFields,
-    },
-    Burn {
-        common: CommonPointFields,
-    },
+    Bash {},
+    Burn {},
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CommonLineFields {
+#[derive(Debug, Clone)]
+pub struct SetPoint {
+    pub coordinates: UVec2,
+    pub z: i32,
+    pub chance: u32,
+    pub repeat: (u32, u32),
+    pub operation: SetOperation,
+}
+
+impl Set for SetPoint {
+    fn coordinates(&self) -> Vec<UVec2> {
+        vec![self.coordinates]
+    }
+
+    fn operation(&self) -> &SetOperation {
+        &self.operation
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SetLine {
     pub coordinates_from: UVec2,
     pub coordinates_to: UVec2,
 
     pub z: i32,
     pub chance: u32,
     pub repeat: (u32, u32),
+    pub operation: SetOperation,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum SetLine {
-    Place {
-        id: CDDAIdentifier,
-        ty: PlaceableSetType,
-        common: CommonLineFields,
-    },
-    Remove {
-        ty: RemovableSetType,
-        common: CommonLineFields,
-    },
-    Radiation {
-        common: CommonLineFields,
-        amount: (u32, u32),
-    },
+impl Set for SetLine {
+    fn coordinates(&self) -> Vec<UVec2> {
+        todo!()
+    }
+
+    fn operation(&self) -> &SetOperation {
+        &self.operation
+    }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CommonSquareFields {
+#[derive(Debug, Clone)]
+pub struct SetSquare {
     pub top_left: UVec2,
     pub bottom_right: UVec2,
     pub z: i32,
     pub chance: u32,
     pub repeat: (u32, u32),
+    pub operation: SetOperation,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub enum SetSquare {
-    Place {
-        id: CDDAIdentifier,
-        ty: PlaceableSetType,
-        common: CommonSquareFields,
-    },
-    Remove {
-        ty: RemovableSetType,
-        common: CommonSquareFields,
-    },
-    Radiation {
-        common: CommonSquareFields,
-        amount: (u32, u32),
-    },
+impl Set for SetSquare {
+    fn coordinates(&self) -> Vec<UVec2> {
+        let mut coordinates = vec![];
+
+        for y in self.top_left.y..self.bottom_right.x {
+            for x in self.top_left.x..self.bottom_right.x {
+                coordinates.push(UVec2::new(x, y))
+            }
+        }
+
+        coordinates
+    }
+
+    fn operation(&self) -> &SetOperation {
+        &self.operation
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -141,9 +267,8 @@ pub struct MapData {
 
     pub palettes: Vec<MapGenValue>,
 
-    pub set_point: Vec<SetPoint>,
-    pub set_line: Vec<SetLine>,
-    pub set_square: Vec<SetSquare>,
+    #[serde(skip)]
+    pub set: Vec<Arc<dyn Set>>,
 }
 
 impl Default for MapData {
@@ -165,9 +290,7 @@ impl Default for MapData {
             terrain: Default::default(),
             furniture: Default::default(),
             palettes: Default::default(),
-            set_line: Default::default(),
-            set_point: Default::default(),
-            set_square: Default::default(),
+            set: vec![],
         }
     }
 }
@@ -186,9 +309,7 @@ impl MapData {
         furniture: HashMap<char, MapGenValue>,
         palettes: Vec<MapGenValue>,
         parameters: HashMap<ParameterIdentifier, Parameter>,
-        set_point: Vec<SetPoint>,
-        set_line: Vec<SetLine>,
-        set_square: Vec<SetSquare>,
+        set: Vec<Arc<dyn Set>>,
     ) -> Self {
         Self {
             calculated_parameters: Default::default(),
@@ -198,9 +319,7 @@ impl MapData {
             terrain,
             furniture,
             cells,
-            set_square,
-            set_point,
-            set_line,
+            set,
         }
     }
 

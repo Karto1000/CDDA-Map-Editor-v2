@@ -36,3 +36,4 @@ rand = "0.9.0"
 derive_more = { version = "2.0.1", features = ["full"] }
 strum = "0.27.1"
 strum_macros = "0.27.1"
+dyn-clone = "1.0.19"

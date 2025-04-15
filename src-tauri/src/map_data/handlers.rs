@@ -5,15 +5,17 @@ use crate::editor_data::tab::ProjectState::Saved;
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver, Project};
 use crate::map_data::io::ProjectSaver;
-use crate::map_data::{MapData, ProjectContainer};
-use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex, SpriteLayer};
-use crate::tileset::{SpriteKind, Tilesheet, TilesheetKind};
+use crate::map_data::{MapData, PlaceableSetType, ProjectContainer, SetSquare};
+use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex};
+use crate::tileset::{SpriteKind, SpriteLayer, Tilesheet, TilesheetKind};
 use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Save};
-use glam::{UVec2, UVec3};
+use glam::{IVec3, UVec2, UVec3, Vec3};
 use image::imageops::tile;
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use serde_json::json;
+use std::collections::{HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::path::PathBuf;
 use std::str::FromStr;
@@ -101,9 +103,9 @@ pub struct PlaceSpriteEvent {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaceSpritesEvent {
-    static_sprites: Vec<StaticSprite>,
-    animated_sprites: Vec<AnimatedSprite>,
-    fallback_sprites: Vec<FallbackSprite>,
+    static_sprites: HashSet<StaticSprite>,
+    animated_sprites: HashSet<AnimatedSprite>,
+    fallback_sprites: HashSet<FallbackSprite>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -156,6 +158,22 @@ struct StaticSprite {
     pub z: i32,
 }
 
+impl Hash for StaticSprite {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.position.hash(state);
+        self.layer.hash(state);
+        self.z.hash(state);
+    }
+}
+
+impl PartialEq<Self> for StaticSprite {
+    fn eq(&self, other: &Self) -> bool {
+        self.position.eq(&other.position) && self.layer.eq(&other.layer) && self.z.eq(&other.z)
+    }
+}
+
+impl Eq for StaticSprite {}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct AnimatedSprite {
     pub position: JSONSerializableUVec2,
@@ -164,6 +182,22 @@ struct AnimatedSprite {
     pub z: i32,
 }
 
+impl Hash for AnimatedSprite {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.position.hash(state);
+        self.layer.hash(state);
+        self.z.hash(state);
+    }
+}
+
+impl PartialEq for AnimatedSprite {
+    fn eq(&self, other: &Self) -> bool {
+        self.position.eq(&other.position) && self.layer.eq(&other.layer) && self.z.eq(&other.z)
+    }
+}
+
+impl Eq for AnimatedSprite {}
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct FallbackSprite {
     pub position: JSONSerializableUVec2,
@@ -171,9 +205,24 @@ struct FallbackSprite {
     pub z: i32,
 }
 
+impl Hash for FallbackSprite {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.position.hash(state);
+        self.z.hash(state);
+    }
+}
+
+impl PartialEq for FallbackSprite {
+    fn eq(&self, other: &Self) -> bool {
+        self.position.eq(&other.position) && self.z.eq(&other.z)
+    }
+}
+
+impl Eq for FallbackSprite {}
+
 fn get_id_from_mapped_sprites(
-    mapped_sprites_lock: &MutexGuard<HashMap<UVec3, MappedSprite>>,
-    cords: &UVec3,
+    mapped_sprites_lock: &MutexGuard<HashMap<IVec3, MappedSprite>>,
+    cords: &IVec3,
     layer: &TileLayer,
 ) -> Option<CDDAIdentifier> {
     mapped_sprites_lock
@@ -181,8 +230,112 @@ fn get_id_from_mapped_sprites(
         .map(|v| match layer {
             TileLayer::Terrain => v.terrain.clone(),
             TileLayer::Furniture => v.furniture.clone(),
+            TileLayer::Trap => v.trap.clone(),
         })
         .flatten()
+}
+
+#[derive(Debug)]
+pub enum SpriteType {
+    Static(StaticSprite),
+    Animated(AnimatedSprite),
+    Fallback(FallbackSprite),
+}
+
+pub fn get_fg_from_sprite(
+    id: &CDDAIdentifier,
+    position: IVec3,
+    json_data: &DeserializedCDDAJsonData,
+    layer: TileLayer,
+    sprite_kind: &SpriteKind,
+    mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+) -> Option<SpriteType> {
+    let (top, right, bottom, left) =
+        get_adjacent_coordinates(mapped_sprites_lock, position, &layer);
+    let position_uvec2 = UVec2::new(position.x as u32, position.y as u32);
+
+    match sprite_kind {
+        SpriteKind::Exists(sprite) => {
+            match sprite.get_fg_id(&id, json_data, &layer, top, right, bottom, left) {
+                None => None,
+                Some(id) => match sprite.is_animated() {
+                    true => {
+                        let display_sprite = AnimatedSprite {
+                            position: JSONSerializableUVec2(position_uvec2),
+                            layer: (layer as u32) * 2 + SpriteLayer::Fg as u32,
+                            indices: id.into_vec(),
+                            z: position.z,
+                        };
+
+                        Some(SpriteType::Animated(display_sprite))
+                    }
+                    false => {
+                        let display_sprite = StaticSprite {
+                            position: JSONSerializableUVec2(position_uvec2),
+                            layer: (layer as u32) * 2 + SpriteLayer::Fg as u32,
+                            index: id.into_single().unwrap(),
+                            z: position.z,
+                        };
+
+                        Some(SpriteType::Static(display_sprite))
+                    }
+                },
+            }
+        }
+        SpriteKind::Fallback(sprite_index) => Some(SpriteType::Fallback(FallbackSprite {
+            position: JSONSerializableUVec2(position_uvec2),
+            index: *sprite_index,
+            z: position.z,
+        })),
+    }
+}
+
+pub fn get_bg_from_sprite(
+    id: &CDDAIdentifier,
+    position: IVec3,
+    json_data: &DeserializedCDDAJsonData,
+    layer: TileLayer,
+    sprite_kind: &SpriteKind,
+    mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+) -> Option<SpriteType> {
+    let (top, right, bottom, left) =
+        get_adjacent_coordinates(mapped_sprites_lock, position, &layer);
+    let position_uvec2 = UVec2::new(position.x as u32, position.y as u32);
+
+    match sprite_kind {
+        SpriteKind::Exists(sprite) => {
+            match sprite.get_bg_id(&id, json_data, &layer, top, right, bottom, left) {
+                None => None,
+                Some(id) => match sprite.is_animated() {
+                    true => {
+                        let display_sprite = AnimatedSprite {
+                            position: JSONSerializableUVec2(position_uvec2),
+                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                            indices: id.into_vec(),
+                            z: position.z,
+                        };
+
+                        Some(SpriteType::Animated(display_sprite))
+                    }
+                    false => {
+                        let display_sprite = StaticSprite {
+                            position: JSONSerializableUVec2(position_uvec2),
+                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
+                            index: id.into_single().unwrap(),
+                            z: position.z,
+                        };
+
+                        Some(SpriteType::Static(display_sprite))
+                    }
+                },
+            }
+        }
+        SpriteKind::Fallback(sprite_index) => Some(SpriteType::Fallback(FallbackSprite {
+            position: JSONSerializableUVec2(position_uvec2),
+            index: *sprite_index,
+            z: position.z,
+        })),
+    }
 }
 
 #[tauri::command]
@@ -192,7 +345,7 @@ pub async fn open_project(
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
     project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    mapped_sprites: State<'_, Mutex<HashMap<UVec3, MappedSprite>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedSprite>>>,
 ) -> Result<(), ()> {
     let mut lock = project_container.lock().await;
 
@@ -226,9 +379,9 @@ pub async fn open_project(
         .get(&CDDAIdentifier("default".into()))
         .expect("Region settings to exist");
 
-    let mut static_sprites = vec![];
-    let mut animated_sprites = vec![];
-    let mut fallback_sprites = vec![];
+    let mut static_sprites = HashSet::new();
+    let mut animated_sprites = HashSet::new();
+    let mut fallback_sprites = HashSet::new();
 
     for (z, map_data) in project.maps.iter() {
         let fill_terrain_sprite = match &map_data.fill {
@@ -295,16 +448,17 @@ pub async fn open_project(
                         mapped_sprite.furniture = Some(id.clone());
                         new_identifier_group.furniture = Some(id.clone());
                     }
+                    _ => unreachable!(),
                 };
             }
 
-            mapped_sprites_lock.insert(UVec3::new(p.x, p.y, *z as u32), mapped_sprite);
+            mapped_sprites_lock.insert(IVec3::new(p.x as i32, p.y as i32, *z), mapped_sprite);
             identifiers.insert(p, new_identifier_group);
         });
 
         map_data.cells.iter().for_each(|(p, cell)| {
             let identifier_group = identifiers.remove(p).expect("Identifier group to exist");
-            let mapped_sprite_coords = UVec3::new(p.x, p.y, *z as u32);
+            let mapped_sprite_coords = IVec3::new(p.x as i32, p.y as i32, *z);
 
             if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
                 warn!("No sprites found for char {:?}", cell);
@@ -323,105 +477,72 @@ pub async fn open_project(
                     }
                 };
 
-                let top_cords = mapped_sprite_coords + UVec3::new(0, 1, 0);
-                let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
-
-                let right_cords = mapped_sprite_coords + UVec3::new(1, 0, 0);
-                let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
-
-                // We need this to protect against underflow of coordinates since they're stored as a UVec2
-                let bottom = match p.y > 0 {
-                    true => {
-                        let bottom_cords = mapped_sprite_coords - UVec3::new(0, 1, 0);
-                        get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
-                    }
-                    false => None,
-                };
-
-                let left = match p.x > 0 {
-                    true => {
-                        let left_cords = mapped_sprite_coords - UVec3::new(1, 0, 0);
-                        get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
-                    }
-                    false => None,
-                };
-
                 let sprite_kind = match tilesheet {
                     TilesheetKind::Legacy(l) => l.get_sprite(&id, &json_data),
                     TilesheetKind::Current(c) => c.get_sprite(&id, &json_data),
                 };
 
-                match sprite_kind {
-                    SpriteKind::Exists(sprite) => {
-                        match sprite.get_fg_id(
-                            &id,
-                            json_data,
-                            &layer,
-                            top.clone(),
-                            right.clone(),
-                            bottom.clone(),
-                            left.clone(),
-                        ) {
-                            None => {}
-                            // TODO: Mapped Sprite
-                            Some(id) => match sprite.is_animated() {
-                                true => {
-                                    let display_sprite = AnimatedSprite {
-                                        position: JSONSerializableUVec2(p.clone()),
-                                        layer: (layer.clone() as u32) * 2 + SpriteLayer::Fg as u32,
-                                        indices: id.into_vec(),
-                                        z: *z,
-                                    };
-
-                                    animated_sprites.push(display_sprite)
-                                }
-                                false => {
-                                    let display_sprite = StaticSprite {
-                                        position: JSONSerializableUVec2(p.clone()),
-                                        layer: (layer.clone() as u32) * 2 + SpriteLayer::Bg as u32,
-                                        index: id.into_single().unwrap(),
-                                        z: *z,
-                                    };
-
-                                    static_sprites.push(display_sprite);
-                                }
-                            },
+                if let Some(fg) = get_fg_from_sprite(
+                    &id,
+                    mapped_sprite_coords.clone(),
+                    json_data,
+                    layer.clone(),
+                    &sprite_kind,
+                    &mut mapped_sprites_lock,
+                ) {
+                    match fg {
+                        SpriteType::Static(s) => {
+                            static_sprites.replace(s);
                         }
-
-                        match sprite.get_bg_id(&id, json_data, &layer, top, right, bottom, left) {
-                            None => {}
-                            Some(id) => match sprite.is_animated() {
-                                true => {
-                                    let display_sprite = AnimatedSprite {
-                                        position: JSONSerializableUVec2(p.clone()),
-                                        layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                                        indices: id.into_vec(),
-                                        z: *z,
-                                    };
-
-                                    animated_sprites.push(display_sprite);
-                                }
-                                false => {
-                                    let display_sprite = StaticSprite {
-                                        position: JSONSerializableUVec2(p.clone()),
-                                        layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                                        index: id.into_single().unwrap(),
-                                        z: *z,
-                                    };
-
-                                    static_sprites.push(display_sprite);
-                                }
-                            },
+                        SpriteType::Animated(a) => {
+                            animated_sprites.replace(a);
+                        }
+                        SpriteType::Fallback(f) => {
+                            fallback_sprites.replace(f);
                         }
                     }
-                    SpriteKind::Fallback(sprite_index) => fallback_sprites.push(FallbackSprite {
-                        position: JSONSerializableUVec2(p.clone()),
-                        index: sprite_index,
-                        z: *z,
-                    }),
+                }
+
+                if let Some(bg) = get_bg_from_sprite(
+                    &id,
+                    mapped_sprite_coords.clone(),
+                    json_data,
+                    layer.clone(),
+                    &sprite_kind,
+                    &mut mapped_sprites_lock,
+                ) {
+                    match bg {
+                        SpriteType::Static(s) => {
+                            static_sprites.replace(s);
+                        }
+                        SpriteType::Animated(a) => {
+                            animated_sprites.replace(a);
+                        }
+                        SpriteType::Fallback(f) => {
+                            fallback_sprites.replace(f);
+                        }
+                    }
                 }
             }
         });
+
+        for set in map_data.set.iter() {
+            let sprites = set.get_sprites(*z, tilesheet, json_data, &mut mapped_sprites_lock);
+
+            for sprite in sprites {
+                match sprite {
+                    SpriteType::Static(s) => {
+                        static_sprites.replace(s);
+                    }
+                    SpriteType::Animated(a) => {
+                        animated_sprites.replace(a);
+                    }
+                    SpriteType::Fallback(f) => {
+                        fallback_sprites.replace(f);
+                    }
+                }
+            }
+        }
     }
 
     app.emit(
@@ -437,10 +558,45 @@ pub async fn open_project(
     Ok(())
 }
 
+fn get_adjacent_coordinates(
+    mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    coordinates: IVec3,
+    layer: &TileLayer,
+) -> (
+    Option<CDDAIdentifier>,
+    Option<CDDAIdentifier>,
+    Option<CDDAIdentifier>,
+    Option<CDDAIdentifier>,
+) {
+    let top_cords = coordinates + IVec3::new(0, 1, 0);
+    let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
+
+    let right_cords = coordinates + IVec3::new(1, 0, 0);
+    let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
+
+    let bottom = match coordinates.y > 0 {
+        true => {
+            let bottom_cords = coordinates - IVec3::new(0, 1, 0);
+            get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
+        }
+        false => None,
+    };
+
+    let left = match coordinates.x > 0 {
+        true => {
+            let left_cords = coordinates - IVec3::new(1, 0, 0);
+            get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
+        }
+        false => None,
+    };
+
+    (top, right, bottom, left)
+}
+
 #[tauri::command]
 pub async fn close_project(
     project_container: State<'_, Mutex<ProjectContainer>>,
-    mapped_sprites: State<'_, Mutex<HashMap<UVec3, MappedSprite>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedSprite>>>,
 ) -> Result<(), ()> {
     let mut lock = project_container.lock().await;
     lock.current_project = None;

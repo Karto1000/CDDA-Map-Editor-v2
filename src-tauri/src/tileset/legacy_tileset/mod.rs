@@ -35,16 +35,11 @@ pub enum CardinalDirection {
     West = 3,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum SpriteLayer {
-    Bg = 0,
-    Fg = 1,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
 pub struct MappedSprite {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
+    pub trap: Option<CDDAIdentifier>,
 }
 
 fn to_weighted_vec(

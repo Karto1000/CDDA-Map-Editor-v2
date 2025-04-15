@@ -50,6 +50,7 @@ pub struct CDDADeleteOp {
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
+    Trap = 2,
 }
 
 #[derive(Debug, Clone, Deserialize)]

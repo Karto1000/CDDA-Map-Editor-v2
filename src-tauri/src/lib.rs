@@ -28,7 +28,7 @@ use crate::tileset::TilesheetKind;
 use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, Load, MeabyVec};
 use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
-use glam::{UVec2, UVec3};
+use glam::{IVec3, UVec2, UVec3};
 use image::{load, GenericImageView};
 use log::{debug, error, info, warn, LevelFilter};
 use map_data::importing::MapDataImporter;
@@ -297,7 +297,7 @@ pub fn run() -> () {
             app.manage(Mutex::new(tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
-            app.manage::<Mutex<HashMap<UVec3, MappedSprite>>>(Mutex::new(HashMap::new()));
+            app.manage::<Mutex<HashMap<IVec3, MappedSprite>>>(Mutex::new(HashMap::new()));
 
             Ok(())
         })

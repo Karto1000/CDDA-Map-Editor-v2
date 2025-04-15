@@ -155,6 +155,7 @@ export class Tilesheets {
     const batches: StaticBatches = {}
 
     for (const drawSprite of staticSprites) {
+      console.log(drawSprite.layer)
       const index = drawSprite.index
 
       for (let k of Object.keys(this.tilesheets)) {
@@ -177,7 +178,6 @@ export class Tilesheets {
     }
 
     this.cachedStaticBatches = batches
-    console.log(batches)
 
     const currentBatch = batches[this.zLevel]
     for (let k of Object.keys(currentBatch)) {

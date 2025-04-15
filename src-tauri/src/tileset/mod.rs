@@ -650,3 +650,9 @@ impl<T> MeabyWeightedSprite<T> {
         }
     }
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum SpriteLayer {
+    Bg = 0,
+    Fg = 1,
+}
