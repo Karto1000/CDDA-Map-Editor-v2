@@ -6,11 +6,11 @@ use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::MapDataState::Saved;
 use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::legacy_tileset::{
-    FinalIds, GetRandom, MappedSprite, Sprite, SpriteIndex, SpriteKind, SpriteLayer, Tilesheet,
-};
 use crate::map_data::io::MapDataSaver;
 use crate::map_data::{Cell, MapData, MapDataContainer, SPECIAL_EMPTY_CHAR};
+use crate::tileset::legacy_tileset::LegacyTilesheet;
+use crate::tileset::legacy_tileset::{FinalIds, MappedSprite, SpriteIndex, SpriteLayer};
+use crate::tileset::{GetRandom, Sprite, SpriteKind, Tilesheet, TilesheetKind};
 use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, JSONSerializableUVec2, Save};
 use glam::{UVec2, Vec2};
 use image::imageops::{index_colors, tile};
@@ -22,6 +22,7 @@ use std::convert::identity;
 use std::mem::discriminant;
 use std::ops::{Deref, Index};
 use std::path::PathBuf;
+use std::sync::Arc;
 use tauri::async_runtime::{set, Mutex};
 use tauri::utils::display_path;
 use tauri::{AppHandle, Emitter, State};
@@ -113,66 +114,6 @@ pub struct PlaceSpritesEvent {
     fallback_sprites: Vec<FallbackSprite>,
 }
 
-#[derive(Debug, thiserror::Error, Serialize)]
-pub enum PlaceError {
-    #[error(transparent)]
-    MapError(#[from] GetCurrentMapDataError),
-
-    #[error("No Tilesheet selected")]
-    NoTilesheet,
-}
-
-#[tauri::command]
-pub async fn place(
-    app: AppHandle,
-    map_data: State<'_, Mutex<MapDataContainer>>,
-    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
-    command: PlaceCommand,
-) -> Result<(), PlaceError> {
-    let mut lock = map_data.lock().await;
-    let data = get_current_map_mut(&mut lock)?;
-
-    let tilesheet_lock = tilesheet.lock().await;
-    let tilesheet = match tilesheet_lock.as_ref() {
-        None => return Err(PlaceError::NoTilesheet),
-        Some(t) => t,
-    };
-
-    if data.cells.get(&command.position.0).is_some() {
-        return Ok(());
-    }
-
-    data.cells.insert(
-        command.position.0.clone(),
-        Cell {
-            character: command.character,
-        },
-    );
-
-    // let sprite = tilesheet
-    //     .id_map
-    //     .get(&CDDAIdentifier("t_grass".into()))
-    //     .unwrap();
-    // let fg = match sprite {
-    //     Sprite::Single { .. } => unreachable!(),
-    //     Sprite::Open { .. } => unreachable!(),
-    //     Sprite::Broken { .. } => unreachable!(),
-    //     Sprite::Explosion { .. } => unreachable!(),
-    //     Sprite::Multitile { ids, .. } => ids.fg.clone().unwrap().get(0).unwrap().sprite,
-    // };
-    //
-    // app.emit(
-    //     "place_sprite",
-    //     PlaceSpriteEvent {
-    //         position: command.position.clone(),
-    //         index: fg,
-    //     },
-    // )
-    // .unwrap();
-
-    Ok(())
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMapData {
     name: String,
@@ -248,7 +189,7 @@ fn get_id_from_mapped_sprites(
 pub async fn open_map(
     index: usize,
     app: AppHandle,
-    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
+    tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
     map_data_container: State<'_, Mutex<MapDataContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     mapped_sprites: State<'_, Mutex<HashMap<UVec2, MappedSprite>>>,
@@ -402,7 +343,10 @@ pub async fn open_map(
                 false => None,
             };
 
-            let sprite_kind = tilesheet.get_sprite(&id, &json_data);
+            let sprite_kind = match tilesheet {
+                TilesheetKind::Legacy(l) => l.get_sprite(&id, &json_data),
+                TilesheetKind::Current(c) => c.get_sprite(&id, &json_data),
+            };
 
             match sprite_kind {
                 SpriteKind::Exists(sprite) => {

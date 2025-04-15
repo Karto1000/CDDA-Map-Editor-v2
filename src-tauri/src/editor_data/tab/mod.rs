@@ -17,7 +17,9 @@ pub enum TabType {
 pub enum MapDataState {
     #[default]
     Unsaved,
-    Saved { path: PathBuf },
+    Saved {
+        path: PathBuf,
+    },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]

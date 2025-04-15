@@ -1,7 +1,7 @@
 mod cdda_data;
 mod editor_data;
-mod legacy_tileset;
 mod map_data;
+mod tileset;
 mod util;
 
 use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
@@ -13,15 +13,16 @@ use crate::editor_data::handlers::{
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::tab::{MapDataState, TabType};
 use crate::editor_data::{EditorConfig, EditorData};
-use crate::legacy_tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
-use crate::legacy_tileset::tile_config::reader::TileConfigReader;
-use crate::legacy_tileset::tile_config::{
-    AdditionalTile, AdditionalTileId, Spritesheet, Tile, TileConfig,
-};
-use crate::legacy_tileset::{MappedSprite, Tilesheet};
+use crate::map_data::handlers::open_map;
 use crate::map_data::handlers::{close_map, create_map, get_current_map_data, save_current_map};
-use crate::map_data::handlers::{open_map, place};
 use crate::map_data::{MapData, MapDataContainer};
+use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
+use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
+use crate::tileset::legacy_tileset::tile_config::{
+    AdditionalTile, AdditionalTileId, LegacyTileConfig, Spritesheet, Tile,
+};
+use crate::tileset::legacy_tileset::MappedSprite;
+use crate::tileset::TilesheetKind;
 use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec};
 use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
@@ -38,6 +39,7 @@ use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
+use tileset::legacy_tileset::LegacyTilesheet;
 use walkdir::WalkDir;
 
 #[tauri::command]
@@ -201,7 +203,7 @@ fn get_map_data(editor_data: &EditorData) -> Result<MapDataContainer, anyhow::Er
     Ok(map_data)
 }
 
-fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, Error> {
+fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
         Some(t) => t.clone(),
@@ -212,17 +214,17 @@ fn load_tilesheet(editor_data: &EditorData) -> Result<Option<Tilesheet>, Error> 
         Some(p) => p.clone(),
     };
 
-    let tile_config_reader = TileConfigReader {
-        path: cdda_path
-            .join("gfx")
-            .join(&tileset)
-            .join("tile_config.json"),
-    };
+    let config_path = cdda_path
+        .join("gfx")
+        .join(&tileset)
+        .join("tile_config.json");
+    let tile_config_loader = TileConfigLoader::new(config_path);
 
-    let config = tile_config_reader.read()?;
-    let tilesheet = legacy_tileset::get_tilesheet_from_config(config);
+    let config = tile_config_loader.load()?;
+    let tilesheet_loader = TilesheetLoader::new(config);
+    let tilesheet = tilesheet_loader.load()?;
 
-    Ok(Some(tilesheet))
+    Ok(Some(TilesheetKind::Legacy(tilesheet)))
 }
 
 pub fn load_cdda_json_data(
@@ -301,7 +303,6 @@ pub fn run() -> () {
             download_spritesheet,
             get_info_of_current_tileset,
             get_current_map_data,
-            place,
             get_editor_data,
             cdda_installation_directory_picked,
             tileset_picked,

@@ -1,9 +1,11 @@
-pub(crate) mod reader;
-
-use crate::legacy_tileset::{MeabyWeightedSprite, SpriteIndex, TileInfo};
-use crate::util::{CDDAIdentifier, MeabyVec};
+use crate::tileset::io::TileConfigLoader;
+use crate::tileset::legacy_tileset::SpriteIndex;
+use crate::tileset::MeabyWeightedSprite;
+use crate::util::{CDDAIdentifier, Load, MeabyVec};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::fs::File;
+use std::io::BufReader;
 
 pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
     deserializer: D,
@@ -20,33 +22,47 @@ pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
         .ok_or_else(|| Error::custom("Failed to strip 'range ' from prefix"))?
         .trim();
 
-    let from = u32::from_str_radix(left, 36)
-        .map_err(|_| Error::custom(format!("Failed to parse {} as u32", left)))?;
-
-    let to = u32::from_str_radix(right, 36)
-        .map_err(|_| Error::custom(format!("Failed to parse {} as u32", left)))?;
+    let from = left
+        .parse()
+        .map_err(|e| Error::custom("Failed to parse range start"))?;
+    let to = right
+        .parse()
+        .map_err(|e| Error::custom("Failed to parse range end"))?;
 
     Ok((from, to))
 }
 
-#[derive(Debug, Deserialize)]
-pub struct TileConfig {
+impl Load<LegacyTileConfig> for TileConfigLoader {
+    fn load(&self) -> Result<LegacyTileConfig, anyhow::Error> {
+        let file = File::open(&self.path)?;
+        let reader = BufReader::new(file);
+        serde_json::from_reader(reader).map_err(|e| anyhow::anyhow!(e))
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub struct LegacyTileConfig {
     pub tile_info: Vec<TileInfo>,
 
     #[serde(rename = "tiles-new")]
     pub spritesheets: Vec<Spritesheet>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum Spritesheet {
     Normal(NormalSpritesheet),
     Fallback(FallbackSpritesheet),
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct NormalSpritesheet {
     pub file: String,
+
+    pub sprite_width: Option<u32>,
+    pub sprite_height: Option<u32>,
+    pub sprite_offset_x: Option<i32>,
+    pub sprite_offset_y: Option<i32>,
 
     #[serde(deserialize_with = "deserialize_range_comment", rename = "//")]
     pub range: (u32, u32),
@@ -54,7 +70,7 @@ pub struct NormalSpritesheet {
     pub tiles: Vec<Tile>,
 }
 
-#[derive(Debug, Clone, Deserialize, Hash, Eq, PartialEq)]
+#[derive(Debug, Clone, Deserialize, Serialize, Hash, Eq, PartialEq)]
 pub enum AdditionalTileId {
     #[serde(rename = "center")]
     Center,
@@ -81,7 +97,7 @@ pub enum AdditionalTileId {
     Open,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AdditionalTile {
     pub id: AdditionalTileId,
     pub rotates: Option<bool>,
@@ -90,7 +106,7 @@ pub struct AdditionalTile {
     pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Tile {
     pub id: MeabyVec<CDDAIdentifier>,
     pub fg: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
@@ -101,7 +117,7 @@ pub struct Tile {
     pub additional_tiles: Option<Vec<AdditionalTile>>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct FallbackSpritesheet {
     pub file: String,
 
@@ -111,9 +127,20 @@ pub struct FallbackSpritesheet {
     pub ascii: Vec<AsciiCharGroup>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct AsciiCharGroup {
     pub offset: i32,
     pub bold: bool,
     pub color: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TileInfo {
+    pub pixelscale: u32,
+    pub width: u32,
+    pub height: u32,
+    pub zlevel_height: u32,
+    pub iso: bool,
+    pub retract_dist_min: f32,
+    pub retract_dist_max: f32,
 }
