@@ -45,7 +45,6 @@ export class Tilesheets {
 
   private cachedStaticBatches: StaticBatches = {}
   private cachedFallbackBatches: FallbackBatches = {}
-  private cachedAnimatedBatches: AnimatedBatches = {}
 
   constructor(tilesheets: { [name: string]: Tilesheet }, fallback: Tilesheet) {
     this.tilesheets = tilesheets
@@ -53,6 +52,8 @@ export class Tilesheets {
   }
 
   public updateAnimatedSprites() {
+    if (this.animatedSprites.length === 0) return
+
     const batches: AnimatedBatches = {}
 
     for (const animatedSprite of this.animatedSprites) {
@@ -92,7 +93,9 @@ export class Tilesheets {
       animatedSprite.currentFrame = nextFrame
     }
 
-    for (let k of Object.keys(batches)) {
+    if (!batches[this.zLevel]) return;
+
+    for (let k of Object.keys(batches[this.zLevel])) {
       const batch = batches[this.zLevel][k]
 
       if (batch.draw.length === 0) continue
