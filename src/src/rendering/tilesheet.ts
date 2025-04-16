@@ -12,14 +12,15 @@ import {TileInfo, TileNew} from "../lib/tileset/legacy.ts";
 
 export type InstanceNumber = number;
 
-export enum SpriteLayer {
-  Fg,
-  Bg
+function degreesToRadians(degrees: number) {
+  const pi = Math.PI;
+  return degrees * (pi / 180);
 }
 
 export type DrawLocalSprite = {
   position: Vector3
   index: number
+  rotation: number
   layer: number
 }
 
@@ -118,6 +119,7 @@ export class Tilesheet {
       uvMappings.uvs.push(this.getCoordinatesFromIndex(drawSprite.index))
 
       const transform = new Object3D()
+      transform.rotateZ(degreesToRadians(drawSprite.rotation))
 
       transform.position.set(
         drawSprite.position.x,
@@ -134,7 +136,7 @@ export class Tilesheet {
     this.mesh.computeBoundingSphere()
   }
 
-  public removeSpriteAtPosition(position: Vector2, layer: SpriteLayer) {
+  public removeSpriteAtPosition(position: Vector2, layer: number) {
     let mappedInstance = this.mappedTiles.get(`${position.x}:${position.y}:${layer}`)
 
     if (!mappedInstance) return
@@ -142,7 +144,7 @@ export class Tilesheet {
     this.deleteInstance(mappedInstance)
   }
 
-  public removeSpritesAtPositions(positions: Vector2[], layers: SpriteLayer[]) {
+  public removeSpritesAtPositions(positions: Vector2[], layers: number[]) {
     const mappedInstances = []
 
     for (let i = 0; i++; i < positions.length) {

@@ -69,6 +69,7 @@ export type StaticSprite = {
   position: string
   index: number
   layer: number
+  rotate_deg: number
   z: number
 }
 
@@ -76,7 +77,8 @@ export type AnimatedSprite = {
   position: string
   indices: number[],
   layer: number
-  z: number
+  rotate_deg: number
+  z: number,
 }
 
 export type FallbackSprite = {

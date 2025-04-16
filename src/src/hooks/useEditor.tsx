@@ -18,7 +18,6 @@ import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {useMousePosition} from "./useMousePosition.ts";
 import {invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
 import {listen} from "@tauri-apps/api/event";
-import {SpriteLayer} from "../rendering/tilesheet.ts";
 import {
   AnimatedSprite,
   MapDataEvent,
@@ -310,6 +309,7 @@ export function useEditor(props: Props) {
           ...ds,
           layer: 0,
           position: vec2,
+          rotate_deg: 0
         }
       })
 

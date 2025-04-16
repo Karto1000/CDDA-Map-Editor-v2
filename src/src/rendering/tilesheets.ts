@@ -1,4 +1,4 @@
-import {DrawLocalSprite, SpriteLayer, Tilesheet} from "./tilesheet.ts";
+import {DrawLocalSprite, Tilesheet} from "./tilesheet.ts";
 import {Vector2, Vector3} from "three";
 
 const MAX_DEPTH = 999997
@@ -10,6 +10,7 @@ export type DrawStaticSprite = {
   position: Vector2
   index: number
   layer: number
+  rotate_deg: number
   z: number
 }
 
@@ -17,6 +18,7 @@ export type DrawAnimatedSprite = {
   position: Vector2
   indices: number[],
   layer: number
+  rotate_deg: number
   z: number
 }
 
@@ -30,7 +32,7 @@ type AnimatedBatches = {
   [zLevel: number]: {
     [key: string]: {
       draw: DrawLocalSprite[],
-      remove: { positions: Vector2[], layers: SpriteLayer[] }
+      remove: { positions: Vector2[], layers: number[] }
     }
   }
 }
@@ -73,7 +75,8 @@ export class Tilesheets {
           animatedSprite.indices[animatedSprite.currentFrame],
           animatedSprite.position,
           animatedSprite.layer,
-          tilesheet
+          tilesheet,
+          animatedSprite.rotate_deg
         )
 
         if (!batches[animatedSprite.z]) batches[animatedSprite.z] = {}
@@ -112,7 +115,13 @@ export class Tilesheets {
     )
   }
 
-  private getLocalDrawSprite(index: number, position: Vector2, layer: number, tilesheet: Tilesheet): DrawLocalSprite {
+  private getLocalDrawSprite(
+    index: number,
+    position: Vector2,
+    layer: number,
+    tilesheet: Tilesheet,
+    rotation: number
+  ): DrawLocalSprite {
     const worldY = position.y / TILE_SIZE
     const worldX = position.x / TILE_SIZE
 
@@ -126,7 +135,8 @@ export class Tilesheets {
     return {
       index: index - tilesheet.range[0],
       layer: layer,
-      position: newPosition
+      position: newPosition,
+      rotation
     }
   }
 
@@ -154,9 +164,8 @@ export class Tilesheets {
 
     const batches: StaticBatches = {}
 
-    for (const drawSprite of staticSprites) {
-      console.log(drawSprite.layer)
-      const index = drawSprite.index
+    for (const staticSprite of staticSprites) {
+      const index = staticSprite.index
 
       for (let k of Object.keys(this.tilesheets)) {
         const tilesheet = this.tilesheets[k]
@@ -164,14 +173,15 @@ export class Tilesheets {
 
         const drawLocalSprite = this.getLocalDrawSprite(
           index,
-          drawSprite.position,
-          drawSprite.layer,
-          tilesheet
+          staticSprite.position,
+          staticSprite.layer,
+          tilesheet,
+          staticSprite.rotate_deg
         )
 
-        if (!batches[drawSprite.z]) batches[drawSprite.z] = {}
-        if (!batches[drawSprite.z][k]) batches[drawSprite.z][k] = []
-        batches[drawSprite.z][k].push(drawLocalSprite)
+        if (!batches[staticSprite.z]) batches[staticSprite.z] = {}
+        if (!batches[staticSprite.z][k]) batches[staticSprite.z][k] = []
+        batches[staticSprite.z][k].push(drawLocalSprite)
 
         break
       }
@@ -207,7 +217,8 @@ export class Tilesheets {
       const drawLocalSprite: DrawLocalSprite = {
         index: index,
         layer: drawSprite.layer,
-        position: newPosition
+        position: newPosition,
+        rotation: drawSprite.rotate_deg
       }
 
       if (!batches[drawSprite.z]) batches[drawSprite.z] = []
@@ -227,7 +238,7 @@ export class Tilesheets {
     this.animatedSprites = []
   }
 
-  public removeSprite(position: Vector2, layer: SpriteLayer) {
+  public removeSprite(position: Vector2, layer: number) {
     for (let k of Object.keys(this.tilesheets)) {
       const tilesheet = this.tilesheets[k]
       tilesheet.removeSpriteAtPosition(position, layer)
