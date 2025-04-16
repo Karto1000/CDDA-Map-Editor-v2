@@ -156,6 +156,7 @@ struct StaticSprite {
     pub index: u32,
     pub layer: u32,
     pub z: i32,
+    pub rotate_deg: i32,
 }
 
 impl Hash for StaticSprite {
@@ -180,6 +181,7 @@ struct AnimatedSprite {
     pub indices: Vec<u32>,
     pub layer: u32,
     pub z: i32,
+    pub rotate_deg: i32,
 }
 
 impl Hash for AnimatedSprite {
@@ -263,7 +265,8 @@ pub fn get_fg_from_sprite(
                         let display_sprite = AnimatedSprite {
                             position: JSONSerializableUVec2(position_uvec2),
                             layer: (layer as u32) * 2 + SpriteLayer::Fg as u32,
-                            indices: id.into_vec(),
+                            indices: id.data.into_vec(),
+                            rotate_deg: id.rotation.deg(),
                             z: position.z,
                         };
 
@@ -273,7 +276,8 @@ pub fn get_fg_from_sprite(
                         let display_sprite = StaticSprite {
                             position: JSONSerializableUVec2(position_uvec2),
                             layer: (layer as u32) * 2 + SpriteLayer::Fg as u32,
-                            index: id.into_single().unwrap(),
+                            index: id.data.into_single().unwrap(),
+                            rotate_deg: id.rotation.deg(),
                             z: position.z,
                         };
 
@@ -311,7 +315,8 @@ pub fn get_bg_from_sprite(
                         let display_sprite = AnimatedSprite {
                             position: JSONSerializableUVec2(position_uvec2),
                             layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                            indices: id.into_vec(),
+                            indices: id.data.into_vec(),
+                            rotate_deg: id.rotation.deg(),
                             z: position.z,
                         };
 
@@ -321,8 +326,9 @@ pub fn get_bg_from_sprite(
                         let display_sprite = StaticSprite {
                             position: JSONSerializableUVec2(position_uvec2),
                             layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                            index: id.into_single().unwrap(),
+                            index: id.data.into_single().unwrap(),
                             z: position.z,
+                            rotate_deg: id.rotation.deg(),
                         };
 
                         Some(SpriteType::Static(display_sprite))

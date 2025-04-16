@@ -11,7 +11,13 @@ use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
 use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
+use crate::RANDOM;
 use derive_more::Display;
+use indexmap::IndexMap;
+use num_traits::PrimInt;
+use rand::distr::uniform::SampleUniform;
+use rand::Rng;
+use rand_chacha::rand_core::SeedableRng;
 use serde::de::{Error, Visitor};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -34,6 +40,26 @@ where
     }
 
     Ok(comments)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum NumberOrRange<T: PrimInt + Clone + SampleUniform> {
+    Number(T),
+    Range((T, T)),
+}
+
+impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
+    pub fn number(&self) -> T {
+        match self.clone() {
+            NumberOrRange::Number(n) => n,
+            NumberOrRange::Range((from, to)) => {
+                let mut rng = RANDOM.write().unwrap();
+                let num = rng.random_range(from..to);
+                num
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -316,7 +342,7 @@ pub enum DistributionInner {
 impl GetIdentifier for DistributionInner {
     fn get_identifier(
         &self,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
             DistributionInner::String(s) => s.clone(),
@@ -360,7 +386,7 @@ pub enum MapGenValue {
 impl GetIdentifier for MapGenValue {
     fn get_identifier(
         &self,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
             MapGenValue::String(s) => s.clone(),

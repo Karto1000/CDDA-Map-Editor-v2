@@ -22,9 +22,17 @@ pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
         .ok_or_else(|| Error::custom("Failed to strip 'range ' from prefix"))?
         .trim();
 
-    let from = left
+    let mut from = left
         .parse()
         .map_err(|e| Error::custom("Failed to parse range start"))?;
+
+    // TODO: Special case for the first entry of the first spritesheet. This is done to fix the
+    // Off by one error when rendering sprites of the first spritesheet. Probably a better way to do
+    // this
+    if from == 1 {
+        from = 0
+    }
+
     let to = right
         .parse()
         .map_err(|e| Error::custom("Failed to parse range end"))?;
@@ -95,6 +103,11 @@ pub enum AdditionalTileId {
 
     #[serde(rename = "open")]
     Open,
+
+    // ???
+    // BrownLikeBears -> tile_config.json -> Line 5688
+    #[serde(rename = "h")]
+    H,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

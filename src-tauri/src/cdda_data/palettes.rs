@@ -1,5 +1,6 @@
 use crate::cdda_data::{CataVariant, Distribution, MapGenValue};
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, ParameterIdentifier};
+use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -57,9 +58,9 @@ impl CDDAPalette {
     pub fn calculate_parameters(
         &self,
         all_palettes: &Palettes,
-    ) -> HashMap<ParameterIdentifier, CDDAIdentifier> {
-        let mut calculated_parameters: HashMap<ParameterIdentifier, CDDAIdentifier> =
-            HashMap::new();
+    ) -> IndexMap<ParameterIdentifier, CDDAIdentifier> {
+        let mut calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier> =
+            IndexMap::new();
 
         for (id, parameter) in self.parameters.iter() {
             calculated_parameters.insert(
@@ -87,7 +88,7 @@ impl CDDAPalette {
     pub fn get_terrain(
         &self,
         character: &char,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         all_palettes: &Palettes,
     ) -> Option<CDDAIdentifier> {
         if let Some(id) = self.terrain.get(character) {
@@ -110,7 +111,7 @@ impl CDDAPalette {
     pub fn get_furniture(
         &self,
         character: &char,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         all_palettes: &Palettes,
     ) -> Option<CDDAIdentifier> {
         if let Some(id) = self.furniture.get(character) {

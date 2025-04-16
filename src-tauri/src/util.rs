@@ -2,37 +2,18 @@ use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::Switch;
+use crate::tileset::GetRandom;
+use crate::RANDOM;
 use derive_more::with_trait::Display;
 use glam::UVec2;
+use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
-use rand::rng;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
-
-pub trait GetRandom<T> {
-    fn get_random(&self) -> &T;
-}
-
-impl<T> GetRandom<T> for HashMap<T, i32> {
-    fn get_random(&self) -> &T {
-        let mut weights = vec![];
-
-        let mut vec = self.iter().collect::<Vec<(&T, &i32)>>();
-        vec.iter().for_each(|(_, w)| weights.push(**w));
-
-        let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = rng();
-
-        let chosen_index = weighted_index.sample(&mut rng);
-        let item = vec.remove(chosen_index);
-
-        &item.0
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct CDDAIdentifier(pub String);
@@ -86,18 +67,18 @@ pub type Comment = Option<String>;
 pub trait GetIdentifier {
     fn get_identifier(
         &self,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier;
 }
 
 impl GetIdentifier for DistributionInner {
     fn get_identifier(
         &self,
-        calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
             DistributionInner::Param { param, fallback } => calculated_parameters
-                .get(&param)
+                .get(param)
                 .map(|p| p.clone())
                 .unwrap_or(fallback.clone()),
             DistributionInner::Normal(n) => n.clone(),
@@ -111,7 +92,7 @@ impl GetIdentifier for DistributionInner {
 impl GetIdentifier for CDDAIdentifier {
     fn get_identifier(
         &self,
-        _calculated_parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>,
+        _calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         self.clone()
     }
@@ -185,14 +166,17 @@ impl<T: Clone> MeabyVec<T> {
 }
 
 impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
-    pub fn get(&self, parameters: &HashMap<ParameterIdentifier, CDDAIdentifier>) -> CDDAIdentifier {
+    pub fn get(
+        &self,
+        parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> CDDAIdentifier {
         let mut weights = vec![];
         let mut self_vec = self.clone().into_vec();
 
         self.for_each(|v| weights.push(v.weight_or_one()));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = rng();
+        let mut rng = RANDOM.write().unwrap();
 
         let chosen_index = weighted_index.sample(&mut rng);
         let item = self_vec.remove(chosen_index);

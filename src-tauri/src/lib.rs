@@ -7,6 +7,7 @@ mod util;
 use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
 use crate::cdda_data::palettes::{CDDAPalette, Palettes};
 use crate::cdda_data::region_settings::CDDARegionSettings;
+use crate::cdda_data::{DistributionInner, MapGenValue};
 use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
@@ -25,24 +26,36 @@ use crate::tileset::legacy_tileset::tile_config::{
 };
 use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::TilesheetKind;
-use crate::util::{CDDAIdentifier, DistributionInner, GetIdentifier, Load, MeabyVec};
+use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec, MeabyWeighted};
 use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
 use glam::{IVec3, UVec2, UVec3};
 use image::{load, GenericImageView};
+use lazy_static::lazy_static;
 use log::{debug, error, info, warn, LevelFilter};
 use map_data::importing::MapDataImporter;
+use rand::prelude::StdRng;
+use rand::SeedableRng;
+use rand_chacha::ChaCha8Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::sync::{Arc, OnceLock, RwLock};
 use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
 use tileset::legacy_tileset::LegacyTilesheet;
 use walkdir::WalkDir;
+
+pub static RANDOM_SEED: u64 = 1;
+
+lazy_static! {
+    pub static ref RANDOM: Arc<RwLock<StdRng>> =
+        Arc::new(RwLock::new(StdRng::seed_from_u64(RANDOM_SEED)));
+}
 
 #[tauri::command]
 async fn frontend_ready(
@@ -63,7 +76,7 @@ async fn frontend_ready(
     Ok(())
 }
 
-fn get_saved_editor_data(app: &mut App) -> Result<EditorData, anyhow::Error> {
+fn get_saved_editor_data(app: &mut App) -> Result<EditorData, Error> {
     let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
 
     let directory_path = match project_dir {
@@ -279,6 +292,27 @@ pub fn run() -> () {
                         om_terrain: "nuclear_plant_0_0_0".into(),
                     };
                     let loaded = importer.load()?;
+
+                    // let mut project = Project::new("Test".to_string(), UVec2::new(24, 24));
+                    //
+                    // let mut test_map = MapData::default();
+                    // test_map.terrain.insert(
+                    //     'g',
+                    //     MapGenValue::Distribution(MeabyVec::Vec(vec![
+                    //         MeabyWeighted::NotWeighted(DistributionInner::String(
+                    //             CDDAIdentifier::from("t_grass"),
+                    //         )),
+                    //         MeabyWeighted::NotWeighted(DistributionInner::String(
+                    //             CDDAIdentifier::from("t_grass_dead"),
+                    //         )),
+                    //     ])),
+                    // );
+                    // test_map
+                    //     .cells
+                    //     .iter_mut()
+                    //     .for_each(|(_, cell)| cell.character = 'g');
+                    //
+                    // project.maps.insert(0, test_map);
 
                     map_data.data.push(loaded);
 

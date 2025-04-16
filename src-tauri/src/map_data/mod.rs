@@ -4,7 +4,7 @@ pub(crate) mod io;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
-use crate::cdda_data::{MapGenValue, TileLayer};
+use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
 use crate::map_data::handlers::{get_bg_from_sprite, get_fg_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedSprite;
@@ -14,6 +14,7 @@ use crate::util::{
 };
 use dyn_clone::{clone_trait_object, DynClone};
 use glam::{IVec3, UVec2};
+use indexmap::IndexMap;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -122,12 +123,14 @@ pub trait Set: Debug + DynClone + Send + Sync {
     ) -> Vec<SpriteType> {
         let mut sprites = vec![];
 
+        let chosen_coordinates = self.coordinates();
+
         // Like before, we need to map the ids before we generate the sprites
-        for coordinates in self.coordinates() {
+        for coordinates in chosen_coordinates.iter() {
             self.map_ids(&coordinates, z, mapped_sprites_lock)
         }
 
-        for coordinates in self.coordinates() {
+        for coordinates in chosen_coordinates {
             let (fg, bg) =
                 self.get_fg_and_bg(coordinates, z, tilesheet, json_data, mapped_sprites_lock);
 
@@ -183,7 +186,8 @@ pub enum SetOperation {
 
 #[derive(Debug, Clone)]
 pub struct SetPoint {
-    pub coordinates: UVec2,
+    pub x: NumberOrRange<u32>,
+    pub y: NumberOrRange<u32>,
     pub z: i32,
     pub chance: u32,
     pub repeat: (u32, u32),
@@ -192,7 +196,8 @@ pub struct SetPoint {
 
 impl Set for SetPoint {
     fn coordinates(&self) -> Vec<UVec2> {
-        vec![self.coordinates]
+        let coordinates = UVec2::new(self.x.number(), self.y.number());
+        vec![coordinates]
     }
 
     fn operation(&self) -> &SetOperation {
@@ -202,8 +207,11 @@ impl Set for SetPoint {
 
 #[derive(Debug, Clone)]
 pub struct SetLine {
-    pub coordinates_from: UVec2,
-    pub coordinates_to: UVec2,
+    pub from_x: NumberOrRange<u32>,
+    pub from_y: NumberOrRange<u32>,
+
+    pub to_x: NumberOrRange<u32>,
+    pub to_y: NumberOrRange<u32>,
 
     pub z: i32,
     pub chance: u32,
@@ -223,8 +231,12 @@ impl Set for SetLine {
 
 #[derive(Debug, Clone)]
 pub struct SetSquare {
-    pub top_left: UVec2,
-    pub bottom_right: UVec2,
+    pub top_left_x: NumberOrRange<u32>,
+    pub top_left_y: NumberOrRange<u32>,
+
+    pub bottom_right_x: NumberOrRange<u32>,
+    pub bottom_right_y: NumberOrRange<u32>,
+
     pub z: i32,
     pub chance: u32,
     pub repeat: (u32, u32),
@@ -235,8 +247,14 @@ impl Set for SetSquare {
     fn coordinates(&self) -> Vec<UVec2> {
         let mut coordinates = vec![];
 
-        for y in self.top_left.y..self.bottom_right.x {
-            for x in self.top_left.x..self.bottom_right.x {
+        let top_left_chosen_y = self.top_left_y.number();
+        let top_left_chosen_x = self.top_left_x.number();
+
+        let bottom_right_chosen_y = self.bottom_right_y.number();
+        let bottom_right_chosen_x = self.bottom_right_x.number();
+
+        for y in top_left_chosen_y..bottom_right_chosen_y {
+            for x in top_left_chosen_x..bottom_right_chosen_x {
                 coordinates.push(UVec2::new(x, y))
             }
         }
@@ -256,11 +274,11 @@ pub struct Cell {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapData {
-    pub cells: HashMap<UVec2, Cell>,
+    pub cells: IndexMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
 
-    pub calculated_parameters: HashMap<ParameterIdentifier, CDDAIdentifier>,
-    pub parameters: HashMap<ParameterIdentifier, Parameter>,
+    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
 
     pub terrain: HashMap<char, MapGenValue>,
     pub furniture: HashMap<char, MapGenValue>,
@@ -273,7 +291,7 @@ pub struct MapData {
 
 impl Default for MapData {
     fn default() -> Self {
-        let mut cells = HashMap::new();
+        let mut cells = IndexMap::new();
 
         for y in 0..24 {
             for x in 0..24 {
@@ -304,11 +322,11 @@ pub struct CDDAIdentifierGroup {
 impl MapData {
     pub fn new(
         fill: Option<DistributionInner>,
-        cells: HashMap<UVec2, Cell>,
+        cells: IndexMap<UVec2, Cell>,
         terrain: HashMap<char, MapGenValue>,
         furniture: HashMap<char, MapGenValue>,
         palettes: Vec<MapGenValue>,
-        parameters: HashMap<ParameterIdentifier, Parameter>,
+        parameters: IndexMap<ParameterIdentifier, Parameter>,
         set: Vec<Arc<dyn Set>>,
     ) -> Self {
         Self {
@@ -324,7 +342,7 @@ impl MapData {
     }
 
     pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>) {
-        let mut calculated_parameters = HashMap::new();
+        let mut calculated_parameters = IndexMap::new();
 
         for (id, parameter) in self.parameters.iter() {
             calculated_parameters.insert(

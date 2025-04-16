@@ -1,5 +1,5 @@
 use crate::cdda_data::palettes::Parameter;
-use crate::cdda_data::MapGenValue;
+use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map_data::{
     Cell, MapData, PlaceableSetType, RemovableSetType, Set, SetLine, SetOperation, SetPoint,
     SetSquare,
@@ -7,6 +7,7 @@ use crate::map_data::{
 use crate::util::{CDDAIdentifier, DistributionInner, ParameterIdentifier};
 use crate::{skip_err, skip_none};
 use glam::{UVec2, Vec3};
+use indexmap::IndexMap;
 use log::warn;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -31,11 +32,11 @@ pub struct SetIntermediate {
     point: Option<CDDAIdentifier>,
     square: Option<CDDAIdentifier>,
     id: Option<CDDAIdentifier>,
-    x: Option<u32>,
-    y: Option<u32>,
+    x: Option<NumberOrRange<u32>>,
+    y: Option<NumberOrRange<u32>>,
     z: Option<i32>,
-    x2: Option<u32>,
-    y2: Option<u32>,
+    x2: Option<NumberOrRange<u32>>,
+    y2: Option<NumberOrRange<u32>>,
     amount: Option<(u32, u32)>,
     chance: Option<u32>,
     repeat: Option<(u32, u32)>,
@@ -52,7 +53,7 @@ pub struct CDDAMapDataObject {
     #[serde(default)]
     pub furniture: HashMap<char, MapGenValue>,
     #[serde(default)]
-    pub parameters: HashMap<ParameterIdentifier, Parameter>,
+    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
     #[serde(default)]
     pub set: Vec<SetIntermediate>,
 }
@@ -67,7 +68,7 @@ pub struct CDDAMapData {
 
 impl Into<MapData> for CDDAMapData {
     fn into(self) -> MapData {
-        let mut cells = HashMap::new();
+        let mut cells = IndexMap::new();
 
         // We need to reverse the iterators direction since we want the last row of the rows to
         // be at the bottom left so basically 0, 0
@@ -114,8 +115,10 @@ impl Into<MapData> for CDDAMapData {
 
                 if let Some(operation) = operation {
                     let set_line = SetLine {
-                        coordinates_from: UVec2::new(x, y),
-                        coordinates_to: UVec2::new(x2, y2),
+                        from_x: x,
+                        from_y: y,
+                        to_x: x2,
+                        to_y: y2,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),
@@ -124,9 +127,7 @@ impl Into<MapData> for CDDAMapData {
 
                     set_vec.push(Arc::new(set_line));
                 }
-            }
-
-            if let Some(ty) = set.point {
+            } else if let Some(ty) = set.point {
                 let x = skip_none!(set.x);
                 let y = skip_none!(set.y);
 
@@ -162,7 +163,8 @@ impl Into<MapData> for CDDAMapData {
 
                 if let Some(operation) = operation {
                     let set_point = SetPoint {
-                        coordinates: UVec2::new(x, y),
+                        x,
+                        y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),
@@ -171,9 +173,7 @@ impl Into<MapData> for CDDAMapData {
 
                     set_vec.push(Arc::new(set_point))
                 }
-            }
-
-            if let Some(ty) = set.square {
+            } else if let Some(ty) = set.square {
                 let x = skip_none!(set.x);
                 let y = skip_none!(set.y);
                 let x2 = skip_none!(set.x2);
@@ -202,8 +202,10 @@ impl Into<MapData> for CDDAMapData {
 
                 if let Some(operation) = operation {
                     let set_square = SetSquare {
-                        top_left: UVec2::new(x, y),
-                        bottom_right: UVec2::new(x2, y2),
+                        top_left_x: x,
+                        top_left_y: y,
+                        bottom_right_x: x2,
+                        bottom_right_y: y2,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),

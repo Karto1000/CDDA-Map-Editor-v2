@@ -1,4 +1,5 @@
 use crate::util::{CDDAIdentifier, Weighted};
+use indexmap::IndexMap;
 use serde::Deserialize;
 use std::collections::HashMap;
 
@@ -7,8 +8,8 @@ pub struct RegionIdentifier(pub String);
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct RegionTerrainAndFurniture {
-    pub terrain: HashMap<RegionIdentifier, HashMap<CDDAIdentifier, i32>>,
-    pub furniture: HashMap<RegionIdentifier, HashMap<CDDAIdentifier, i32>>,
+    pub terrain: IndexMap<RegionIdentifier, IndexMap<CDDAIdentifier, i32>>,
+    pub furniture: IndexMap<RegionIdentifier, IndexMap<CDDAIdentifier, i32>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]

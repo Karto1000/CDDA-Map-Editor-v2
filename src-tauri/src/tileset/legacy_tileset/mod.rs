@@ -11,7 +11,7 @@ use crate::tileset::{
     WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
 };
 use crate::util::{CDDAIdentifier, Load, MeabyVec};
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use log::info;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
@@ -25,7 +25,99 @@ pub(crate) mod tile_config;
 
 pub type SpriteIndex = u32;
 pub type FinalIds = Option<Vec<WeightedSprite<SpriteIndex>>>;
-pub type AdditionalTileIds = Option<Vec<WeightedSprite<Vec<SpriteIndex>>>>;
+pub type AdditionalTileIds = Option<Vec<WeightedSprite<Rotates>>>;
+
+#[derive(Debug, Clone)]
+pub enum Rotation {
+    Deg0,
+    Deg90,
+    Deg180,
+    Deg270,
+}
+
+impl Rotation {
+    pub fn deg(self) -> i32 {
+        match self {
+            Rotation::Deg0 => 0,
+            Rotation::Deg90 => 90,
+            Rotation::Deg180 => 180,
+            Rotation::Deg270 => 270,
+        }
+    }
+}
+
+impl From<CardinalDirection> for Rotation {
+    fn from(value: CardinalDirection) -> Self {
+        match value {
+            CardinalDirection::North => Self::Deg0,
+            CardinalDirection::East => Self::Deg90,
+            CardinalDirection::South => Self::Deg180,
+            CardinalDirection::West => Self::Deg270,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Rotated<T> {
+    pub data: T,
+    pub rotation: Rotation,
+}
+
+impl<T> Rotated<T> {
+    pub fn none(data: T) -> Self {
+        Self {
+            data,
+            rotation: Rotation::Deg0,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Rotates {
+    Auto(SpriteIndex),
+    Pre2((SpriteIndex, SpriteIndex)),
+    Pre4((SpriteIndex, SpriteIndex, SpriteIndex, SpriteIndex)),
+}
+
+impl Rotates {
+    pub fn get(&self, direction: &CardinalDirection) -> &SpriteIndex {
+        match self {
+            Rotates::Auto(a) => a,
+            Rotates::Pre2(p) => match direction {
+                CardinalDirection::North => &p.0,
+                CardinalDirection::East => &p.1,
+                CardinalDirection::South => unreachable!(),
+                CardinalDirection::West => unreachable!(),
+            },
+            Rotates::Pre4(p) => match direction {
+                CardinalDirection::North => &p.0,
+                CardinalDirection::East => &p.1,
+                CardinalDirection::South => &p.2,
+                CardinalDirection::West => &p.3,
+            },
+        }
+    }
+}
+
+impl TryFrom<Vec<SpriteIndex>> for Rotates {
+    type Error = Error;
+
+    fn try_from(value: Vec<SpriteIndex>) -> Result<Self, Self::Error> {
+        match (value.get(0), value.get(1), value.get(2), value.get(3)) {
+            (Some(auto), None, None, None) => Ok(Rotates::Auto(auto.clone())),
+            (Some(first), Some(second), None, None) => {
+                Ok(Rotates::Pre2((first.clone(), second.clone())))
+            }
+            (Some(first), Some(second), Some(third), Some(fourth)) => Ok(Rotates::Pre4((
+                first.clone(),
+                second.clone(),
+                third.clone(),
+                fourth.clone(),
+            ))),
+            (_, _, _, _) => Err(anyhow!("Invalid vec supplied for rotation")),
+        }
+    }
+}
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub enum CardinalDirection {
@@ -51,25 +143,35 @@ fn to_weighted_vec(
 fn to_weighted_vec_additional_exception(
     indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
 ) -> Option<Vec<WeightedSprite<SpriteIndex>>> {
-    indices.map(|fg| {
-        fg.map(|mw| {
+    indices.map(|ids| {
+        ids.map(|mw| {
             let weighted = mw.weighted();
-            let single = weighted.sprite.into_single().unwrap();
+            let single = match weighted.sprite.into_single() {
+                None => return None,
+                Some(v) => v,
+            };
 
-            WeightedSprite::new(single, weighted.weight)
+            Some(WeightedSprite::new(single, weighted.weight))
         })
+        .into_iter()
+        .filter_map(|v| {
+            if v.is_none() {
+                return None;
+            }
+            return Some(v.unwrap());
+        })
+        .collect()
     })
 }
 
 fn to_weighted_vec_additional(
     indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
-) -> Option<Vec<WeightedSprite<Vec<SpriteIndex>>>> {
+) -> Option<Vec<WeightedSprite<Rotates>>> {
     indices.map(|fg| {
         fg.map(|mw| {
             let weighted = mw.weighted();
-            let single = weighted.sprite.into_vec();
-
-            WeightedSprite::new(single, weighted.weight)
+            let rotation = Rotates::try_from(weighted.sprite.into_vec()).unwrap();
+            WeightedSprite::new(rotation, weighted.weight)
         })
     })
 }
@@ -77,7 +179,7 @@ fn to_weighted_vec_additional(
 fn get_multitile_sprite_from_additional_tiles(
     tile: &Tile,
     additional_tiles: &Vec<AdditionalTile>,
-) -> Result<Sprite, anyhow::Error> {
+) -> Result<Sprite, Error> {
     let mut additional_tile_ids = HashMap::new();
     // Special cases for open and broken
     let mut broken: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> = None;
@@ -106,7 +208,7 @@ fn get_multitile_sprite_from_additional_tiles(
                     MultitileSprite {
                         ids: ForeBackIds::new(fg, bg),
                         animated: additional_tile.animated.unwrap_or(false),
-                        rotates: additional_tile.rotates.unwrap_or(false),
+                        rotates: additional_tile.rotates.unwrap_or(true),
                     },
                 );
             }
@@ -151,74 +253,6 @@ fn get_multitile_sprite_from_additional_tiles(
         unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
         end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
     })
-}
-
-pub fn get_tilesheet_from_config(config: LegacyTileConfig) -> LegacyTilesheet {
-    let mut id_map = HashMap::new();
-    let mut fallback_map = HashMap::new();
-
-    let mut normal_spritesheets = vec![];
-    let mut fallback_spritesheet = None;
-
-    for spritesheet in config.spritesheets.iter() {
-        match spritesheet {
-            Spritesheet::Normal(n) => normal_spritesheets.push(n),
-            Spritesheet::Fallback(f) => fallback_spritesheet = Some(f),
-        }
-    }
-
-    for spritesheet in normal_spritesheets {
-        for tile in spritesheet.tiles.iter() {
-            let is_multitile =
-                tile.multitile.unwrap_or_else(|| false) && tile.additional_tiles.is_some();
-
-            if !is_multitile {
-                let fg = to_weighted_vec(tile.fg.clone());
-                let bg = to_weighted_vec(tile.bg.clone());
-
-                tile.id.for_each(|id| {
-                    id_map.insert(
-                        id.clone(),
-                        Sprite::Single {
-                            ids: ForeBackIds::new(fg.clone(), bg.clone()),
-                            animated: tile.animated.unwrap_or(false),
-                            rotates: tile.rotates.unwrap_or(false),
-                        },
-                    );
-                });
-            }
-
-            if is_multitile {
-                let additional_tiles = match &tile.additional_tiles {
-                    None => unreachable!(),
-                    Some(t) => t,
-                };
-
-                tile.id.for_each(|id| {
-                    id_map.insert(
-                        id.clone(),
-                        get_multitile_sprite_from_additional_tiles(tile, additional_tiles).unwrap(),
-                    );
-                });
-            }
-        }
-    }
-
-    let fallback_spritesheet = fallback_spritesheet.expect("Fallback spritesheet to exist");
-
-    for ascii_group in fallback_spritesheet.ascii.iter() {
-        for (character, offset) in FALLBACK_TILE_MAPPING {
-            fallback_map.insert(
-                format!("{}_{}", character, ascii_group.color),
-                (offset / FALLBACK_TILE_ROW_SIZE as u32) + offset,
-            );
-        }
-    }
-
-    LegacyTilesheet {
-        id_map,
-        fallback_map,
-    }
 }
 
 pub struct LegacyTilesheet {
@@ -353,8 +387,8 @@ impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
                     tile.multitile.unwrap_or_else(|| false) && tile.additional_tiles.is_some();
 
                 if !is_multitile {
-                    let fg = crate::tileset::legacy_tileset::to_weighted_vec(tile.fg.clone());
-                    let bg = crate::tileset::legacy_tileset::to_weighted_vec(tile.bg.clone());
+                    let fg = to_weighted_vec(tile.fg.clone());
+                    let bg = to_weighted_vec(tile.bg.clone());
 
                     tile.id.for_each(|id| {
                         id_map.insert(
@@ -377,7 +411,8 @@ impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
                     tile.id.for_each(|id| {
                         id_map.insert(
                             id.clone(),
-                            crate::tileset::legacy_tileset::get_multitile_sprite_from_additional_tiles(tile, additional_tiles).unwrap(),
+                            get_multitile_sprite_from_additional_tiles(tile, additional_tiles)
+                                .unwrap(),
                         );
                     });
                 }

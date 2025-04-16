@@ -1,13 +1,17 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
 use crate::tileset::current_tileset::CurrentTilesheet;
+use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
 use crate::tileset::legacy_tileset::{
-    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, SpriteIndex,
+    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, Rotated, Rotates, Rotation,
+    SpriteIndex,
 };
 use crate::util::{CDDAIdentifier, MeabyVec};
+use crate::RANDOM;
+use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
-use rand::rng;
+use rand_chacha::rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -15,6 +19,8 @@ pub(crate) mod current_tileset;
 pub(crate) mod handlers;
 pub(crate) mod io;
 pub(crate) mod legacy_tileset;
+
+pub type MeabyAnimated<T> = MeabyVec<T>;
 
 const FALLBACK_TILE_ROW_SIZE: usize = 16;
 const FALLBACK_TILE_WIDTH: usize = 32;
@@ -150,38 +156,70 @@ impl Sprite {
 
     fn get_random_animated_sprite(
         ids: &Vec<WeightedSprite<SpriteIndex>>,
-    ) -> Option<MeabyVec<SpriteIndex>> {
+    ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if ids.len() == 0 {
             return None;
         }
 
-        Some(MeabyVec::Vec(
+        Some(Rotated::none(MeabyVec::Vec(
             ids.to_vec().into_iter().map(|v| v.sprite).collect(),
-        ))
+        )))
     }
 
-    fn get_random_sprite(ids: &Vec<WeightedSprite<SpriteIndex>>) -> Option<MeabyVec<SpriteIndex>> {
+    fn get_random_sprite(
+        ids: &Vec<WeightedSprite<SpriteIndex>>,
+    ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if ids.len() == 0 {
             return None;
         }
 
-        Some(MeabyVec::Single(ids.get_random().clone()))
+        let rotated = Rotated::none(MeabyAnimated::Single(ids.get_random().clone()));
+        Some(rotated)
     }
 
     fn get_random_additional_tile_sprite(
         direction: CardinalDirection,
-        ids: &Vec<WeightedSprite<Vec<SpriteIndex>>>,
-    ) -> Option<MeabyVec<SpriteIndex>> {
+        tile_id: AdditionalTileId,
+        rotates: bool,
+        ids: &Vec<WeightedSprite<Rotates>>,
+    ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if ids.len() == 0 {
             return None;
         }
 
-        Some(MeabyVec::Single(
-            ids.get_random()
-                .get(direction.clone() as usize)
-                .expect(format!("t_connection to have a {:?} sprite", direction).as_str())
-                .clone(),
-        ))
+        let rotated = match tile_id {
+            AdditionalTileId::Center | AdditionalTileId::Unconnected => Rotated {
+                data: MeabyAnimated::Single(ids.get_random().get(&direction).clone()),
+                rotation: Rotation::Deg0,
+            },
+            AdditionalTileId::Corner
+            | AdditionalTileId::TConnection
+            | AdditionalTileId::Edge
+            | AdditionalTileId::EndPiece => match ids.get_random() {
+                Rotates::Auto(a) => match rotates {
+                    true => Rotated {
+                        data: MeabyAnimated::Single(a.clone()),
+                        rotation: Rotation::from(direction),
+                    },
+                    false => Rotated::none(MeabyAnimated::Single(a.clone())),
+                },
+                Rotates::Pre2(p) => match direction {
+                    CardinalDirection::North => Rotated::none(MeabyAnimated::Single(p.0.clone())),
+                    CardinalDirection::East => Rotated::none(MeabyAnimated::Single(p.1.clone())),
+                    CardinalDirection::South => unreachable!(),
+                    CardinalDirection::West => unreachable!(),
+                },
+                Rotates::Pre4(p) => match direction {
+                    CardinalDirection::North => Rotated::none(MeabyAnimated::Single(p.0.clone())),
+                    CardinalDirection::East => Rotated::none(MeabyAnimated::Single(p.1.clone())),
+                    CardinalDirection::South => Rotated::none(MeabyAnimated::Single(p.2.clone())),
+                    CardinalDirection::West => Rotated::none(MeabyAnimated::Single(p.3.clone())),
+                },
+            },
+            _ => unreachable!(),
+        };
+
+        Some(rotated)
     }
 
     fn edit_connection_groups(flags: &Vec<String>, connection: &mut HashSet<CDDAIdentifier>) {
@@ -272,9 +310,13 @@ impl Sprite {
         right: Option<CDDAIdentifier>,
         bottom: Option<CDDAIdentifier>,
         left: Option<CDDAIdentifier>,
-    ) -> Option<MeabyVec<SpriteIndex>> {
+    ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
-            Sprite::Single { ids, animated, .. } => match *animated {
+            Sprite::Single {
+                ids,
+                animated,
+                rotates,
+            } => match *animated {
                 true => match &ids.fg {
                     None => None,
                     Some(fg) => Self::get_random_animated_sprite(fg),
@@ -310,6 +352,8 @@ impl Sprite {
                                 // instead of copying the contents of the function into this match arm
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::North,
+                                    AdditionalTileId::Center,
+                                    center.rotates,
                                     fg,
                                 ),
                             },
@@ -320,6 +364,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::East,
+                                    AdditionalTileId::TConnection,
+                                    t_connection.rotates,
                                     fg,
                                 ),
                             },
@@ -330,6 +376,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::South,
+                                    AdditionalTileId::TConnection,
+                                    t_connection.rotates,
                                     fg,
                                 ),
                             },
@@ -340,6 +388,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::West,
+                                    AdditionalTileId::TConnection,
+                                    t_connection.rotates,
                                     fg,
                                 ),
                             },
@@ -350,6 +400,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::North,
+                                    AdditionalTileId::TConnection,
+                                    t_connection.rotates,
                                     fg,
                                 ),
                             },
@@ -360,6 +412,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::East,
+                                    AdditionalTileId::Corner,
+                                    corner.rotates,
                                     fg,
                                 ),
                             },
@@ -370,6 +424,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::South,
+                                    AdditionalTileId::Corner,
+                                    corner.rotates,
                                     fg,
                                 ),
                             },
@@ -380,6 +436,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::North,
+                                    AdditionalTileId::Corner,
+                                    corner.rotates,
                                     fg,
                                 ),
                             },
@@ -390,6 +448,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::West,
+                                    AdditionalTileId::Corner,
+                                    corner.rotates,
                                     fg,
                                 ),
                             },
@@ -400,6 +460,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::South,
+                                    AdditionalTileId::EndPiece,
+                                    end_piece.rotates,
                                     fg,
                                 ),
                             },
@@ -410,6 +472,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::East,
+                                    AdditionalTileId::EndPiece,
+                                    end_piece.rotates,
                                     fg,
                                 ),
                             },
@@ -420,6 +484,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::North,
+                                    AdditionalTileId::EndPiece,
+                                    end_piece.rotates,
                                     fg,
                                 ),
                             },
@@ -430,6 +496,8 @@ impl Sprite {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     CardinalDirection::West,
+                                    AdditionalTileId::EndPiece,
+                                    end_piece.rotates,
                                     fg,
                                 ),
                             },
@@ -441,6 +509,8 @@ impl Sprite {
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     // East-West
                                     CardinalDirection::East,
+                                    AdditionalTileId::Edge,
+                                    edge.rotates,
                                     fg,
                                 ),
                             },
@@ -452,6 +522,8 @@ impl Sprite {
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     // North-South
                                     CardinalDirection::North,
+                                    AdditionalTileId::Edge,
+                                    edge.rotates,
                                     fg,
                                 ),
                             },
@@ -463,6 +535,8 @@ impl Sprite {
                                 Some(fg) => Self::get_random_additional_tile_sprite(
                                     // First
                                     CardinalDirection::North,
+                                    AdditionalTileId::Unconnected,
+                                    unconnected.rotates,
                                     fg,
                                 ),
                             },
@@ -484,7 +558,7 @@ impl Sprite {
         right: Option<CDDAIdentifier>,
         bottom: Option<CDDAIdentifier>,
         left: Option<CDDAIdentifier>,
-    ) -> Option<MeabyVec<SpriteIndex>> {
+    ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
             Sprite::Single { ids, animated, .. } => match *animated {
                 true => match &ids.bg {
@@ -607,11 +681,28 @@ impl<T> GetRandom<T> for Vec<WeightedSprite<T>> {
         self.iter().for_each(|v| weights.push(v.weight));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = rng();
+        let mut rng = RANDOM.write().unwrap();
 
         let chosen_index = weighted_index.sample(&mut rng);
 
         &self.get(chosen_index).unwrap().sprite
+    }
+}
+
+impl<T> GetRandom<T> for IndexMap<T, i32> {
+    fn get_random(&self) -> &T {
+        let mut weights = vec![];
+
+        let mut vec = self.iter().collect::<Vec<(&T, &i32)>>();
+        vec.iter().for_each(|(_, w)| weights.push(**w));
+
+        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+        let mut rng = RANDOM.write().unwrap();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+        let item = vec.remove(chosen_index);
+
+        &item.0
     }
 }
 
