@@ -8,7 +8,9 @@ use crate::map_data::io::ProjectSaver;
 use crate::map_data::{MapData, PlaceableSetType, ProjectContainer, SetSquare};
 use crate::tileset;
 use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex};
-use crate::tileset::{SpriteKind, SpriteLayer, Tilesheet, TilesheetKind};
+use crate::tileset::{
+    get_id_from_mapped_sprites, AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
+};
 use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Save};
 use glam::{IVec3, UVec2, UVec3, Vec3};
 use image::imageops::tile;
@@ -233,26 +235,17 @@ pub enum SpriteType {
 pub fn get_sprite_type_from_sprite(
     id: &CDDAIdentifier,
     position: IVec3,
-    json_data: &DeserializedCDDAJsonData,
+    adjacent_sprites: &AdjacentSprites,
     layer: TileLayer,
     sprite_kind: &SpriteKind,
-    mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    // ----
+    json_data: &DeserializedCDDAJsonData,
 ) -> (Option<SpriteType>, Option<SpriteType>) {
-    let (top, right, bottom, left) =
-        tileset::get_adjacent_coordinates(mapped_sprites_lock, position, &layer);
     let position_uvec2 = UVec2::new(position.x as u32, position.y as u32);
 
     match sprite_kind {
         SpriteKind::Exists(sprite) => {
-            let fg = match sprite.get_fg_id(
-                &id,
-                json_data,
-                &layer,
-                top.clone(),
-                right.clone(),
-                bottom.clone(),
-                left.clone(),
-            ) {
+            let fg = match sprite.get_fg_id(&id, json_data, &layer, adjacent_sprites) {
                 None => None,
                 Some(id) => match sprite.is_animated() {
                     true => {
@@ -280,7 +273,7 @@ pub fn get_sprite_type_from_sprite(
                 },
             };
 
-            let bg = match sprite.get_bg_id(&id, json_data, &layer, top, right, bottom, left) {
+            let bg = match sprite.get_bg_id(&id, json_data, &layer, adjacent_sprites) {
                 None => None,
                 Some(id) => match sprite.is_animated() {
                     true => {
@@ -383,12 +376,28 @@ pub async fn open_project(
         let mut identifiers = HashMap::new();
 
         for set in map_data.set.iter() {
-            let chosen_coordinates = set.coordinates();
+            let chosen_coordinates: Vec<IVec3> = set
+                .coordinates()
+                .into_iter()
+                .map(|c| IVec3::new(c.x as i32, c.y as i32, *z))
+                .collect();
 
-            let mapped_sprites = set.get_mapped_sprites(&chosen_coordinates, *z);
+            let mapped_sprites = set.get_mapped_sprites(chosen_coordinates.clone());
             mapped_sprites_lock.extend(mapped_sprites);
 
-            let sprites = set.get_sprites(*z, tilesheet, json_data, &mut mapped_sprites_lock);
+            let adjacent_tiles_vec: Vec<AdjacentSprites> = chosen_coordinates
+                .iter()
+                .map(|c| {
+                    tileset::get_adjacent_sprites(
+                        &mapped_sprites_lock,
+                        c.clone(),
+                        &set.tile_layer(),
+                    )
+                })
+                .collect();
+
+            let sprites =
+                set.get_sprites(chosen_coordinates, adjacent_tiles_vec, tilesheet, json_data);
 
             for sprite in sprites {
                 match sprite {
@@ -408,11 +417,24 @@ pub async fn open_project(
         for (_, place_vec) in map_data.place.iter() {
             for place in place_vec {
                 let chosen_coordinates = place.coordinates();
+                let three_dim_coordinates =
+                    IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, *z);
+
+                let adjacent_sprites = tileset::get_adjacent_sprites(
+                    &mapped_sprites_lock,
+                    three_dim_coordinates,
+                    &place.tile_layer(),
+                );
 
                 let mapped_sprites = place.get_mapped_sprites(&chosen_coordinates, *z);
                 mapped_sprites_lock.extend(mapped_sprites);
 
-                let sprites = place.get_sprites(*z, tilesheet, json_data, &mut mapped_sprites_lock);
+                let sprites = place.get_sprites(
+                    three_dim_coordinates,
+                    &adjacent_sprites,
+                    tilesheet,
+                    json_data,
+                );
 
                 for sprite in sprites {
                     match sprite {
@@ -484,6 +506,9 @@ pub async fn open_project(
             }
 
             let mapped_cords = IVec3::new(p.x as i32, p.y as i32, *z);
+
+            // We don't want to overwrite the sprites we set with the 'set' and 'place' properties
+            // So we're checking if there's a sprite already here
             match mapped_sprites_lock.get(&mapped_cords) {
                 None => {
                     mapped_sprites_lock.insert(mapped_cords, mapped_sprite);
@@ -520,13 +545,19 @@ pub async fn open_project(
                     TilesheetKind::Current(c) => c.get_sprite(&id, &json_data),
                 };
 
+                let adjacent_sprites = tileset::get_adjacent_sprites(
+                    &mapped_sprites_lock,
+                    mapped_sprite_coords.clone(),
+                    &layer,
+                );
+
                 let (fg, bg) = get_sprite_type_from_sprite(
                     &id,
                     mapped_sprite_coords.clone(),
-                    json_data,
+                    &adjacent_sprites,
                     layer.clone(),
                     &sprite_kind,
-                    &mut mapped_sprites_lock,
+                    json_data,
                 );
 
                 if let Some(fg) = fg {

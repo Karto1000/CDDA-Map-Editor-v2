@@ -245,22 +245,23 @@ impl Sprite {
         this_id: &CDDAIdentifier,
         layer: &TileLayer,
         json_data: &DeserializedCDDAJsonData,
-        top: Option<CDDAIdentifier>,
-        right: Option<CDDAIdentifier>,
-        bottom: Option<CDDAIdentifier>,
-        left: Option<CDDAIdentifier>,
+        adjacent_sprites: &AdjacentSprites,
     ) -> (bool, bool, bool, bool) {
         let mut this_connects_to = json_data.get_connects_to(Some(this_id.clone()), layer);
-        let mut top_connect_groups = json_data.get_connect_groups(top.clone(), layer);
-        let mut right_connect_groups = json_data.get_connect_groups(right.clone(), layer);
-        let mut bottom_connect_groups = json_data.get_connect_groups(bottom.clone(), layer);
-        let mut left_connect_groups = json_data.get_connect_groups(left.clone(), layer);
+        let mut top_connect_groups =
+            json_data.get_connect_groups(adjacent_sprites.top.clone(), layer);
+        let mut right_connect_groups =
+            json_data.get_connect_groups(adjacent_sprites.right.clone(), layer);
+        let mut bottom_connect_groups =
+            json_data.get_connect_groups(adjacent_sprites.bottom.clone(), layer);
+        let mut left_connect_groups =
+            json_data.get_connect_groups(adjacent_sprites.left.clone(), layer);
 
         let this_flags = json_data.get_flags(Some(this_id.clone()), layer);
-        let top_flags = json_data.get_flags(top.clone(), layer);
-        let right_flags = json_data.get_flags(right.clone(), layer);
-        let bottom_flags = json_data.get_flags(bottom.clone(), layer);
-        let left_flags = json_data.get_flags(left.clone(), layer);
+        let top_flags = json_data.get_flags(adjacent_sprites.top.clone(), layer);
+        let right_flags = json_data.get_flags(adjacent_sprites.right.clone(), layer);
+        let bottom_flags = json_data.get_flags(adjacent_sprites.bottom.clone(), layer);
+        let left_flags = json_data.get_flags(adjacent_sprites.left.clone(), layer);
 
         Self::edit_connection_groups(&this_flags, &mut this_connects_to);
         Self::edit_connection_groups(&top_flags, &mut top_connect_groups);
@@ -275,25 +276,41 @@ impl Sprite {
             // TODO: I think there's a no self connect flag to toggle this behaviour
             // although im not sure
             .is_some()
-            || this_id == &top.unwrap_or(CDDAIdentifier("".to_string()));
+            || this_id
+                == &adjacent_sprites
+                    .top
+                    .clone()
+                    .unwrap_or(CDDAIdentifier("".to_string()));
 
         let can_connect_right = this_connects_to
             .intersection(&right_connect_groups)
             .next()
             .is_some()
-            || this_id == &right.unwrap_or(CDDAIdentifier("".to_string()));
+            || this_id
+                == &adjacent_sprites
+                    .right
+                    .clone()
+                    .unwrap_or(CDDAIdentifier("".to_string()));
 
         let can_connect_bottom = this_connects_to
             .intersection(&bottom_connect_groups)
             .next()
             .is_some()
-            || this_id == &bottom.unwrap_or(CDDAIdentifier("".to_string()));
+            || this_id
+                == &adjacent_sprites
+                    .bottom
+                    .clone()
+                    .unwrap_or(CDDAIdentifier("".to_string()));
 
         let can_connect_left = this_connects_to
             .intersection(&left_connect_groups)
             .next()
             .is_some()
-            || this_id == &left.unwrap_or(CDDAIdentifier("".to_string()));
+            || this_id
+                == &adjacent_sprites
+                    .left
+                    .clone()
+                    .unwrap_or(CDDAIdentifier("".to_string()));
 
         (
             can_connect_top,
@@ -308,10 +325,7 @@ impl Sprite {
         this_id: &CDDAIdentifier,
         json_data: &DeserializedCDDAJsonData,
         layer: &TileLayer,
-        top: Option<CDDAIdentifier>,
-        right: Option<CDDAIdentifier>,
-        bottom: Option<CDDAIdentifier>,
-        left: Option<CDDAIdentifier>,
+        adjacent_sprites: &AdjacentSprites,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
             Sprite::Single {
@@ -340,9 +354,8 @@ impl Sprite {
             } => match *animated {
                 true => todo!(),
                 false => {
-                    let matching_list = Self::get_matching_list(
-                        this_id, layer, json_data, top, right, bottom, left,
-                    );
+                    let matching_list =
+                        Self::get_matching_list(this_id, layer, json_data, adjacent_sprites);
 
                     match matching_list {
                         (true, true, true, true) => match center {
@@ -556,10 +569,7 @@ impl Sprite {
         this_id: &CDDAIdentifier,
         json_data: &DeserializedCDDAJsonData,
         layer: &TileLayer,
-        top: Option<CDDAIdentifier>,
-        right: Option<CDDAIdentifier>,
-        bottom: Option<CDDAIdentifier>,
-        left: Option<CDDAIdentifier>,
+        adjacent_sprites: &AdjacentSprites,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
             Sprite::Single { ids, animated, .. } => match *animated {
@@ -584,9 +594,8 @@ impl Sprite {
             } => match *animated {
                 true => todo!(),
                 false => {
-                    let matching_list = Self::get_matching_list(
-                        this_id, layer, json_data, top, right, bottom, left,
-                    );
+                    let matching_list =
+                        Self::get_matching_list(this_id, layer, json_data, adjacent_sprites);
 
                     match matching_list {
                         (true, true, true, true) => match center {
@@ -765,16 +774,11 @@ pub fn get_id_from_mapped_sprites(
         .flatten()
 }
 
-pub fn get_adjacent_coordinates(
-    mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+pub fn get_adjacent_sprites(
+    mapped_sprites_lock: &MutexGuard<HashMap<IVec3, MappedSprite>>,
     coordinates: IVec3,
     layer: &TileLayer,
-) -> (
-    Option<CDDAIdentifier>,
-    Option<CDDAIdentifier>,
-    Option<CDDAIdentifier>,
-    Option<CDDAIdentifier>,
-) {
+) -> AdjacentSprites {
     let top_cords = coordinates + IVec3::new(0, 1, 0);
     let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
 
@@ -797,5 +801,18 @@ pub fn get_adjacent_coordinates(
         false => None,
     };
 
-    (top, right, bottom, left)
+    AdjacentSprites {
+        top,
+        right,
+        bottom,
+        left,
+    }
+}
+
+#[derive(Debug)]
+pub struct AdjacentSprites {
+    pub top: Option<CDDAIdentifier>,
+    pub right: Option<CDDAIdentifier>,
+    pub bottom: Option<CDDAIdentifier>,
+    pub left: Option<CDDAIdentifier>,
 }

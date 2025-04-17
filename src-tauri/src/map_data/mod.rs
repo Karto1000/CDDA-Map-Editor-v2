@@ -8,7 +8,7 @@ use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
 use crate::map_data::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedSprite;
-use crate::tileset::{Tilesheet, TilesheetKind};
+use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
     bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, Load, ParameterIdentifier,
     Save,
@@ -25,7 +25,6 @@ use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::Arc;
 use strum_macros::EnumString;
-use tokio::sync::MutexGuard;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
@@ -33,14 +32,22 @@ pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
 pub trait Set: Debug + DynClone + Send + Sync {
     fn coordinates(&self) -> Vec<UVec2>;
     fn operation(&self) -> &SetOperation;
-    fn get_mapped_sprites(
-        &self,
-        chosen_coordinates: &Vec<UVec2>,
-        z: i32,
-    ) -> HashMap<IVec3, MappedSprite> {
+    fn tile_layer(&self) -> TileLayer {
+        match self.operation() {
+            SetOperation::Place { ty, .. } => match ty {
+                PlaceableSetType::Terrain => TileLayer::Terrain,
+                PlaceableSetType::Furniture => TileLayer::Furniture,
+                PlaceableSetType::Trap => TileLayer::Trap,
+            },
+            // TODO: Default to terrain, change
+            _ => TileLayer::Terrain,
+        }
+    }
+
+    fn get_mapped_sprites(&self, chosen_coordinates: Vec<IVec3>) -> HashMap<IVec3, MappedSprite> {
         let mut new_mapped_sprites = HashMap::new();
 
-        for coordinates in chosen_coordinates.iter() {
+        for coordinates in chosen_coordinates {
             match self.operation() {
                 SetOperation::Place { ty, id } => {
                     let mut mapped_sprite = MappedSprite::default();
@@ -57,10 +64,7 @@ pub trait Set: Debug + DynClone + Send + Sync {
                         }
                     };
 
-                    new_mapped_sprites.insert(
-                        IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
-                        mapped_sprite.clone(),
-                    );
+                    new_mapped_sprites.insert(coordinates, mapped_sprite.clone());
                 }
                 _ => {}
             }
@@ -71,16 +75,15 @@ pub trait Set: Debug + DynClone + Send + Sync {
 
     fn get_sprites(
         &self,
-        z: i32,
+        chosen_coordinates: Vec<IVec3>,
+        adjacent_sprites: Vec<AdjacentSprites>,
         tilesheet: &TilesheetKind,
         json_data: &DeserializedCDDAJsonData,
-        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
     ) -> Vec<SpriteType> {
         let mut sprites = vec![];
 
-        let chosen_coordinates = self.coordinates();
-
-        for coordinates in chosen_coordinates {
+        for (coordinates, adjacent_sprites) in chosen_coordinates.into_iter().zip(adjacent_sprites)
+        {
             let (fg, bg) = match self.operation() {
                 SetOperation::Place { ty, id } => {
                     let sprite_kind = match tilesheet {
@@ -96,11 +99,11 @@ pub trait Set: Debug + DynClone + Send + Sync {
 
                     let fg_bg = get_sprite_type_from_sprite(
                         id,
-                        IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
-                        json_data,
+                        coordinates,
+                        &adjacent_sprites,
                         layer.clone(),
                         &sprite_kind,
-                        mapped_sprites_lock,
+                        json_data,
                     );
 
                     fg_bg
@@ -124,13 +127,14 @@ clone_trait_object!(Set);
 
 pub trait Place: Debug + DynClone + Send + Sync {
     fn coordinates(&self) -> UVec2;
+    fn tile_layer(&self) -> TileLayer;
 
     fn get_sprites(
         &self,
-        z: i32,
+        coordinates: IVec3,
+        adjacent_sprites: &AdjacentSprites,
         tilesheet: &TilesheetKind,
         json_data: &DeserializedCDDAJsonData,
-        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
     ) -> Vec<SpriteType>;
 
     fn get_mapped_sprites(
@@ -227,15 +231,17 @@ impl Place for PlaceFurniture {
         UVec2::new(self.x.number(), self.y.number())
     }
 
+    fn tile_layer(&self) -> TileLayer {
+        TileLayer::Furniture
+    }
+
     fn get_sprites(
         &self,
-        z: i32,
+        coordinates: IVec3,
+        adjacent_sprites: &AdjacentSprites,
         tilesheet: &TilesheetKind,
         json_data: &DeserializedCDDAJsonData,
-        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
     ) -> Vec<SpriteType> {
-        let position = UVec2::new(self.x.number(), self.y.number());
-
         let sprite_kind = match tilesheet {
             TilesheetKind::Legacy(l) => l.get_sprite(&self.furn, json_data),
             TilesheetKind::Current(c) => c.get_sprite(&self.furn, json_data),
@@ -243,11 +249,11 @@ impl Place for PlaceFurniture {
 
         let (fg, bg) = get_sprite_type_from_sprite(
             &self.furn,
-            IVec3::new(position.x as i32, position.y as i32, z),
-            json_data,
+            coordinates,
+            adjacent_sprites,
             TileLayer::Furniture,
             &sprite_kind,
-            mapped_sprites_lock,
+            json_data,
         );
 
         let mut sprite_types = vec![];
