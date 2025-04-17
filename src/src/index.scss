@@ -76,16 +76,6 @@ html {
 
     #root {
       height: inherit;
-
-      .app {
-        height: inherit;
-        display: flex;
-        flex-direction: column;
-
-        main {
-          height: 100%;
-        }
-      }
     }
   }
 }

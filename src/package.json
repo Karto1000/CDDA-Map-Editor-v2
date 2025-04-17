@@ -12,6 +12,7 @@
     "@testing-library/user-event": "^13.5.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-resizable-panels": "^2.1.7",
     "react-scripts": "^5.0.1",
     "sass": "^1.79.4",
     "stats.js": "^0.17.0",

@@ -13,6 +13,9 @@ import {useEditor} from "./hooks/useEditor.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
 import {EditorData, EditorDataRecvEvent} from "./lib/editor_data.ts";
 import {MapDataSendCommand} from "./lib/map_data.ts";
+import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
+
+import "./app.scss"
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
@@ -38,9 +41,9 @@ function App() {
 
     const [tilesheets, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
     const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.MapEditor
-    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "unset" : "none"
+    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "flex" : "none"
 
-    useEditor({
+    const {resize, displayInLeftPanel} = useEditor({
         canvasRef: mapEditorCanvasRef,
         sceneRef: mapEditorSceneRef,
         canvasContainerRef: mapEditorCanvasContainerRef,
@@ -133,13 +136,35 @@ function App() {
                             </button>
                         </Window>
 
-                        <div ref={mapEditorCanvasContainerRef}
-                             style={{width: "100%", height: "100%", display: mapEditorCanvasDisplay}}>
-                            {/* This should always be in the dom because then we only have to load the sprites once */}
-                            <canvas ref={mapEditorCanvasRef} tabIndex={0}/>
-                        </div>
-
-                        {getMainBasedOnTab()}
+                        <PanelGroup direction={'horizontal'}>
+                            <Panel defaultSize={20} maxSize={20} onResize={resize}>
+                                <div className={"side-panel"}>
+                                    <div className={"side-panel-left"}>
+                                        {
+                                            isDisplayingMapEditor ?
+                                                displayInLeftPanel :
+                                                <div>
+                                                    <h1>Hey there!</h1>
+                                                    <p>This is where you can see the properties of any tiles you hover
+                                                        over</p>
+                                                    <p>If you wish to close this panel you can just drag the Line
+                                                        between this panel and the main content to the left</p>
+                                                </div>
+                                        }
+                                    </div>
+                                    <div className={"side-panel-right"}/>
+                                </div>
+                            </Panel>
+                            <PanelResizeHandle hitAreaMargins={{coarse: 30, fine: 10}}/>
+                            <Panel onResize={resize}>
+                                <div ref={mapEditorCanvasContainerRef}
+                                     style={{width: "100%", height: "100%", display: mapEditorCanvasDisplay}}>
+                                    {/* This should always be in the dom because then we only have to load the sprites once */}
+                                    <canvas ref={mapEditorCanvasRef} tabIndex={0}/>
+                                </div>
+                                {getMainBasedOnTab()}
+                            </Panel>
+                        </PanelGroup>
                     </TabContext.Provider>
                 </ThemeContext.Provider>
             </EditorDataContext.Provider>

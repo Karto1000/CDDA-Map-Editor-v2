@@ -51,13 +51,17 @@ export type PlaceTerrainEvent = {
 
 export enum MapDataEvent {
   OpenedMap = "opened_map",
-  PlaceSprite = "place_sprite",
-  PlaceSprites = "place_sprites"
+  PlaceSprites = "place_sprites",
+  ItemData = "item_data"
 }
 
-export enum MapChangeEventKind {
-  Place = "Place",
-  Delete = "Delete"
+export type MapGenItem = {
+  item: string,
+  // TODO: Add other fields
+}
+
+export type ItemDataEvent = {
+  [coordinates: string]: MapGenItem[]
 }
 
 export type PlaceSpriteCommand = {
@@ -87,17 +91,12 @@ export type FallbackSprite = {
   z: number
 }
 
-export type PlaceSpritesCommand = {
+export type PlaceSpritesEvent = {
   static_sprites: StaticSprite[]
   animated_sprites: AnimatedSprite[]
   fallback_sprites: FallbackSprite[]
 }
-export type DeleteCommand = string;
-export type MapChangeEvent = {
-  kind: {
-    [key in MapChangeEventKind]: PlaceSpriteCommand
-  }
-}
+
 
 export enum MapDataSendCommand {
   CreateProject = "create_project",

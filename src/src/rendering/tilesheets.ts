@@ -1,8 +1,8 @@
 import {DrawLocalSprite, Tilesheet} from "./tilesheet.ts";
 import {Vector2, Vector3} from "three";
 
-const MAX_DEPTH = 999997
-const TILE_SIZE = 32
+export const MAX_DEPTH = 999997
+export const DEFAULT_TILE_SIZE = 32
 const MAX_ROW = 1000
 const ANIMATION_FRAME_DURATION = 200
 
@@ -122,8 +122,8 @@ export class Tilesheets {
     tilesheet: Tilesheet,
     rotation: number
   ): DrawLocalSprite {
-    const worldY = position.y / TILE_SIZE
-    const worldX = position.x / TILE_SIZE
+    const worldY = position.y / DEFAULT_TILE_SIZE
+    const worldX = position.x / DEFAULT_TILE_SIZE
 
     const newPosition = new Vector3(
       position.x,
@@ -204,8 +204,8 @@ export class Tilesheets {
     for (const drawSprite of staticSprites) {
       const index = drawSprite.index
 
-      const worldY = drawSprite.position.y / TILE_SIZE
-      const worldX = drawSprite.position.x / TILE_SIZE
+      const worldY = drawSprite.position.y / DEFAULT_TILE_SIZE
+      const worldX = drawSprite.position.x / DEFAULT_TILE_SIZE
 
       const newPosition = new Vector3(
         drawSprite.position.x,
