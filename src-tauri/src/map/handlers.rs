@@ -4,8 +4,8 @@ use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::ProjectState::Saved;
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver, Project};
-use crate::map_data::io::ProjectSaver;
-use crate::map_data::{MapData, PlaceableSetType, ProjectContainer, SetSquare};
+use crate::map::io::ProjectSaver;
+use crate::map::{MapData, PlaceableSetType, ProjectContainer, SetSquare};
 use crate::tileset;
 use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex};
 use crate::tileset::{
@@ -359,6 +359,22 @@ pub async fn open_project(
     let mut animated_sprites = HashSet::new();
     let mut fallback_sprites = HashSet::new();
 
+    macro_rules! insert_sprite_type {
+        ($val: expr) => {
+            match $val {
+                SpriteType::Static(s) => {
+                    static_sprites.insert(s);
+                }
+                SpriteType::Animated(a) => {
+                    animated_sprites.insert(a);
+                }
+                SpriteType::Fallback(f) => {
+                    fallback_sprites.insert(f);
+                }
+            }
+        };
+    }
+
     for (z, map_data) in project.maps.iter() {
         let fill_terrain_sprite = match &map_data.fill {
             None => None,
@@ -400,17 +416,7 @@ pub async fn open_project(
                 set.get_sprites(chosen_coordinates, adjacent_tiles_vec, tilesheet, json_data);
 
             for sprite in sprites {
-                match sprite {
-                    SpriteType::Static(s) => {
-                        static_sprites.replace(s);
-                    }
-                    SpriteType::Animated(a) => {
-                        animated_sprites.replace(a);
-                    }
-                    SpriteType::Fallback(f) => {
-                        fallback_sprites.replace(f);
-                    }
-                }
+                insert_sprite_type!(sprite);
             }
         }
 
@@ -437,17 +443,7 @@ pub async fn open_project(
                 );
 
                 for sprite in sprites {
-                    match sprite {
-                        SpriteType::Static(s) => {
-                            static_sprites.replace(s);
-                        }
-                        SpriteType::Animated(a) => {
-                            animated_sprites.replace(a);
-                        }
-                        SpriteType::Fallback(f) => {
-                            fallback_sprites.replace(f);
-                        }
-                    }
+                    insert_sprite_type!(sprite)
                 }
             }
         }
@@ -561,31 +557,11 @@ pub async fn open_project(
                 );
 
                 if let Some(fg) = fg {
-                    match fg {
-                        SpriteType::Static(s) => {
-                            static_sprites.insert(s);
-                        }
-                        SpriteType::Animated(a) => {
-                            animated_sprites.insert(a);
-                        }
-                        SpriteType::Fallback(f) => {
-                            fallback_sprites.insert(f);
-                        }
-                    }
+                    insert_sprite_type!(fg)
                 }
 
                 if let Some(bg) = bg {
-                    match bg {
-                        SpriteType::Static(s) => {
-                            static_sprites.insert(s);
-                        }
-                        SpriteType::Animated(a) => {
-                            animated_sprites.insert(a);
-                        }
-                        SpriteType::Fallback(f) => {
-                            fallback_sprites.insert(f);
-                        }
-                    }
+                    insert_sprite_type!(bg)
                 }
             }
         });

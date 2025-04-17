@@ -1,5 +1,5 @@
 use crate::editor_data::Project;
-use crate::map_data::MapData;
+use crate::map::MapData;
 use crate::util::{Load, Save};
 use std::fs::File;
 use std::io::{BufReader, Error};

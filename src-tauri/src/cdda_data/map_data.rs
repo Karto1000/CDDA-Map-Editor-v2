@@ -1,6 +1,6 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
-use crate::map_data::{
+use crate::map::{
     Cell, MapData, Mapping, Place, PlaceFurniture, PlaceableSetType, RemovableSetType, Set,
     SetLine, SetOperation, SetPoint, SetSquare,
 };

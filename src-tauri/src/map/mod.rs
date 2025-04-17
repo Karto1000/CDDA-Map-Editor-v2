@@ -6,7 +6,7 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
-use crate::map_data::handlers::{get_sprite_type_from_sprite, SpriteType};
+use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{

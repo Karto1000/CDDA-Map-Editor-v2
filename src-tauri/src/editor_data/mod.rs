@@ -2,7 +2,7 @@ pub(crate) mod handlers;
 pub(crate) mod tab;
 
 use crate::editor_data::tab::{ProjectState, Tab};
-use crate::map_data::{MapData, DEFAULT_MAP_DATA_SIZE};
+use crate::map::{MapData, DEFAULT_MAP_DATA_SIZE};
 use crate::util::Save;
 use glam::UVec2;
 use log::info;

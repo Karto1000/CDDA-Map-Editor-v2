@@ -1,6 +1,6 @@
 mod cdda_data;
 mod editor_data;
-mod map_data;
+mod map;
 mod tileset;
 mod util;
 
@@ -14,11 +14,11 @@ use crate::editor_data::handlers::{
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorConfig, EditorData, Project};
-use crate::map_data::handlers::open_project;
-use crate::map_data::handlers::{
+use crate::map::handlers::open_project;
+use crate::map::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
-use crate::map_data::{MapData, ProjectContainer, DEFAULT_MAP_DATA_SIZE};
+use crate::map::{MapData, ProjectContainer, DEFAULT_MAP_DATA_SIZE};
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::tile_config::{
@@ -33,7 +33,7 @@ use glam::{IVec3, UVec2, UVec3};
 use image::{load, GenericImageView};
 use lazy_static::lazy_static;
 use log::{debug, error, info, warn, LevelFilter};
-use map_data::importing::MapDataImporter;
+use map::importing::MapDataImporter;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use rand_chacha::ChaCha8Rng;

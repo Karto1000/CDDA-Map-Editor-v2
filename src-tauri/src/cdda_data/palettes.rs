@@ -1,5 +1,5 @@
 use crate::cdda_data::{CataVariant, Distribution, MapGenValue};
-use crate::map_data::Mapping;
+use crate::map::Mapping;
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, ParameterIdentifier};
 use indexmap::IndexMap;
 use serde::Deserialize;

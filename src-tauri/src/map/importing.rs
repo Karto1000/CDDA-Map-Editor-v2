@@ -1,6 +1,6 @@
 use crate::cdda_data::map_data::{CDDAMapData, OmTerrain};
 use crate::editor_data::Project;
-use crate::map_data::DEFAULT_MAP_DATA_SIZE;
+use crate::map::DEFAULT_MAP_DATA_SIZE;
 use crate::util::Load;
 use anyhow::anyhow;
 use glam::UVec2;
