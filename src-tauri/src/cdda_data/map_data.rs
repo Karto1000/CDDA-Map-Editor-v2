@@ -181,7 +181,7 @@ impl Into<MapData> for CDDAMapData {
                         to_y: y2,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((1, 1)),
+                        repeat: set.repeat.unwrap_or((0, 1)),
                         operation,
                     };
 

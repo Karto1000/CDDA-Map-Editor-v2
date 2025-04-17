@@ -10,14 +10,17 @@ use crate::map_data::handlers::{get_bg_from_sprite, get_fg_from_sprite, SpriteTy
 use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::{Tilesheet, TilesheetKind};
 use crate::util::{
-    CDDAIdentifier, DistributionInner, GetIdentifier, Load, ParameterIdentifier, Save,
+    bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, Load, ParameterIdentifier,
+    Save,
 };
+use crate::RANDOM;
 use dyn_clone::{clone_trait_object, DynClone};
 use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
+use rand::Rng;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -221,8 +224,23 @@ pub struct SetPoint {
 
 impl Set for SetPoint {
     fn coordinates(&self) -> Vec<UVec2> {
-        let coordinates = UVec2::new(self.x.number(), self.y.number());
-        vec![coordinates]
+        let mut coords = HashSet::new();
+
+        for _ in self.repeat.0..self.repeat.1 {
+            // Block here to release the lock on RANDOM since the number() function also uses RANDOM
+            {
+                let mut random = RANDOM.write().unwrap();
+
+                if random.random_range(1..=self.chance) != 1 {
+                    continue;
+                }
+            }
+
+            let coordinates = UVec2::new(self.x.number(), self.y.number());
+            coords.insert(coordinates);
+        }
+
+        Vec::from_iter(coords)
     }
 
     fn operation(&self) -> &SetOperation {
@@ -246,7 +264,30 @@ pub struct SetLine {
 
 impl Set for SetLine {
     fn coordinates(&self) -> Vec<UVec2> {
-        todo!()
+        let mut coords = HashSet::new();
+
+        for _ in self.repeat.0..self.repeat.1 {
+            {
+                let mut random = RANDOM.write().unwrap();
+
+                if random.random_range(1..=self.chance) != 1 {
+                    continue;
+                }
+            }
+
+            let from_x = self.from_x.number();
+            let from_y = self.from_y.number();
+            let to_x = self.to_x.number();
+            let to_y = self.to_y.number();
+
+            let line = bresenham_line(from_x as i32, from_y as i32, to_x as i32, to_y as i32);
+
+            for (x, y) in line {
+                coords.insert(UVec2::new(x as u32, y as u32));
+            }
+        }
+
+        Vec::from_iter(coords)
     }
 
     fn operation(&self) -> &SetOperation {
