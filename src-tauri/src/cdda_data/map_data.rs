@@ -1,8 +1,8 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map_data::{
-    Cell, MapData, PlaceableSetType, RemovableSetType, Set, SetLine, SetOperation, SetPoint,
-    SetSquare,
+    Cell, MapData, Mapping, PlaceableSetType, RemovableSetType, Set, SetLine, SetOperation,
+    SetPoint, SetSquare,
 };
 use crate::util::{CDDAIdentifier, DistributionInner, ParameterIdentifier};
 use crate::{skip_err, skip_none};
@@ -10,6 +10,7 @@ use glam::{UVec2, Vec3};
 use indexmap::IndexMap;
 use log::warn;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
@@ -46,14 +47,73 @@ pub struct SetIntermediate {
 pub struct CDDAMapDataObject {
     pub fill_ter: Option<DistributionInner>,
     pub rows: Vec<String>,
+
     #[serde(default)]
     pub palettes: Vec<MapGenValue>,
+
     #[serde(default)]
     pub terrain: HashMap<char, MapGenValue>,
+
     #[serde(default)]
     pub furniture: HashMap<char, MapGenValue>,
+
+    #[serde(default)]
+    pub monster: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub monsters: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub npcs: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub items: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub loot: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub sealed_item: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub fields: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub signs: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub rubble: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub liquids: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub corpses: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub computers: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub nested: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub toilets: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub gaspumps: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub vehicles: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub traps: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub graffiti: HashMap<char, Value>,
+
     #[serde(default)]
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
+
     #[serde(default)]
     pub set: Vec<SetIntermediate>,
 }
@@ -217,11 +277,15 @@ impl Into<MapData> for CDDAMapData {
             }
         }
 
+        let mut mappings = HashMap::new();
+
+        mappings.insert(Mapping::Terrain, self.object.terrain);
+        mappings.insert(Mapping::Furniture, self.object.furniture);
+
         MapData::new(
             self.object.fill_ter,
             cells,
-            self.object.terrain,
-            self.object.furniture,
+            mappings,
             self.object.palettes,
             self.object.parameters,
             set_vec,

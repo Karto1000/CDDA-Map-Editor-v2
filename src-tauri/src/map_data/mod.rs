@@ -148,6 +148,31 @@ pub trait Set: Debug + DynClone + Send + Sync {
 
 clone_trait_object!(Set);
 
+#[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum Mapping {
+    Terrain,
+    Furniture,
+    Monster,
+    Monsters,
+    Npcs,
+    Items,
+    Loot,
+    SealedItem,
+    Fields,
+    Signs,
+    Rubble,
+    Liquids,
+    Corpses,
+    Computers,
+    Nested,
+    Toilets,
+    Gaspumps,
+    Vehicles,
+    Traps,
+    Graffiti,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum PlaceableSetType {
@@ -280,9 +305,7 @@ pub struct MapData {
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
 
-    pub terrain: HashMap<char, MapGenValue>,
-    pub furniture: HashMap<char, MapGenValue>,
-
+    pub mappings: HashMap<Mapping, HashMap<char, MapGenValue>>,
     pub palettes: Vec<MapGenValue>,
 
     #[serde(skip)]
@@ -305,9 +328,8 @@ impl Default for MapData {
             fill,
             calculated_parameters: Default::default(),
             parameters: Default::default(),
-            terrain: Default::default(),
-            furniture: Default::default(),
             palettes: Default::default(),
+            mappings: Default::default(),
             set: vec![],
         }
     }
@@ -323,8 +345,7 @@ impl MapData {
     pub fn new(
         fill: Option<DistributionInner>,
         cells: IndexMap<UVec2, Cell>,
-        terrain: HashMap<char, MapGenValue>,
-        furniture: HashMap<char, MapGenValue>,
+        mappings: HashMap<Mapping, HashMap<char, MapGenValue>>,
         palettes: Vec<MapGenValue>,
         parameters: IndexMap<ParameterIdentifier, Parameter>,
         set: Vec<Arc<dyn Set>>,
@@ -334,8 +355,7 @@ impl MapData {
             fill,
             parameters,
             palettes,
-            terrain,
-            furniture,
+            mappings,
             cells,
             set,
         }
@@ -366,13 +386,19 @@ impl MapData {
         self.calculated_parameters = calculated_parameters
     }
 
-    pub fn get_terrain(
+    pub fn get_mapping(
         &self,
+        mapping_kind: &Mapping,
         character: &char,
         all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
     ) -> Option<CDDAIdentifier> {
-        // If we find the terrain in the current map's terrain field, return that
-        if let Some(id) = self.terrain.get(character) {
+        // If we find the mapping in the current map's terrain field, return that
+        if let Some(id) = self
+            .mappings
+            .get(mapping_kind)
+            .map(|v| v.get(character))
+            .flatten()
+        {
             return Some(id.get_identifier(&self.calculated_parameters));
         };
 
@@ -381,32 +407,12 @@ impl MapData {
             let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
             let palette = all_palettes.get(&palette_id).expect("Palette to exist");
 
-            if let Some(id) =
-                palette.get_terrain(character, &self.calculated_parameters, all_palettes)
-            {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
-    pub fn get_furniture(
-        &self,
-        character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) -> Option<CDDAIdentifier> {
-        if let Some(id) = self.furniture.get(character) {
-            return Some(id.get_identifier(&self.calculated_parameters));
-        };
-
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
-
-            if let Some(id) =
-                palette.get_furniture(character, &self.calculated_parameters, all_palettes)
-            {
+            if let Some(id) = palette.get_mapping(
+                mapping_kind,
+                character,
+                &self.calculated_parameters,
+                all_palettes,
+            ) {
                 return Some(id);
             }
         }
@@ -419,8 +425,8 @@ impl MapData {
         character: &char,
         all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
     ) -> CDDAIdentifierGroup {
-        let terrain = self.get_terrain(character, all_palettes);
-        let furniture = self.get_furniture(character, all_palettes);
+        let terrain = self.get_mapping(&Mapping::Terrain, character, all_palettes);
+        let furniture = self.get_mapping(&Mapping::Furniture, character, all_palettes);
 
         CDDAIdentifierGroup { terrain, furniture }
     }

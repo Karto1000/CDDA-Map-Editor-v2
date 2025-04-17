@@ -291,24 +291,12 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                         })
                                         .collect();
 
-                                    let mapgen = CDDAMapData {
-                                        method: mg.method.clone(),
-                                        om_terrain: OmTerrain::Single(om_terrain.clone()),
-                                        weight: mg.weight.clone(),
-                                        object: CDDAMapDataObject {
-                                            fill_ter: mg.object.fill_ter.clone(),
-                                            rows,
-                                            palettes: mg.object.palettes.clone(),
-                                            terrain: mg.object.terrain.clone(),
-                                            furniture: mg.object.furniture.clone(),
-                                            parameters: mg.object.parameters.clone(),
-                                            set: mg.object.set.clone(),
-                                        },
-                                    };
+                                    let mut new_mapgen = mg.clone();
+                                    new_mapgen.object.rows = rows;
 
                                     cdda_data
                                         .mapgens
-                                        .insert(CDDAIdentifier(om_terrain.clone()), mapgen);
+                                        .insert(CDDAIdentifier(om_terrain.clone()), new_mapgen);
                                 }
                             }
                         }

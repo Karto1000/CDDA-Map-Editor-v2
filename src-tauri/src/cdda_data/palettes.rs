@@ -1,7 +1,9 @@
 use crate::cdda_data::{CataVariant, Distribution, MapGenValue};
+use crate::map_data::Mapping;
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, ParameterIdentifier};
 use indexmap::IndexMap;
 use serde::Deserialize;
+use serde_json::Value;
 use std::collections::HashMap;
 
 pub type Palettes = HashMap<CDDAIdentifier, CDDAPalette>;
@@ -48,10 +50,64 @@ pub struct CDDAPalette {
     pub palettes: Vec<MapGenValue>,
 
     #[serde(default)]
+    pub terrain: HashMap<char, MapGenValue>,
+
+    #[serde(default)]
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub terrain: HashMap<char, MapGenValue>,
+    pub monster: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub monsters: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub npcs: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub items: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub loot: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub sealed_item: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub fields: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub signs: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub rubble: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub liquids: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub corpses: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub computers: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub nested: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub toilets: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub gaspumps: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub vehicles: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub traps: HashMap<char, Value>,
+
+    #[serde(default)]
+    pub graffiti: HashMap<char, Value>,
 }
 
 impl CDDAPalette {
@@ -85,45 +141,34 @@ impl CDDAPalette {
         calculated_parameters
     }
 
-    pub fn get_terrain(
+    pub fn get_mapping(
         &self,
+        mapping_kind: &Mapping,
         character: &char,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         all_palettes: &Palettes,
     ) -> Option<CDDAIdentifier> {
-        if let Some(id) = self.terrain.get(character) {
-            return Some(id.get_identifier(calculated_parameters));
-        };
-
-        // If we don't find it, search the palettes from top to bottom
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
-
-            if let Some(id) = palette.get_terrain(character, calculated_parameters, all_palettes) {
-                return Some(id);
+        match mapping_kind {
+            Mapping::Terrain => {
+                if let Some(id) = self.terrain.get(character) {
+                    return Some(id.get_identifier(calculated_parameters));
+                };
             }
+            Mapping::Furniture => {
+                if let Some(id) = self.furniture.get(character) {
+                    return Some(id.get_identifier(calculated_parameters));
+                };
+            }
+            _ => todo!(),
         }
 
-        None
-    }
-
-    pub fn get_furniture(
-        &self,
-        character: &char,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        all_palettes: &Palettes,
-    ) -> Option<CDDAIdentifier> {
-        if let Some(id) = self.furniture.get(character) {
-            return Some(id.get_identifier(calculated_parameters));
-        };
-
         // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value.get_identifier(calculated_parameters);
             let palette = all_palettes.get(&palette_id).expect("Palette to exist");
 
-            if let Some(id) = palette.get_furniture(character, calculated_parameters, all_palettes)
+            if let Some(id) =
+                palette.get_mapping(mapping_kind, character, calculated_parameters, all_palettes)
             {
                 return Some(id);
             }

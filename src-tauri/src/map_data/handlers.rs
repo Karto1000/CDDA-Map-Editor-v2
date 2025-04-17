@@ -405,6 +405,24 @@ pub async fn open_project(
         // this function in the next iteration through map_data, we would get other identifiers
         let mut identifiers = HashMap::new();
 
+        for set in map_data.set.iter() {
+            let sprites = set.get_sprites(*z, tilesheet, json_data, &mut mapped_sprites_lock);
+
+            for sprite in sprites {
+                match sprite {
+                    SpriteType::Static(s) => {
+                        static_sprites.replace(s);
+                    }
+                    SpriteType::Animated(a) => {
+                        animated_sprites.replace(a);
+                    }
+                    SpriteType::Fallback(f) => {
+                        fallback_sprites.replace(f);
+                    }
+                }
+            }
+        }
+
         // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
         // the function relies on the mapped sprite of this sprite to already exist
         map_data.cells.iter().for_each(|(p, cell)| {
@@ -458,7 +476,14 @@ pub async fn open_project(
                 };
             }
 
-            mapped_sprites_lock.insert(IVec3::new(p.x as i32, p.y as i32, *z), mapped_sprite);
+            let mapped_cords = IVec3::new(p.x as i32, p.y as i32, *z);
+            match mapped_sprites_lock.get(&mapped_cords) {
+                None => {
+                    mapped_sprites_lock.insert(mapped_cords, mapped_sprite);
+                }
+                Some(_) => {}
+            }
+
             identifiers.insert(p, new_identifier_group);
         });
 
@@ -498,13 +523,13 @@ pub async fn open_project(
                 ) {
                     match fg {
                         SpriteType::Static(s) => {
-                            static_sprites.replace(s);
+                            static_sprites.insert(s);
                         }
                         SpriteType::Animated(a) => {
-                            animated_sprites.replace(a);
+                            animated_sprites.insert(a);
                         }
                         SpriteType::Fallback(f) => {
-                            fallback_sprites.replace(f);
+                            fallback_sprites.insert(f);
                         }
                     }
                 }
@@ -519,36 +544,18 @@ pub async fn open_project(
                 ) {
                     match bg {
                         SpriteType::Static(s) => {
-                            static_sprites.replace(s);
+                            static_sprites.insert(s);
                         }
                         SpriteType::Animated(a) => {
-                            animated_sprites.replace(a);
+                            animated_sprites.insert(a);
                         }
                         SpriteType::Fallback(f) => {
-                            fallback_sprites.replace(f);
+                            fallback_sprites.insert(f);
                         }
                     }
                 }
             }
         });
-
-        for set in map_data.set.iter() {
-            let sprites = set.get_sprites(*z, tilesheet, json_data, &mut mapped_sprites_lock);
-
-            for sprite in sprites {
-                match sprite {
-                    SpriteType::Static(s) => {
-                        static_sprites.replace(s);
-                    }
-                    SpriteType::Animated(a) => {
-                        animated_sprites.replace(a);
-                    }
-                    SpriteType::Fallback(f) => {
-                        fallback_sprites.replace(f);
-                    }
-                }
-            }
-        }
     }
 
     app.emit(
