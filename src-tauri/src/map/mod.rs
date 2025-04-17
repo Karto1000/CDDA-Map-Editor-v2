@@ -3,6 +3,7 @@ pub(crate) mod importing;
 pub(crate) mod io;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::map_data::MapGenItem;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
@@ -148,27 +149,10 @@ clone_trait_object!(Place);
 
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
-pub enum Mapping {
+pub enum VisibleMapping {
     Terrain,
     Furniture,
-    Monster,
-    Monsters,
-    Npcs,
-    Items,
-    Loot,
-    SealedItem,
-    Fields,
-    Signs,
-    Rubble,
-    Liquids,
-    Corpses,
-    Computers,
-    Nested,
-    Toilets,
-    Gaspumps,
-    Vehicles,
     Traps,
-    Graffiti,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -184,7 +168,10 @@ pub struct MapData {
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
 
-    pub mappings: HashMap<Mapping, HashMap<char, MapGenValue>>,
+    // Mappings for terrain, furniture and traps
+    pub visible_mappings: HashMap<VisibleMapping, HashMap<char, MapGenValue>>,
+
+    pub items: HashMap<char, Vec<MapGenItem>>,
 
     pub palettes: Vec<MapGenValue>,
 
@@ -192,7 +179,7 @@ pub struct MapData {
     pub set: Vec<Arc<dyn Set>>,
 
     #[serde(skip)]
-    pub place: HashMap<Mapping, Vec<Arc<dyn Place>>>,
+    pub place: HashMap<VisibleMapping, Vec<Arc<dyn Place>>>,
 }
 
 impl Default for MapData {
@@ -212,10 +199,150 @@ impl Default for MapData {
             calculated_parameters: Default::default(),
             parameters: Default::default(),
             palettes: Default::default(),
-            mappings: Default::default(),
+            visible_mappings: Default::default(),
             set: vec![],
             place: Default::default(),
+            items: Default::default(),
         }
+    }
+}
+
+impl MapData {
+    pub fn new(
+        fill: Option<DistributionInner>,
+        cells: IndexMap<UVec2, Cell>,
+        visible_mappings: HashMap<VisibleMapping, HashMap<char, MapGenValue>>,
+        palettes: Vec<MapGenValue>,
+        items: HashMap<char, Vec<MapGenItem>>,
+        parameters: IndexMap<ParameterIdentifier, Parameter>,
+        set: Vec<Arc<dyn Set>>,
+        place: HashMap<VisibleMapping, Vec<Arc<dyn Place>>>,
+    ) -> Self {
+        Self {
+            calculated_parameters: Default::default(),
+            fill,
+            parameters,
+            palettes,
+            items,
+            visible_mappings,
+            cells,
+            set,
+            place,
+        }
+    }
+
+    pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>) {
+        let mut calculated_parameters = IndexMap::new();
+
+        for (id, parameter) in self.parameters.iter() {
+            calculated_parameters.insert(
+                id.clone(),
+                parameter.default.distribution.get(&calculated_parameters),
+            );
+        }
+
+        for mapgen_value in self.palettes.iter() {
+            let id = mapgen_value.get_identifier(&calculated_parameters);
+            let palette = all_palettes.get(&id).unwrap();
+
+            palette
+                .calculate_parameters(all_palettes)
+                .into_iter()
+                .for_each(|(palette_id, ident)| {
+                    calculated_parameters.insert(palette_id, ident);
+                });
+        }
+
+        self.calculated_parameters = calculated_parameters
+    }
+
+    pub fn get_items(
+        &self,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+    ) -> Option<Vec<MapGenItem>> {
+        if let Some(items) = self.items.get(character) {
+            return Some(items.clone());
+        }
+
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) =
+                palette.get_items(character, &self.calculated_parameters, all_palettes)
+            {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_visible_mapping(
+        &self,
+        mapping_kind: &VisibleMapping,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+    ) -> Option<CDDAIdentifier> {
+        // If we find the mapping in the current map's terrain field, return that
+        if let Some(id) = self
+            .visible_mappings
+            .get(mapping_kind)
+            .map(|v| v.get(character))
+            .flatten()
+        {
+            return Some(id.get_identifier(&self.calculated_parameters));
+        };
+
+        // If we don't find it, search the palettes from top to bottom
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) = palette.get_visible_mapping(
+                mapping_kind,
+                character,
+                &self.calculated_parameters,
+                all_palettes,
+            ) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_visible_mappings(
+        &self,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+    ) -> CDDAIdentifierGroup {
+        let terrain = self.get_visible_mapping(&VisibleMapping::Terrain, character, all_palettes);
+        let furniture =
+            self.get_visible_mapping(&VisibleMapping::Furniture, character, all_palettes);
+
+        CDDAIdentifierGroup { terrain, furniture }
+    }
+}
+
+impl Serialize for MapData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut serialized_cells = HashMap::new();
+
+        for (key, value) in &self.cells {
+            let key_str = format!("{},{}", key.x, key.y);
+            serialized_cells.insert(key_str, value);
+        }
+
+        let mut state = serializer.serialize_struct("MapData", 2 + serialized_cells.len())?;
+
+        state.serialize_field("cells", &serialized_cells)?;
+
+        state.end()
     }
 }
 
@@ -449,119 +576,6 @@ impl Set for SetSquare {
 pub struct CDDAIdentifierGroup {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
-}
-
-impl MapData {
-    pub fn new(
-        fill: Option<DistributionInner>,
-        cells: IndexMap<UVec2, Cell>,
-        mappings: HashMap<Mapping, HashMap<char, MapGenValue>>,
-        palettes: Vec<MapGenValue>,
-        parameters: IndexMap<ParameterIdentifier, Parameter>,
-        set: Vec<Arc<dyn Set>>,
-        place: HashMap<Mapping, Vec<Arc<dyn Place>>>,
-    ) -> Self {
-        Self {
-            calculated_parameters: Default::default(),
-            fill,
-            parameters,
-            palettes,
-            mappings,
-            cells,
-            set,
-            place,
-        }
-    }
-
-    pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>) {
-        let mut calculated_parameters = IndexMap::new();
-
-        for (id, parameter) in self.parameters.iter() {
-            calculated_parameters.insert(
-                id.clone(),
-                parameter.default.distribution.get(&calculated_parameters),
-            );
-        }
-
-        for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value.get_identifier(&calculated_parameters);
-            let palette = all_palettes.get(&id).unwrap();
-
-            palette
-                .calculate_parameters(all_palettes)
-                .into_iter()
-                .for_each(|(palette_id, ident)| {
-                    calculated_parameters.insert(palette_id, ident);
-                });
-        }
-
-        self.calculated_parameters = calculated_parameters
-    }
-
-    pub fn get_mapping(
-        &self,
-        mapping_kind: &Mapping,
-        character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) -> Option<CDDAIdentifier> {
-        // If we find the mapping in the current map's terrain field, return that
-        if let Some(id) = self
-            .mappings
-            .get(mapping_kind)
-            .map(|v| v.get(character))
-            .flatten()
-        {
-            return Some(id.get_identifier(&self.calculated_parameters));
-        };
-
-        // If we don't find it, search the palettes from top to bottom
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
-
-            if let Some(id) = palette.get_mapping(
-                mapping_kind,
-                character,
-                &self.calculated_parameters,
-                all_palettes,
-            ) {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
-    pub fn get_identifiers(
-        &self,
-        character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) -> CDDAIdentifierGroup {
-        let terrain = self.get_mapping(&Mapping::Terrain, character, all_palettes);
-        let furniture = self.get_mapping(&Mapping::Furniture, character, all_palettes);
-
-        CDDAIdentifierGroup { terrain, furniture }
-    }
-}
-
-impl Serialize for MapData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut serialized_cells = HashMap::new();
-
-        for (key, value) in &self.cells {
-            let key_str = format!("{},{}", key.x, key.y);
-            serialized_cells.insert(key_str, value);
-        }
-
-        let mut state = serializer.serialize_struct("MapData", 2 + serialized_cells.len())?;
-
-        state.serialize_field("cells", &serialized_cells)?;
-
-        state.end()
-    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]

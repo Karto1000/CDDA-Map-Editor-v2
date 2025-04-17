@@ -1,15 +1,15 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map::{
-    Cell, MapData, Mapping, Place, PlaceFurniture, PlaceableSetType, RemovableSetType, Set,
-    SetLine, SetOperation, SetPoint, SetSquare,
+    Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType, Set, SetLine,
+    SetOperation, SetPoint, SetSquare, VisibleMapping,
 };
-use crate::util::{CDDAIdentifier, DistributionInner, ParameterIdentifier};
+use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
 use crate::{skip_err, skip_none};
 use glam::{UVec2, Vec3};
 use indexmap::IndexMap;
 use log::warn;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -19,7 +19,7 @@ use tauri::async_runtime::set;
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum OmTerrain {
     Single(String),
@@ -27,7 +27,7 @@ pub enum OmTerrain {
     Nested(Vec<Vec<String>>),
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SetIntermediate {
     line: Option<CDDAIdentifier>,
     point: Option<CDDAIdentifier>,
@@ -43,7 +43,15 @@ pub struct SetIntermediate {
     repeat: Option<(u32, u32)>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenItem {
+    pub item: CDDAIdentifier,
+    pub chance: Option<NumberOrRange<u32>>,
+    pub repeat: Option<NumberOrRange<u32>>,
+    pub faction: Option<CDDAIdentifier>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapDataObject {
     pub fill_ter: Option<DistributionInner>,
     pub rows: Vec<String>,
@@ -58,6 +66,9 @@ pub struct CDDAMapDataObject {
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
+    pub items: HashMap<char, MeabyVec<MapGenItem>>,
+
+    #[serde(default)]
     pub place_furniture: Vec<PlaceFurniture>,
 
     #[serde(default)]
@@ -68,9 +79,6 @@ pub struct CDDAMapDataObject {
 
     #[serde(default)]
     pub npcs: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub items: HashMap<char, Value>,
 
     #[serde(default)]
     pub loot: HashMap<char, Value>,
@@ -121,7 +129,7 @@ pub struct CDDAMapDataObject {
     pub set: Vec<SetIntermediate>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapData {
     pub method: String,
     pub om_terrain: OmTerrain,
@@ -282,12 +290,12 @@ impl Into<MapData> for CDDAMapData {
 
         let mut mappings = HashMap::new();
 
-        mappings.insert(Mapping::Terrain, self.object.terrain);
-        mappings.insert(Mapping::Furniture, self.object.furniture);
+        mappings.insert(VisibleMapping::Terrain, self.object.terrain);
+        mappings.insert(VisibleMapping::Furniture, self.object.furniture);
 
         let mut place = HashMap::new();
         place.insert(
-            Mapping::Furniture,
+            VisibleMapping::Furniture,
             self.object
                 .place_furniture
                 .into_iter()
@@ -300,6 +308,12 @@ impl Into<MapData> for CDDAMapData {
             cells,
             mappings,
             self.object.palettes,
+            HashMap::from_iter(
+                self.object
+                    .items
+                    .into_iter()
+                    .map(|(k, v)| (k, v.into_vec())),
+            ),
             self.object.parameters,
             set_vec,
             place,

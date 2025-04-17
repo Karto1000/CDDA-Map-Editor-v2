@@ -5,10 +5,11 @@ use crate::cdda_data::map_data::{
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
-use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
+use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, ItemGroup, TileLayer};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
 use log::{debug, error, info, warn};
+use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::ffi::OsStr;
 use std::fs::File;
@@ -20,13 +21,14 @@ use walkdir::WalkDir;
 const NULL_TERRAIN: &'static str = "t_null";
 const NULL_FURNITURE: &'static str = "f_null";
 
-#[derive(Default)]
+#[derive(Default, Serialize)]
 pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
     pub mapgens: HashMap<CDDAIdentifier, CDDAMapData>,
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
+    pub item_groups: HashMap<CDDAIdentifier, ItemGroup>,
 }
 
 impl DeserializedCDDAJsonData {

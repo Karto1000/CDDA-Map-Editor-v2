@@ -1,14 +1,15 @@
+use crate::cdda_data::map_data::MapGenItem;
 use crate::cdda_data::{CataVariant, Distribution, MapGenValue};
-use crate::map::Mapping;
-use crate::util::{CDDAIdentifier, Comment, GetIdentifier, ParameterIdentifier};
+use crate::map::VisibleMapping;
+use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 
 pub type Palettes = HashMap<CDDAIdentifier, CDDAPalette>;
 
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub enum ParameterScope {
     // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-parameters
     // "By default, the scope of a parameter is the overmap_special being generated."
@@ -23,7 +24,7 @@ pub enum ParameterScope {
     Omt,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Parameter {
     #[serde(rename = "type")]
     pub ty: CataVariant,
@@ -36,7 +37,7 @@ pub struct Parameter {
     pub default: Distribution,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAPalette {
     pub id: CDDAIdentifier,
 
@@ -65,7 +66,7 @@ pub struct CDDAPalette {
     pub npcs: HashMap<char, Value>,
 
     #[serde(default)]
-    pub items: HashMap<char, Value>,
+    pub items: HashMap<char, MeabyVec<MapGenItem>>,
 
     #[serde(default)]
     pub loot: HashMap<char, Value>,
@@ -141,20 +142,42 @@ impl CDDAPalette {
         calculated_parameters
     }
 
-    pub fn get_mapping(
+    pub fn get_items(
         &self,
-        mapping_kind: &Mapping,
+        character: &char,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+    ) -> Option<Vec<MapGenItem>> {
+        if let Some(items) = self.items.get(character) {
+            return Some(items.clone().into_vec());
+        }
+
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) = palette.get_items(character, calculated_parameters, all_palettes) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_visible_mapping(
+        &self,
+        visible_mapping: &VisibleMapping,
         character: &char,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         all_palettes: &Palettes,
     ) -> Option<CDDAIdentifier> {
-        match mapping_kind {
-            Mapping::Terrain => {
+        match visible_mapping {
+            VisibleMapping::Terrain => {
                 if let Some(id) = self.terrain.get(character) {
                     return Some(id.get_identifier(calculated_parameters));
                 };
             }
-            Mapping::Furniture => {
+            VisibleMapping::Furniture => {
                 if let Some(id) = self.furniture.get(character) {
                     return Some(id.get_identifier(calculated_parameters));
                 };
@@ -167,9 +190,12 @@ impl CDDAPalette {
             let palette_id = mapgen_value.get_identifier(calculated_parameters);
             let palette = all_palettes.get(&palette_id).expect("Palette to exist");
 
-            if let Some(id) =
-                palette.get_mapping(mapping_kind, character, calculated_parameters, all_palettes)
-            {
+            if let Some(id) = palette.get_visible_mapping(
+                visible_mapping,
+                character,
+                calculated_parameters,
+                all_palettes,
+            ) {
                 return Some(id);
             }
         }

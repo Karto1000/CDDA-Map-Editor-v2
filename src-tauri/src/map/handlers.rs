@@ -1,4 +1,5 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::map_data::MapGenItem;
 use crate::cdda_data::TileLayer;
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::ProjectState::Saved;
@@ -11,7 +12,7 @@ use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex};
 use crate::tileset::{
     get_id_from_mapped_sprites, AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
-use crate::util::{CDDAIdentifier, GetIdentifier, JSONSerializableUVec2, Save};
+use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, Save, UVec2JsonKey};
 use glam::{IVec3, UVec2, UVec3, Vec3};
 use image::imageops::tile;
 use log::{debug, error, warn};
@@ -29,6 +30,7 @@ use tokio::sync::MutexGuard;
 mod events {
     pub const OPENED_MAP: &'static str = "opened_map";
     pub const PLACE_SPRITES: &'static str = "place_sprites";
+    pub const ITEM_DATA: &'static str = "item_data";
 }
 
 #[derive(Debug, thiserror::Error, Serialize)]
@@ -83,7 +85,7 @@ pub async fn get_current_project_data(
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaceCommand {
-    position: JSONSerializableUVec2,
+    position: UVec2JsonKey,
     character: char,
 }
 
@@ -95,12 +97,12 @@ pub struct MapChangEvent {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum MapChangeEventKind {
     Place(PlaceCommand),
-    Delete(JSONSerializableUVec2),
+    Delete(UVec2JsonKey),
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct PlaceSpriteEvent {
-    position: JSONSerializableUVec2,
+    position: UVec2JsonKey,
     index: u32,
 }
 
@@ -114,7 +116,7 @@ pub struct PlaceSpritesEvent {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateMapData {
     name: String,
-    size: JSONSerializableUVec2,
+    size: UVec2JsonKey,
 }
 
 #[tauri::command]
@@ -155,7 +157,7 @@ pub async fn create_project(
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct StaticSprite {
-    pub position: JSONSerializableUVec2,
+    pub position: UVec2JsonKey,
     pub index: u32,
     pub layer: u32,
     pub z: i32,
@@ -180,7 +182,7 @@ impl Eq for StaticSprite {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct AnimatedSprite {
-    pub position: JSONSerializableUVec2,
+    pub position: UVec2JsonKey,
     pub indices: Vec<u32>,
     pub layer: u32,
     pub z: i32,
@@ -205,7 +207,7 @@ impl Eq for AnimatedSprite {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct FallbackSprite {
-    pub position: JSONSerializableUVec2,
+    pub position: UVec2JsonKey,
     pub index: u32,
     pub z: i32,
 }
@@ -250,7 +252,7 @@ pub fn get_sprite_type_from_sprite(
                 Some(id) => match sprite.is_animated() {
                     true => {
                         let display_sprite = AnimatedSprite {
-                            position: JSONSerializableUVec2(position_uvec2),
+                            position: UVec2JsonKey(position_uvec2),
                             layer: (layer.clone() as u32) * 2 + SpriteLayer::Fg as u32,
                             indices: id.data.into_vec(),
                             rotate_deg: id.rotation.deg(),
@@ -261,7 +263,7 @@ pub fn get_sprite_type_from_sprite(
                     }
                     false => {
                         let display_sprite = StaticSprite {
-                            position: JSONSerializableUVec2(position_uvec2),
+                            position: UVec2JsonKey(position_uvec2),
                             layer: (layer.clone() as u32) * 2 + SpriteLayer::Fg as u32,
                             index: id.data.into_single().unwrap(),
                             rotate_deg: id.rotation.deg(),
@@ -278,7 +280,7 @@ pub fn get_sprite_type_from_sprite(
                 Some(id) => match sprite.is_animated() {
                     true => {
                         let display_sprite = AnimatedSprite {
-                            position: JSONSerializableUVec2(position_uvec2),
+                            position: UVec2JsonKey(position_uvec2),
                             layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
                             indices: id.data.into_vec(),
                             rotate_deg: id.rotation.deg(),
@@ -289,7 +291,7 @@ pub fn get_sprite_type_from_sprite(
                     }
                     false => {
                         let display_sprite = StaticSprite {
-                            position: JSONSerializableUVec2(position_uvec2),
+                            position: UVec2JsonKey(position_uvec2),
                             layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
                             index: id.data.into_single().unwrap(),
                             rotate_deg: id.rotation.deg(),
@@ -305,7 +307,7 @@ pub fn get_sprite_type_from_sprite(
         }
         SpriteKind::Fallback(sprite_index) => (
             Some(SpriteType::Fallback(FallbackSprite {
-                position: JSONSerializableUVec2(position_uvec2),
+                position: UVec2JsonKey(position_uvec2),
                 index: *sprite_index,
                 z: position.z,
             })),
@@ -358,6 +360,8 @@ pub async fn open_project(
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
     let mut fallback_sprites = HashSet::new();
+
+    let mut item_data: HashMap<IVec3JsonKey, Vec<MapGenItem>> = HashMap::new();
 
     macro_rules! insert_sprite_type {
         ($val: expr) => {
@@ -452,7 +456,7 @@ pub async fn open_project(
         // the function relies on the mapped sprite of this sprite to already exist
         map_data.cells.iter().for_each(|(p, cell)| {
             let mut identifier_group =
-                map_data.get_identifiers(&cell.character, &json_data.palettes);
+                map_data.get_visible_mappings(&cell.character, &json_data.palettes);
 
             match identifier_group.terrain {
                 None => {
@@ -517,7 +521,7 @@ pub async fn open_project(
 
         map_data.cells.iter().for_each(|(p, cell)| {
             let identifier_group = identifiers.remove(p).expect("Identifier group to exist");
-            let mapped_sprite_coords = IVec3::new(p.x as i32, p.y as i32, *z);
+            let cell_coordinates = IVec3::new(p.x as i32, p.y as i32, *z);
 
             if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
                 warn!("No sprites found for char {:?}", cell);
@@ -543,13 +547,13 @@ pub async fn open_project(
 
                 let adjacent_sprites = tileset::get_adjacent_sprites(
                     &mapped_sprites_lock,
-                    mapped_sprite_coords.clone(),
+                    cell_coordinates.clone(),
                     &layer,
                 );
 
                 let (fg, bg) = get_sprite_type_from_sprite(
                     &id,
-                    mapped_sprite_coords.clone(),
+                    cell_coordinates.clone(),
                     &adjacent_sprites,
                     layer.clone(),
                     &sprite_kind,
@@ -564,6 +568,13 @@ pub async fn open_project(
                     insert_sprite_type!(bg)
                 }
             }
+
+            match map_data.get_items(&cell.character, &json_data.palettes) {
+                None => {}
+                Some(items) => {
+                    item_data.insert(IVec3JsonKey(cell_coordinates.clone()), items.clone());
+                }
+            };
         });
     }
 
@@ -576,6 +587,8 @@ pub async fn open_project(
         },
     )
     .unwrap();
+
+    app.emit(events::ITEM_DATA, item_data).unwrap();
 
     Ok(())
 }

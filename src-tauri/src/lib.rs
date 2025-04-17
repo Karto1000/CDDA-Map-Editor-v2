@@ -42,13 +42,20 @@ use std::collections::HashMap;
 use std::fs;
 use std::fs::File;
 use std::io::BufReader;
+use std::ops::Deref;
 use std::sync::{Arc, OnceLock, RwLock};
 use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
 use tileset::legacy_tileset::LegacyTilesheet;
+use tokio::sync::MutexGuard;
 use walkdir::WalkDir;
+
+mod events {
+    pub const EDITOR_DATA_CHANGED: &'static str = "editor_data_changed";
+    pub const CDDA_DATA: &'static str = "cdda_data";
+}
 
 pub static RANDOM_SEED: u64 = 1;
 
@@ -61,6 +68,7 @@ lazy_static! {
 async fn frontend_ready(
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), ()> {
     let lock = editor_data.lock().await;
 
@@ -70,8 +78,18 @@ async fn frontend_ready(
     }
 
     info!("Sent initial editor data change");
-    app.emit("editor_data_changed", lock.clone())
+    app.emit(events::EDITOR_DATA_CHANGED, lock.clone())
         .expect("Emit to not fail");
+
+    let lock = json_data.lock().await;
+
+    match lock.deref() {
+        None => {}
+        Some(d) => {
+            info!("Sending cdda data");
+            app.emit(events::CDDA_DATA, d.clone()).unwrap();
+        }
+    }
 
     Ok(())
 }

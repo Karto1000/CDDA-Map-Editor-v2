@@ -1,7 +1,7 @@
 use crate::cdda_data::{CDDADeleteOp, CDDAExtendOp, CDDAString, IdOrAbstract};
 use crate::impl_merge_with_precedence;
 use crate::util::{CDDAIdentifier, MeabyVec};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct CDDAFurnitureIntermediate {
@@ -21,7 +21,7 @@ pub struct CDDAFurnitureIntermediate {
     pub delete: Option<CDDADeleteOp>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAFurniture {
     pub id: CDDAIdentifier,
     #[serde(rename = "copy-from")]

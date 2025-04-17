@@ -5,7 +5,7 @@ use crate::cdda_data::Switch;
 use crate::tileset::GetRandom;
 use crate::RANDOM;
 use derive_more::with_trait::Display;
-use glam::UVec2;
+use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
@@ -269,9 +269,9 @@ impl<T> MeabyWeighted<T> {
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct JSONSerializableUVec2(pub UVec2);
+pub struct UVec2JsonKey(pub UVec2);
 
-impl Serialize for JSONSerializableUVec2 {
+impl Serialize for UVec2JsonKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
@@ -282,7 +282,7 @@ impl Serialize for JSONSerializableUVec2 {
     }
 }
 
-impl<'de> Deserialize<'de> for JSONSerializableUVec2 {
+impl<'de> Deserialize<'de> for UVec2JsonKey {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -304,7 +304,44 @@ impl<'de> Deserialize<'de> for JSONSerializableUVec2 {
         let y = parts[1].parse::<u32>().map_err(serde::de::Error::custom)?;
 
         // Return the JSONSerializableUVec2 wrapper with the parsed UVec2
-        Ok(JSONSerializableUVec2(UVec2::new(x, y)))
+        Ok(UVec2JsonKey(UVec2::new(x, y)))
+    }
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq)]
+pub struct IVec3JsonKey(pub IVec3);
+
+impl Serialize for IVec3JsonKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Convert the UVec2 into a string like "x,y"
+        let s = format!("{},{},{}", self.0.x, self.0.y, self.0.z);
+        serializer.serialize_str(&s)
+    }
+}
+
+impl<'de> Deserialize<'de> for IVec3JsonKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+
+        let parts: Vec<&str> = s.split(',').collect();
+        if parts.len() != 2 {
+            return Err(de::Error::invalid_value(
+                de::Unexpected::Str(&s),
+                &"a string in the format 'x,y,z'",
+            ));
+        }
+
+        let x = parts[0].parse::<i32>().map_err(serde::de::Error::custom)?;
+        let y = parts[1].parse::<i32>().map_err(serde::de::Error::custom)?;
+        let z = parts[2].parse::<i32>().map_err(serde::de::Error::custom)?;
+
+        Ok(IVec3JsonKey(IVec3::new(x, y, z)))
     }
 }
 

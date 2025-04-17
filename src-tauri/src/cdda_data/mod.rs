@@ -62,24 +62,24 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
     }
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAExtendOp {
     pub flags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDADeleteOp {
     pub flags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
     Trap = 2,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum CDDAString {
     String(String),
@@ -106,8 +106,19 @@ pub struct UnknownEntry {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ConnectGroup {
     pub id: CDDAIdentifier,
-    #[serde(rename = "type")]
-    pub ty: CataVariant,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ItemGroupSubtype {
+    Collection,
+    Distribution,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ItemGroup {
+    pub subtype: ItemGroupSubtype,
+    pub id: CDDAIdentifier,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -120,6 +131,7 @@ pub enum CDDAJsonEntry {
     Terrain(CDDATerrainIntermediate),
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
+    ItemGroup(ItemGroup),
 
     // -- UNUSED
     WeatherType,
@@ -170,7 +182,6 @@ pub enum CDDAJsonEntry {
     #[serde(rename = "TOOL")]
     Tool,
     AmmunitionType,
-    ItemGroup,
     HitRange,
     Profession,
     HarvestDropType,

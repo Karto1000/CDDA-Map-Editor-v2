@@ -1,25 +1,25 @@
 use crate::util::{CDDAIdentifier, Weighted};
 use indexmap::IndexMap;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct RegionIdentifier(pub String);
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RegionTerrainAndFurniture {
     pub terrain: IndexMap<RegionIdentifier, IndexMap<CDDAIdentifier, i32>>,
     pub furniture: IndexMap<RegionIdentifier, IndexMap<CDDAIdentifier, i32>>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapTerrainAlias {
     pub om_terrain: String,
     pub om_terrain_match_type: String,
     pub alias: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapLakeSettings {
     pub noise_threshold_lake: f32,
     pub lake_size_min: i32,
@@ -28,7 +28,7 @@ pub struct OvermapLakeSettings {
     pub shore_extendable_overmap_terrain_aliases: Vec<OvermapTerrainAlias>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapOceanSettings {
     pub noise_threshold_ocean: f32,
     pub ocean_size_min: i32,
@@ -40,7 +40,7 @@ pub struct OvermapOceanSettings {
     pub sandy_beach_width: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapRavineSettings {
     pub num_ravines: i32,
     pub ravine_width: i32,
@@ -48,7 +48,7 @@ pub struct OvermapRavineSettings {
     pub ravine_depth: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapForestSettings {
     pub noise_threshold_forest: f32,
     pub noise_threshold_forest_thick: f32,
@@ -58,7 +58,7 @@ pub struct OvermapForestSettings {
     pub river_floodplain_buffer_distance_max: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapConnectionSettings {
     pub intra_city_road_connection: String,
     pub inter_city_road_connection: String,
@@ -68,7 +68,7 @@ pub struct OvermapConnectionSettings {
     pub rail_connection: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ForestTrailSettings {
     pub chance: i32,
     pub border_point_chance: i32,
@@ -80,12 +80,12 @@ pub struct ForestTrailSettings {
     pub trailhead_road_distance: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MapExtras {
     pub forest: HashMap<String, i32>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CitySettings {
     pub shop_radius: i32,
     pub shop_sigma: i32,
@@ -93,7 +93,7 @@ pub struct CitySettings {
     pub park_sigma: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct WeatherSettings {
     pub base_temperature: f32,
     pub base_humidity: f32,
@@ -103,7 +103,7 @@ pub struct WeatherSettings {
     pub base_wind_season_variation: i32,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapFeatureFlagSettings {
     pub clear_blacklist: bool,
     pub blacklist: Vec<String>,
@@ -111,7 +111,7 @@ pub struct OvermapFeatureFlagSettings {
     pub whitelist: Vec<String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDARegionSettings {
     pub id: CDDAIdentifier,
     pub default_oter: Vec<String>,
