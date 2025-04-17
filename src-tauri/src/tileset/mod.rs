@@ -3,17 +3,19 @@ use crate::cdda_data::TileLayer;
 use crate::tileset::current_tileset::CurrentTilesheet;
 use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
 use crate::tileset::legacy_tileset::{
-    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, Rotated, Rotates, Rotation,
-    SpriteIndex,
+    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, MappedSprite, Rotated,
+    Rotates, Rotation, SpriteIndex,
 };
 use crate::util::{CDDAIdentifier, MeabyVec};
 use crate::RANDOM;
+use glam::IVec3;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use rand_chacha::rand_core::SeedableRng;
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use tokio::sync::MutexGuard;
 
 pub(crate) mod current_tileset;
 pub(crate) mod handlers;
@@ -746,4 +748,54 @@ impl<T> MeabyWeightedSprite<T> {
 pub enum SpriteLayer {
     Bg = 0,
     Fg = 1,
+}
+
+pub fn get_id_from_mapped_sprites(
+    mapped_sprites_lock: &MutexGuard<HashMap<IVec3, MappedSprite>>,
+    cords: &IVec3,
+    layer: &TileLayer,
+) -> Option<CDDAIdentifier> {
+    mapped_sprites_lock
+        .get(cords)
+        .map(|v| match layer {
+            TileLayer::Terrain => v.terrain.clone(),
+            TileLayer::Furniture => v.furniture.clone(),
+            TileLayer::Trap => v.trap.clone(),
+        })
+        .flatten()
+}
+
+pub fn get_adjacent_coordinates(
+    mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    coordinates: IVec3,
+    layer: &TileLayer,
+) -> (
+    Option<CDDAIdentifier>,
+    Option<CDDAIdentifier>,
+    Option<CDDAIdentifier>,
+    Option<CDDAIdentifier>,
+) {
+    let top_cords = coordinates + IVec3::new(0, 1, 0);
+    let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
+
+    let right_cords = coordinates + IVec3::new(1, 0, 0);
+    let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
+
+    let bottom = match coordinates.y > 0 {
+        true => {
+            let bottom_cords = coordinates - IVec3::new(0, 1, 0);
+            get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
+        }
+        false => None,
+    };
+
+    let left = match coordinates.x > 0 {
+        true => {
+            let left_cords = coordinates - IVec3::new(1, 0, 0);
+            get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
+        }
+        false => None,
+    };
+
+    (top, right, bottom, left)
 }

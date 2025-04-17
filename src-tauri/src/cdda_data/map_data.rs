@@ -1,8 +1,8 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map_data::{
-    Cell, MapData, Mapping, PlaceableSetType, RemovableSetType, Set, SetLine, SetOperation,
-    SetPoint, SetSquare,
+    Cell, MapData, Mapping, Place, PlaceFurniture, PlaceableSetType, RemovableSetType, Set,
+    SetLine, SetOperation, SetPoint, SetSquare,
 };
 use crate::util::{CDDAIdentifier, DistributionInner, ParameterIdentifier};
 use crate::{skip_err, skip_none};
@@ -56,6 +56,9 @@ pub struct CDDAMapDataObject {
 
     #[serde(default)]
     pub furniture: HashMap<char, MapGenValue>,
+
+    #[serde(default)]
+    pub place_furniture: Vec<PlaceFurniture>,
 
     #[serde(default)]
     pub monster: HashMap<char, Value>,
@@ -282,6 +285,16 @@ impl Into<MapData> for CDDAMapData {
         mappings.insert(Mapping::Terrain, self.object.terrain);
         mappings.insert(Mapping::Furniture, self.object.furniture);
 
+        let mut place = HashMap::new();
+        place.insert(
+            Mapping::Furniture,
+            self.object
+                .place_furniture
+                .into_iter()
+                .map(|f| Arc::new(f) as Arc<dyn Place>)
+                .collect(),
+        );
+
         MapData::new(
             self.object.fill_ter,
             cells,
@@ -289,6 +302,7 @@ impl Into<MapData> for CDDAMapData {
             self.object.palettes,
             self.object.parameters,
             set_vec,
+            place,
         )
     }
 }

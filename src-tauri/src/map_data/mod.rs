@@ -6,7 +6,7 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
-use crate::map_data::handlers::{get_bg_from_sprite, get_fg_from_sprite, SpriteType};
+use crate::map_data::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::{Tilesheet, TilesheetKind};
 use crate::util::{
@@ -33,88 +33,40 @@ pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
 pub trait Set: Debug + DynClone + Send + Sync {
     fn coordinates(&self) -> Vec<UVec2>;
     fn operation(&self) -> &SetOperation;
-
-    fn map_ids(
+    fn get_mapped_sprites(
         &self,
-        coordinates: &UVec2,
+        chosen_coordinates: &Vec<UVec2>,
         z: i32,
-        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
-    ) {
-        match self.operation() {
-            SetOperation::Place { ty, id } => {
-                let mut mapped_sprite = MappedSprite::default();
+    ) -> HashMap<IVec3, MappedSprite> {
+        let mut new_mapped_sprites = HashMap::new();
 
-                match ty {
-                    PlaceableSetType::Terrain => {
-                        mapped_sprite.terrain = Some(id.clone());
-                    }
-                    PlaceableSetType::Furniture => {
-                        mapped_sprite.furniture = Some(id.clone());
-                    }
-                    PlaceableSetType::Trap => {
-                        mapped_sprite.trap = Some(id.clone());
-                    }
-                };
+        for coordinates in chosen_coordinates.iter() {
+            match self.operation() {
+                SetOperation::Place { ty, id } => {
+                    let mut mapped_sprite = MappedSprite::default();
 
-                mapped_sprites_lock.insert(
-                    IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
-                    mapped_sprite.clone(),
-                );
+                    match ty {
+                        PlaceableSetType::Terrain => {
+                            mapped_sprite.terrain = Some(id.clone());
+                        }
+                        PlaceableSetType::Furniture => {
+                            mapped_sprite.furniture = Some(id.clone());
+                        }
+                        PlaceableSetType::Trap => {
+                            mapped_sprite.trap = Some(id.clone());
+                        }
+                    };
+
+                    new_mapped_sprites.insert(
+                        IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
+                        mapped_sprite.clone(),
+                    );
+                }
+                _ => {}
             }
-            SetOperation::Remove { .. } => {}
-            SetOperation::Radiation { .. } => {}
-            SetOperation::Variable { .. } => {}
-            SetOperation::Bash { .. } => {}
-            SetOperation::Burn { .. } => {}
         }
-    }
-    fn get_fg_and_bg(
-        &self,
-        coordinates: UVec2,
-        z: i32,
-        tilesheet: &TilesheetKind,
-        json_data: &DeserializedCDDAJsonData,
-        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
-    ) -> (Option<SpriteType>, Option<SpriteType>) {
-        match self.operation() {
-            SetOperation::Place { ty, id } => {
-                let sprite_kind = match tilesheet {
-                    TilesheetKind::Legacy(l) => l.get_sprite(id, json_data),
-                    TilesheetKind::Current(c) => c.get_sprite(id, json_data),
-                };
 
-                let layer = match ty {
-                    PlaceableSetType::Terrain => TileLayer::Terrain,
-                    PlaceableSetType::Furniture => TileLayer::Furniture,
-                    PlaceableSetType::Trap => TileLayer::Trap,
-                };
-
-                let fg = get_fg_from_sprite(
-                    id,
-                    IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
-                    json_data,
-                    layer.clone(),
-                    &sprite_kind,
-                    mapped_sprites_lock,
-                );
-
-                let bg = get_bg_from_sprite(
-                    id,
-                    IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
-                    json_data,
-                    layer.clone(),
-                    &sprite_kind,
-                    mapped_sprites_lock,
-                );
-
-                (fg, bg)
-            }
-            SetOperation::Remove { .. } => (None, None),
-            SetOperation::Radiation { .. } => (None, None),
-            SetOperation::Variable { .. } => (None, None),
-            SetOperation::Bash { .. } => (None, None),
-            SetOperation::Burn { .. } => (None, None),
-        }
+        new_mapped_sprites
     }
 
     fn get_sprites(
@@ -128,14 +80,33 @@ pub trait Set: Debug + DynClone + Send + Sync {
 
         let chosen_coordinates = self.coordinates();
 
-        // Like before, we need to map the ids before we generate the sprites
-        for coordinates in chosen_coordinates.iter() {
-            self.map_ids(&coordinates, z, mapped_sprites_lock)
-        }
-
         for coordinates in chosen_coordinates {
-            let (fg, bg) =
-                self.get_fg_and_bg(coordinates, z, tilesheet, json_data, mapped_sprites_lock);
+            let (fg, bg) = match self.operation() {
+                SetOperation::Place { ty, id } => {
+                    let sprite_kind = match tilesheet {
+                        TilesheetKind::Legacy(l) => l.get_sprite(id, json_data),
+                        TilesheetKind::Current(c) => c.get_sprite(id, json_data),
+                    };
+
+                    let layer = match ty {
+                        PlaceableSetType::Terrain => TileLayer::Terrain,
+                        PlaceableSetType::Furniture => TileLayer::Furniture,
+                        PlaceableSetType::Trap => TileLayer::Trap,
+                    };
+
+                    let fg_bg = get_sprite_type_from_sprite(
+                        id,
+                        IVec3::new(coordinates.x as i32, coordinates.y as i32, z),
+                        json_data,
+                        layer.clone(),
+                        &sprite_kind,
+                        mapped_sprites_lock,
+                    );
+
+                    fg_bg
+                }
+                _ => (None, None),
+            };
 
             if let Some(fg) = fg {
                 sprites.push(fg);
@@ -150,6 +121,26 @@ pub trait Set: Debug + DynClone + Send + Sync {
 }
 
 clone_trait_object!(Set);
+
+pub trait Place: Debug + DynClone + Send + Sync {
+    fn coordinates(&self) -> UVec2;
+
+    fn get_sprites(
+        &self,
+        z: i32,
+        tilesheet: &TilesheetKind,
+        json_data: &DeserializedCDDAJsonData,
+        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    ) -> Vec<SpriteType>;
+
+    fn get_mapped_sprites(
+        &self,
+        chosen_coordinates: &UVec2,
+        z: i32,
+    ) -> HashMap<IVec3, MappedSprite>;
+}
+
+clone_trait_object!(Place);
 
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
@@ -174,6 +165,121 @@ pub enum Mapping {
     Vehicles,
     Traps,
     Graffiti,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct Cell {
+    pub character: char,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MapData {
+    pub cells: IndexMap<UVec2, Cell>,
+    pub fill: Option<DistributionInner>,
+
+    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
+
+    pub mappings: HashMap<Mapping, HashMap<char, MapGenValue>>,
+
+    pub palettes: Vec<MapGenValue>,
+
+    #[serde(skip)]
+    pub set: Vec<Arc<dyn Set>>,
+
+    #[serde(skip)]
+    pub place: HashMap<Mapping, Vec<Arc<dyn Place>>>,
+}
+
+impl Default for MapData {
+    fn default() -> Self {
+        let mut cells = IndexMap::new();
+
+        for y in 0..24 {
+            for x in 0..24 {
+                cells.insert(UVec2::new(x, y), Cell { character: ' ' });
+            }
+        }
+        let fill = Some(DistributionInner::Normal(CDDAIdentifier::from("t_grass")));
+
+        Self {
+            cells,
+            fill,
+            calculated_parameters: Default::default(),
+            parameters: Default::default(),
+            palettes: Default::default(),
+            mappings: Default::default(),
+            set: vec![],
+            place: Default::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceFurniture {
+    furn: CDDAIdentifier,
+    x: NumberOrRange<u32>,
+    y: NumberOrRange<u32>,
+}
+
+impl Place for PlaceFurniture {
+    fn coordinates(&self) -> UVec2 {
+        UVec2::new(self.x.number(), self.y.number())
+    }
+
+    fn get_sprites(
+        &self,
+        z: i32,
+        tilesheet: &TilesheetKind,
+        json_data: &DeserializedCDDAJsonData,
+        mapped_sprites_lock: &mut MutexGuard<HashMap<IVec3, MappedSprite>>,
+    ) -> Vec<SpriteType> {
+        let position = UVec2::new(self.x.number(), self.y.number());
+
+        let sprite_kind = match tilesheet {
+            TilesheetKind::Legacy(l) => l.get_sprite(&self.furn, json_data),
+            TilesheetKind::Current(c) => c.get_sprite(&self.furn, json_data),
+        };
+
+        let (fg, bg) = get_sprite_type_from_sprite(
+            &self.furn,
+            IVec3::new(position.x as i32, position.y as i32, z),
+            json_data,
+            TileLayer::Furniture,
+            &sprite_kind,
+            mapped_sprites_lock,
+        );
+
+        let mut sprite_types = vec![];
+
+        if let Some(fg) = fg {
+            sprite_types.push(fg)
+        }
+
+        if let Some(bg) = bg {
+            sprite_types.push(bg)
+        }
+
+        sprite_types
+    }
+
+    fn get_mapped_sprites(
+        &self,
+        chosen_coordinates: &UVec2,
+        z: i32,
+    ) -> HashMap<IVec3, MappedSprite> {
+        let mut mapped_sprites = HashMap::new();
+
+        let mut mapped_sprite = MappedSprite::default();
+        mapped_sprite.furniture = Some(self.furn.clone());
+
+        mapped_sprites.insert(
+            IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, z),
+            mapped_sprite,
+        );
+
+        mapped_sprites
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
@@ -333,49 +439,6 @@ impl Set for SetSquare {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-pub struct Cell {
-    pub character: char,
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub struct MapData {
-    pub cells: IndexMap<UVec2, Cell>,
-    pub fill: Option<DistributionInner>,
-
-    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
-
-    pub mappings: HashMap<Mapping, HashMap<char, MapGenValue>>,
-    pub palettes: Vec<MapGenValue>,
-
-    #[serde(skip)]
-    pub set: Vec<Arc<dyn Set>>,
-}
-
-impl Default for MapData {
-    fn default() -> Self {
-        let mut cells = IndexMap::new();
-
-        for y in 0..24 {
-            for x in 0..24 {
-                cells.insert(UVec2::new(x, y), Cell { character: ' ' });
-            }
-        }
-        let fill = Some(DistributionInner::Normal(CDDAIdentifier::from("t_grass")));
-
-        Self {
-            cells,
-            fill,
-            calculated_parameters: Default::default(),
-            parameters: Default::default(),
-            palettes: Default::default(),
-            mappings: Default::default(),
-            set: vec![],
-        }
-    }
-}
-
 #[derive(Debug, Clone, Default)]
 pub struct CDDAIdentifierGroup {
     pub terrain: Option<CDDAIdentifier>,
@@ -390,6 +453,7 @@ impl MapData {
         palettes: Vec<MapGenValue>,
         parameters: IndexMap<ParameterIdentifier, Parameter>,
         set: Vec<Arc<dyn Set>>,
+        place: HashMap<Mapping, Vec<Arc<dyn Place>>>,
     ) -> Self {
         Self {
             calculated_parameters: Default::default(),
@@ -399,6 +463,7 @@ impl MapData {
             mappings,
             cells,
             set,
+            place,
         }
     }
 
