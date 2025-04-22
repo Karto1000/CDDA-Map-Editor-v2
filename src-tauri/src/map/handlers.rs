@@ -20,6 +20,7 @@ use image::imageops::tile;
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -605,18 +606,28 @@ pub async fn open_project(
 pub enum DisplayItemGroup {
     Single {
         item: CDDAIdentifier,
-        probability: i32,
+        probability: f32,
     },
     Collection {
         name: Option<String>,
         items: Vec<DisplayItemGroup>,
-        probability: i32,
+        probability: f32,
     },
     Distribution {
         name: Option<String>,
         items: Vec<DisplayItemGroup>,
-        probability: i32,
+        probability: f32,
     },
+}
+
+impl DisplayItemGroup {
+    pub fn probability(&self) -> f32 {
+        match self {
+            DisplayItemGroup::Single { probability, .. } => probability.clone(),
+            DisplayItemGroup::Collection { probability, .. } => probability.clone(),
+            DisplayItemGroup::Distribution { probability, .. } => probability.clone(),
+        }
+    }
 }
 
 #[derive(Debug, Serialize)]
@@ -630,12 +641,19 @@ pub fn get_display_item_group_from_item_group(
 ) -> Vec<DisplayItemGroup> {
     let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
 
+    let weight_sum = item_group.entries.iter().fold(0, |acc, v| match v {
+        EntryItem::Item(i) => acc + i.probability,
+        EntryItem::Group(g) => acc + g.probability,
+        EntryItem::Distribution { probability, .. } => acc + probability.unwrap_or(100),
+        EntryItem::Collection { probability, .. } => acc + probability.unwrap_or(100),
+    });
+
     for entry in item_group.entries.iter() {
         match entry {
             EntryItem::Item(i) => {
                 let display_item = DisplayItemGroup::Single {
                     item: i.item.clone(),
-                    probability: i.probability,
+                    probability: i.probability as f32 / weight_sum as f32,
                 };
                 display_item_groups.push(display_item);
             }
@@ -645,20 +663,22 @@ pub fn get_display_item_group_from_item_group(
                     .get(&g.group)
                     .expect("Item Group to exist");
                 let display_item = get_display_item_group_from_item_group(other_group, json_data);
+                let probability = g.probability as f32 / weight_sum as f32;
 
                 match other_group.subtype {
                     ItemGroupSubtype::Collection => {
                         display_item_groups.push(DisplayItemGroup::Collection {
                             items: display_item,
                             name: Some(other_group.id.clone().0),
-                            probability: g.probability,
+                            probability,
                         });
                     }
                     ItemGroupSubtype::Distribution => {
+                        let probability = g.probability as f32 / weight_sum as f32;
                         display_item_groups.push(DisplayItemGroup::Distribution {
                             items: display_item,
                             name: Some(other_group.id.clone().0),
-                            probability: g.probability,
+                            probability,
                         });
                     }
                 }
@@ -673,6 +693,12 @@ pub fn get_display_item_group_from_item_group(
             } => {}
         }
     }
+
+    display_item_groups.sort_by(|v1, v2| {
+        v2.probability()
+            .partial_cmp(&v1.probability())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     display_item_groups
 }
@@ -691,16 +717,25 @@ pub fn get_display_item_group_from_mapgen_items(
 
         let items = get_display_item_group_from_item_group(item_group, json_data);
 
+        let probability = mapgen_item
+            .chance
+            .clone()
+            .map(|v| v.get_from_to().0)
+            .unwrap_or(100) as f32
+            // the default chance is 100, but we want to have a range from 0-1 so / 100
+            / 100.;
         display_item_groups.push(DisplayItemGroup::Distribution {
             name: Some(mapgen_item.item.clone().0),
-            probability: mapgen_item
-                .chance
-                .clone()
-                .map(|v| v.get_from_to().0)
-                .unwrap_or(100) as i32,
+            probability,
             items,
         });
     }
+
+    display_item_groups.sort_by(|v1, v2| {
+        v2.probability()
+            .partial_cmp(&v1.probability())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
 
     display_item_groups
 }
@@ -767,7 +802,7 @@ pub async fn close_project(
     Ok(())
 }
 
-#[derive(Debug, thiserror::Error, Serialize)]
+#[derive(Debug, Error, Serialize)]
 pub enum SaveError {
     #[error(transparent)]
     MapError(#[from] GetCurrentMapDataError),
