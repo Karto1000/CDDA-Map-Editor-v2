@@ -98,7 +98,6 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     )
                 }
 
-                console.log(atlases, fallback)
                 return { atlases, fallback }
             }
 

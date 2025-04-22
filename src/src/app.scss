@@ -5,7 +5,11 @@
     background-color: theme-var("dark");
 
     .side-panel-left {
-      color: theme-var("lightest")
+      color: theme-var("lightest");
+
+      .item-container {
+        border-color: theme-var("lightest");
+      }
     }
 
     .side-panel-right {
@@ -32,6 +36,16 @@
     .side-panel-left {
       flex: 1;
       padding: 12px;
+      box-sizing: border-box;
+
+      .item-container {
+        display: flex;
+        flex-direction: column;
+        margin-top: 12px;
+        margin-bottom: 12px;
+        border-width: 1px;
+        border-style: solid;
+      }
     }
 
     .side-panel-right {

@@ -2,6 +2,9 @@
 
 @include themed($themes) {
   .multimenu {
+    display: flex;
+    flex-direction: column;
+
     .tabs-container {
       .tabs {
         div {
@@ -53,5 +56,6 @@
 
   .multimenu-body {
     height: 100%;
+    overflow-y: auto;
   }
 }

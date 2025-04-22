@@ -138,7 +138,7 @@ function App() {
                         </Window>
 
                         <PanelGroup direction={'horizontal'}>
-                            <Panel defaultSize={20} maxSize={20} onResize={resize}>
+                            <Panel defaultSize={20} maxSize={50} onResize={resize}>
                                 <div className={"side-panel"}>
                                     <div className={"side-panel-left"}>
                                         {

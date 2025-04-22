@@ -40,6 +40,11 @@
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
 }
 
+* {
+  font-smooth: never;
+  -webkit-font-smoothing : none;
+}
+
 :root, button, input, select, option, label {
   font-family: 'Unifont', sans-serif;
 }
@@ -51,6 +56,10 @@ p {
 button, select, input {
   cursor: pointer;
   border: none;
+}
+
+h1, h2, h3, h4, h5, h6  {
+  font-weight: 400;
 }
 
 .interactable-text {

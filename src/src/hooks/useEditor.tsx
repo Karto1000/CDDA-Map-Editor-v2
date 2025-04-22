@@ -1,29 +1,21 @@
-import {
-    AmbientLight,
-    GridHelper,
-    Group,
-    Mesh,
-    MeshBasicMaterial,
-    OrthographicCamera,
-    Plane,
-    PlaneGeometry,
-    Raycaster,
-    Scene,
-    Vector2,
-    Vector3,
-    WebGLRenderer
-} from "three";
+import {AmbientLight, GridHelper, Group, OrthographicCamera, Raycaster, Scene, Vector3, WebGLRenderer} from "three";
 import React, {MutableRefObject, useCallback, useEffect, useRef, useState} from "react";
 import Stats from "stats.js";
 import {getColorFromTheme, Theme} from "./useTheme.ts";
 import {degToRad} from "three/src/math/MathUtils.js";
-import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../rendering/tilesheets.ts";
+import {DrawAnimatedSprite, DrawStaticSprite, Tilesheets} from "../rendering/tilesheets.ts";
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {useMousePosition} from "./useMousePosition.ts";
-import {invokeTauri, makeCancelable, serializedVec2ToVector2, serializedVec3ToVector3} from "../lib/index.ts";
+import {BackendResponseType, invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
 import {listen} from "@tauri-apps/api/event";
-import {ItemDataEvent, MapDataEvent, MapDataSendCommand, MapGenItem, PlaceSpritesEvent} from "../lib/map_data.ts";
-import {MultiMenuTab} from "../components/multimenu.js";
+import {
+    DisplayItemGroup,
+    DisplayItemGroupType,
+    MapDataEvent,
+    MapDataSendCommand,
+    PlaceSpritesEvent
+} from "../lib/map_data.ts";
+import {Project} from "../lib/project.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -43,8 +35,8 @@ type Props = {
 type UseEditorRet = {
     resize: () => void,
     displayInLeftPanel: {
-        items: React.JSX.Element[]
-        monsters: React.JSX.Element[]
+        items: React.JSX.Element[] | React.JSX.Element
+        monsters: React.JSX.Element[] | React.JSX.Element
     }
 }
 
@@ -61,11 +53,12 @@ export function useEditor(props: Props): UseEditorRet {
     const [currentZLayer, setCurrentZLayer] = useState<number>(0)
     const isLeftMousePressedRef = useRef<boolean>(false)
     const mousePosition = useMousePosition(props.canvasRef)
+    const worldMousePosition = useRef<Vector3>(new Vector3(0, 0, 0))
 
-    const [displayInLeftPanel, setDisplayInLeftPanel] = useState<{
-        items: React.JSX.Element[],
-        monsters: React.JSX.Element[]
-    }>({items: [], monsters: []})
+    const [itemDisplay, setItemDisplay] = useState<React.JSX.Element>()
+    const [cellData, setCellData] = useState<{
+        [coords: string]: { item_groups: DisplayItemGroup[] }
+    }>({})
 
     const onResize = useCallback(() => {
         if (!rendererRef.current) return
@@ -80,6 +73,7 @@ export function useEditor(props: Props): UseEditorRet {
         cameraRef.current.top = newHeight / 2
         cameraRef.current.bottom = newHeight / -2
     }, [props.canvasContainerRef])
+
 
     // Should only run once on application startup
     useEffect(() => {
@@ -152,6 +146,73 @@ export function useEditor(props: Props): UseEditorRet {
         }
     }, [onResize, props.canvasContainerRef, props.canvasRef, props.sceneRef]);
 
+    useEffect(() => {
+        function getChildrenOfDisplayGroup(
+            level: number,
+            itemGroup: DisplayItemGroup,
+        ): React.JSX.Element[] {
+            const innerGroup: React.JSX.Element[] = []
+
+            if (itemGroup.type === DisplayItemGroupType.Single) {
+                innerGroup.push(<div key={`${level}-${itemGroup.item}`}>{itemGroup.item}, {itemGroup.probability}</div>)
+            } else if (itemGroup.type === DisplayItemGroupType.Distribution || itemGroup.type === DisplayItemGroupType.Collection) {
+                if (itemGroup.items.length === 0) return innerGroup
+
+                innerGroup.push(
+                    <fieldset style={{marginLeft: level * 2}} className={"item-container"} key={`${level}-${itemGroup.type}`}>
+                        <legend>{itemGroup.name} {itemGroup.type} {itemGroup.probability}</legend>
+                        {itemGroup.items.map(ig => getChildrenOfDisplayGroup(level + 1, ig))}
+                    </fieldset>
+                )
+            }
+
+            return innerGroup
+        }
+
+        function onCellChange(newCoordinates: Vector3) {
+            const group = cellData[`${newCoordinates.x},${newCoordinates.y},${currentZLayer}`]
+
+            if (!group) return;
+
+            const newItemDisplay = []
+
+            for (const itemGroup of group.item_groups) {
+                newItemDisplay.push(getChildrenOfDisplayGroup(0, itemGroup))
+            }
+
+            setItemDisplay(
+                <div style={{display: "flex", height: "100%", flexDirection: "column"}}>
+                    {newItemDisplay}
+                </div>
+            )
+        }
+
+        function setHoveredCell() {
+            if (!itemTooltipGroupRef.current) return
+
+            const rect = rendererRef.current.domElement.getBoundingClientRect();
+            const mouseNormalized = new Vector3();
+            mouseNormalized.x = ((mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
+            mouseNormalized.y = -((mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
+            mouseNormalized.z = 0
+
+            const offset = new Vector3(0.5, 0.5, 0)
+            const worldCoords = mouseNormalized.unproject(cameraRef.current).divide(new Vector3(32, 32, 1)).add(offset).floor();
+
+            if (worldCoords.x !== worldMousePosition.current.x || worldCoords.y !== worldMousePosition.current.y) {
+                onCellChange(worldCoords)
+            }
+
+            worldMousePosition.current = worldCoords
+        }
+
+        window.addEventListener("mousemove", setHoveredCell)
+
+        return () => {
+            window.removeEventListener("mousemove", setHoveredCell)
+        }
+    }, [cellData, currentZLayer, mousePosition]);
+
     // Should run when the MapEditor is opened
     useEffect(() => {
         if (!props.isDisplaying) return
@@ -172,98 +233,44 @@ export function useEditor(props: Props): UseEditorRet {
 
         initialValueUpdate();
 
-        function handleEvents() {
-            if (isLeftMousePressedRef.current) {
-                const mouseNormalized = new Vector2();
-                const rect = rendererRef.current.domElement.getBoundingClientRect();
-                // ABSOLUTE LEGEND #2 -> https://discourse.threejs.org/t/custom-canvas-size-with-orbitcontrols-and-raycaster/18742/2
-                mouseNormalized.x = ((mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
-                mouseNormalized.y = -((mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
+        async function getCellData() {
+            const response = await invokeTauri<{
+                [coords: string]: { item_groups: DisplayItemGroup[] }
+            }, unknown>(MapDataSendCommand.GetProjectCellData, {});
 
-                const raycaster = new Raycaster()
-                raycaster.setFromCamera(mouseNormalized.clone(), cameraRef.current);
-                const planeZ = new Plane(new Vector3(0, 0, 1), 0);
-
-                const intersection = new Vector3();
-                const intersected = raycaster.ray.intersectPlane(planeZ, intersection);
-
-                const worldCellX = Math.round(intersected.x / 32)
-                const worldCellY = Math.round(intersected.y / 32)
-
-                if (worldCellX >= 0 && worldCellY >= 0) {
-                    const args = {
-                        command: {
-                            position: `${worldCellX},${worldCellY}`,
-                            character: "g"
-                        }
-                    }
-
-                    // invokeTauri<PlaceSpriteCommand, unknown>(MapDataSendCommand.Place, args).then()
-                }
-            }
-        }
-
-        function handleItemTooltip() {
-            if (!itemTooltipGroupRef.current) return
-
-            const rect = rendererRef.current.domElement.getBoundingClientRect();
-            const mouseNormalized = new Vector2();
-            mouseNormalized.x = ((mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
-            mouseNormalized.y = -((mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
-
-            raycasterRef.current.setFromCamera(mouseNormalized, cameraRef.current);
-            const intersects = raycasterRef.current.intersectObject(itemTooltipGroupRef.current);
-
-            if (intersects.length !== 0) {
-                let obj = intersects[0].object;
-                setDisplayInLeftPanel({items: obj.userData['items'], monsters: [<p>Monster</p>]})
+            if (response.type === BackendResponseType.Error) {
                 return
             }
 
-            setDisplayInLeftPanel({items: [], monsters: []})
+            setCellData(response.data)
         }
 
-        const itemDataUnlistenFn = makeCancelable(listen<ItemDataEvent>(
-            MapDataEvent.ItemData,
-            d => {
-                const group = new Group()
+        async function getCurrentProjectData() {
+            const response = await invokeTauri<Project, unknown>(MapDataSendCommand.GetCurrentProjectData, {})
 
-                for (const stringCoordinates of Object.keys(d.payload)) {
-                    const vec3 = serializedVec3ToVector3(stringCoordinates)
-                    const data = d.payload[stringCoordinates].map(i => i.item).join(", ")
+            if (response.type === BackendResponseType.Error) {
+                console.error(response.error)
+                return
+            }
 
-                    const geometry = new PlaneGeometry(32, 32);
-                    const material = new MeshBasicMaterial({visible: false});
-                    const mesh = new Mesh(geometry, material);
+            const group = new Group()
 
-                    mesh.position.x = vec3.x * 32
-                    mesh.position.y = vec3.y * 32
-                    mesh.position.z = MAX_DEPTH + 1
+            itemTooltipGroupRef.current = group
+            props.sceneRef.current.add(group)
+        }
 
-                    mesh.userData = {
-                        "items": data
-                    }
-
-                    group.add(mesh)
-                }
-
-                itemTooltipGroupRef.current = group
-                props.sceneRef.current.add(group)
-            }))
+        getCurrentProjectData()
+        getCellData()
 
         if (props.tilesheetsRef.current) props.tilesheetsRef.current.clearAll();
 
         let handler: number;
-
-        window.addEventListener("mousemove", handleItemTooltip)
 
         function loop() {
             statsRef.current.begin()
 
             cameraRef.current.updateProjectionMatrix()
             if (props.tilesheetsRef.current) props.tilesheetsRef.current.updateAnimatedSprites()
-
-            handleEvents()
 
             controlsRef.current.update()
             rendererRef.current.render(props.sceneRef.current, cameraRef.current)
@@ -277,8 +284,6 @@ export function useEditor(props: Props): UseEditorRet {
 
         return () => {
             cancelAnimationFrame(handler)
-            itemDataUnlistenFn.cancel()
-            window.removeEventListener("mousemove", handleItemTooltip)
         }
     }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef, mousePosition, props.openedTab]);
 
@@ -380,5 +385,5 @@ export function useEditor(props: Props): UseEditorRet {
         }
     }, [props.isTilesheetLoaded, props.tilesheetsRef]);
 
-    return {resize: onResize, displayInLeftPanel: displayInLeftPanel}
+    return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: []}}
 }
