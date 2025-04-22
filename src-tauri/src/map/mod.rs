@@ -355,7 +355,7 @@ pub struct PlaceFurniture {
 
 impl Place for PlaceFurniture {
     fn coordinates(&self) -> UVec2 {
-        UVec2::new(self.x.number(), self.y.number())
+        UVec2::new(self.x.rand_number(), self.y.rand_number())
     }
 
     fn tile_layer(&self) -> TileLayer {
@@ -475,7 +475,7 @@ impl Set for SetPoint {
                 }
             }
 
-            let coordinates = UVec2::new(self.x.number(), self.y.number());
+            let coordinates = UVec2::new(self.x.rand_number(), self.y.rand_number());
             coords.insert(coordinates);
         }
 
@@ -514,10 +514,10 @@ impl Set for SetLine {
                 }
             }
 
-            let from_x = self.from_x.number();
-            let from_y = self.from_y.number();
-            let to_x = self.to_x.number();
-            let to_y = self.to_y.number();
+            let from_x = self.from_x.rand_number();
+            let from_y = self.from_y.rand_number();
+            let to_x = self.to_x.rand_number();
+            let to_y = self.to_y.rand_number();
 
             let line = bresenham_line(from_x as i32, from_y as i32, to_x as i32, to_y as i32);
 
@@ -552,11 +552,11 @@ impl Set for SetSquare {
     fn coordinates(&self) -> Vec<UVec2> {
         let mut coordinates = vec![];
 
-        let top_left_chosen_y = self.top_left_y.number();
-        let top_left_chosen_x = self.top_left_x.number();
+        let top_left_chosen_y = self.top_left_y.rand_number();
+        let top_left_chosen_x = self.top_left_x.rand_number();
 
-        let bottom_right_chosen_y = self.bottom_right_y.number();
-        let bottom_right_chosen_x = self.bottom_right_x.number();
+        let bottom_right_chosen_y = self.bottom_right_y.rand_number();
+        let bottom_right_chosen_x = self.bottom_right_x.rand_number();
 
         for y in top_left_chosen_y..bottom_right_chosen_y {
             for x in top_left_chosen_x..bottom_right_chosen_x {

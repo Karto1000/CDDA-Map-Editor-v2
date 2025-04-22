@@ -14,10 +14,10 @@ use crate::editor_data::handlers::{
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorConfig, EditorData, Project};
-use crate::map::handlers::open_project;
 use crate::map::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
+use crate::map::handlers::{get_project_cell_data, open_project};
 use crate::map::{MapData, ProjectContainer, DEFAULT_MAP_DATA_SIZE};
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
@@ -87,7 +87,7 @@ async fn frontend_ready(
         None => {}
         Some(d) => {
             info!("Sending cdda data");
-            app.emit(events::CDDA_DATA, d.clone()).unwrap();
+            app.emit(events::CDDA_DATA, d).unwrap();
         }
     }
 
@@ -355,6 +355,7 @@ pub fn run() -> () {
         })
         .invoke_handler(tauri::generate_handler![
             download_spritesheet,
+            get_project_cell_data,
             get_info_of_current_tileset,
             get_current_project_data,
             get_editor_data,

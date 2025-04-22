@@ -1,6 +1,7 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::item::{EntryItem, ItemGroup, ItemGroupSubtype};
 use crate::cdda_data::map_data::MapGenItem;
-use crate::cdda_data::TileLayer;
+use crate::cdda_data::{NumberOrRange, TileLayer};
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::ProjectState::Saved;
 use crate::editor_data::tab::{ProjectState, TabType};
@@ -13,6 +14,7 @@ use crate::tileset::{
     get_id_from_mapped_sprites, AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
 use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, Save, UVec2JsonKey};
+use derive_more::Display;
 use glam::{IVec3, UVec2, UVec3, Vec3};
 use image::imageops::tile;
 use log::{debug, error, warn};
@@ -25,6 +27,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
+use thiserror::Error;
 use tokio::sync::MutexGuard;
 
 mod events {
@@ -33,12 +36,18 @@ mod events {
     pub const ITEM_DATA: &'static str = "item_data";
 }
 
-#[derive(Debug, thiserror::Error, Serialize)]
+#[derive(Debug, Error, Serialize)]
 pub enum GetCurrentMapDataError {
     #[error("No map has been opened")]
     NoMapOpened,
     #[error("Invalid map index")]
     InvalidMapIndex(usize),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum CDDADataError {
+    #[error("No CDDA Data was loaded")]
+    NotLoaded,
 }
 
 fn get_current_project<'a>(
@@ -71,6 +80,15 @@ fn get_current_project_mut<'a>(
     };
 
     Ok(data)
+}
+
+fn get_json_data<'a>(
+    lock: &'a MutexGuard<Option<DeserializedCDDAJsonData>>,
+) -> Result<&'a DeserializedCDDAJsonData, CDDADataError> {
+    match lock.deref() {
+        None => Err(CDDADataError::NotLoaded),
+        Some(d) => Ok(d),
+    }
 }
 
 #[tauri::command]
@@ -361,8 +379,6 @@ pub async fn open_project(
     let mut animated_sprites = HashSet::new();
     let mut fallback_sprites = HashSet::new();
 
-    let mut item_data: HashMap<IVec3JsonKey, Vec<MapGenItem>> = HashMap::new();
-
     macro_rules! insert_sprite_type {
         ($val: expr) => {
             match $val {
@@ -568,13 +584,6 @@ pub async fn open_project(
                     insert_sprite_type!(bg)
                 }
             }
-
-            match map_data.get_items(&cell.character, &json_data.palettes) {
-                None => {}
-                Some(items) => {
-                    item_data.insert(IVec3JsonKey(cell_coordinates.clone()), items.clone());
-                }
-            };
         });
     }
 
@@ -588,9 +597,163 @@ pub async fn open_project(
     )
     .unwrap();
 
-    app.emit(events::ITEM_DATA, item_data).unwrap();
-
     Ok(())
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum DisplayItemGroup {
+    Single {
+        item: CDDAIdentifier,
+        probability: i32,
+    },
+    Collection {
+        name: Option<String>,
+        items: Vec<DisplayItemGroup>,
+        probability: i32,
+    },
+    Distribution {
+        name: Option<String>,
+        items: Vec<DisplayItemGroup>,
+        probability: i32,
+    },
+}
+
+#[derive(Debug, Serialize)]
+pub struct ProjectCellData {
+    item_groups: Vec<DisplayItemGroup>,
+}
+
+pub fn get_display_item_group_from_item_group(
+    item_group: &ItemGroup,
+    json_data: &DeserializedCDDAJsonData,
+) -> Vec<DisplayItemGroup> {
+    let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
+
+    for entry in item_group.entries.iter() {
+        match entry {
+            EntryItem::Item(i) => {
+                let display_item = DisplayItemGroup::Single {
+                    item: i.item.clone(),
+                    probability: i.probability,
+                };
+                display_item_groups.push(display_item);
+            }
+            EntryItem::Group(g) => {
+                let other_group = json_data
+                    .item_groups
+                    .get(&g.group)
+                    .expect("Item Group to exist");
+                let display_item = get_display_item_group_from_item_group(other_group, json_data);
+
+                match other_group.subtype {
+                    ItemGroupSubtype::Collection => {
+                        display_item_groups.push(DisplayItemGroup::Collection {
+                            items: display_item,
+                            name: Some(other_group.id.clone().0),
+                            probability: g.probability,
+                        });
+                    }
+                    ItemGroupSubtype::Distribution => {
+                        display_item_groups.push(DisplayItemGroup::Distribution {
+                            items: display_item,
+                            name: Some(other_group.id.clone().0),
+                            probability: g.probability,
+                        });
+                    }
+                }
+            }
+            EntryItem::Distribution {
+                distribution,
+                probability,
+            } => {}
+            EntryItem::Collection {
+                collection,
+                probability,
+            } => {}
+        }
+    }
+
+    display_item_groups
+}
+
+pub fn get_display_item_group_from_mapgen_items(
+    items: &Vec<MapGenItem>,
+    json_data: &DeserializedCDDAJsonData,
+) -> Vec<DisplayItemGroup> {
+    let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
+
+    for mapgen_item in items.iter() {
+        let item_group = json_data
+            .item_groups
+            .get(&mapgen_item.item)
+            .expect("Item group to exist");
+
+        let items = get_display_item_group_from_item_group(item_group, json_data);
+
+        display_item_groups.push(DisplayItemGroup::Distribution {
+            name: Some(mapgen_item.item.clone().0),
+            probability: mapgen_item
+                .chance
+                .clone()
+                .map(|v| v.get_from_to().0)
+                .unwrap_or(100) as i32,
+            items,
+        });
+    }
+
+    display_item_groups
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum GetProjectCellDataError {
+    #[error(transparent)]
+    MapError(#[from] GetCurrentMapDataError),
+
+    #[error(transparent)]
+    CDDADataError(#[from] CDDADataError),
+}
+
+#[tauri::command]
+pub async fn get_project_cell_data(
+    project_container: State<'_, Mutex<ProjectContainer>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<HashMap<IVec3JsonKey, ProjectCellData>, GetProjectCellDataError> {
+    let project_lock = project_container.lock().await;
+    let project = get_current_project(&project_lock)?;
+
+    let json_data_lock = json_data.lock().await;
+    let json_data = get_json_data(&json_data_lock)?;
+
+    let mut item_data: HashMap<IVec3JsonKey, ProjectCellData> = HashMap::new();
+
+    for (z, map_data) in project.maps.iter() {
+        for (cell_coordinates, cell) in map_data.cells.iter() {
+            // Calculate item groups
+            let item_groups = {
+                let mapgen_item_group =
+                    match map_data.get_items(&cell.character, &json_data.palettes) {
+                        None => continue,
+                        Some(v) => v,
+                    };
+
+                get_display_item_group_from_mapgen_items(&mapgen_item_group, &json_data)
+            };
+
+            let cell_data = ProjectCellData { item_groups };
+
+            item_data.insert(
+                IVec3JsonKey(IVec3::new(
+                    cell_coordinates.x as i32,
+                    cell_coordinates.y as i32,
+                    *z,
+                )),
+                cell_data,
+            );
+        }
+    }
+
+    Ok(item_data)
 }
 
 #[tauri::command]

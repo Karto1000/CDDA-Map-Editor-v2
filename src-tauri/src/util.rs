@@ -15,7 +15,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display, Default)]
 pub struct CDDAIdentifier(pub String);
 
 impl From<&str> for CDDAIdentifier {
@@ -187,8 +187,8 @@ impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Weighted<T> {
-    data: T,
-    weight: i32,
+    pub data: T,
+    pub weight: i32,
 }
 
 impl<'de, T> Deserialize<'de> for Weighted<T>

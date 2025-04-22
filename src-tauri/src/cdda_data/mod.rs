@@ -1,11 +1,13 @@
 pub(crate) mod furniture;
 pub(crate) mod io;
+pub(crate) mod item;
 pub(crate) mod map_data;
 pub(crate) mod palettes;
 pub(crate) mod region_settings;
 pub(crate) mod terrain;
 
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
+use crate::cdda_data::item::IntermediateItemGroup;
 use crate::cdda_data::map_data::CDDAMapData;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
@@ -50,7 +52,7 @@ pub enum NumberOrRange<T: PrimInt + Clone + SampleUniform> {
 }
 
 impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
-    pub fn number(&self) -> T {
+    pub fn rand_number(&self) -> T {
         match self.clone() {
             NumberOrRange::Number(n) => n,
             NumberOrRange::Range((from, to)) => {
@@ -58,6 +60,13 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
                 let num = rng.random_range(from..to);
                 num
             }
+        }
+    }
+
+    pub fn get_from_to(&self) -> (T, T) {
+        match self.clone() {
+            NumberOrRange::Number(n) => (n, n),
+            NumberOrRange::Range((from, to)) => (from, to),
         }
     }
 }
@@ -108,19 +117,6 @@ pub struct ConnectGroup {
     pub id: CDDAIdentifier,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ItemGroupSubtype {
-    Collection,
-    Distribution,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ItemGroup {
-    pub subtype: ItemGroupSubtype,
-    pub id: CDDAIdentifier,
-}
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
@@ -131,7 +127,7 @@ pub enum CDDAJsonEntry {
     Terrain(CDDATerrainIntermediate),
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
-    ItemGroup(ItemGroup),
+    ItemGroup(IntermediateItemGroup),
 
     // -- UNUSED
     WeatherType,

@@ -1,11 +1,12 @@
 use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
+use crate::cdda_data::item::ItemGroup;
 use crate::cdda_data::map_data::{
     CDDAMapData, CDDAMapDataObject, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
-use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, ItemGroup, TileLayer};
+use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
 use log::{debug, error, info, warn};
@@ -332,6 +333,17 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                         cdda_data
                             .furniture
                             .insert(new_furniture.id.clone(), new_furniture);
+                    }
+                    CDDAJsonEntry::ItemGroup(group) => {
+                        let new_group: ItemGroup = group.into();
+                        debug!(
+                            "Found ItemGroup entry {} in {:?}",
+                            new_group.id,
+                            entry.path()
+                        );
+                        cdda_data
+                            .item_groups
+                            .insert(new_group.id.clone(), new_group);
                     }
                     _ => {
                         info!("Unused JSON entry in {:?}", entry.path());
