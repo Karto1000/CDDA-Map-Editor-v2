@@ -38,13 +38,19 @@
       padding: 12px;
       box-sizing: border-box;
 
-      .item-container {
+      .menu-body-container {
         display: flex;
+        height: 100%;
         flex-direction: column;
-        margin-top: 12px;
-        margin-bottom: 12px;
-        border-width: 1px;
-        border-style: solid;
+
+        .item-container {
+          display: flex;
+          flex-direction: column;
+          margin-top: 12px;
+          margin-bottom: 12px;
+          border-width: 1px;
+          border-style: solid;
+        }
       }
     }
 

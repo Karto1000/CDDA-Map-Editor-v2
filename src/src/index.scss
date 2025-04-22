@@ -7,10 +7,6 @@
 
   * {
     scrollbar-color: theme-var("selected") theme-var("darker");
-
-    ::-webkit-scrollbar {
-      background-color: red
-    }
   }
 
   .divider {
@@ -53,8 +49,15 @@ p {
   margin: 0;
 }
 
-button, select, input {
+button, select {
   cursor: pointer;
+  border: none;
+}
+
+input {
+  user-select: initial;
+  -webkit-user-select: initial;
+  cursor: initial;
   border: none;
 }
 

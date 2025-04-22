@@ -130,8 +130,10 @@ function App() {
                                 setIsOpen={setIsCreatingMapWindowOpen}>
                             <label htmlFor={"map-name"}>Map Name</label>
                             <input name={"map-name"} value={creatingMapName}
+                                   type={"text"}
                                    placeholder={"Map Name"}
-                                   onChange={e => setCreatingMapName(e.target.value)}/>
+                                   onChange={e => setCreatingMapName(e.target.value)}
+                            />
                             <button onClick={createMap}>
                                 Create
                             </button>

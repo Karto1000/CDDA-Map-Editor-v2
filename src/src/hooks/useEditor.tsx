@@ -1,5 +1,15 @@
-import {AmbientLight, GridHelper, Group, OrthographicCamera, Raycaster, Scene, Vector3, WebGLRenderer} from "three";
-import React, {MutableRefObject, useCallback, useEffect, useRef, useState} from "react";
+import {
+    AmbientLight,
+    GridHelper,
+    Group,
+    OrthographicCamera,
+    Raycaster,
+    Scene,
+    Vector2,
+    Vector3,
+    WebGLRenderer
+} from "three";
+import React, {MutableRefObject, ReactElement, useCallback, useEffect, useRef, useState} from "react";
 import Stats from "stats.js";
 import {getColorFromTheme, Theme} from "./useTheme.ts";
 import {degToRad} from "three/src/math/MathUtils.js";
@@ -19,6 +29,10 @@ import {Project} from "../lib/project.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
+
+type CellData = {
+    [coords: string]: { item_groups: DisplayItemGroup[] }
+}
 
 type Props = {
     sceneRef: MutableRefObject<Scene>,
@@ -40,6 +54,116 @@ type UseEditorRet = {
     }
 }
 
+type ItemPanelProps = {
+    rendererRef: MutableRefObject<WebGLRenderer>
+    cameraRef: MutableRefObject<OrthographicCamera>
+    mousePosition: MutableRefObject<Vector2>
+    worldMousePosition: MutableRefObject<Vector3>
+    currentZLayer: number
+    cellData: CellData
+}
+
+export function ItemPanel(props: ItemPanelProps) {
+    const [query, setQuery] = useState<string>("")
+    const [displayItem, setDisplayItem] = useState<React.JSX.Element[]>([])
+    const [currentGroup, setCurrentGroup] = useState<{ item_groups: DisplayItemGroup[] }>()
+
+    useEffect(() => {
+        if (!currentGroup) return
+
+        function getChildrenOfDisplayGroup(
+            level: number,
+            itemGroup: DisplayItemGroup,
+            index: number
+        ): React.JSX.Element[] | null {
+            const innerGroup: React.JSX.Element[] = []
+
+            if (itemGroup.type === DisplayItemGroupType.Single) {
+                if (!itemGroup.item.includes(query)) return null
+
+                innerGroup.push(<div
+                    key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {(itemGroup.probability * 100).toFixed(2)}%</div>)
+            } else if (itemGroup.type === DisplayItemGroupType.Distribution || itemGroup.type === DisplayItemGroupType.Collection) {
+                if (itemGroup.items.length === 0) return null
+
+                const children = itemGroup.items
+                    .map(ig => getChildrenOfDisplayGroup(level + 1, ig, index))
+                    .filter(v => v !== null)
+
+                if (children.length === 0) return null
+
+                innerGroup.push(
+                    <fieldset style={{marginLeft: level * 2}} className={"item-container"}
+                              key={`${index}-${level}-${itemGroup.type}-${itemGroup.probability}`}>
+                        <legend>{itemGroup.name} {itemGroup.type} {(itemGroup.probability * 100).toFixed(2)}%</legend>
+                        {children}
+                    </fieldset>
+                )
+            }
+
+            return innerGroup
+        }
+
+        const displayGroups = []
+
+        currentGroup.item_groups.forEach((itemGroup, i) => {
+            const display = getChildrenOfDisplayGroup(0, itemGroup, i)
+
+            if (!display) return
+
+            displayGroups.push(...display)
+
+        })
+
+        setDisplayItem(displayGroups)
+    }, [currentGroup, query]);
+
+    useEffect(() => {
+        function onCellChange(newCoordinates: Vector3) {
+            const group = props.cellData[`${newCoordinates.x},${newCoordinates.y},${props.currentZLayer}`]
+
+            if (!group) return;
+
+            setCurrentGroup(group)
+        }
+
+        function setHoveredCell() {
+            const rect = props.rendererRef.current.domElement.getBoundingClientRect();
+            const mouseNormalized = new Vector3();
+            mouseNormalized.x = ((props.mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
+            mouseNormalized.y = -((props.mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
+            mouseNormalized.z = 0
+
+            const offset = new Vector3(0.5, 0.5, 0)
+            const worldCoords = mouseNormalized.unproject(props.cameraRef.current).divide(new Vector3(32, 32, 1)).add(offset).floor();
+
+            if (worldCoords.x !== props.worldMousePosition.current.x || worldCoords.y !== props.worldMousePosition.current.y) {
+                onCellChange(worldCoords)
+            }
+
+            props.worldMousePosition.current = worldCoords
+        }
+
+        window.addEventListener("mousemove", setHoveredCell)
+
+        return () => {
+            window.removeEventListener("mousemove", setHoveredCell)
+        }
+    }, [props.cameraRef, props.cellData, props.currentZLayer, props.mousePosition, props.rendererRef, props.worldMousePosition]);
+
+    return (
+        <div className={"menu-body-container"}>
+            <input
+                placeholder={"Search..."}
+                value={query}
+                type={"text"}
+                onChange={e => setQuery(e.target.value)}
+            />
+            {displayItem}
+        </div>
+    )
+}
+
 export function useEditor(props: Props): UseEditorRet {
     const rendererRef = useRef<WebGLRenderer>()
     const cameraRef = useRef<OrthographicCamera>()
@@ -48,17 +172,14 @@ export function useEditor(props: Props): UseEditorRet {
     const ambientLightRef = useRef<AmbientLight>()
     const raycasterRef = useRef<Raycaster>()
     const statsRef = useRef<Stats>()
-    const itemTooltipGroupRef = useRef<Group>()
 
     const [currentZLayer, setCurrentZLayer] = useState<number>(0)
     const isLeftMousePressedRef = useRef<boolean>(false)
     const mousePosition = useMousePosition(props.canvasRef)
     const worldMousePosition = useRef<Vector3>(new Vector3(0, 0, 0))
 
-    const [itemDisplay, setItemDisplay] = useState<React.JSX.Element>()
-    const [cellData, setCellData] = useState<{
-        [coords: string]: { item_groups: DisplayItemGroup[] }
-    }>({})
+    const [itemDisplay, setItemDisplay] = useState<ReactElement<ItemPanelProps>>()
+    const [cellData, setCellData] = useState<CellData>({})
 
     const onResize = useCallback(() => {
         if (!rendererRef.current) return
@@ -147,70 +268,16 @@ export function useEditor(props: Props): UseEditorRet {
     }, [onResize, props.canvasContainerRef, props.canvasRef, props.sceneRef]);
 
     useEffect(() => {
-        function getChildrenOfDisplayGroup(
-            level: number,
-            itemGroup: DisplayItemGroup,
-        ): React.JSX.Element[] {
-            const innerGroup: React.JSX.Element[] = []
-
-            if (itemGroup.type === DisplayItemGroupType.Single) {
-                innerGroup.push(<div key={`${level}-${itemGroup.item}`}>{itemGroup.item}, {itemGroup.probability}</div>)
-            } else if (itemGroup.type === DisplayItemGroupType.Distribution || itemGroup.type === DisplayItemGroupType.Collection) {
-                if (itemGroup.items.length === 0) return innerGroup
-
-                innerGroup.push(
-                    <fieldset style={{marginLeft: level * 2}} className={"item-container"} key={`${level}-${itemGroup.type}`}>
-                        <legend>{itemGroup.name} {itemGroup.type} {itemGroup.probability}</legend>
-                        {itemGroup.items.map(ig => getChildrenOfDisplayGroup(level + 1, ig))}
-                    </fieldset>
-                )
-            }
-
-            return innerGroup
-        }
-
-        function onCellChange(newCoordinates: Vector3) {
-            const group = cellData[`${newCoordinates.x},${newCoordinates.y},${currentZLayer}`]
-
-            if (!group) return;
-
-            const newItemDisplay = []
-
-            for (const itemGroup of group.item_groups) {
-                newItemDisplay.push(getChildrenOfDisplayGroup(0, itemGroup))
-            }
-
-            setItemDisplay(
-                <div style={{display: "flex", height: "100%", flexDirection: "column"}}>
-                    {newItemDisplay}
-                </div>
-            )
-        }
-
-        function setHoveredCell() {
-            if (!itemTooltipGroupRef.current) return
-
-            const rect = rendererRef.current.domElement.getBoundingClientRect();
-            const mouseNormalized = new Vector3();
-            mouseNormalized.x = ((mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
-            mouseNormalized.y = -((mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
-            mouseNormalized.z = 0
-
-            const offset = new Vector3(0.5, 0.5, 0)
-            const worldCoords = mouseNormalized.unproject(cameraRef.current).divide(new Vector3(32, 32, 1)).add(offset).floor();
-
-            if (worldCoords.x !== worldMousePosition.current.x || worldCoords.y !== worldMousePosition.current.y) {
-                onCellChange(worldCoords)
-            }
-
-            worldMousePosition.current = worldCoords
-        }
-
-        window.addEventListener("mousemove", setHoveredCell)
-
-        return () => {
-            window.removeEventListener("mousemove", setHoveredCell)
-        }
+        setItemDisplay(
+            <ItemPanel
+                rendererRef={rendererRef}
+                cameraRef={cameraRef}
+                mousePosition={mousePosition}
+                worldMousePosition={worldMousePosition}
+                currentZLayer={currentZLayer}
+                cellData={cellData}
+            />
+        )
     }, [cellData, currentZLayer, mousePosition]);
 
     // Should run when the MapEditor is opened
@@ -234,9 +301,7 @@ export function useEditor(props: Props): UseEditorRet {
         initialValueUpdate();
 
         async function getCellData() {
-            const response = await invokeTauri<{
-                [coords: string]: { item_groups: DisplayItemGroup[] }
-            }, unknown>(MapDataSendCommand.GetProjectCellData, {});
+            const response = await invokeTauri<CellData, unknown>(MapDataSendCommand.GetProjectCellData, {});
 
             if (response.type === BackendResponseType.Error) {
                 return
@@ -255,7 +320,6 @@ export function useEditor(props: Props): UseEditorRet {
 
             const group = new Group()
 
-            itemTooltipGroupRef.current = group
             props.sceneRef.current.add(group)
         }
 
@@ -309,8 +373,6 @@ export function useEditor(props: Props): UseEditorRet {
 
     useEffect(() => {
         const keydownListener = async (e: KeyboardEvent) => {
-            e.preventDefault()
-
             if (e.key === "s") {
                 const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentProject, {})
             }
