@@ -23,6 +23,7 @@ import {useMousePosition} from "./useMousePosition.ts";
 import {invokeTauri, makeCancelable, serializedVec2ToVector2, serializedVec3ToVector3} from "../lib/index.ts";
 import {listen} from "@tauri-apps/api/event";
 import {ItemDataEvent, MapDataEvent, MapDataSendCommand, MapGenItem, PlaceSpritesEvent} from "../lib/map_data.ts";
+import {MultiMenuTab} from "../components/multimenu.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -39,7 +40,15 @@ type Props = {
     isTilesheetLoaded: boolean
 }
 
-export function useEditor(props: Props) {
+type UseEditorRet = {
+    resize: () => void,
+    displayInLeftPanel: {
+        items: React.JSX.Element[]
+        monsters: React.JSX.Element[]
+    }
+}
+
+export function useEditor(props: Props): UseEditorRet {
     const rendererRef = useRef<WebGLRenderer>()
     const cameraRef = useRef<OrthographicCamera>()
     const controlsRef = useRef<ArcballControls>()
@@ -53,7 +62,10 @@ export function useEditor(props: Props) {
     const isLeftMousePressedRef = useRef<boolean>(false)
     const mousePosition = useMousePosition(props.canvasRef)
 
-    const [displayInLeftPanel, setDisplayInLeftPanel] = useState<React.JSX.Element[]>([])
+    const [displayInLeftPanel, setDisplayInLeftPanel] = useState<{
+        items: React.JSX.Element[],
+        monsters: React.JSX.Element[]
+    }>({items: [], monsters: []})
 
     const onResize = useCallback(() => {
         if (!rendererRef.current) return
@@ -204,11 +216,11 @@ export function useEditor(props: Props) {
 
             if (intersects.length !== 0) {
                 let obj = intersects[0].object;
-                setDisplayInLeftPanel(obj.userData['items'])
+                setDisplayInLeftPanel({items: obj.userData['items'], monsters: [<p>Monster</p>]})
                 return
             }
 
-            setDisplayInLeftPanel([<></>])
+            setDisplayInLeftPanel({items: [], monsters: []})
         }
 
         const itemDataUnlistenFn = makeCancelable(listen<ItemDataEvent>(

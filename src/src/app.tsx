@@ -16,6 +16,7 @@ import {MapDataSendCommand} from "./lib/map_data.ts";
 import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
 import "./app.scss"
+import MultiMenu from "./components/multimenu.tsx";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
@@ -142,7 +143,19 @@ function App() {
                                     <div className={"side-panel-left"}>
                                         {
                                             isDisplayingMapEditor ?
-                                                displayInLeftPanel :
+                                                <MultiMenu tabs={
+                                                    [
+                                                        {
+                                                            name: "Items",
+                                                            content: displayInLeftPanel.items
+                                                        },
+                                                        {
+                                                            name: "Monsters",
+                                                            content: displayInLeftPanel.monsters
+                                                        }
+                                                    ]}
+                                                />
+                                                :
                                                 <div>
                                                     <h1>Hey there!</h1>
                                                     <p>This is where you can see the properties of any tiles you hover
