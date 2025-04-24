@@ -433,7 +433,11 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         function onMouseDown(e: MouseEvent) {
             if (e.button === 0) {
-                setSelectedCellPosition(worldMousePosition.current)
+                if (selectedCellPosition?.x === worldMousePosition.current.x && selectedCellPosition?.y === worldMousePosition.current.y) {
+                    setSelectedCellPosition(null)
+                } else {
+                    setSelectedCellPosition(worldMousePosition.current)
+                }
             }
         }
 
@@ -446,7 +450,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
             props.canvasRef.current.removeEventListener("mousemove", onMouseMove)
             props.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
-    }, [currentZLayer, mousePosition, props.canvasRef, props.isDisplaying, props.spritesheetConfig, props.tilesheetsRef]);
+    }, [currentZLayer, mousePosition, props.canvasRef, props.isDisplaying, props.spritesheetConfig, props.tilesheetsRef, selectedCellPosition]);
 
     // Should run when the tilesheet has finished loading
     useEffect(() => {
