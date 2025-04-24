@@ -4,12 +4,13 @@ import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, Texture
 import {Tilesheet} from "../rendering/tilesheet.ts";
 import {Tilesheets} from "../rendering/tilesheets.ts";
 import {EditorData} from "../lib/editor_data.ts";
-import {LegacyTilesetCommand, SpritesheetConfig} from "../lib/tileset/legacy.ts";
+import {LegacyTilesetCommand, SpritesheetConfig, TileInfo} from "../lib/tileset/legacy.ts";
 
 export type Atlases = { [file: string]: Tilesheet }
 
-export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Scene>): [MutableRefObject<Tilesheets>, boolean] {
+export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Scene>): [MutableRefObject<Tilesheets>, MutableRefObject<SpritesheetConfig>, boolean] {
     const tilesheets = useRef<Tilesheets>()
+    const spritesheetConfig = useRef<SpritesheetConfig>()
     const [isLoaded, setIsLoaded] = useState<boolean>(false)
 
     useEffect(() => {
@@ -25,7 +26,12 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                 return
             }
 
-            const loadFromBackend = async (): Promise<{ atlases: { [key: string]: Tilesheet }, fallback: Tilesheet}> => {
+            spritesheetConfig.current = infoResponse.data;
+
+            const loadFromBackend = async (): Promise<{
+                atlases: { [key: string]: Tilesheet },
+                fallback: Tilesheet
+            }> => {
                 const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
 
                 for (let tileInfo of infoResponse.data["tiles-new"]) {
@@ -67,18 +73,23 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     )
                 }
 
-                return { atlases, fallback }
+                return {atlases, fallback}
             }
 
-            const loadFromPublic = async (): Promise<{ atlases: { [key: string]: Tilesheet}, fallback: Tilesheet }> => {
+            const loadFromPublic = async (): Promise<{
+                atlases: { [key: string]: Tilesheet },
+                fallback: Tilesheet,
+                tileInfo: TileInfo
+            }> => {
                 const atlases = {}
                 let fallback: Tilesheet;
+                const tileInfo = infoResponse.data.tile_info[0]
 
                 for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
                     const spritesheetInfo = infoResponse.data["tiles-new"][i]
 
                     const texture = await new TextureLoader()
-                        .loadAsync(`/MSX++UnDeadPeopleEdition/${spritesheetInfo.file}`,
+                        .loadAsync(`/BrownLikeBears/${spritesheetInfo.file}`,
                             () => console.log(`Loading ${spritesheetInfo.file}`))
 
                     texture.magFilter = NearestFilter;
@@ -87,18 +98,18 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     texture.colorSpace = SRGBColorSpace
 
                     if (spritesheetInfo.file === "fallback.png") {
-                        fallback = new Tilesheet(texture, infoResponse.data.tile_info[0], spritesheetInfo)
+                        fallback = new Tilesheet(texture, tileInfo, spritesheetInfo)
                         continue
                     }
 
                     atlases[spritesheetInfo.file] = new Tilesheet(
                         texture,
-                        infoResponse.data.tile_info[0],
+                        tileInfo,
                         spritesheetInfo
                     )
                 }
 
-                return { atlases, fallback }
+                return {atlases, fallback, tileInfo}
             }
 
             const atlases = await loadFromPublic();
@@ -112,9 +123,9 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
             }
 
             setIsLoaded(true)
-            tilesheets.current = new Tilesheets(atlases.atlases, atlases.fallback);
+            tilesheets.current = new Tilesheets(atlases.atlases, atlases.fallback, atlases.tileInfo);
         })()
     }, [editorData?.config.selected_tileset, sceneRef]);
 
-    return [tilesheets, isLoaded]
+    return [tilesheets, spritesheetConfig, isLoaded]
 }

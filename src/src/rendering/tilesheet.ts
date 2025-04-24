@@ -31,7 +31,6 @@ export class Tilesheet {
   public readonly spritesheetInfo: TileNew
   private atlasConfig: AtlasMaterialConfig
 
-  public mappedTilesFG: Map<string, InstanceNumber>
   public mappedTiles: Map<string, InstanceNumber>
 
   public mesh: InstancedMesh

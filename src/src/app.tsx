@@ -40,7 +40,7 @@ function App() {
     const mapEditorCanvasRef = useRef<HTMLCanvasElement>();
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
-    const [tilesheets, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
+    const [tilesheets, spritesheetConfig, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
     const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.MapEditor
     const mapEditorCanvasDisplay = isDisplayingMapEditor ? "flex" : "none"
 
@@ -52,7 +52,8 @@ function App() {
         tilesheetsRef: tilesheets,
         openedTab: tabs.openedTab,
         isTilesheetLoaded,
-        theme
+        theme,
+        spritesheetConfig,
     })
 
     useEffect(() => {

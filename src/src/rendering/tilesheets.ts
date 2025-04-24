@@ -1,8 +1,8 @@
 import {DrawLocalSprite, Tilesheet} from "./tilesheet.ts";
 import {Vector2, Vector3} from "three";
+import {TileInfo} from "../lib/tileset/legacy.js";
 
 export const MAX_DEPTH = 999997
-export const DEFAULT_TILE_SIZE = 32
 const MAX_ROW = 1000
 const ANIMATION_FRAME_DURATION = 200
 
@@ -47,10 +47,12 @@ export class Tilesheets {
 
   private cachedStaticBatches: StaticBatches = {}
   private cachedFallbackBatches: FallbackBatches = {}
+  private tileInfo: TileInfo
 
-  constructor(tilesheets: { [name: string]: Tilesheet }, fallback: Tilesheet) {
+  constructor(tilesheets: { [name: string]: Tilesheet }, fallback: Tilesheet, tileInfo: TileInfo) {
     this.tilesheets = tilesheets
     this.fallback = fallback
+    this.tileInfo = tileInfo
   }
 
   public updateAnimatedSprites() {
@@ -122,8 +124,8 @@ export class Tilesheets {
     tilesheet: Tilesheet,
     rotation: number
   ): DrawLocalSprite {
-    const worldY = position.y / DEFAULT_TILE_SIZE
-    const worldX = position.x / DEFAULT_TILE_SIZE
+    const worldY = position.y / this.tileInfo.width
+    const worldX = position.x / this.tileInfo.height
 
     const newPosition = new Vector3(
       position.x,
@@ -204,8 +206,8 @@ export class Tilesheets {
     for (const drawSprite of staticSprites) {
       const index = drawSprite.index
 
-      const worldY = drawSprite.position.y / DEFAULT_TILE_SIZE
-      const worldX = drawSprite.position.x / DEFAULT_TILE_SIZE
+      const worldY = drawSprite.position.y / this.tileInfo.width
+      const worldX = drawSprite.position.x / this.tileInfo.height
 
       const newPosition = new Vector3(
         drawSprite.position.x,

@@ -29,6 +29,7 @@ import {
     PlaceSpritesEvent
 } from "../lib/map_data.ts";
 import {Project} from "../lib/project.js";
+import {SpritesheetConfig} from "../lib/tileset/legacy.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -37,11 +38,12 @@ type CellData = {
     [coords: string]: { item_groups: DisplayItemGroup[] }
 }
 
-type Props = {
+type UseEditorProps = {
     sceneRef: MutableRefObject<Scene>,
     canvasRef: MutableRefObject<HTMLCanvasElement>
     canvasContainerRef: MutableRefObject<HTMLDivElement>
     tilesheetsRef: MutableRefObject<Tilesheets>
+    spritesheetConfig: MutableRefObject<SpritesheetConfig>
 
     openedTab: number
     theme: Theme
@@ -129,7 +131,7 @@ export function ItemPanel(props: ItemPanelProps) {
     }, [currentGroup, query]);
 
     useEffect(() => {
-        if (!props.selectedCellPosition){
+        if (!props.selectedCellPosition) {
             resetCurrentGroup()
             return;
         }
@@ -157,7 +159,7 @@ export function ItemPanel(props: ItemPanelProps) {
     )
 }
 
-export function useEditor(props: Props): UseEditorRet {
+export function useEditor(props: UseEditorProps): UseEditorRet {
     const rendererRef = useRef<WebGLRenderer>()
     const cameraRef = useRef<OrthographicCamera>()
     const controlsRef = useRef<ArcballControls>()
@@ -263,7 +265,8 @@ export function useEditor(props: Props): UseEditorRet {
 
     // Should run when the MapEditor is opened
     useEffect(() => {
-        if (!props.isDisplaying) return
+        if (!props.isDisplaying) return;
+        if (!props.spritesheetConfig) return;
 
         // Because the canvas' parent display value was just set to 'unset'
         // The width and height of the canvas is wrong. This is why we're updating it here
@@ -329,23 +332,36 @@ export function useEditor(props: Props): UseEditorRet {
 
         return () => {
             cancelAnimationFrame(handler)
+            props.sceneRef.current.remove(selectedCellMeshRef.current)
+            props.sceneRef.current.remove(hoveredCellMeshRef.current)
         }
-    }, [props.tilesheetsRef, props.canvasContainerRef, props.isDisplaying, props.sceneRef, mousePosition, props.openedTab]);
+    }, [
+        props.tilesheetsRef,
+        props.canvasContainerRef,
+        props.isDisplaying,
+        props.sceneRef,
+        mousePosition,
+        props.openedTab,
+        props.spritesheetConfig
+    ]);
 
     // Should run when the theme changes to change colors
     useEffect(() => {
+        if (!props.isDisplaying) return;
+        if (!props.spritesheetConfig) return;
+
+        const tile_info = props.spritesheetConfig.current.tile_info[0]
+
         rendererRef.current.setClearColor(getColorFromTheme(props.theme, "darker"))
 
-        // TODO: Hardcoded 32
-        const hovered = new PlaneGeometry(32, 32)
+        const hovered = new PlaneGeometry(tile_info.width, tile_info.height)
         const hoveredMaterial = new MeshBasicMaterial({color: getColorFromTheme(props.theme, "darkBlue")})
         hoveredMaterial.transparent = true
         hoveredMaterial.opacity = 0.5
         const highlightedMesh = new Mesh(hovered, hoveredMaterial)
-        // TODO: Hardcoded 32
-        highlightedMesh.position.set(worldMousePosition.current.x * 32, worldMousePosition.current.y * 32, MAX_DEPTH + 1)
+        highlightedMesh.position.set(worldMousePosition.current.x * tile_info.width, worldMousePosition.current.y * tile_info.height, MAX_DEPTH + 1)
 
-        const selected = new PlaneGeometry(32, 32)
+        const selected = new PlaneGeometry(tile_info.width, tile_info.height)
         const selectedMaterial = new MeshBasicMaterial({color: getColorFromTheme(props.theme, "selected")})
         selectedMaterial.transparent = true
         selectedMaterial.opacity = 0.5
@@ -361,22 +377,25 @@ export function useEditor(props: Props): UseEditorRet {
 
         const gridHelper = new GridHelper(
             1,
-            16 * 8 * 32 * 24 / 32,
+            16 * 8 * tile_info.width * 24 / tile_info.height,
             getColorFromTheme(props.theme, "disabled"), getColorFromTheme(props.theme, "light")
         )
-        gridHelper.scale.x = 16 * 8 * 32 * 24
-        gridHelper.scale.z = 16 * 8 * 32 * 24
+        gridHelper.scale.x = 16 * 8 * tile_info.width * 24
+        gridHelper.scale.z = 16 * 8 * tile_info.height * 24
 
-        gridHelper.position.x -= 16
-        gridHelper.position.y -= 16
+        gridHelper.position.x -= tile_info.width / 2
+        gridHelper.position.y -= tile_info.height / 2
 
         gridHelper.rotateX(degToRad(90))
         props.sceneRef.current.add(gridHelper)
         gridHelperRef.current = gridHelper
-    }, [props.sceneRef, props.theme]);
+    }, [props.isDisplaying, props.sceneRef, props.spritesheetConfig, props.theme]);
 
     useEffect(() => {
-        if (!props.isDisplaying) return
+        if (!props.isDisplaying) return;
+        if (!props.spritesheetConfig) return;
+
+        const tile_info = props.spritesheetConfig.current.tile_info[0]
 
         const keydownListener = async (e: KeyboardEvent) => {
             if (e.key === "PageUp") {
@@ -400,10 +419,16 @@ export function useEditor(props: Props): UseEditorRet {
             mouseNormalized.z = 0
 
             const offset = new Vector3(0.5, 0.5, 0)
-            // TODO: Replace hardcoded 32 with actual tile size
-            worldMousePosition.current = mouseNormalized.unproject(cameraRef.current).divide(new Vector3(32, 32, 1)).add(offset).floor()
+            worldMousePosition.current = mouseNormalized.unproject(cameraRef.current)
+                .divide(new Vector3(tile_info.width, tile_info.height, 1))
+                .add(offset)
+                .floor()
 
-            hoveredCellMeshRef.current.position.set(worldMousePosition.current.x * 32, worldMousePosition.current.y * 32, MAX_DEPTH + 1)
+            hoveredCellMeshRef.current.position.set(
+                worldMousePosition.current.x * tile_info.width,
+                worldMousePosition.current.y * tile_info.height,
+                MAX_DEPTH + 1
+            )
         }
 
         function onMouseDown(e: MouseEvent) {
@@ -421,17 +446,19 @@ export function useEditor(props: Props): UseEditorRet {
             props.canvasRef.current.removeEventListener("mousemove", onMouseMove)
             props.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
-    }, [currentZLayer, mousePosition, props.canvasRef, props.isDisplaying, props.tilesheetsRef]);
+    }, [currentZLayer, mousePosition, props.canvasRef, props.isDisplaying, props.spritesheetConfig, props.tilesheetsRef]);
 
     // Should run when the tilesheet has finished loading
     useEffect(() => {
         if (!props.isTilesheetLoaded) return;
 
+        const tileInfo = props.spritesheetConfig.current.tile_info[0]
+
         let placeMultiUnlistenFn = makeCancelable(listen<PlaceSpritesEvent>(MapDataEvent.PlaceSprites, d => {
             const drawStaticSprites: DrawStaticSprite[] = d.payload.static_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
-                vec2.x *= 32;
-                vec2.y *= 32;
+                vec2.x *= tileInfo.width;
+                vec2.y *= tileInfo.height;
 
                 return {
                     ...ds,
@@ -441,8 +468,8 @@ export function useEditor(props: Props): UseEditorRet {
 
             const drawAnimatedSprites: DrawAnimatedSprite[] = d.payload.animated_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
-                vec2.x *= 32;
-                vec2.y *= 32;
+                vec2.x *= tileInfo.width;
+                vec2.y *= tileInfo.height;
 
                 return {
                     ...ds,
@@ -452,8 +479,8 @@ export function useEditor(props: Props): UseEditorRet {
 
             const drawFallbackSprites: DrawStaticSprite[] = d.payload.fallback_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
-                vec2.x *= 32;
-                vec2.y *= 32;
+                vec2.x *= tileInfo.width;
+                vec2.y *= tileInfo.height;
 
                 return {
                     ...ds,
@@ -471,20 +498,27 @@ export function useEditor(props: Props): UseEditorRet {
         return () => {
             placeMultiUnlistenFn.cancel()
         }
-    }, [props.isTilesheetLoaded, props.tilesheetsRef]);
+    }, [props.isTilesheetLoaded, props.spritesheetConfig, props.tilesheetsRef]);
 
     // Runs when a new cell is selected
     useEffect(() => {
         if (!props.isDisplaying) return;
-        
+        if (!props.spritesheetConfig) return;
+
+        const tile_info = props.spritesheetConfig.current.tile_info[0]
+
         if (!selectedCellPosition) {
             selectedCellMeshRef.current.visible = false
             return
         }
 
-        selectedCellMeshRef.current.position.set(selectedCellPosition.x * 32, selectedCellPosition.y * 32, MAX_DEPTH + 1)
+        selectedCellMeshRef.current.position.set(
+            selectedCellPosition.x * tile_info.width,
+            selectedCellPosition.y * tile_info.height,
+            MAX_DEPTH + 1
+        )
         selectedCellMeshRef.current.visible = true
-    }, [props.isDisplaying, selectedCellPosition]);
+    }, [props.isDisplaying, props.spritesheetConfig, selectedCellPosition]);
 
     return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: []}}
 }
