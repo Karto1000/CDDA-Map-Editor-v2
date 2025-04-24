@@ -2,7 +2,10 @@ import {
     AmbientLight,
     GridHelper,
     Group,
+    Mesh,
+    MeshBasicMaterial,
     OrthographicCamera,
+    PlaneGeometry,
     Raycaster,
     Scene,
     Vector2,
@@ -13,7 +16,7 @@ import React, {MutableRefObject, ReactElement, useCallback, useEffect, useRef, u
 import Stats from "stats.js";
 import {getColorFromTheme, Theme} from "./useTheme.ts";
 import {degToRad} from "three/src/math/MathUtils.js";
-import {DrawAnimatedSprite, DrawStaticSprite, Tilesheets} from "../rendering/tilesheets.ts";
+import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../rendering/tilesheets.ts";
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {useMousePosition} from "./useMousePosition.ts";
 import {BackendResponseType, invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
@@ -61,12 +64,19 @@ type ItemPanelProps = {
     worldMousePosition: MutableRefObject<Vector3>
     currentZLayer: number
     cellData: CellData
+    selectedCellPosition: Vector3 | null
 }
 
 export function ItemPanel(props: ItemPanelProps) {
     const [query, setQuery] = useState<string>("")
     const [displayItem, setDisplayItem] = useState<React.JSX.Element[]>([])
     const [currentGroup, setCurrentGroup] = useState<{ item_groups: DisplayItemGroup[] }>()
+
+    function resetCurrentGroup() {
+        setCurrentGroup(undefined)
+        setQuery("")
+        setDisplayItem([])
+    }
 
     useEffect(() => {
         if (!currentGroup) return
@@ -119,37 +129,20 @@ export function ItemPanel(props: ItemPanelProps) {
     }, [currentGroup, query]);
 
     useEffect(() => {
-        function onCellChange(newCoordinates: Vector3) {
-            const group = props.cellData[`${newCoordinates.x},${newCoordinates.y},${props.currentZLayer}`]
-
-            if (!group) return;
-
-            setCurrentGroup(group)
+        if (!props.selectedCellPosition){
+            resetCurrentGroup()
+            return;
         }
 
-        function setHoveredCell() {
-            const rect = props.rendererRef.current.domElement.getBoundingClientRect();
-            const mouseNormalized = new Vector3();
-            mouseNormalized.x = ((props.mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
-            mouseNormalized.y = -((props.mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
-            mouseNormalized.z = 0
+        const group = props.cellData[`${props.selectedCellPosition.x},${props.selectedCellPosition.y},${props.currentZLayer}`]
 
-            const offset = new Vector3(0.5, 0.5, 0)
-            const worldCoords = mouseNormalized.unproject(props.cameraRef.current).divide(new Vector3(32, 32, 1)).add(offset).floor();
-
-            if (worldCoords.x !== props.worldMousePosition.current.x || worldCoords.y !== props.worldMousePosition.current.y) {
-                onCellChange(worldCoords)
-            }
-
-            props.worldMousePosition.current = worldCoords
+        if (!group) {
+            resetCurrentGroup()
+            return;
         }
 
-        window.addEventListener("mousemove", setHoveredCell)
-
-        return () => {
-            window.removeEventListener("mousemove", setHoveredCell)
-        }
-    }, [props.cameraRef, props.cellData, props.currentZLayer, props.mousePosition, props.rendererRef, props.worldMousePosition]);
+        setCurrentGroup(group)
+    }, [props.cellData, props.currentZLayer, props.selectedCellPosition]);
 
     return (
         <div className={"menu-body-container"}>
@@ -174,9 +167,13 @@ export function useEditor(props: Props): UseEditorRet {
     const statsRef = useRef<Stats>()
 
     const [currentZLayer, setCurrentZLayer] = useState<number>(0)
-    const isLeftMousePressedRef = useRef<boolean>(false)
     const mousePosition = useMousePosition(props.canvasRef)
     const worldMousePosition = useRef<Vector3>(new Vector3(0, 0, 0))
+
+    const hoveredCellMeshRef = useRef<Mesh<PlaneGeometry, MeshBasicMaterial> | null>(null)
+    const selectedCellMeshRef = useRef<Mesh<PlaneGeometry, MeshBasicMaterial> | null>(null)
+
+    const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
 
     const [itemDisplay, setItemDisplay] = useState<ReactElement<ItemPanelProps>>()
     const [cellData, setCellData] = useState<CellData>({})
@@ -194,7 +191,6 @@ export function useEditor(props: Props): UseEditorRet {
         cameraRef.current.top = newHeight / 2
         cameraRef.current.bottom = newHeight / -2
     }, [props.canvasContainerRef])
-
 
     // Should only run once on application startup
     useEffect(() => {
@@ -241,28 +237,12 @@ export function useEditor(props: Props): UseEditorRet {
 
         setup()
 
-        const mouseDownListener = async (e: MouseEvent) => {
-            if (e.button === 0) {
-                isLeftMousePressedRef.current = true
-            }
-        }
-
-        const mouseUpListener = (e: MouseEvent) => {
-            if (e.button === 0) {
-                isLeftMousePressedRef.current = false
-            }
-        }
-
         window.addEventListener("resize", onResize)
         props.canvasContainerRef.current.addEventListener("resize", onResize)
-        props.canvasRef.current.addEventListener("mousedown", mouseDownListener)
-        props.canvasRef.current.addEventListener("mouseup", mouseUpListener)
 
         return () => {
             props.sceneRef.current.remove(ambientLightRef.current)
             props.sceneRef.current.remove(gridHelperRef.current)
-            props.canvasRef.current.removeEventListener("mousedown", mouseDownListener)
-            props.canvasRef.current.removeEventListener("mouseup", mouseUpListener)
             window.removeEventListener("resize", onResize)
         }
     }, [onResize, props.canvasContainerRef, props.canvasRef, props.sceneRef]);
@@ -276,9 +256,10 @@ export function useEditor(props: Props): UseEditorRet {
                 worldMousePosition={worldMousePosition}
                 currentZLayer={currentZLayer}
                 cellData={cellData}
+                selectedCellPosition={selectedCellPosition}
             />
         )
-    }, [cellData, currentZLayer, mousePosition]);
+    }, [cellData, currentZLayer, mousePosition, selectedCellPosition]);
 
     // Should run when the MapEditor is opened
     useEffect(() => {
@@ -355,6 +336,29 @@ export function useEditor(props: Props): UseEditorRet {
     useEffect(() => {
         rendererRef.current.setClearColor(getColorFromTheme(props.theme, "darker"))
 
+        // TODO: Hardcoded 32
+        const hovered = new PlaneGeometry(32, 32)
+        const hoveredMaterial = new MeshBasicMaterial({color: getColorFromTheme(props.theme, "darkBlue")})
+        hoveredMaterial.transparent = true
+        hoveredMaterial.opacity = 0.5
+        const highlightedMesh = new Mesh(hovered, hoveredMaterial)
+        // TODO: Hardcoded 32
+        highlightedMesh.position.set(worldMousePosition.current.x * 32, worldMousePosition.current.y * 32, MAX_DEPTH + 1)
+
+        const selected = new PlaneGeometry(32, 32)
+        const selectedMaterial = new MeshBasicMaterial({color: getColorFromTheme(props.theme, "selected")})
+        selectedMaterial.transparent = true
+        selectedMaterial.opacity = 0.5
+
+        const selectedMesh = new Mesh(selected, selectedMaterial)
+        selectedMesh.visible = false
+
+        selectedCellMeshRef.current = selectedMesh
+        props.sceneRef.current.add(selectedMesh)
+
+        hoveredCellMeshRef.current = highlightedMesh
+        props.sceneRef.current.add(highlightedMesh)
+
         const gridHelper = new GridHelper(
             1,
             16 * 8 * 32 * 24 / 32,
@@ -372,11 +376,9 @@ export function useEditor(props: Props): UseEditorRet {
     }, [props.sceneRef, props.theme]);
 
     useEffect(() => {
-        const keydownListener = async (e: KeyboardEvent) => {
-            if (e.key === "s") {
-                const response = await invokeTauri<never, never>(MapDataSendCommand.SaveCurrentProject, {})
-            }
+        if (!props.isDisplaying) return
 
+        const keydownListener = async (e: KeyboardEvent) => {
             if (e.key === "PageUp") {
                 const newZLayer = currentZLayer + 1
                 setCurrentZLayer(newZLayer)
@@ -390,12 +392,36 @@ export function useEditor(props: Props): UseEditorRet {
             }
         }
 
-        window.addEventListener("keydown", keydownListener)
+        function onMouseMove() {
+            const rect = rendererRef.current.domElement.getBoundingClientRect();
+            const mouseNormalized = new Vector3();
+            mouseNormalized.x = ((mousePosition.current.x - rect.left) / (rect.right - rect.left)) * 2 - 1;
+            mouseNormalized.y = -((mousePosition.current.y - rect.top) / (rect.bottom - rect.top)) * 2 + 1;
+            mouseNormalized.z = 0
+
+            const offset = new Vector3(0.5, 0.5, 0)
+            // TODO: Replace hardcoded 32 with actual tile size
+            worldMousePosition.current = mouseNormalized.unproject(cameraRef.current).divide(new Vector3(32, 32, 1)).add(offset).floor()
+
+            hoveredCellMeshRef.current.position.set(worldMousePosition.current.x * 32, worldMousePosition.current.y * 32, MAX_DEPTH + 1)
+        }
+
+        function onMouseDown(e: MouseEvent) {
+            if (e.button === 0) {
+                setSelectedCellPosition(worldMousePosition.current)
+            }
+        }
+
+        props.canvasRef.current.addEventListener("keydown", keydownListener)
+        props.canvasRef.current.addEventListener("mousemove", onMouseMove)
+        props.canvasRef.current.addEventListener("mousedown", onMouseDown)
 
         return () => {
-            window.removeEventListener("keydown", keydownListener)
+            props.canvasRef.current.removeEventListener("keydown", keydownListener)
+            props.canvasRef.current.removeEventListener("mousemove", onMouseMove)
+            props.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
-    }, [currentZLayer, props.tilesheetsRef]);
+    }, [currentZLayer, mousePosition, props.canvasRef, props.isDisplaying, props.tilesheetsRef]);
 
     // Should run when the tilesheet has finished loading
     useEffect(() => {
@@ -446,6 +472,19 @@ export function useEditor(props: Props): UseEditorRet {
             placeMultiUnlistenFn.cancel()
         }
     }, [props.isTilesheetLoaded, props.tilesheetsRef]);
+
+    // Runs when a new cell is selected
+    useEffect(() => {
+        if (!props.isDisplaying) return;
+        
+        if (!selectedCellPosition) {
+            selectedCellMeshRef.current.visible = false
+            return
+        }
+
+        selectedCellMeshRef.current.position.set(selectedCellPosition.x * 32, selectedCellPosition.y * 32, MAX_DEPTH + 1)
+        selectedCellMeshRef.current.visible = true
+    }, [props.isDisplaying, selectedCellPosition]);
 
     return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: []}}
 }
