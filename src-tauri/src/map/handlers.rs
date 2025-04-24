@@ -638,6 +638,7 @@ pub struct ProjectCellData {
 pub fn get_display_item_group_from_item_group(
     item_group: &ItemGroup,
     json_data: &DeserializedCDDAJsonData,
+    group_probability: f32,
 ) -> Vec<DisplayItemGroup> {
     let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
 
@@ -653,7 +654,7 @@ pub fn get_display_item_group_from_item_group(
             EntryItem::Item(i) => {
                 let display_item = DisplayItemGroup::Single {
                     item: i.item.clone(),
-                    probability: i.probability as f32 / weight_sum as f32,
+                    probability: i.probability as f32 / weight_sum as f32 * group_probability,
                 };
                 display_item_groups.push(display_item);
             }
@@ -662,8 +663,9 @@ pub fn get_display_item_group_from_item_group(
                     .item_groups
                     .get(&g.group)
                     .expect("Item Group to exist");
-                let display_item = get_display_item_group_from_item_group(other_group, json_data);
-                let probability = g.probability as f32 / weight_sum as f32;
+                let probability = g.probability as f32 / weight_sum as f32 * group_probability;
+                let display_item =
+                    get_display_item_group_from_item_group(other_group, json_data, probability);
 
                 match other_group.subtype {
                     ItemGroupSubtype::Collection => {
@@ -715,8 +717,6 @@ pub fn get_display_item_group_from_mapgen_items(
             .get(&mapgen_item.item)
             .expect("Item group to exist");
 
-        let items = get_display_item_group_from_item_group(item_group, json_data);
-
         let probability = mapgen_item
             .chance
             .clone()
@@ -724,6 +724,9 @@ pub fn get_display_item_group_from_mapgen_items(
             .unwrap_or(100) as f32
             // the default chance is 100, but we want to have a range from 0-1 so / 100
             / 100.;
+
+        let items = get_display_item_group_from_item_group(item_group, json_data, probability);
+
         display_item_groups.push(DisplayItemGroup::Distribution {
             name: Some(mapgen_item.item.clone().0),
             probability,

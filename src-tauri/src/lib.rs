@@ -304,12 +304,15 @@ pub fn run() -> () {
                     info!("Loading testing map data");
 
                     let importer = MapDataImporter {
-                        path:
-                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
-                                .into(),
-                        om_terrain: "nuclear_plant_0_0_0".into(),
+                        path: r"C:\CDDA\testing\data\json\mapgen\house\house01.json".into(),
+                        om_terrain: "house_01".into(),
                     };
-                    let loaded = importer.load()?;
+                    let mut loaded = importer.load()?;
+                    loaded
+                        .maps
+                        .get_mut(&0)
+                        .unwrap()
+                        .calculate_parameters(&cdda_json_data.palettes);
 
                     // let mut project = Project::new("Test".to_string(), UVec2::new(24, 24));
                     //
