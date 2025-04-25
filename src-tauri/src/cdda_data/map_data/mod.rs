@@ -1,22 +1,33 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::item::{
+    CDDAItemGroup, CDDAItemGroupInPlace, CDDAItemGroupIntermediate, EntryGroupShortcut, EntryItem,
+    EntryItemShortcut, Item, ItemGroupSubtype,
+};
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map::representative_properties::ItemProperty;
-use crate::map::visible_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
+use crate::map::visible_properties::{
+    FurnitureProperty, MonsterProperty, NestedFurnitureProperty, NestedTerrainProperty,
+    TerrainProperty,
+};
 use crate::map::{
     Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
     RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
-    VisibleMapping, VisibleProperty, SPECIAL_EMPTY_CHAR,
+    VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
 };
 use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
+use crate::warn;
 use crate::{skip_err, skip_none};
 use glam::UVec2;
 use indexmap::IndexMap;
-use log::warn;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
+
+pub(crate) mod nested;
+pub(crate) mod update;
 
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;
@@ -73,8 +84,24 @@ pub struct SetIntermediate {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ReferenceOrInPlace<P> {
+    Reference(CDDAIdentifier),
+    InPlace(P),
+}
+
+impl<P> ReferenceOrInPlace<P> {
+    pub fn ref_or(&self, value: impl Into<CDDAIdentifier>) -> CDDAIdentifier {
+        match self {
+            ReferenceOrInPlace::Reference(r) => r.clone(),
+            ReferenceOrInPlace::InPlace(_) => value.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MapGenItem {
-    pub item: CDDAIdentifier,
+    pub item: ReferenceOrInPlace<CDDAItemGroupInPlace>,
     pub chance: Option<NumberOrRange<u32>>,
     pub repeat: Option<NumberOrRange<u32>>,
     pub faction: Option<CDDAIdentifier>,
@@ -96,7 +123,12 @@ pub struct MapGenMonster {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAMapDataObjectCommon {
+pub struct MapGenNested {
+    pub chunks: MapGenValue,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAMapDataObjectCommonIntermediate {
     #[serde(default)]
     pub palettes: Vec<MapGenValue>,
 
@@ -115,6 +147,10 @@ pub struct CDDAMapDataObjectCommon {
     #[serde(default)]
     pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
 
+    #[serde(default)]
+    pub nested: HashMap<char, MapGenNested>,
+
+    // ---------------
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
 
@@ -146,9 +182,6 @@ pub struct CDDAMapDataObjectCommon {
     pub computers: HashMap<char, Value>,
 
     #[serde(default)]
-    pub nested: HashMap<char, Value>,
-
-    #[serde(default)]
     pub toilets: HashMap<char, Value>,
 
     #[serde(default)]
@@ -171,24 +204,24 @@ pub struct CDDAMapDataObjectCommon {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAMapDataObject {
+pub struct CDDAMapDataObjectIntermediate {
     pub fill_ter: Option<DistributionInner>,
 
     pub rows: Option<Vec<String>>,
 
     #[serde(flatten)]
-    pub common: CDDAMapDataObjectCommon,
+    pub common: CDDAMapDataObjectCommonIntermediate,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAMapData {
+pub struct CDDAMapDataIntermediate {
     pub method: String,
     pub om_terrain: OmTerrain,
     pub weight: Option<i32>,
-    pub object: CDDAMapDataObject,
+    pub object: CDDAMapDataObjectIntermediate,
 }
 
-impl Into<MapData> for CDDAMapData {
+impl Into<MapData> for CDDAMapDataIntermediate {
     fn into(self) -> MapData {
         let mut cells = IndexMap::new();
 
@@ -382,9 +415,24 @@ impl Into<MapData> for CDDAMapData {
             monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
         }
 
-        visible.insert(VisibleMapping::Terrain, terrain_map);
-        visible.insert(VisibleMapping::Furniture, furniture_map);
-        visible.insert(VisibleMapping::Monster, monster_map);
+        let mut nested_terrain_map = HashMap::new();
+        let mut nested_furniture_map = HashMap::new();
+
+        for (char, nested) in self.object.common.nested {
+            let nested_terrain_prop = Arc::new(NestedTerrainProperty {
+                nested: nested.clone(),
+            });
+            nested_terrain_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
+
+            let nested_furniture_prop = Arc::new(NestedFurnitureProperty { nested });
+            nested_furniture_map.insert(char, nested_furniture_prop as Arc<dyn VisibleProperty>);
+        }
+
+        visible.insert(VisibleMappingKind::Terrain, terrain_map);
+        visible.insert(VisibleMappingKind::Furniture, furniture_map);
+        visible.insert(VisibleMappingKind::Monster, monster_map);
+        visible.insert(VisibleMappingKind::NestedTerrain, nested_terrain_map);
+        visible.insert(VisibleMappingKind::NestedFurniture, nested_furniture_map);
 
         let mut representative = HashMap::new();
 
@@ -400,7 +448,7 @@ impl Into<MapData> for CDDAMapData {
 
         let mut place = HashMap::new();
         place.insert(
-            VisibleMapping::Furniture,
+            VisibleMappingKind::Furniture,
             self.object
                 .common
                 .place_furniture
@@ -422,41 +470,4 @@ impl Into<MapData> for CDDAMapData {
 
         map_data
     }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDANestedMapDataObject {
-    pub rows: Option<Vec<String>>,
-
-    #[serde(rename = "mapgensize")]
-    pub mapgen_size: UVec2,
-
-    #[serde(flatten)]
-    pub common: CDDAMapDataObjectCommon,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDANestedMapData {
-    pub method: String,
-
-    pub nested_mapgen_id: CDDAIdentifier,
-
-    pub object: CDDANestedMapDataObject,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAUpdatedMapDataObject {
-    pub rows: Option<Vec<String>>,
-
-    #[serde(flatten)]
-    pub common: CDDAMapDataObjectCommon,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAUpdateMapData {
-    pub method: String,
-
-    pub update_mapgen_id: CDDAIdentifier,
-
-    pub object: CDDANestedMapDataObject,
 }

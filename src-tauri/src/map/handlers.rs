@@ -3,12 +3,13 @@ use crate::cdda_data::TileLayer;
 use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, Project};
-use crate::map::{CellRepresentation, ProjectContainer};
+use crate::map::{
+    CDDAIdentifierGroup, CellRepresentation, ProjectContainer, VisibleMappingCommand,
+    VisibleMappingKind,
+};
 use crate::tileset;
 use crate::tileset::legacy_tileset::MappedSprite;
-use crate::tileset::{
-    AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
-};
+use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind};
 use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, UVec2JsonKey};
 use glam::{IVec3, UVec2};
 use log::{debug, error, warn};
@@ -398,7 +399,7 @@ pub async fn open_project(
 
         let mut mapped_sprites_lock = mapped_sprites.lock().await;
 
-        // Store the identifiers here since they use random numbers to determine them and if we used
+        // Store the identifiers here since they use random numbers to determine them, and if we used
         // this function in the next iteration through map_data, we would get other identifiers
         let mut identifiers = HashMap::new();
 
@@ -459,75 +460,95 @@ pub async fn open_project(
             }
         }
 
+        // Create the identifiers before we populate them with the ids because a nested mapgen might
+        // edit things outside the defined character
+        map_data.cells.iter().for_each(|(p, _)| {
+            identifiers.insert(p, CDDAIdentifierGroup::default());
+
+            let default_mapped_sprite = MappedSprite::default();
+            mapped_sprites_lock.insert(
+                IVec3::new(p.x as i32, p.y as i32, *z),
+                default_mapped_sprite,
+            );
+        });
+
         // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
         // the function relies on the mapped sprite of this sprite to already exist
         map_data.cells.iter().for_each(|(p, cell)| {
-            let mut identifier_group = map_data.get_visible_mappings(&cell.character, &json_data);
+            let ident_commands =
+                map_data.get_identifier_change_commands(&cell.character, p, &json_data);
 
-            match identifier_group.terrain {
-                None => {
-                    debug!(
-                        "No terrain found for {}, trying to use fill_sprite",
-                        cell.character
-                    );
+            for command in ident_commands {
+                match command {
+                    VisibleMappingCommand::Place {
+                        coordinates,
+                        id: pre_id,
+                        mapping,
+                    } => {
+                        let id = pre_id.as_final_id(
+                            region_settings,
+                            &json_data.terrain,
+                            &json_data.furniture,
+                        );
 
-                    match &fill_terrain_sprite {
-                        None => {
-                            warn!("terrain was not defined for {}", cell.character);
-                            todo!();
+                        let ident_mut = match identifiers.get_mut(&coordinates) {
+                            None => {
+                                error!(
+                                    "Identifier group at coordinates {:?} not found",
+                                    coordinates
+                                );
+                                continue;
+                            }
+                            Some(i) => i,
+                        };
+
+                        match mapping {
+                            VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
+                                ident_mut.terrain = Some(id.clone());
+                            }
+                            VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
+                                ident_mut.furniture = Some(id.clone());
+                            }
+                            VisibleMappingKind::Traps => {
+                                todo!()
+                            }
+                            VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
                         }
-                        Some(fill_sprite) => {
-                            identifier_group.terrain = Some(fill_sprite.clone());
+
+                        let three_dim_coords =
+                            IVec3::new(coordinates.x as i32, coordinates.y as i32, *z);
+                        let mut mapped_sprite = mapped_sprites_lock
+                            .get_mut(&three_dim_coords)
+                            .expect("Mapped sprite to exist");
+
+                        match mapping {
+                            VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
+                                mapped_sprite.terrain = Some(id.clone());
+                            }
+                            VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
+                                mapped_sprite.furniture = Some(id.clone());
+                            }
+                            VisibleMappingKind::Traps => {
+                                todo!()
+                            }
+                            VisibleMappingKind::Monster => mapped_sprite.monster = Some(id.clone()),
                         }
-                    };
+                    }
                 }
-                Some(_) => {}
             }
+        });
 
-            let mut mapped_sprite = MappedSprite::default();
-            let mut new_identifier_group = identifier_group.clone();
+        // Now we fill any identifier_group and mapped_sprite with no terrain with the fill sprite
+        identifiers.iter_mut().for_each(|(p, i)| {
+            if i.terrain.is_none() {
+                i.terrain = fill_terrain_sprite.clone();
 
-            for (layer, o_id) in [
-                (TileLayer::Terrain, &identifier_group.terrain),
-                (TileLayer::Furniture, &identifier_group.furniture),
-                (TileLayer::Monster, &identifier_group.monster),
-            ] {
-                let id = match o_id {
-                    None => continue,
-                    Some(id) => {
-                        id.as_final_id(region_settings, &json_data.terrain, &json_data.furniture)
-                    }
-                };
+                let mapped_sprite = mapped_sprites_lock
+                    .get_mut(&IVec3::new(p.x as i32, p.y as i32, *z))
+                    .expect("Mapped sprite to exist");
 
-                match layer {
-                    TileLayer::Terrain => {
-                        mapped_sprite.terrain = Some(id.clone());
-                        new_identifier_group.terrain = Some(id.clone());
-                    }
-                    TileLayer::Furniture => {
-                        mapped_sprite.furniture = Some(id.clone());
-                        new_identifier_group.furniture = Some(id.clone());
-                    }
-                    TileLayer::Monster => {
-                        mapped_sprite.monster = Some(id.clone());
-                        new_identifier_group.monster = Some(id.clone());
-                    }
-                    _ => unreachable!(),
-                };
+                mapped_sprite.terrain = fill_terrain_sprite.clone();
             }
-
-            let mapped_cords = IVec3::new(p.x as i32, p.y as i32, *z);
-
-            // We don't want to overwrite the sprites we set with the 'set' and 'place' properties
-            // So we're checking if there's a sprite already here
-            match mapped_sprites_lock.get(&mapped_cords) {
-                None => {
-                    mapped_sprites_lock.insert(mapped_cords, mapped_sprite);
-                }
-                Some(_) => {}
-            }
-
-            identifiers.insert(p, new_identifier_group);
         });
 
         map_data.cells.iter().for_each(|(p, cell)| {

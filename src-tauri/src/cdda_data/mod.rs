@@ -8,19 +8,20 @@ pub(crate) mod region_settings;
 pub(crate) mod terrain;
 
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
-use crate::cdda_data::item::IntermediateItemGroup;
-use crate::cdda_data::map_data::{CDDAMapData, CDDANestedMapData, CDDAUpdateMapData};
+use crate::cdda_data::item::CDDAItemGroupIntermediate;
+use crate::cdda_data::map_data::nested::CDDANestedMapDataIntermediate;
+use crate::cdda_data::map_data::update::CDDAUpdateMapDataIntermediate;
+use crate::cdda_data::map_data::CDDAMapDataIntermediate;
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
 use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
-use crate::RANDOM;
 use derive_more::Display;
 use indexmap::IndexMap;
 use num_traits::PrimInt;
 use rand::distr::uniform::SampleUniform;
-use rand::Rng;
+use rand::{rng, Rng};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -56,7 +57,8 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
         match self.clone() {
             NumberOrRange::Number(n) => n,
             NumberOrRange::Range((from, to)) => {
-                let mut rng = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
                 num
             }
@@ -66,13 +68,15 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
     pub fn is_random_hit(&self, default_upper_bound: T) -> bool {
         match self.clone() {
             NumberOrRange::Number(n) => {
-                let mut rng = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(n..default_upper_bound);
 
                 num == n
             }
             NumberOrRange::Range((from, to)) => {
-                let mut rng = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
 
                 num == from
@@ -138,9 +142,9 @@ pub struct ConnectGroup {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(untagged)]
 pub enum MapgenKind {
-    OmTerrain(CDDAMapData),
-    NestedOmTerrain(CDDANestedMapData),
-    UpdateOmTerrain(CDDAUpdateMapData),
+    OmTerrain(CDDAMapDataIntermediate),
+    NestedOmTerrain(CDDANestedMapDataIntermediate),
+    UpdateOmTerrain(CDDAUpdateMapDataIntermediate),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -153,7 +157,7 @@ pub enum CDDAJsonEntry {
     Terrain(CDDATerrainIntermediate),
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
-    ItemGroup(IntermediateItemGroup),
+    ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
     MonsterGroup(CDDAMonsterGroup),
 

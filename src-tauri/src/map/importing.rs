@@ -1,4 +1,5 @@
-use crate::cdda_data::map_data::{CDDAMapData, OmTerrain};
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::map_data::{CDDAMapDataIntermediate, OmTerrain};
 use crate::editor_data::Project;
 use crate::map::DEFAULT_MAP_DATA_SIZE;
 use crate::util::Load;
@@ -8,25 +9,27 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-pub struct MapDataImporter {
+pub struct MapDataImporter<'a> {
     pub path: PathBuf,
     pub om_terrain: String,
+
+    pub json_data: &'a mut DeserializedCDDAJsonData,
 }
 
-impl Load<Project> for MapDataImporter {
-    fn load(&self) -> Result<Project, anyhow::Error> {
+impl Load<Project> for MapDataImporter<'_> {
+    fn load(&mut self) -> Result<Project, anyhow::Error> {
         let reader = BufReader::new(File::open(&self.path)?);
-        let importing_map_datas: Vec<CDDAMapData> =
+        let importing_map_datas: Vec<CDDAMapDataIntermediate> =
             serde_json::from_reader(reader).map_err(|e| anyhow::Error::from(e))?;
 
         // TODO: Handle multiple z-levels
         let project = importing_map_datas
             .into_iter()
-            .find_map(|md| match &md.om_terrain {
+            .find_map(|mdi| match &mdi.om_terrain {
                 OmTerrain::Single(s) => match &self.om_terrain == s {
                     true => {
                         let mut project = Project::new(s.clone(), DEFAULT_MAP_DATA_SIZE);
-                        project.maps.insert(0, md.into());
+                        project.maps.insert(0, mdi.into());
                         Some(project)
                     }
                     false => None,
@@ -35,7 +38,7 @@ impl Load<Project> for MapDataImporter {
                     match duplicate.iter().find(|d| *d == &self.om_terrain) {
                         Some(s) => {
                             let mut project = Project::new(s.clone(), DEFAULT_MAP_DATA_SIZE);
-                            project.maps.insert(0, md.into());
+                            project.maps.insert(0, mdi.into());
                             Some(project)
                         }
                         None => None,
@@ -52,7 +55,7 @@ impl Load<Project> for MapDataImporter {
                                     as u32,
                             ),
                         );
-                        project.maps.insert(0, md.into());
+                        project.maps.insert(0, mdi.into());
 
                         Some(project)
                     }

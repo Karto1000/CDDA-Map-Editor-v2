@@ -3,8 +3,12 @@ use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
 use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
 use crate::map::representative_properties::ItemProperty;
 use crate::map::visible_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
-use crate::map::{RepresentativeMapping, RepresentativeProperty, VisibleMapping, VisibleProperty};
+use crate::map::{
+    RepresentativeMapping, RepresentativeProperty, VisibleMappingCommand, VisibleMappingKind,
+    VisibleProperty,
+};
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
+use glam::UVec2;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -145,9 +149,9 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
             monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
         }
 
-        visible.insert(VisibleMapping::Terrain, terrain_map);
-        visible.insert(VisibleMapping::Furniture, furniture_map);
-        visible.insert(VisibleMapping::Monster, monster_map);
+        visible.insert(VisibleMappingKind::Terrain, terrain_map);
+        visible.insert(VisibleMappingKind::Furniture, furniture_map);
+        visible.insert(VisibleMappingKind::Monster, monster_map);
 
         let mut representative = HashMap::new();
 
@@ -177,7 +181,7 @@ pub struct CDDAPalette {
     pub id: CDDAIdentifier,
 
     #[serde(skip)]
-    pub visible: HashMap<VisibleMapping, HashMap<char, Arc<dyn VisibleProperty>>>,
+    pub visible: HashMap<VisibleMappingKind, HashMap<char, Arc<dyn VisibleProperty>>>,
 
     #[serde(skip)]
     pub representative:
@@ -226,15 +230,16 @@ impl CDDAPalette {
 
     pub fn get_visible_mapping(
         &self,
-        mapping_kind: impl Borrow<VisibleMapping>,
+        mapping_kind: impl Borrow<VisibleMappingKind>,
         character: impl Borrow<char>,
+        position: &UVec2,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<CDDAIdentifier> {
+    ) -> Option<Vec<VisibleMappingCommand>> {
         let mapping = self.visible.get(mapping_kind.borrow())?;
 
         if let Some(id) = mapping.get(character.borrow()) {
-            return id.get_identifier(calculated_parameters, json_data);
+            return id.get_identifier(calculated_parameters, position, json_data);
         }
 
         for mapgen_value in self.palettes.iter() {
@@ -244,6 +249,7 @@ impl CDDAPalette {
             if let Some(id) = palette.get_visible_mapping(
                 mapping_kind.borrow(),
                 character.borrow(),
+                position,
                 calculated_parameters,
                 json_data,
             ) {

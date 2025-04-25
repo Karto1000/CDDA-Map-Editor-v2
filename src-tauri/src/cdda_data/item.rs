@@ -267,7 +267,7 @@ impl Into<EntryItem> for EntryGroupShortcut {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct IntermediateItemGroup {
+pub struct CDDAItemGroupIntermediate {
     pub id: CDDAIdentifier,
 
     #[serde(default)]
@@ -283,8 +283,20 @@ pub struct IntermediateItemGroup {
     pub entries: Vec<EntryItem>,
 }
 
-impl Into<CDDDAItemGroup> for IntermediateItemGroup {
-    fn into(self) -> CDDDAItemGroup {
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAItemGroupInPlace {
+    #[serde(flatten)]
+    pub common: CDDAItemGroupCommon,
+
+    #[serde(default)]
+    pub items: Vec<EntryItemShortcut>,
+
+    #[serde(default)]
+    pub groups: Vec<EntryGroupShortcut>,
+}
+
+impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
+    fn into(self) -> CDDAItemGroup {
         // This:
         //
         // "items": [ "<id-1>", [ "<id-2>", 10 ] ]
@@ -307,7 +319,7 @@ impl Into<CDDDAItemGroup> for IntermediateItemGroup {
             entries.push(entry_item);
         });
 
-        // Turn groups into entires
+        // Turn groups into entries
         self.groups.into_iter().for_each(|group| {
             let entry_item: EntryItem = group.into();
             entries.push(entry_item);
@@ -315,17 +327,26 @@ impl Into<CDDDAItemGroup> for IntermediateItemGroup {
 
         entries.extend(self.entries);
 
-        CDDDAItemGroup {
+        CDDAItemGroup {
             id: self.id,
-            subtype: self.subtype,
-            entries,
+            common: CDDAItemGroupCommon {
+                entries,
+                subtype: self.subtype,
+            },
         }
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDDAItemGroup {
-    pub id: CDDAIdentifier,
-    pub subtype: ItemGroupSubtype,
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct CDDAItemGroupCommon {
     pub entries: Vec<EntryItem>,
+    pub subtype: ItemGroupSubtype,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAItemGroup {
+    pub id: CDDAIdentifier,
+
+    #[serde(flatten)]
+    pub common: CDDAItemGroupCommon,
 }

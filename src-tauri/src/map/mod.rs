@@ -2,7 +2,7 @@ pub(crate) mod handlers;
 pub(crate) mod importing;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::item::{CDDDAItemGroup, EntryItem, ItemGroupSubtype};
+use crate::cdda_data::item::{EntryItem, ItemGroupSubtype};
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster, MapGenMonsterType};
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
@@ -13,11 +13,10 @@ use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
     bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, ParameterIdentifier,
 };
-use crate::RANDOM;
 use dyn_clone::{clone_trait_object, DynClone};
 use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
-use rand::Rng;
+use rand::{rng, Rng};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
@@ -158,19 +157,22 @@ pub trait VisibleProperty: RepresentativeProperty {
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<CDDAIdentifier>;
+    ) -> Option<Vec<VisibleMappingCommand>>;
 }
 
 clone_trait_object!(VisibleProperty);
 
-#[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
-pub enum VisibleMapping {
+pub enum VisibleMappingKind {
     Terrain,
     Furniture,
     Traps,
     Monster,
+    NestedTerrain,
+    NestedFurniture,
 }
 
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
@@ -182,7 +184,10 @@ pub enum RepresentativeMapping {
 
 pub mod visible_properties {
     use super::*;
+    use crate::cdda_data::map_data::MapGenNested;
     use crate::util::MeabyVec;
+    use log::error;
+    use log::kv::Source;
 
     #[derive(Debug, Clone)]
     pub struct TerrainProperty {
@@ -199,9 +204,17 @@ pub mod visible_properties {
         fn get_identifier(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+            position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
-        ) -> Option<CDDAIdentifier> {
-            Some(self.mapgen_value.get_identifier(calculated_parameters))
+        ) -> Option<Vec<VisibleMappingCommand>> {
+            let ident = self.mapgen_value.get_identifier(calculated_parameters);
+            let command = VisibleMappingCommand::Place {
+                id: ident,
+                mapping: VisibleMappingKind::Terrain,
+                coordinates: position.clone(),
+            };
+
+            Some(vec![command])
         }
     }
 
@@ -220,29 +233,41 @@ pub mod visible_properties {
         fn get_identifier(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+            position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
-        ) -> Option<CDDAIdentifier> {
+        ) -> Option<Vec<VisibleMappingCommand>> {
             for monster in self.monster.clone().into_vec() {
-                match monster
+                let ident = match monster
                     .chance
                     .clone()
                     .unwrap_or(NumberOrRange::Number(1))
                     .is_random_hit(100)
                 {
-                    true => {
-                        return match monster.id {
-                            MapGenMonsterType::Monster { monster } => {
-                                Some(monster.get_identifier(calculated_parameters))
-                            }
-                            MapGenMonsterType::MonsterGroup { group } => {
-                                let mon_group = json_data.monstergroups.get(&group)?;
-                                mon_group
-                                    .get_random_monster(&json_data.monstergroups)
-                                    .map(|id| id.get_identifier(calculated_parameters))
-                            }
+                    true => match monster.id {
+                        MapGenMonsterType::Monster { monster } => {
+                            Some(monster.get_identifier(calculated_parameters))
                         }
+                        MapGenMonsterType::MonsterGroup { group } => {
+                            let mon_group = json_data.monstergroups.get(&group)?;
+                            mon_group
+                                .get_random_monster(&json_data.monstergroups)
+                                .map(|id| id.get_identifier(calculated_parameters))
+                        }
+                    },
+                    false => None,
+                };
+
+                match ident {
+                    None => {}
+                    Some(ident) => {
+                        let command = VisibleMappingCommand::Place {
+                            id: ident,
+                            mapping: VisibleMappingKind::Monster,
+                            coordinates: position.clone(),
+                        };
+
+                        return Some(vec![command]);
                     }
-                    false => {}
                 }
             }
 
@@ -265,15 +290,109 @@ pub mod visible_properties {
         fn get_identifier(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+            position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
-        ) -> Option<CDDAIdentifier> {
-            Some(self.mapgen_value.get_identifier(calculated_parameters))
+        ) -> Option<Vec<VisibleMappingCommand>> {
+            let ident = self.mapgen_value.get_identifier(calculated_parameters);
+            let command = VisibleMappingCommand::Place {
+                id: ident,
+                mapping: VisibleMappingKind::Furniture,
+                coordinates: position.clone(),
+            };
+
+            Some(vec![command])
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct NestedTerrainProperty {
+        pub nested: MapGenNested,
+    }
+
+    impl RepresentativeProperty for NestedTerrainProperty {
+        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+            todo!()
+        }
+    }
+
+    impl VisibleProperty for NestedTerrainProperty {
+        fn get_identifier(
+            &self,
+            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+            position: &UVec2,
+            json_data: &DeserializedCDDAJsonData,
+        ) -> Option<Vec<VisibleMappingCommand>> {
+            let selected_chunk = self.nested.chunks.get_identifier(calculated_parameters);
+            let nested_mapgen = match json_data.nested_mapgens.get(&selected_chunk) {
+                None => {
+                    error!("Nested Mapgen {} not found", selected_chunk);
+                    return None;
+                }
+                Some(v) => v,
+            };
+
+            let mut commands = vec![];
+            for y in 0..nested_mapgen.object.mapgen_size.y {
+                for x in 0..nested_mapgen.object.mapgen_size.x {
+                    commands.push(VisibleMappingCommand::Place {
+                        id: CDDAIdentifier::from("t_floor"),
+                        mapping: VisibleMappingKind::Terrain,
+                        coordinates: position.clone() - UVec2::new(x, y),
+                    });
+                }
+            }
+
+            Some(commands)
+        }
+    }
+
+    #[derive(Debug, Clone)]
+    pub struct NestedFurnitureProperty {
+        pub nested: MapGenNested,
+    }
+
+    impl RepresentativeProperty for NestedFurnitureProperty {
+        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+            todo!()
+        }
+    }
+
+    impl VisibleProperty for NestedFurnitureProperty {
+        fn get_identifier(
+            &self,
+            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+            position: &UVec2,
+            json_data: &DeserializedCDDAJsonData,
+        ) -> Option<Vec<VisibleMappingCommand>> {
+            let selected_chunk = self.nested.chunks.get_identifier(calculated_parameters);
+            let nested_mapgen = match json_data.nested_mapgens.get(&selected_chunk) {
+                None => {
+                    error!("Nested Mapgen {} not found", selected_chunk);
+                    return None;
+                }
+                Some(n) => n,
+            };
+
+            let mut commands = vec![];
+            for y in 0..nested_mapgen.object.mapgen_size.y {
+                for x in 0..nested_mapgen.object.mapgen_size.x {
+                    commands.push(VisibleMappingCommand::Place {
+                        id: CDDAIdentifier::from("f_alien_zapper"),
+                        mapping: VisibleMappingKind::Furniture,
+                        coordinates: position.clone() - UVec2::new(x, y),
+                    });
+                }
+            }
+
+            Some(commands)
         }
     }
 }
 
 pub mod representative_properties {
     use super::*;
+    use crate::cdda_data::item::CDDAItemGroupCommon;
+    use crate::cdda_data::map_data::ReferenceOrInPlace;
 
     #[derive(Debug, Serialize)]
     #[serde(tag = "type")]
@@ -312,20 +431,20 @@ pub mod representative_properties {
     impl ItemProperty {
         fn get_display_item_group_from_item_group(
             &self,
-            item_group: &CDDDAItemGroup,
+            common: &CDDAItemGroupCommon,
             json_data: &DeserializedCDDAJsonData,
             group_probability: f32,
         ) -> Vec<DisplayItemGroup> {
             let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
 
-            let weight_sum = item_group.entries.iter().fold(0, |acc, v| match v {
+            let weight_sum = common.entries.iter().fold(0, |acc, v| match v {
                 EntryItem::Item(i) => acc + i.probability,
                 EntryItem::Group(g) => acc + g.probability,
                 EntryItem::Distribution { probability, .. } => acc + probability.unwrap_or(100),
                 EntryItem::Collection { probability, .. } => acc + probability.unwrap_or(100),
             });
 
-            for entry in item_group.entries.iter() {
+            for entry in common.entries.iter() {
                 match entry {
                     EntryItem::Item(i) => {
                         let display_item = DisplayItemGroup::Single {
@@ -336,19 +455,21 @@ pub mod representative_properties {
                         display_item_groups.push(display_item);
                     }
                     EntryItem::Group(g) => {
-                        let other_group = json_data
+                        let other_group = &json_data
                             .item_groups
                             .get(&g.group)
                             .expect("Item Group to exist");
+
                         let probability =
                             g.probability as f32 / weight_sum as f32 * group_probability;
+
                         let display_item = self.get_display_item_group_from_item_group(
-                            other_group,
+                            &other_group.common,
                             json_data,
                             probability,
                         );
 
-                        match other_group.subtype {
+                        match other_group.common.subtype {
                             ItemGroupSubtype::Collection => {
                                 display_item_groups.push(DisplayItemGroup::Collection {
                                     items: display_item,
@@ -392,10 +513,16 @@ pub mod representative_properties {
             let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
 
             for mapgen_item in self.items.iter() {
-                let item_group = json_data
-                    .item_groups
-                    .get(&mapgen_item.item)
-                    .expect("Item group to exist");
+                let item_group_entries = match &mapgen_item.item {
+                    ReferenceOrInPlace::Reference(i) => {
+                        &json_data
+                            .item_groups
+                            .get(&i)
+                            .expect("Item group to exist")
+                            .common
+                    }
+                    ReferenceOrInPlace::InPlace(ip) => &ip.common,
+                };
 
                 let probability = mapgen_item
                     .chance
@@ -405,11 +532,14 @@ pub mod representative_properties {
                     // the default chance is 100, but we want to have a range from 0-1 so / 100
                     / 100.;
 
-                let items =
-                    self.get_display_item_group_from_item_group(item_group, json_data, probability);
+                let items = self.get_display_item_group_from_item_group(
+                    item_group_entries,
+                    json_data,
+                    probability,
+                );
 
                 display_item_groups.push(DisplayItemGroup::Distribution {
-                    name: Some(mapgen_item.item.clone().0),
+                    name: Some(mapgen_item.item.ref_or("Unnamed Group").0),
                     probability,
                     items,
                 });
@@ -437,6 +567,15 @@ pub struct CellRepresentation {
     item_groups: Value,
 }
 
+#[derive(Debug, Serialize)]
+pub enum VisibleMappingCommand {
+    Place {
+        mapping: VisibleMappingKind,
+        coordinates: UVec2,
+        id: CDDAIdentifier,
+    },
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapData {
     pub cells: IndexMap<UVec2, Cell>,
@@ -447,7 +586,7 @@ pub struct MapData {
     pub palettes: Vec<MapGenValue>,
 
     #[serde(skip)]
-    pub visible: HashMap<VisibleMapping, HashMap<char, Arc<dyn VisibleProperty>>>,
+    pub visible: HashMap<VisibleMappingKind, HashMap<char, Arc<dyn VisibleProperty>>>,
 
     #[serde(skip)]
     pub representative:
@@ -457,7 +596,7 @@ pub struct MapData {
     pub set: Vec<Arc<dyn Set>>,
 
     #[serde(skip)]
-    pub place: HashMap<VisibleMapping, Vec<Arc<dyn Place>>>,
+    pub place: HashMap<VisibleMappingKind, Vec<Arc<dyn Place>>>,
 }
 
 impl Default for MapData {
@@ -513,14 +652,15 @@ impl MapData {
 
     pub fn get_visible_mapping(
         &self,
-        mapping_kind: &VisibleMapping,
+        mapping_kind: &VisibleMappingKind,
         character: &char,
+        position: &UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<CDDAIdentifier> {
+    ) -> Option<Vec<VisibleMappingCommand>> {
         let mapping = self.visible.get(mapping_kind)?;
 
         if let Some(id) = mapping.get(character) {
-            return id.get_identifier(&self.calculated_parameters, json_data);
+            return id.get_identifier(&self.calculated_parameters, position, json_data);
         }
 
         // If we don't find it, search the palettes from top to bottom
@@ -531,6 +671,7 @@ impl MapData {
             if let Some(id) = palette.get_visible_mapping(
                 mapping_kind,
                 character,
+                position,
                 &self.calculated_parameters,
                 json_data,
             ) {
@@ -583,20 +724,61 @@ impl MapData {
         CellRepresentation { item_groups }
     }
 
-    pub fn get_visible_mappings(
+    pub fn get_identifier_change_commands(
         &self,
         character: &char,
+        position: &UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> CDDAIdentifierGroup {
-        let terrain = self.get_visible_mapping(&VisibleMapping::Terrain, character, json_data);
-        let furniture = self.get_visible_mapping(&VisibleMapping::Furniture, character, json_data);
-        let monster = self.get_visible_mapping(&VisibleMapping::Monster, character, json_data);
+    ) -> Vec<VisibleMappingCommand> {
+        let mut commands = Vec::new();
 
-        CDDAIdentifierGroup {
-            terrain,
-            furniture,
-            monster,
+        match self
+            .get_visible_mapping(
+                &VisibleMappingKind::NestedTerrain,
+                character,
+                position,
+                json_data,
+            )
+            .map_or(
+                self.get_visible_mapping(
+                    &VisibleMappingKind::Terrain,
+                    character,
+                    position,
+                    json_data,
+                ),
+                |v| Some(v),
+            ) {
+            None => {}
+            Some(c) => commands.extend(c),
         }
+
+        match self
+            .get_visible_mapping(
+                &VisibleMappingKind::NestedFurniture,
+                character,
+                position,
+                json_data,
+            )
+            .map_or(
+                self.get_visible_mapping(
+                    &VisibleMappingKind::Furniture,
+                    character,
+                    position,
+                    json_data,
+                ),
+                |v| Some(v),
+            ) {
+            None => {}
+            Some(c) => commands.extend(c),
+        };
+
+        match self.get_visible_mapping(&VisibleMappingKind::Monster, character, position, json_data)
+        {
+            None => {}
+            Some(c) => commands.extend(c),
+        }
+
+        commands
     }
 }
 
@@ -742,9 +924,10 @@ impl Set for SetPoint {
         for _ in self.repeat.0..self.repeat.1 {
             // Block here to release the lock on RANDOM since the number() function also uses RANDOM
             {
-                let mut random = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut random = RANDOM.write().unwrap();
 
-                if random.random_range(1..=self.chance) != 1 {
+                if rng.random_range(1..=self.chance) != 1 {
                     continue;
                 }
             }
@@ -781,9 +964,10 @@ impl Set for SetLine {
 
         for _ in self.repeat.0..self.repeat.1 {
             {
-                let mut random = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut random = RANDOM.write().unwrap();
 
-                if random.random_range(1..=self.chance) != 1 {
+                if rng.random_range(1..=self.chance) != 1 {
                     continue;
                 }
             }

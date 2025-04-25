@@ -7,11 +7,11 @@ use crate::tileset::legacy_tileset::{
     Rotates, Rotation, SpriteIndex,
 };
 use crate::util::{CDDAIdentifier, MeabyVec};
-use crate::RANDOM;
 use glam::IVec3;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
+use rand::rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use tokio::sync::MutexGuard;
@@ -691,7 +691,9 @@ impl<T> GetRandom<T> for Vec<WeightedSprite<T>> {
         self.iter().for_each(|v| weights.push(v.weight));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = RANDOM.write().unwrap();
+
+        let mut rng = rng();
+        //let mut rng = RANDOM.write().unwrap();
 
         let chosen_index = weighted_index.sample(&mut rng);
 
@@ -707,7 +709,9 @@ impl<T> GetRandom<T> for IndexMap<T, i32> {
         vec.iter().for_each(|(_, w)| weights.push(**w));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = RANDOM.write().unwrap();
+
+        let mut rng = rng();
+        //let mut rng = RANDOM.write().unwrap();
 
         let chosen_index = weighted_index.sample(&mut rng);
         let item = vec.remove(chosen_index);

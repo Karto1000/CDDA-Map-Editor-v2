@@ -236,10 +236,11 @@ fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind>, Err
         .join("gfx")
         .join(&tileset)
         .join("tile_config.json");
-    let tile_config_loader = TileConfigLoader::new(config_path);
 
+    let mut tile_config_loader = TileConfigLoader::new(config_path);
     let config = tile_config_loader.load()?;
-    let tilesheet_loader = TilesheetLoader::new(config);
+
+    let mut tilesheet_loader = TilesheetLoader::new(config);
     let tilesheet = tilesheet_loader.load()?;
 
     Ok(Some(TilesheetKind::Legacy(tilesheet)))
@@ -255,7 +256,7 @@ pub fn load_cdda_json_data(
         .ok_or(anyhow!("No CDDA Path supplied"))?
         .clone();
 
-    let data_loader = CDDADataLoader {
+    let mut data_loader = CDDADataLoader {
         json_path: cdda_path.join(&editor_data.config.json_data_path),
     };
 
@@ -285,14 +286,13 @@ pub fn run() -> () {
 
             info!("trying to load CDDA Json Data");
             match load_cdda_json_data(&editor_data) {
-                Ok(cdda_json_data) => {
+                Ok(mut cdda_json_data) => {
                     info!("Loading testing map data");
 
-                    let importer = MapDataImporter {
-                        path:
-                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
-                                .into(),
-                        om_terrain: "nuclear_plant_0_0_0".into(),
+                    let mut importer = MapDataImporter {
+                        path: r"C:\CDDA\testing\data\json\mapgen\bar.json".into(),
+                        om_terrain: "bar_1".into(),
+                        json_data: &mut cdda_json_data,
                     };
                     let mut loaded = importer.load()?;
                     loaded

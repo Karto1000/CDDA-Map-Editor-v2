@@ -17,13 +17,13 @@ impl Tilesheet for CurrentTilesheet {
 }
 
 impl Load<CurrentTilesheet> for TilesheetLoader<CurrentTileConfig> {
-    fn load(&self) -> Result<CurrentTilesheet, Error> {
+    fn load(&mut self) -> Result<CurrentTilesheet, Error> {
         Err(anyhow!("Not Implemented"))
     }
 }
 
 impl Load<CurrentTileConfig> for TilesheetConfigLoader {
-    fn load(&self) -> Result<CurrentTileConfig, Error> {
+    fn load(&mut self) -> Result<CurrentTileConfig, Error> {
         Err(anyhow!("Not Implemented"))
     }
 }

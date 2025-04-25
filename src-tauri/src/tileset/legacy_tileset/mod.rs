@@ -365,7 +365,7 @@ impl LegacyTilesheet {
 }
 
 impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
-    fn load(&self) -> Result<LegacyTilesheet, Error> {
+    fn load(&mut self) -> Result<LegacyTilesheet, Error> {
         let mut id_map = HashMap::new();
         let mut fallback_map = HashMap::new();
 
@@ -436,7 +436,7 @@ impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
 }
 
 impl Load<LegacyTileConfig> for TilesheetConfigLoader {
-    fn load(&self) -> Result<LegacyTileConfig, Error> {
+    fn load(&mut self) -> Result<LegacyTileConfig, Error> {
         let config_path = self.tileset_path.join("tile_config.json");
         let reader = BufReader::new(File::open(config_path)?);
         Ok(serde_json::from_reader(reader)?)

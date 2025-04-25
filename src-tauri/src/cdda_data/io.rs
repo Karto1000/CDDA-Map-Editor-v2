@@ -1,8 +1,9 @@
 use crate::cdda_data::furniture::CDDAFurniture;
-use crate::cdda_data::item::CDDDAItemGroup;
+use crate::cdda_data::item::CDDAItemGroup;
+use crate::cdda_data::map_data::nested::CDDANestedMapDataIntermediate;
+use crate::cdda_data::map_data::update::CDDAUpdateMapDataIntermediate;
 use crate::cdda_data::map_data::{
-    CDDAMapData, CDDANestedMapData, CDDAUpdateMapData, OmTerrain, DEFAULT_MAP_HEIGHT,
-    DEFAULT_MAP_ROWS, DEFAULT_MAP_WIDTH,
+    CDDAMapDataIntermediate, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_ROWS, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPalette;
@@ -27,13 +28,13 @@ const NULL_FURNITURE: &'static str = "f_null";
 #[derive(Default, Serialize)]
 pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
-    pub mapgens: HashMap<CDDAIdentifier, CDDAMapData>,
-    pub nested_mapgens: HashMap<CDDAIdentifier, CDDANestedMapData>,
-    pub update_mapgens: HashMap<CDDAIdentifier, CDDAUpdateMapData>,
+    pub mapgens: HashMap<CDDAIdentifier, CDDAMapDataIntermediate>,
+    pub nested_mapgens: HashMap<CDDAIdentifier, CDDANestedMapDataIntermediate>,
+    pub update_mapgens: HashMap<CDDAIdentifier, CDDAUpdateMapDataIntermediate>,
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
-    pub item_groups: HashMap<CDDAIdentifier, CDDDAItemGroup>,
+    pub item_groups: HashMap<CDDAIdentifier, CDDAItemGroup>,
     pub monstergroups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
 }
 
@@ -220,7 +221,7 @@ pub struct CDDADataLoader {
 }
 
 impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
-    fn load(&self) -> Result<DeserializedCDDAJsonData, Error> {
+    fn load(&mut self) -> Result<DeserializedCDDAJsonData, Error> {
         let walkdir = WalkDir::new(&self.json_path);
 
         let mut cdda_data = DeserializedCDDAJsonData::default();
@@ -351,7 +352,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
                                 cdda_data
                                     .nested_mapgens
-                                    .insert(ng.nested_mapgen_id.clone(), ng);
+                                    .insert(ng.nested_mapgen_id.clone(), ng.into());
                             }
                             MapgenKind::UpdateOmTerrain(ug) => {
                                 debug!(
@@ -362,7 +363,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
                                 cdda_data
                                     .update_mapgens
-                                    .insert(ug.update_mapgen_id.clone(), ug);
+                                    .insert(ug.update_mapgen_id.clone(), ug.into());
                             }
                         }
                     }
@@ -397,7 +398,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             .insert(new_furniture.id.clone(), new_furniture);
                     }
                     CDDAJsonEntry::ItemGroup(group) => {
-                        let new_group: CDDDAItemGroup = group.into();
+                        let new_group: CDDAItemGroup = group.into();
                         debug!(
                             "Found ItemGroup entry {} in {:?}",
                             new_group.id,
@@ -435,7 +436,7 @@ mod tests {
 
     #[test]
     fn test_load_cdda_data() {
-        let data_loader = CDDADataLoader {
+        let mut data_loader = CDDADataLoader {
             json_path: PathBuf::from(CDDA_TEST_JSON_PATH),
         };
 

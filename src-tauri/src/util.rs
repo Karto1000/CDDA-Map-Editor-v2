@@ -3,12 +3,12 @@ use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::Switch;
 use crate::tileset::GetRandom;
-use crate::RANDOM;
 use derive_more::with_trait::Display;
 use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
+use rand::rng;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -175,7 +175,9 @@ impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
         self.for_each(|v| weights.push(v.weight_or_one()));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = RANDOM.write().unwrap();
+
+        // let mut rng = RANDOM.write().unwrap();
+        let mut rng = rng();
 
         let chosen_index = weighted_index.sample(&mut rng);
         let item = self_vec.remove(chosen_index);
@@ -349,7 +351,7 @@ pub trait Save<T> {
 }
 
 pub trait Load<T> {
-    fn load(&self) -> Result<T, anyhow::Error>;
+    fn load(&mut self) -> Result<T, anyhow::Error>;
 }
 
 pub fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
