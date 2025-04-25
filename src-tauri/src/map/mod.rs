@@ -182,6 +182,7 @@ pub enum RepresentativeMapping {
 
 pub mod visible_properties {
     use super::*;
+    use crate::util::MeabyVec;
 
     #[derive(Debug, Clone)]
     pub struct TerrainProperty {
@@ -206,7 +207,7 @@ pub mod visible_properties {
 
     #[derive(Debug, Clone)]
     pub struct MonsterProperty {
-        pub monster: MapGenMonster,
+        pub monster: MeabyVec<MapGenMonster>,
     }
 
     impl RepresentativeProperty for MonsterProperty {
@@ -221,26 +222,31 @@ pub mod visible_properties {
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
             json_data: &DeserializedCDDAJsonData,
         ) -> Option<CDDAIdentifier> {
-            match self
-                .monster
-                .chance
-                .clone()
-                .unwrap_or(NumberOrRange::Number(1))
-                .is_random_hit(100)
-            {
-                true => match &self.monster.id {
-                    MapGenMonsterType::Monster { monster } => {
-                        Some(monster.get_identifier(calculated_parameters))
+            for monster in self.monster.clone().into_vec() {
+                match monster
+                    .chance
+                    .clone()
+                    .unwrap_or(NumberOrRange::Number(1))
+                    .is_random_hit(100)
+                {
+                    true => {
+                        return match monster.id {
+                            MapGenMonsterType::Monster { monster } => {
+                                Some(monster.get_identifier(calculated_parameters))
+                            }
+                            MapGenMonsterType::MonsterGroup { group } => {
+                                let mon_group = json_data.monstergroups.get(&group)?;
+                                mon_group
+                                    .get_random_monster(&json_data.monstergroups)
+                                    .map(|id| id.get_identifier(calculated_parameters))
+                            }
+                        }
                     }
-                    MapGenMonsterType::MonsterGroup { group } => {
-                        let mon_group = json_data.monstergroups.get(group)?;
-                        mon_group
-                            .get_random_monster(&json_data.monstergroups)
-                            .map(|id| id.get_identifier(calculated_parameters))
-                    }
-                },
-                false => None,
+                    false => {}
+                }
             }
+
+            None
         }
     }
 

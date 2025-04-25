@@ -5,7 +5,7 @@ use crate::map::visible_properties::{FurnitureProperty, MonsterProperty, Terrain
 use crate::map::{
     Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
     RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
-    VisibleMapping, VisibleProperty,
+    VisibleMapping, VisibleProperty, SPECIAL_EMPTY_CHAR,
 };
 use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
 use crate::{skip_err, skip_none};
@@ -20,6 +20,33 @@ use std::sync::Arc;
 
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;
+pub const DEFAULT_CELL_CHARACTER: char = ' ';
+pub const DEFAULT_MAP_ROWS: [&'static str; 24] = [
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+];
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -69,10 +96,7 @@ pub struct MapGenMonster {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAMapDataObject {
-    pub fill_ter: Option<DistributionInner>,
-    pub rows: Vec<String>,
-
+pub struct CDDAMapDataObjectCommon {
     #[serde(default)]
     pub palettes: Vec<MapGenValue>,
 
@@ -89,7 +113,7 @@ pub struct CDDAMapDataObject {
     pub place_furniture: Vec<PlaceFurniture>,
 
     #[serde(default)]
-    pub monster: HashMap<char, MapGenMonster>,
+    pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
@@ -147,6 +171,16 @@ pub struct CDDAMapDataObject {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAMapDataObject {
+    pub fill_ter: Option<DistributionInner>,
+
+    pub rows: Option<Vec<String>>,
+
+    #[serde(flatten)]
+    pub common: CDDAMapDataObjectCommon,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapData {
     pub method: String,
     pub om_terrain: OmTerrain,
@@ -158,20 +192,36 @@ impl Into<MapData> for CDDAMapData {
     fn into(self) -> MapData {
         let mut cells = IndexMap::new();
 
-        // We need to reverse the iterators direction since we want the last row of the rows to
-        // be at the bottom left so basically 0, 0
-        for (row_index, row) in self.object.rows.into_iter().rev().enumerate() {
-            for (column_index, character) in row.chars().enumerate() {
-                cells.insert(
-                    UVec2::new(column_index as u32, row_index as u32),
-                    Cell { character },
-                );
+        match &self.object.rows {
+            None => {
+                for y in 0..DEFAULT_MAP_HEIGHT {
+                    for x in 0..DEFAULT_MAP_WIDTH {
+                        cells.insert(
+                            UVec2::new(x as u32, y as u32),
+                            Cell {
+                                character: SPECIAL_EMPTY_CHAR,
+                            },
+                        );
+                    }
+                }
+            }
+            Some(rows) => {
+                // We need to reverse the iterators direction since we want the last row of the rows to
+                // be at the bottom left so basically 0, 0
+                for (row_index, row) in rows.into_iter().rev().enumerate() {
+                    for (column_index, character) in row.chars().enumerate() {
+                        cells.insert(
+                            UVec2::new(column_index as u32, row_index as u32),
+                            Cell { character },
+                        );
+                    }
+                }
             }
         }
 
         let mut set_vec: Vec<Arc<dyn Set>> = vec![];
 
-        for set in self.object.set {
+        for set in self.object.common.set {
             if let Some(ty) = set.line {
                 let x = skip_none!(set.x);
                 let y = skip_none!(set.y);
@@ -308,7 +358,7 @@ impl Into<MapData> for CDDAMapData {
         let mut visible = HashMap::new();
 
         let mut terrain_map = HashMap::new();
-        for (char, terrain) in self.object.terrain {
+        for (char, terrain) in self.object.common.terrain {
             let ter_prop = Arc::new(TerrainProperty {
                 mapgen_value: terrain,
             });
@@ -317,7 +367,7 @@ impl Into<MapData> for CDDAMapData {
         }
 
         let mut furniture_map = HashMap::new();
-        for (char, furniture) in self.object.furniture {
+        for (char, furniture) in self.object.common.furniture {
             let fur_prop = Arc::new(FurnitureProperty {
                 mapgen_value: furniture,
             });
@@ -326,7 +376,7 @@ impl Into<MapData> for CDDAMapData {
         }
 
         let mut monster_map = HashMap::new();
-        for (char, monster) in self.object.monster {
+        for (char, monster) in self.object.common.monster {
             let monster_prop = Arc::new(MonsterProperty { monster });
 
             monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
@@ -339,7 +389,7 @@ impl Into<MapData> for CDDAMapData {
         let mut representative = HashMap::new();
 
         let mut item_map = HashMap::new();
-        for (char, items) in self.object.items {
+        for (char, items) in self.object.common.items {
             let item_prop = Arc::new(ItemProperty {
                 items: items.into_vec(),
             });
@@ -352,6 +402,7 @@ impl Into<MapData> for CDDAMapData {
         place.insert(
             VisibleMapping::Furniture,
             self.object
+                .common
                 .place_furniture
                 .into_iter()
                 .map(|f| Arc::new(f) as Arc<dyn Place>)
@@ -365,10 +416,47 @@ impl Into<MapData> for CDDAMapData {
         map_data.visible = visible;
         map_data.representative = representative;
         map_data.place = place;
-        map_data.parameters = self.object.parameters;
-        map_data.palettes = self.object.palettes;
+        map_data.parameters = self.object.common.parameters;
+        map_data.palettes = self.object.common.palettes;
         map_data.fill = self.object.fill_ter;
 
         map_data
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDANestedMapDataObject {
+    pub rows: Option<Vec<String>>,
+
+    #[serde(rename = "mapgensize")]
+    pub mapgen_size: UVec2,
+
+    #[serde(flatten)]
+    pub common: CDDAMapDataObjectCommon,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDANestedMapData {
+    pub method: String,
+
+    pub nested_mapgen_id: CDDAIdentifier,
+
+    pub object: CDDANestedMapDataObject,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAUpdatedMapDataObject {
+    pub rows: Option<Vec<String>>,
+
+    #[serde(flatten)]
+    pub common: CDDAMapDataObjectCommon,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAUpdateMapData {
+    pub method: String,
+
+    pub update_mapgen_id: CDDAIdentifier,
+
+    pub object: CDDANestedMapDataObject,
 }

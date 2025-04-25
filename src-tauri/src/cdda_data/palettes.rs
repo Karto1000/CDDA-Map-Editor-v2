@@ -62,7 +62,7 @@ pub struct CDDAPaletteIntermediate {
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub monster: HashMap<char, MapGenMonster>,
+    pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,

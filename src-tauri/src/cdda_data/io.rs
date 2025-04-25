@@ -1,13 +1,17 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::item::CDDDAItemGroup;
-use crate::cdda_data::map_data::{CDDAMapData, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH};
+use crate::cdda_data::map_data::{
+    CDDAMapData, CDDANestedMapData, CDDAUpdateMapData, OmTerrain, DEFAULT_MAP_HEIGHT,
+    DEFAULT_MAP_ROWS, DEFAULT_MAP_WIDTH,
+};
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::{CDDAJsonEntry, TileLayer};
+use crate::cdda_data::{CDDAJsonEntry, MapgenKind, TileLayer};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
+use log::kv::Source;
 use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -24,6 +28,8 @@ const NULL_FURNITURE: &'static str = "f_null";
 pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
     pub mapgens: HashMap<CDDAIdentifier, CDDAMapData>,
+    pub nested_mapgens: HashMap<CDDAIdentifier, CDDANestedMapData>,
+    pub update_mapgens: HashMap<CDDAIdentifier, CDDAUpdateMapData>,
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
@@ -251,61 +257,115 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
             for des_entry in des {
                 match des_entry {
-                    CDDAJsonEntry::Mapgen(mg) => match &mg.om_terrain {
-                        OmTerrain::Single(id) => {
-                            debug!("Found Single Mapgen '{}' in {:?}", id, entry.path());
-                            cdda_data
-                                .mapgens
-                                .insert(CDDAIdentifier(id.clone()), mg.clone());
-                        }
-                        OmTerrain::Duplicate(duplicate) => {
-                            debug!(
-                                "Found Duplicate Mapgen '{:?}' in {:?}",
-                                duplicate,
-                                entry.path()
-                            );
-                            for id in duplicate.iter() {
-                                cdda_data
-                                    .mapgens
-                                    .insert(CDDAIdentifier(id.clone()), mg.clone());
-                            }
-                        }
-                        OmTerrain::Nested(nested) => {
-                            debug!("Found Nested Mapgen '{:?}' in {:?}", nested, entry.path());
+                    CDDAJsonEntry::Mapgen(mk) => {
+                        match mk {
+                            MapgenKind::OmTerrain(mg) => {
+                                match &mg.om_terrain {
+                                    OmTerrain::Single(id) => {
+                                        debug!(
+                                            "Found Single Mapgen '{}' in {:?}",
+                                            id,
+                                            entry.path()
+                                        );
+                                        cdda_data
+                                            .mapgens
+                                            .insert(CDDAIdentifier(id.clone()), mg.clone());
+                                    }
+                                    OmTerrain::Duplicate(duplicate) => {
+                                        debug!(
+                                            "Found Duplicate Mapgen '{:?}' in {:?}",
+                                            duplicate,
+                                            entry.path()
+                                        );
+                                        for id in duplicate.iter() {
+                                            cdda_data
+                                                .mapgens
+                                                .insert(CDDAIdentifier(id.clone()), mg.clone());
+                                        }
+                                    }
+                                    OmTerrain::Nested(nested) => {
+                                        debug!(
+                                            "Found Nested Mapgen '{:?}' in {:?}",
+                                            nested,
+                                            entry.path()
+                                        );
 
-                            for (row, vec) in nested.iter().enumerate() {
-                                for (column, om_terrain) in vec.iter().enumerate() {
-                                    let rows = mg
-                                        .object
-                                        .rows
-                                        // Get correct range of rows for this om_terrain from row..row + DEFAULT_MAP_HEIGHT
-                                        .get(
-                                            row * DEFAULT_MAP_HEIGHT
-                                                ..row * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT,
-                                        )
-                                        .expect("Row to not be out of bounds")
-                                        .iter()
-                                        .map(|colstring| {
-                                            colstring
-                                                .chars()
-                                                .skip(column * DEFAULT_MAP_WIDTH)
-                                                .take(
-                                                    column * DEFAULT_MAP_WIDTH + DEFAULT_MAP_WIDTH,
-                                                )
-                                                .collect()
-                                        })
-                                        .collect();
+                                        for (row, vec) in nested.iter().enumerate() {
+                                            for (column, om_terrain) in vec.iter().enumerate() {
+                                                let sliced_rows = match &mg.object.rows {
+                                                    None => Some(Vec::from_iter(
+                                                        DEFAULT_MAP_ROWS
+                                                            .into_iter()
+                                                            .map(|s| s.to_string()),
+                                                    )),
+                                                    Some(rows) => {
+                                                        Some(
+                                                            rows.clone()
+                                                                // Get correct range of rows for this om_terrain from row..row + DEFAULT_MAP_HEIGHT
+                                                                .get(
+                                                                    row * DEFAULT_MAP_HEIGHT
+                                                                        ..row * DEFAULT_MAP_HEIGHT
+                                                                            + DEFAULT_MAP_HEIGHT,
+                                                                )
+                                                                .expect(
+                                                                    "Row to not be out of bounds",
+                                                                )
+                                                                .iter()
+                                                                .map(|colstring| {
+                                                                    colstring
+                                                                        .chars()
+                                                                        .skip(
+                                                                            column
+                                                                                * DEFAULT_MAP_WIDTH,
+                                                                        )
+                                                                        .take(
+                                                                            column
+                                                                                * DEFAULT_MAP_WIDTH
+                                                                                + DEFAULT_MAP_WIDTH,
+                                                                        )
+                                                                        .collect()
+                                                                })
+                                                                .collect(),
+                                                        )
+                                                    }
+                                                };
 
-                                    let mut new_mapgen = mg.clone();
-                                    new_mapgen.object.rows = rows;
+                                                let mut new_mapgen = mg.clone();
+                                                new_mapgen.object.rows = sliced_rows;
 
-                                    cdda_data
-                                        .mapgens
-                                        .insert(CDDAIdentifier(om_terrain.clone()), new_mapgen);
+                                                cdda_data.mapgens.insert(
+                                                    CDDAIdentifier(om_terrain.clone()),
+                                                    new_mapgen,
+                                                );
+                                            }
+                                        }
+                                    }
                                 }
                             }
+                            MapgenKind::NestedOmTerrain(ng) => {
+                                debug!(
+                                    "Found Nested Mapgen Object '{}' in {:?}",
+                                    ng.nested_mapgen_id,
+                                    entry.path()
+                                );
+
+                                cdda_data
+                                    .nested_mapgens
+                                    .insert(ng.nested_mapgen_id.clone(), ng);
+                            }
+                            MapgenKind::UpdateOmTerrain(ug) => {
+                                debug!(
+                                    "Found Update Mapgen Object '{:?}' in {:?}",
+                                    ug.update_mapgen_id,
+                                    entry.path()
+                                );
+
+                                cdda_data
+                                    .update_mapgens
+                                    .insert(ug.update_mapgen_id.clone(), ug);
+                            }
                         }
-                    },
+                    }
                     CDDAJsonEntry::RegionSettings(rs) => {
                         debug!("Found Region setting {} in {:?}", rs.id, entry.path());
                         cdda_data.region_settings.insert(rs.id.clone(), rs);

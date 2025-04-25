@@ -9,7 +9,7 @@ pub(crate) mod terrain;
 
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::item::IntermediateItemGroup;
-use crate::cdda_data::map_data::CDDAMapData;
+use crate::cdda_data::map_data::{CDDAMapData, CDDANestedMapData, CDDAUpdateMapData};
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
@@ -136,10 +136,18 @@ pub struct ConnectGroup {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+#[serde(untagged)]
+pub enum MapgenKind {
+    OmTerrain(CDDAMapData),
+    NestedOmTerrain(CDDANestedMapData),
+    UpdateOmTerrain(CDDAUpdateMapData),
+}
+
+#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
-    Mapgen(CDDAMapData),
+    Mapgen(MapgenKind),
     RegionSettings(CDDARegionSettings),
     Palette(CDDAPaletteIntermediate),
     Terrain(CDDATerrainIntermediate),
