@@ -1,12 +1,17 @@
-use crate::cdda_data::map_data::{MapGenItem, MapGenMonster, MapGenMonsterType};
-use crate::cdda_data::monster::CDDAMonsterGroup;
-use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue, NumberOrRange};
-use crate::map::VisibleMapping;
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
+use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
+use crate::map::{
+    FurnitureProperty, ItemProperty, MonsterProperty, RepresentativeMapping,
+    RepresentativeProperty, TerrainProperty, VisibleMapping, VisibleProperty,
+};
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 pub type Palettes = HashMap<CDDAIdentifier, CDDAPalette>;
 
@@ -39,7 +44,7 @@ pub struct Parameter {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAPalette {
+pub struct CDDAPaletteIntermediate {
     pub id: CDDAIdentifier,
 
     #[serde(rename = "//")]
@@ -112,6 +117,83 @@ pub struct CDDAPalette {
     pub graffiti: HashMap<char, Value>,
 }
 
+impl Into<CDDAPalette> for CDDAPaletteIntermediate {
+    fn into(self) -> CDDAPalette {
+        let mut visible = HashMap::new();
+
+        let mut terrain_map = HashMap::new();
+        for (char, terrain) in self.terrain {
+            let ter_prop = Arc::new(TerrainProperty {
+                mapgen_value: terrain,
+            });
+
+            terrain_map.insert(char, ter_prop as Arc<dyn VisibleProperty>);
+        }
+
+        let mut furniture_map = HashMap::new();
+        for (char, furniture) in self.furniture {
+            let fur_prop = Arc::new(FurnitureProperty {
+                mapgen_value: furniture,
+            });
+
+            furniture_map.insert(char, fur_prop as Arc<dyn VisibleProperty>);
+        }
+
+        let mut monster_map = HashMap::new();
+        for (char, monster) in self.monster {
+            let monster_prop = Arc::new(MonsterProperty { monster });
+
+            monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
+        }
+
+        visible.insert(VisibleMapping::Terrain, terrain_map);
+        visible.insert(VisibleMapping::Furniture, furniture_map);
+        visible.insert(VisibleMapping::Monster, monster_map);
+
+        let mut representative = HashMap::new();
+
+        let mut item_map = HashMap::new();
+        for (char, items) in self.items {
+            let item_prop = Arc::new(ItemProperty {
+                items: items.into_vec(),
+            });
+            item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
+        }
+
+        representative.insert(RepresentativeMapping::ItemGroups, item_map);
+
+        CDDAPalette {
+            id: self.id,
+            visible,
+            representative,
+            comment: self.comment,
+            parameters: self.parameters,
+            palettes: self.palettes,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAPalette {
+    pub id: CDDAIdentifier,
+
+    #[serde(skip)]
+    pub visible: HashMap<VisibleMapping, HashMap<char, Arc<dyn VisibleProperty>>>,
+
+    #[serde(skip)]
+    pub representative:
+        HashMap<RepresentativeMapping, HashMap<char, Arc<dyn RepresentativeProperty>>>,
+
+    #[serde(rename = "//")]
+    pub comment: Comment,
+
+    #[serde(default)]
+    pub parameters: HashMap<ParameterIdentifier, Parameter>,
+
+    #[serde(default)]
+    pub palettes: Vec<MapGenValue>,
+}
+
 impl CDDAPalette {
     pub fn calculate_parameters(
         &self,
@@ -143,67 +225,28 @@ impl CDDAPalette {
         calculated_parameters
     }
 
-    pub fn get_items(
+    pub fn get_visible_mapping(
         &self,
-        character: &char,
+        mapping_kind: impl Borrow<VisibleMapping>,
+        character: impl Borrow<char>,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) -> Option<Vec<MapGenItem>> {
-        if let Some(items) = self.items.get(character) {
-            return Some(items.clone().into_vec());
-        }
-
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
-
-            if let Some(id) = palette.get_items(character, calculated_parameters, all_palettes) {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
-    pub fn get_monster(
-        &self,
-        character: &char,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-        monstergroups: &HashMap<CDDAIdentifier, CDDAMonsterGroup>,
+        json_data: &DeserializedCDDAJsonData,
     ) -> Option<CDDAIdentifier> {
-        if let Some(mon) = self.monster.get(character) {
-            return match mon
-                .chance
-                .clone()
-                .unwrap_or(NumberOrRange::Number(1))
-                // TODO: This is spawning wayyy to many monsters
-                .is_random_hit(100)
-            {
-                true => match &mon.id {
-                    MapGenMonsterType::Monster { monster } => {
-                        Some(monster.get_identifier(calculated_parameters))
-                    }
-                    MapGenMonsterType::MonsterGroup { group } => {
-                        let mon_group = monstergroups.get(group)?;
-                        mon_group
-                            .get_random_monster(monstergroups)
-                            .map(|id| id.get_identifier(calculated_parameters))
-                    }
-                },
-                false => None,
-            };
-        };
+        let mapping = self.visible.get(mapping_kind.borrow())?;
+
+        if let Some(id) = mapping.get(character.borrow()) {
+            return id.get_identifier(calculated_parameters, json_data);
+        }
 
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value.get_identifier(calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+            let palette = json_data.palettes.get(&palette_id)?;
 
-            if let Some(id) = palette.get_monster(
-                character,
+            if let Some(id) = palette.get_visible_mapping(
+                mapping_kind.borrow(),
+                character.borrow(),
                 calculated_parameters,
-                all_palettes,
-                monstergroups,
+                json_data,
             ) {
                 return Some(id);
             }
@@ -212,37 +255,29 @@ impl CDDAPalette {
         None
     }
 
-    pub fn get_visible_mapping(
+    pub fn get_representative_mapping(
         &self,
-        visible_mapping: &VisibleMapping,
-        character: &char,
+        mapping_kind: impl Borrow<RepresentativeMapping>,
+        character: impl Borrow<char>,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        all_palettes: &Palettes,
-    ) -> Option<CDDAIdentifier> {
-        match visible_mapping {
-            VisibleMapping::Terrain => {
-                if let Some(id) = self.terrain.get(character) {
-                    return Some(id.get_identifier(calculated_parameters));
-                };
-            }
-            VisibleMapping::Furniture => {
-                if let Some(id) = self.furniture.get(character) {
-                    return Some(id.get_identifier(calculated_parameters));
-                };
-            }
-            _ => todo!(),
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Value> {
+        let mapping = self.representative.get(mapping_kind.borrow())?;
+
+        match mapping.get(character.borrow()) {
+            None => {}
+            Some(s) => return Some(s.representation(json_data)),
         }
 
-        // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value.get_identifier(calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+            let palette = json_data.palettes.get(&palette_id)?;
 
-            if let Some(id) = palette.get_visible_mapping(
-                visible_mapping,
-                character,
+            if let Some(id) = palette.get_representative_mapping(
+                mapping_kind.borrow(),
+                character.borrow(),
                 calculated_parameters,
-                all_palettes,
+                json_data,
             ) {
                 return Some(id);
             }

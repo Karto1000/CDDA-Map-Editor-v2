@@ -7,7 +7,7 @@ use crate::editor_data::tab::ProjectState::Saved;
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver, Project};
 use crate::map::io::ProjectSaver;
-use crate::map::{MapData, PlaceableSetType, ProjectContainer, SetSquare};
+use crate::map::{CellRepresentation, MapData, PlaceableSetType, ProjectContainer, SetSquare};
 use crate::tileset;
 use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex};
 use crate::tileset::{
@@ -606,148 +606,6 @@ pub async fn open_project(
     Ok(())
 }
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-pub enum DisplayItemGroup {
-    Single {
-        item: CDDAIdentifier,
-        probability: f32,
-    },
-    Collection {
-        name: Option<String>,
-        items: Vec<DisplayItemGroup>,
-        probability: f32,
-    },
-    Distribution {
-        name: Option<String>,
-        items: Vec<DisplayItemGroup>,
-        probability: f32,
-    },
-}
-
-impl DisplayItemGroup {
-    pub fn probability(&self) -> f32 {
-        match self {
-            DisplayItemGroup::Single { probability, .. } => probability.clone(),
-            DisplayItemGroup::Collection { probability, .. } => probability.clone(),
-            DisplayItemGroup::Distribution { probability, .. } => probability.clone(),
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct ProjectCellData {
-    item_groups: Vec<DisplayItemGroup>,
-}
-
-pub fn get_display_item_group_from_item_group(
-    item_group: &CDDDAItemGroup,
-    json_data: &DeserializedCDDAJsonData,
-    group_probability: f32,
-) -> Vec<DisplayItemGroup> {
-    let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
-
-    let weight_sum = item_group.entries.iter().fold(0, |acc, v| match v {
-        EntryItem::Item(i) => acc + i.probability,
-        EntryItem::Group(g) => acc + g.probability,
-        EntryItem::Distribution { probability, .. } => acc + probability.unwrap_or(100),
-        EntryItem::Collection { probability, .. } => acc + probability.unwrap_or(100),
-    });
-
-    for entry in item_group.entries.iter() {
-        match entry {
-            EntryItem::Item(i) => {
-                let display_item = DisplayItemGroup::Single {
-                    item: i.item.clone(),
-                    probability: i.probability as f32 / weight_sum as f32 * group_probability,
-                };
-                display_item_groups.push(display_item);
-            }
-            EntryItem::Group(g) => {
-                let other_group = json_data
-                    .item_groups
-                    .get(&g.group)
-                    .expect("Item Group to exist");
-                let probability = g.probability as f32 / weight_sum as f32 * group_probability;
-                let display_item =
-                    get_display_item_group_from_item_group(other_group, json_data, probability);
-
-                match other_group.subtype {
-                    ItemGroupSubtype::Collection => {
-                        display_item_groups.push(DisplayItemGroup::Collection {
-                            items: display_item,
-                            name: Some(other_group.id.clone().0),
-                            probability,
-                        });
-                    }
-                    ItemGroupSubtype::Distribution => {
-                        let probability = g.probability as f32 / weight_sum as f32;
-                        display_item_groups.push(DisplayItemGroup::Distribution {
-                            items: display_item,
-                            name: Some(other_group.id.clone().0),
-                            probability,
-                        });
-                    }
-                }
-            }
-            EntryItem::Distribution {
-                distribution,
-                probability,
-            } => {}
-            EntryItem::Collection {
-                collection,
-                probability,
-            } => {}
-        }
-    }
-
-    display_item_groups.sort_by(|v1, v2| {
-        v2.probability()
-            .partial_cmp(&v1.probability())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    display_item_groups
-}
-
-pub fn get_display_item_group_from_mapgen_items(
-    items: &Vec<MapGenItem>,
-    json_data: &DeserializedCDDAJsonData,
-) -> Vec<DisplayItemGroup> {
-    let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
-
-    for mapgen_item in items.iter() {
-        let item_group = json_data
-            .item_groups
-            .get(&mapgen_item.item)
-            .expect("Item group to exist");
-
-        let probability = mapgen_item
-            .chance
-            .clone()
-            .map(|v| v.get_from_to().0)
-            .unwrap_or(100) as f32
-            // the default chance is 100, but we want to have a range from 0-1 so / 100
-            / 100.;
-
-        let items = get_display_item_group_from_item_group(item_group, json_data, probability);
-
-        display_item_groups.push(DisplayItemGroup::Distribution {
-            name: Some(mapgen_item.item.clone().0),
-            probability,
-            items,
-        });
-    }
-
-    display_item_groups.sort_by(|v1, v2| {
-        v2.probability()
-            .partial_cmp(&v1.probability())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    display_item_groups
-}
-
 #[derive(Debug, Error, Serialize)]
 pub enum GetProjectCellDataError {
     #[error(transparent)]
@@ -761,29 +619,18 @@ pub enum GetProjectCellDataError {
 pub async fn get_project_cell_data(
     project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-) -> Result<HashMap<IVec3JsonKey, ProjectCellData>, GetProjectCellDataError> {
+) -> Result<HashMap<IVec3JsonKey, CellRepresentation>, GetProjectCellDataError> {
     let project_lock = project_container.lock().await;
     let project = get_current_project(&project_lock)?;
 
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
-    let mut item_data: HashMap<IVec3JsonKey, ProjectCellData> = HashMap::new();
+    let mut item_data: HashMap<IVec3JsonKey, CellRepresentation> = HashMap::new();
 
     for (z, map_data) in project.maps.iter() {
         for (cell_coordinates, cell) in map_data.cells.iter() {
-            // Calculate item groups
-            let item_groups = {
-                let mapgen_item_group =
-                    match map_data.get_items(&cell.character, &json_data.palettes) {
-                        None => continue,
-                        Some(v) => v,
-                    };
-
-                get_display_item_group_from_mapgen_items(&mapgen_item_group, &json_data)
-            };
-
-            let cell_data = ProjectCellData { item_groups };
+            let cell_data = map_data.get_cell_data(&cell.character, &json_data);
 
             item_data.insert(
                 IVec3JsonKey(IVec3::new(

@@ -1,8 +1,9 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map::{
-    Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType, Set, SetLine,
-    SetOperation, SetPoint, SetSquare, VisibleMapping,
+    Cell, FurnitureProperty, ItemProperty, MapData, MonsterProperty, Place, PlaceFurniture,
+    PlaceableSetType, RemovableSetType, RepresentativeMapping, RepresentativeProperty, Set,
+    SetLine, SetOperation, SetPoint, SetSquare, TerrainProperty, VisibleMapping, VisibleProperty,
 };
 use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
 use crate::{skip_err, skip_none};
@@ -303,10 +304,48 @@ impl Into<MapData> for CDDAMapData {
             }
         }
 
-        let mut mappings = HashMap::new();
+        let mut visible = HashMap::new();
 
-        mappings.insert(VisibleMapping::Terrain, self.object.terrain);
-        mappings.insert(VisibleMapping::Furniture, self.object.furniture);
+        let mut terrain_map = HashMap::new();
+        for (char, terrain) in self.object.terrain {
+            let ter_prop = Arc::new(TerrainProperty {
+                mapgen_value: terrain,
+            });
+
+            terrain_map.insert(char, ter_prop as Arc<dyn VisibleProperty>);
+        }
+
+        let mut furniture_map = HashMap::new();
+        for (char, furniture) in self.object.furniture {
+            let fur_prop = Arc::new(FurnitureProperty {
+                mapgen_value: furniture,
+            });
+
+            furniture_map.insert(char, fur_prop as Arc<dyn VisibleProperty>);
+        }
+
+        let mut monster_map = HashMap::new();
+        for (char, monster) in self.object.monster {
+            let monster_prop = Arc::new(MonsterProperty { monster });
+
+            monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
+        }
+
+        visible.insert(VisibleMapping::Terrain, terrain_map);
+        visible.insert(VisibleMapping::Furniture, furniture_map);
+        visible.insert(VisibleMapping::Monster, monster_map);
+
+        let mut representative = HashMap::new();
+
+        let mut item_map = HashMap::new();
+        for (char, items) in self.object.items {
+            let item_prop = Arc::new(ItemProperty {
+                items: items.into_vec(),
+            });
+            item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
+        }
+
+        representative.insert(RepresentativeMapping::ItemGroups, item_map);
 
         let mut place = HashMap::new();
         place.insert(
@@ -318,21 +357,17 @@ impl Into<MapData> for CDDAMapData {
                 .collect(),
         );
 
-        MapData::new(
-            self.object.fill_ter,
-            cells,
-            mappings,
-            self.object.palettes,
-            HashMap::from_iter(
-                self.object
-                    .items
-                    .into_iter()
-                    .map(|(k, v)| (k, v.into_vec())),
-            ),
-            self.object.parameters,
-            self.object.monster,
-            set_vec,
-            place,
-        )
+        let mut map_data = MapData::default();
+
+        map_data.cells = cells;
+        map_data.set = set_vec;
+        map_data.visible = visible;
+        map_data.representative = representative;
+        map_data.place = place;
+        map_data.parameters = self.object.parameters;
+        map_data.palettes = self.object.palettes;
+        map_data.fill = self.object.fill_ter;
+
+        map_data
     }
 }

@@ -315,7 +315,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                     }
                     CDDAJsonEntry::Palette(p) => {
                         debug!("Found Palette {} in {:?}", p.id, entry.path());
-                        cdda_data.palettes.insert(p.id.clone(), p);
+                        cdda_data.palettes.insert(p.id.clone(), p.into());
                     }
                     CDDAJsonEntry::Terrain(terrain) => {
                         let new_terrain: CDDATerrain = terrain.into();

@@ -3,8 +3,8 @@ pub(crate) mod importing;
 pub(crate) mod io;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::item::{CDDDAItemGroup, EntryItem, ItemGroupSubtype};
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster, MapGenMonsterType};
-use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
@@ -22,6 +22,7 @@ use indexmap::IndexMap;
 use rand::Rng;
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
 use std::str::FromStr;
@@ -148,17 +149,278 @@ pub trait Place: Debug + DynClone + Send + Sync {
 
 clone_trait_object!(Place);
 
+// Things like items or whatever else will be represented in the sidebar panel
+pub trait RepresentativeProperty: Debug + DynClone + Send + Sync {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
+}
+
+clone_trait_object!(RepresentativeProperty);
+
+// Things like terrain, furniture, monsters This allows us to get the Identifier
+pub trait VisibleProperty: RepresentativeProperty {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<CDDAIdentifier>;
+}
+
+clone_trait_object!(VisibleProperty);
+
+#[derive(Debug, Clone)]
+pub struct TerrainProperty {
+    pub mapgen_value: MapGenValue,
+}
+
+impl RepresentativeProperty for TerrainProperty {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        todo!()
+    }
+}
+
+impl VisibleProperty for TerrainProperty {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<CDDAIdentifier> {
+        Some(self.mapgen_value.get_identifier(calculated_parameters))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct MonsterProperty {
+    pub monster: MapGenMonster,
+}
+
+impl RepresentativeProperty for MonsterProperty {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        todo!()
+    }
+}
+
+impl VisibleProperty for MonsterProperty {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<CDDAIdentifier> {
+        match self
+            .monster
+            .chance
+            .clone()
+            .unwrap_or(NumberOrRange::Number(1))
+            .is_random_hit(100)
+        {
+            true => match &self.monster.id {
+                MapGenMonsterType::Monster { monster } => {
+                    Some(monster.get_identifier(calculated_parameters))
+                }
+                MapGenMonsterType::MonsterGroup { group } => {
+                    let mon_group = json_data.monstergroups.get(group)?;
+                    mon_group
+                        .get_random_monster(&json_data.monstergroups)
+                        .map(|id| id.get_identifier(calculated_parameters))
+                }
+            },
+            false => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FurnitureProperty {
+    pub mapgen_value: MapGenValue,
+}
+
+impl RepresentativeProperty for FurnitureProperty {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        todo!()
+    }
+}
+
+impl VisibleProperty for FurnitureProperty {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<CDDAIdentifier> {
+        Some(self.mapgen_value.get_identifier(calculated_parameters))
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type")]
+pub enum DisplayItemGroup {
+    Single {
+        item: CDDAIdentifier,
+        probability: f32,
+    },
+    Collection {
+        name: Option<String>,
+        items: Vec<DisplayItemGroup>,
+        probability: f32,
+    },
+    Distribution {
+        name: Option<String>,
+        items: Vec<DisplayItemGroup>,
+        probability: f32,
+    },
+}
+
+impl DisplayItemGroup {
+    pub fn probability(&self) -> f32 {
+        match self {
+            DisplayItemGroup::Single { probability, .. } => probability.clone(),
+            DisplayItemGroup::Collection { probability, .. } => probability.clone(),
+            DisplayItemGroup::Distribution { probability, .. } => probability.clone(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ItemProperty {
+    pub items: Vec<MapGenItem>,
+}
+
+impl ItemProperty {
+    fn get_display_item_group_from_item_group(
+        &self,
+        item_group: &CDDDAItemGroup,
+        json_data: &DeserializedCDDAJsonData,
+        group_probability: f32,
+    ) -> Vec<DisplayItemGroup> {
+        let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
+
+        let weight_sum = item_group.entries.iter().fold(0, |acc, v| match v {
+            EntryItem::Item(i) => acc + i.probability,
+            EntryItem::Group(g) => acc + g.probability,
+            EntryItem::Distribution { probability, .. } => acc + probability.unwrap_or(100),
+            EntryItem::Collection { probability, .. } => acc + probability.unwrap_or(100),
+        });
+
+        for entry in item_group.entries.iter() {
+            match entry {
+                EntryItem::Item(i) => {
+                    let display_item = DisplayItemGroup::Single {
+                        item: i.item.clone(),
+                        probability: i.probability as f32 / weight_sum as f32 * group_probability,
+                    };
+                    display_item_groups.push(display_item);
+                }
+                EntryItem::Group(g) => {
+                    let other_group = json_data
+                        .item_groups
+                        .get(&g.group)
+                        .expect("Item Group to exist");
+                    let probability = g.probability as f32 / weight_sum as f32 * group_probability;
+                    let display_item = self.get_display_item_group_from_item_group(
+                        other_group,
+                        json_data,
+                        probability,
+                    );
+
+                    match other_group.subtype {
+                        ItemGroupSubtype::Collection => {
+                            display_item_groups.push(DisplayItemGroup::Collection {
+                                items: display_item,
+                                name: Some(other_group.id.clone().0),
+                                probability,
+                            });
+                        }
+                        ItemGroupSubtype::Distribution => {
+                            let probability = g.probability as f32 / weight_sum as f32;
+                            display_item_groups.push(DisplayItemGroup::Distribution {
+                                items: display_item,
+                                name: Some(other_group.id.clone().0),
+                                probability,
+                            });
+                        }
+                    }
+                }
+                EntryItem::Distribution {
+                    distribution,
+                    probability,
+                } => {}
+                EntryItem::Collection {
+                    collection,
+                    probability,
+                } => {}
+            }
+        }
+
+        display_item_groups.sort_by(|v1, v2| {
+            v2.probability()
+                .partial_cmp(&v1.probability())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        display_item_groups
+    }
+}
+
+impl RepresentativeProperty for ItemProperty {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
+
+        for mapgen_item in self.items.iter() {
+            let item_group = json_data
+                .item_groups
+                .get(&mapgen_item.item)
+                .expect("Item group to exist");
+
+            let probability = mapgen_item
+                .chance
+                .clone()
+                .map(|v| v.get_from_to().0)
+                .unwrap_or(100) as f32
+                // the default chance is 100, but we want to have a range from 0-1 so / 100
+                / 100.;
+
+            let items =
+                self.get_display_item_group_from_item_group(item_group, json_data, probability);
+
+            display_item_groups.push(DisplayItemGroup::Distribution {
+                name: Some(mapgen_item.item.clone().0),
+                probability,
+                items,
+            });
+        }
+
+        display_item_groups.sort_by(|v1, v2| {
+            v2.probability()
+                .partial_cmp(&v1.probability())
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        serde_json::to_value(display_item_groups).unwrap()
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum VisibleMapping {
     Terrain,
     Furniture,
     Traps,
+    Monster,
+}
+
+#[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum RepresentativeMapping {
+    Monster,
+    ItemGroups,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
     pub character: char,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CellRepresentation {
+    item_groups: Value,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -168,14 +430,14 @@ pub struct MapData {
 
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
-
-    // Mappings for terrain, furniture and traps
-    pub visible_mappings: HashMap<VisibleMapping, HashMap<char, MapGenValue>>,
-
-    pub items: HashMap<char, Vec<MapGenItem>>,
-    pub monster: HashMap<char, MapGenMonster>,
-
     pub palettes: Vec<MapGenValue>,
+
+    #[serde(skip)]
+    pub visible: HashMap<VisibleMapping, HashMap<char, Arc<dyn VisibleProperty>>>,
+
+    #[serde(skip)]
+    pub representative:
+        HashMap<RepresentativeMapping, HashMap<char, Arc<dyn RepresentativeProperty>>>,
 
     #[serde(skip)]
     pub set: Vec<Arc<dyn Set>>,
@@ -200,42 +462,16 @@ impl Default for MapData {
             fill,
             calculated_parameters: Default::default(),
             parameters: Default::default(),
+            visible: Default::default(),
             palettes: Default::default(),
-            visible_mappings: Default::default(),
             set: vec![],
             place: Default::default(),
-            items: Default::default(),
-            monster: Default::default(),
+            representative: Default::default(),
         }
     }
 }
 
 impl MapData {
-    pub fn new(
-        fill: Option<DistributionInner>,
-        cells: IndexMap<UVec2, Cell>,
-        visible_mappings: HashMap<VisibleMapping, HashMap<char, MapGenValue>>,
-        palettes: Vec<MapGenValue>,
-        items: HashMap<char, Vec<MapGenItem>>,
-        parameters: IndexMap<ParameterIdentifier, Parameter>,
-        monster: HashMap<char, MapGenMonster>,
-        set: Vec<Arc<dyn Set>>,
-        place: HashMap<VisibleMapping, Vec<Arc<dyn Place>>>,
-    ) -> Self {
-        Self {
-            calculated_parameters: Default::default(),
-            fill,
-            parameters,
-            palettes,
-            items,
-            visible_mappings,
-            cells,
-            set,
-            place,
-            monster,
-        }
-    }
-
     pub fn calculate_parameters(&mut self, all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>) {
         let mut calculated_parameters = IndexMap::new();
 
@@ -261,106 +497,76 @@ impl MapData {
         self.calculated_parameters = calculated_parameters
     }
 
-    pub fn get_items(
-        &self,
-        character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) -> Option<Vec<MapGenItem>> {
-        if let Some(items) = self.items.get(character) {
-            return Some(items.clone());
-        }
-
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
-
-            if let Some(id) =
-                palette.get_items(character, &self.calculated_parameters, all_palettes)
-            {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
-    pub fn get_monster(
-        &self,
-        character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-        monstergroups: &HashMap<CDDAIdentifier, CDDAMonsterGroup>,
-    ) -> Option<CDDAIdentifier> {
-        if let Some(mon) = self.monster.get(character) {
-            return match mon
-                .chance
-                .clone()
-                .unwrap_or(NumberOrRange::Number(1))
-                .is_random_hit(100)
-            {
-                true => match &mon.id {
-                    MapGenMonsterType::Monster { monster } => {
-                        Some(monster.get_identifier(&self.calculated_parameters))
-                    }
-                    MapGenMonsterType::MonsterGroup { group } => {
-                        let mon_group = monstergroups.get(group)?;
-                        mon_group
-                            .get_random_monster(monstergroups)
-                            .map(|id| id.get_identifier(&self.calculated_parameters))
-                    }
-                },
-                false => None,
-            };
-        };
-
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
-
-            if let Some(id) = palette.get_monster(
-                character,
-                &self.calculated_parameters,
-                all_palettes,
-                monstergroups,
-            ) {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
     pub fn get_visible_mapping(
         &self,
         mapping_kind: &VisibleMapping,
         character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+        json_data: &DeserializedCDDAJsonData,
     ) -> Option<CDDAIdentifier> {
-        // If we find the mapping in the current map's terrain field, return that
-        if let Some(id) = self
-            .visible_mappings
-            .get(mapping_kind)
-            .map(|v| v.get(character))
-            .flatten()
-        {
-            return Some(id.get_identifier(&self.calculated_parameters));
-        };
+        let mapping = self.visible.get(mapping_kind)?;
+
+        if let Some(id) = mapping.get(character) {
+            return id.get_identifier(&self.calculated_parameters, json_data);
+        }
 
         // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
-            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+            let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_visible_mapping(
                 mapping_kind,
                 character,
                 &self.calculated_parameters,
-                all_palettes,
+                json_data,
             ) {
                 return Some(id);
             }
         }
 
         None
+    }
+
+    pub fn get_representative_mapping(
+        &self,
+        mapping_kind: &RepresentativeMapping,
+        character: &char,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Value> {
+        let mapping = self.representative.get(mapping_kind)?;
+
+        match mapping.get(character) {
+            None => {}
+            Some(s) => return Some(s.representation(json_data)),
+        }
+
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette = json_data.palettes.get(&palette_id)?;
+
+            if let Some(id) = palette.get_representative_mapping(
+                mapping_kind,
+                character,
+                &self.calculated_parameters,
+                json_data,
+            ) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_cell_data(
+        &self,
+        character: &char,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> CellRepresentation {
+        let item_groups = self
+            .get_representative_mapping(&RepresentativeMapping::ItemGroups, character, json_data)
+            .unwrap_or(Value::Array(vec![]));
+
+        CellRepresentation { item_groups }
     }
 
     pub fn get_visible_mappings(
@@ -368,11 +574,9 @@ impl MapData {
         character: &char,
         json_data: &DeserializedCDDAJsonData,
     ) -> CDDAIdentifierGroup {
-        let terrain =
-            self.get_visible_mapping(&VisibleMapping::Terrain, character, &json_data.palettes);
-        let furniture =
-            self.get_visible_mapping(&VisibleMapping::Furniture, character, &json_data.palettes);
-        let monster = self.get_monster(character, &json_data.palettes, &json_data.monstergroups);
+        let terrain = self.get_visible_mapping(&VisibleMapping::Terrain, character, json_data);
+        let furniture = self.get_visible_mapping(&VisibleMapping::Furniture, character, json_data);
+        let monster = self.get_visible_mapping(&VisibleMapping::Monster, character, json_data);
 
         CDDAIdentifierGroup {
             terrain,

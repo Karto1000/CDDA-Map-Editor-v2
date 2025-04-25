@@ -11,7 +11,7 @@ use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::item::IntermediateItemGroup;
 use crate::cdda_data::map_data::CDDAMapData;
 use crate::cdda_data::monster::CDDAMonsterGroup;
-use crate::cdda_data::palettes::CDDAPalette;
+use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
 use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
@@ -143,7 +143,7 @@ pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
     Mapgen(CDDAMapData),
     RegionSettings(CDDARegionSettings),
-    Palette(CDDAPalette),
+    Palette(CDDAPaletteIntermediate),
     Terrain(CDDATerrainIntermediate),
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
