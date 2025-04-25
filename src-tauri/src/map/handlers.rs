@@ -1,5 +1,5 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::item::{EntryItem, ItemGroup, ItemGroupSubtype};
+use crate::cdda_data::item::{CDDDAItemGroup, EntryItem, ItemGroupSubtype};
 use crate::cdda_data::map_data::MapGenItem;
 use crate::cdda_data::{NumberOrRange, TileLayer};
 use crate::editor_data::tab::handlers::create_tab;
@@ -472,8 +472,7 @@ pub async fn open_project(
         // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
         // the function relies on the mapped sprite of this sprite to already exist
         map_data.cells.iter().for_each(|(p, cell)| {
-            let mut identifier_group =
-                map_data.get_visible_mappings(&cell.character, &json_data.palettes);
+            let mut identifier_group = map_data.get_visible_mappings(&cell.character, &json_data);
 
             match identifier_group.terrain {
                 None => {
@@ -501,6 +500,7 @@ pub async fn open_project(
             for (layer, o_id) in [
                 (TileLayer::Terrain, &identifier_group.terrain),
                 (TileLayer::Furniture, &identifier_group.furniture),
+                (TileLayer::Monster, &identifier_group.monster),
             ] {
                 let id = match o_id {
                     None => continue,
@@ -517,6 +517,10 @@ pub async fn open_project(
                     TileLayer::Furniture => {
                         mapped_sprite.furniture = Some(id.clone());
                         new_identifier_group.furniture = Some(id.clone());
+                    }
+                    TileLayer::Monster => {
+                        mapped_sprite.monster = Some(id.clone());
+                        new_identifier_group.monster = Some(id.clone());
                     }
                     _ => unreachable!(),
                 };
@@ -549,6 +553,7 @@ pub async fn open_project(
             for (layer, o_id) in [
                 (TileLayer::Terrain, identifier_group.terrain),
                 (TileLayer::Furniture, identifier_group.furniture),
+                (TileLayer::Monster, identifier_group.monster),
             ] {
                 let id = match o_id {
                     None => continue,
@@ -636,7 +641,7 @@ pub struct ProjectCellData {
 }
 
 pub fn get_display_item_group_from_item_group(
-    item_group: &ItemGroup,
+    item_group: &CDDDAItemGroup,
     json_data: &DeserializedCDDAJsonData,
     group_probability: f32,
 ) -> Vec<DisplayItemGroup> {

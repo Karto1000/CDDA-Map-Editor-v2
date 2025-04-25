@@ -304,8 +304,10 @@ pub fn run() -> () {
                     info!("Loading testing map data");
 
                     let importer = MapDataImporter {
-                        path: r"C:\CDDA\testing\data\json\mapgen\house\house01.json".into(),
-                        om_terrain: "house_01".into(),
+                        path:
+                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                                .into(),
+                        om_terrain: "nuclear_plant_0_0_0".into(),
                     };
                     let mut loaded = importer.load()?;
                     loaded

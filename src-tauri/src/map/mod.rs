@@ -3,7 +3,8 @@ pub(crate) mod importing;
 pub(crate) mod io;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::map_data::MapGenItem;
+use crate::cdda_data::map_data::{MapGenItem, MapGenMonster, MapGenMonsterType};
+use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
@@ -172,6 +173,7 @@ pub struct MapData {
     pub visible_mappings: HashMap<VisibleMapping, HashMap<char, MapGenValue>>,
 
     pub items: HashMap<char, Vec<MapGenItem>>,
+    pub monster: HashMap<char, MapGenMonster>,
 
     pub palettes: Vec<MapGenValue>,
 
@@ -203,6 +205,7 @@ impl Default for MapData {
             set: vec![],
             place: Default::default(),
             items: Default::default(),
+            monster: Default::default(),
         }
     }
 }
@@ -215,6 +218,7 @@ impl MapData {
         palettes: Vec<MapGenValue>,
         items: HashMap<char, Vec<MapGenItem>>,
         parameters: IndexMap<ParameterIdentifier, Parameter>,
+        monster: HashMap<char, MapGenMonster>,
         set: Vec<Arc<dyn Set>>,
         place: HashMap<VisibleMapping, Vec<Arc<dyn Place>>>,
     ) -> Self {
@@ -228,6 +232,7 @@ impl MapData {
             cells,
             set,
             place,
+            monster,
         }
     }
 
@@ -279,6 +284,51 @@ impl MapData {
         None
     }
 
+    pub fn get_monster(
+        &self,
+        character: &char,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+        monstergroups: &HashMap<CDDAIdentifier, CDDAMonsterGroup>,
+    ) -> Option<CDDAIdentifier> {
+        if let Some(mon) = self.monster.get(character) {
+            return match mon
+                .chance
+                .clone()
+                .unwrap_or(NumberOrRange::Number(1))
+                .is_random_hit(100)
+            {
+                true => match &mon.id {
+                    MapGenMonsterType::Monster { monster } => {
+                        Some(monster.get_identifier(&self.calculated_parameters))
+                    }
+                    MapGenMonsterType::MonsterGroup { group } => {
+                        let mon_group = monstergroups.get(group)?;
+                        mon_group
+                            .get_random_monster(monstergroups)
+                            .map(|id| id.get_identifier(&self.calculated_parameters))
+                    }
+                },
+                false => None,
+            };
+        };
+
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) = palette.get_monster(
+                character,
+                &self.calculated_parameters,
+                all_palettes,
+                monstergroups,
+            ) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
     pub fn get_visible_mapping(
         &self,
         mapping_kind: &VisibleMapping,
@@ -316,13 +366,19 @@ impl MapData {
     pub fn get_visible_mappings(
         &self,
         character: &char,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+        json_data: &DeserializedCDDAJsonData,
     ) -> CDDAIdentifierGroup {
-        let terrain = self.get_visible_mapping(&VisibleMapping::Terrain, character, all_palettes);
+        let terrain =
+            self.get_visible_mapping(&VisibleMapping::Terrain, character, &json_data.palettes);
         let furniture =
-            self.get_visible_mapping(&VisibleMapping::Furniture, character, all_palettes);
+            self.get_visible_mapping(&VisibleMapping::Furniture, character, &json_data.palettes);
+        let monster = self.get_monster(character, &json_data.palettes, &json_data.monstergroups);
 
-        CDDAIdentifierGroup { terrain, furniture }
+        CDDAIdentifierGroup {
+            terrain,
+            furniture,
+            monster,
+        }
     }
 }
 
@@ -576,6 +632,7 @@ impl Set for SetSquare {
 pub struct CDDAIdentifierGroup {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
+    pub monster: Option<CDDAIdentifier>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]

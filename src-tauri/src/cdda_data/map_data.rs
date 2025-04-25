@@ -52,6 +52,21 @@ pub struct MapGenItem {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum MapGenMonsterType {
+    Monster { monster: CDDAIdentifier },
+    MonsterGroup { group: CDDAIdentifier },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenMonster {
+    #[serde(flatten)]
+    pub id: MapGenMonsterType,
+    pub chance: Option<NumberOrRange<u32>>,
+    pub pack_size: Option<NumberOrRange<u32>>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapDataObject {
     pub fill_ter: Option<DistributionInner>,
     pub rows: Vec<String>,
@@ -72,7 +87,7 @@ pub struct CDDAMapDataObject {
     pub place_furniture: Vec<PlaceFurniture>,
 
     #[serde(default)]
-    pub monster: HashMap<char, Value>,
+    pub monster: HashMap<char, MapGenMonster>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
@@ -315,6 +330,7 @@ impl Into<MapData> for CDDAMapData {
                     .map(|(k, v)| (k, v.into_vec())),
             ),
             self.object.parameters,
+            self.object.monster,
             set_vec,
             place,
         )

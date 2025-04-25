@@ -2,6 +2,7 @@ pub(crate) mod furniture;
 pub(crate) mod io;
 pub(crate) mod item;
 pub(crate) mod map_data;
+pub(crate) mod monster;
 pub(crate) mod palettes;
 pub(crate) mod region_settings;
 pub(crate) mod terrain;
@@ -9,6 +10,7 @@ pub(crate) mod terrain;
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::item::IntermediateItemGroup;
 use crate::cdda_data::map_data::CDDAMapData;
+use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
@@ -63,6 +65,23 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
         }
     }
 
+    pub fn is_random_hit(&self, default_upper_bound: T) -> bool {
+        match self.clone() {
+            NumberOrRange::Number(n) => {
+                let mut rng = RANDOM.write().unwrap();
+                let num = rng.random_range(n..default_upper_bound);
+
+                num == n
+            }
+            NumberOrRange::Range((from, to)) => {
+                let mut rng = RANDOM.write().unwrap();
+                let num = rng.random_range(from..to);
+
+                num == from
+            }
+        }
+    }
+
     pub fn get_from_to(&self) -> (T, T) {
         match self.clone() {
             NumberOrRange::Number(n) => (n, n),
@@ -86,6 +105,7 @@ pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
     Trap = 2,
+    Monster = 3,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -109,7 +129,7 @@ pub struct UnknownEntry {
     identifier: IdOrAbstract,
 
     #[serde(rename = "type")]
-    ty: CataVariant,
+    ty: KnownCataVariant,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -128,6 +148,8 @@ pub enum CDDAJsonEntry {
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
     ItemGroup(IntermediateItemGroup),
+    #[serde(rename = "monstergroup")]
+    MonsterGroup(CDDAMonsterGroup),
 
     // -- UNUSED
     WeatherType,
@@ -205,8 +227,6 @@ pub enum CDDAJsonEntry {
     AsciiArt,
     AttackVector,
     Bionic,
-    #[serde(rename = "monstergroup")]
-    MonsterGroup,
     TerFurnTransform,
     JmathFunction,
     JsonFlag,
@@ -304,12 +324,14 @@ pub enum CDDAJsonEntry {
 
 #[derive(Debug, Clone, Display, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum CataVariant {
+pub enum KnownCataVariant {
     OvermapSpecialId,
     Palette,
     RegionSettings,
     Mapgen,
     ConnectGroup,
+    #[serde(rename = "monstergroup")]
+    MonsterGroup,
     #[serde(other)]
     Other,
 }

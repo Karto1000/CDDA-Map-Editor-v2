@@ -1,5 +1,6 @@
-use crate::cdda_data::map_data::MapGenItem;
-use crate::cdda_data::{CataVariant, Distribution, MapGenValue};
+use crate::cdda_data::map_data::{MapGenItem, MapGenMonster, MapGenMonsterType};
+use crate::cdda_data::monster::CDDAMonsterGroup;
+use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue, NumberOrRange};
 use crate::map::VisibleMapping;
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
 use indexmap::IndexMap;
@@ -27,7 +28,7 @@ pub enum ParameterScope {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Parameter {
     #[serde(rename = "type")]
-    pub ty: CataVariant,
+    pub ty: KnownCataVariant,
 
     #[serde(rename = "//")]
     pub comment: Comment,
@@ -57,7 +58,7 @@ pub struct CDDAPalette {
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub monster: HashMap<char, Value>,
+    pub monster: HashMap<char, MapGenMonster>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
@@ -157,6 +158,53 @@ impl CDDAPalette {
             let palette = all_palettes.get(&palette_id).expect("Palette to exist");
 
             if let Some(id) = palette.get_items(character, calculated_parameters, all_palettes) {
+                return Some(id);
+            }
+        }
+
+        None
+    }
+
+    pub fn get_monster(
+        &self,
+        character: &char,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
+        monstergroups: &HashMap<CDDAIdentifier, CDDAMonsterGroup>,
+    ) -> Option<CDDAIdentifier> {
+        if let Some(mon) = self.monster.get(character) {
+            return match mon
+                .chance
+                .clone()
+                .unwrap_or(NumberOrRange::Number(1))
+                // TODO: This is spawning wayyy to many monsters
+                .is_random_hit(100)
+            {
+                true => match &mon.id {
+                    MapGenMonsterType::Monster { monster } => {
+                        Some(monster.get_identifier(calculated_parameters))
+                    }
+                    MapGenMonsterType::MonsterGroup { group } => {
+                        let mon_group = monstergroups.get(group)?;
+                        mon_group
+                            .get_random_monster(monstergroups)
+                            .map(|id| id.get_identifier(calculated_parameters))
+                    }
+                },
+                false => None,
+            };
+        };
+
+        for mapgen_value in self.palettes.iter() {
+            let palette_id = mapgen_value.get_identifier(calculated_parameters);
+            let palette = all_palettes.get(&palette_id).expect("Palette to exist");
+
+            if let Some(id) = palette.get_monster(
+                character,
+                calculated_parameters,
+                all_palettes,
+                monstergroups,
+            ) {
                 return Some(id);
             }
         }

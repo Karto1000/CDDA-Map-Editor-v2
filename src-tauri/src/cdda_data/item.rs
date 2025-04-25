@@ -283,8 +283,8 @@ pub struct IntermediateItemGroup {
     pub entries: Vec<EntryItem>,
 }
 
-impl Into<ItemGroup> for IntermediateItemGroup {
-    fn into(self) -> ItemGroup {
+impl Into<CDDDAItemGroup> for IntermediateItemGroup {
+    fn into(self) -> CDDDAItemGroup {
         // This:
         //
         // "items": [ "<id-1>", [ "<id-2>", 10 ] ]
@@ -315,7 +315,7 @@ impl Into<ItemGroup> for IntermediateItemGroup {
 
         entries.extend(self.entries);
 
-        ItemGroup {
+        CDDDAItemGroup {
             id: self.id,
             subtype: self.subtype,
             entries,
@@ -324,7 +324,7 @@ impl Into<ItemGroup> for IntermediateItemGroup {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ItemGroup {
+pub struct CDDDAItemGroup {
     pub id: CDDAIdentifier,
     pub subtype: ItemGroupSubtype,
     pub entries: Vec<EntryItem>,

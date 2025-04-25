@@ -1,8 +1,9 @@
 use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
-use crate::cdda_data::item::ItemGroup;
+use crate::cdda_data::item::CDDDAItemGroup;
 use crate::cdda_data::map_data::{
     CDDAMapData, CDDAMapDataObject, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
+use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
@@ -29,7 +30,8 @@ pub struct DeserializedCDDAJsonData {
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
-    pub item_groups: HashMap<CDDAIdentifier, ItemGroup>,
+    pub item_groups: HashMap<CDDAIdentifier, CDDDAItemGroup>,
+    pub monstergroups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
 }
 
 impl DeserializedCDDAJsonData {
@@ -71,6 +73,7 @@ impl DeserializedCDDAJsonData {
                 }
                 // TODO: I don't know if traps have connect groups, have to check later
                 TileLayer::Trap => HashSet::new(),
+                TileLayer::Monster => HashSet::new(),
             }
         })
         .unwrap_or_default()
@@ -102,6 +105,7 @@ impl DeserializedCDDAJsonData {
             }
             // TODO: Again, not sure if they have flags
             TileLayer::Trap => vec![],
+            TileLayer::Monster => vec![],
         })
         .unwrap_or_default()
     }
@@ -137,6 +141,7 @@ impl DeserializedCDDAJsonData {
                 }
                 // TODO: See comments up top
                 TileLayer::Trap => HashSet::new(),
+                TileLayer::Monster => HashSet::new(),
             }
         })
         .unwrap_or_default()
@@ -335,7 +340,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             .insert(new_furniture.id.clone(), new_furniture);
                     }
                     CDDAJsonEntry::ItemGroup(group) => {
-                        let new_group: ItemGroup = group.into();
+                        let new_group: CDDDAItemGroup = group.into();
                         debug!(
                             "Found ItemGroup entry {} in {:?}",
                             new_group.id,
@@ -344,6 +349,14 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                         cdda_data
                             .item_groups
                             .insert(new_group.id.clone(), new_group);
+                    }
+                    CDDAJsonEntry::MonsterGroup(group) => {
+                        debug!(
+                            "Found MonsterGroup entry {} in {:?}",
+                            group.id,
+                            entry.path()
+                        );
+                        cdda_data.monstergroups.insert(group.id.clone(), group);
                     }
                     _ => {
                         info!("Unused JSON entry in {:?}", entry.path());

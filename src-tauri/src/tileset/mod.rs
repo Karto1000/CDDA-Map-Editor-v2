@@ -770,6 +770,7 @@ pub fn get_id_from_mapped_sprites(
             TileLayer::Terrain => v.terrain.clone(),
             TileLayer::Furniture => v.furniture.clone(),
             TileLayer::Trap => v.trap.clone(),
+            &TileLayer::Monster => v.monster.clone(),
         })
         .flatten()
 }

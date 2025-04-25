@@ -132,6 +132,7 @@ pub struct MappedSprite {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
     pub trap: Option<CDDAIdentifier>,
+    pub monster: Option<CDDAIdentifier>,
 }
 
 fn to_weighted_vec(
