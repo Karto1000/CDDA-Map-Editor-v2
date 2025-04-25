@@ -5,52 +5,37 @@ mod tileset;
 mod util;
 
 use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
-use crate::cdda_data::palettes::{CDDAPalette, Palettes};
-use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::{DistributionInner, MapGenValue};
 use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
-use crate::editor_data::tab::{ProjectState, TabType};
-use crate::editor_data::{EditorConfig, EditorData, Project};
+use crate::editor_data::EditorData;
 use crate::map::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
 use crate::map::handlers::{get_project_cell_data, open_project};
-use crate::map::{MapData, ProjectContainer, DEFAULT_MAP_DATA_SIZE};
+use crate::map::ProjectContainer;
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
-use crate::tileset::legacy_tileset::tile_config::{
-    AdditionalTile, AdditionalTileId, LegacyTileConfig, Spritesheet, Tile,
-};
 use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::TilesheetKind;
-use crate::util::{CDDAIdentifier, GetIdentifier, Load, MeabyVec, MeabyWeighted};
+use crate::util::Load;
 use anyhow::{anyhow, Error};
 use directories::ProjectDirs;
-use glam::{IVec3, UVec2, UVec3};
-use image::{load, GenericImageView};
+use glam::IVec3;
 use lazy_static::lazy_static;
-use log::{debug, error, info, warn, LevelFilter};
+use log::{error, info, warn, LevelFilter};
 use map::importing::MapDataImporter;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
-use rand_chacha::ChaCha8Rng;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::fs::File;
-use std::io::BufReader;
 use std::ops::Deref;
-use std::sync::{Arc, OnceLock, RwLock};
+use std::sync::{Arc, RwLock};
 use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
-use tileset::legacy_tileset::LegacyTilesheet;
-use tokio::sync::MutexGuard;
-use walkdir::WalkDir;
 
 mod events {
     pub const EDITOR_DATA_CHANGED: &'static str = "editor_data_changed";
@@ -213,7 +198,7 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, Error> {
 }
 
 fn get_map_data(editor_data: &EditorData) -> Result<ProjectContainer, anyhow::Error> {
-    let mut map_data = ProjectContainer::default();
+    let map_data = ProjectContainer::default();
 
     // map_data.data.push(loaded);
 

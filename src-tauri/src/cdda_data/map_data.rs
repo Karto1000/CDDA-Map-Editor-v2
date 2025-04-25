@@ -1,13 +1,15 @@
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
+use crate::map::representative_properties::ItemProperty;
+use crate::map::visible_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
 use crate::map::{
-    Cell, FurnitureProperty, ItemProperty, MapData, MonsterProperty, Place, PlaceFurniture,
-    PlaceableSetType, RemovableSetType, RepresentativeMapping, RepresentativeProperty, Set,
-    SetLine, SetOperation, SetPoint, SetSquare, TerrainProperty, VisibleMapping, VisibleProperty,
+    Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
+    RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
+    VisibleMapping, VisibleProperty,
 };
 use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
 use crate::{skip_err, skip_none};
-use glam::{UVec2, Vec3};
+use glam::UVec2;
 use indexmap::IndexMap;
 use log::warn;
 use serde::{Deserialize, Serialize};
@@ -15,7 +17,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-use tauri::async_runtime::set;
 
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;

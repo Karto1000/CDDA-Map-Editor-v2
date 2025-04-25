@@ -1,22 +1,19 @@
-use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
+use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::item::CDDDAItemGroup;
-use crate::cdda_data::map_data::{
-    CDDAMapData, CDDAMapDataObject, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
-};
+use crate::cdda_data::map_data::{CDDAMapData, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH};
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
-use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
+use crate::cdda_data::terrain::CDDATerrain;
+use crate::cdda_data::{CDDAJsonEntry, TileLayer};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
 use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::ffi::OsStr;
 use std::fs::File;
 use std::io::BufReader;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::string::ToString;
 use walkdir::WalkDir;
 
@@ -371,11 +368,9 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use crate::cdda_data::io::CDDADataLoader;
-    use crate::util::Load;
-    use std::path::PathBuf;
-
+    use super::*;
     const CDDA_TEST_JSON_PATH: &'static str = r"C:\CDDA\testing\data\json";
 
     #[test]

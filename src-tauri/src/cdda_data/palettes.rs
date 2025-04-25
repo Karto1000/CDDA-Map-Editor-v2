@@ -1,10 +1,9 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
 use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
-use crate::map::{
-    FurnitureProperty, ItemProperty, MonsterProperty, RepresentativeMapping,
-    RepresentativeProperty, TerrainProperty, VisibleMapping, VisibleProperty,
-};
+use crate::map::representative_properties::ItemProperty;
+use crate::map::visible_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
+use crate::map::{RepresentativeMapping, RepresentativeProperty, VisibleMapping, VisibleProperty};
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};

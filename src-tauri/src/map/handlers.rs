@@ -1,31 +1,21 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::item::{CDDDAItemGroup, EntryItem, ItemGroupSubtype};
-use crate::cdda_data::map_data::MapGenItem;
-use crate::cdda_data::{NumberOrRange, TileLayer};
+use crate::cdda_data::TileLayer;
 use crate::editor_data::tab::handlers::create_tab;
-use crate::editor_data::tab::ProjectState::Saved;
 use crate::editor_data::tab::{ProjectState, TabType};
-use crate::editor_data::{EditorData, EditorDataSaver, Project};
-use crate::map::io::ProjectSaver;
-use crate::map::{CellRepresentation, MapData, PlaceableSetType, ProjectContainer, SetSquare};
+use crate::editor_data::{EditorData, Project};
+use crate::map::{CellRepresentation, ProjectContainer};
 use crate::tileset;
-use crate::tileset::legacy_tileset::{MappedSprite, SpriteIndex};
+use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::{
-    get_id_from_mapped_sprites, AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
+    AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
-use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, Save, UVec2JsonKey};
-use derive_more::Display;
-use glam::{IVec3, UVec2, UVec3, Vec3};
-use image::imageops::tile;
+use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, UVec2JsonKey};
+use glam::{IVec3, UVec2};
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::cmp::Reverse;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
-use std::path::PathBuf;
-use std::str::FromStr;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
@@ -671,36 +661,27 @@ pub async fn save_current_project(
     project_container: State<'_, Mutex<ProjectContainer>>,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), SaveError> {
-    let lock = project_container.lock().await;
-    let map_data = get_current_project(&lock)?;
-
-    let save_path = r"C:\Users\Kartoffelbauer\Downloads\test";
-    let saver = ProjectSaver {
-        path: save_path.into(),
-    };
-
-    // saver.save(&map_data).map_err(|e| {
-    //     error!("{}", e);
-    //     SaveError::SaveError
-    // })?;
-
-    let mut editor_data = editor_data.lock().await;
-    let new_tab_type = TabType::MapEditor(Saved {
-        path: PathBuf::from(save_path).join(&map_data.name),
-    });
-    editor_data
-        .tabs
-        .get_mut(lock.current_project.unwrap())
-        .unwrap()
-        .tab_type = new_tab_type;
-
-    let editor_data_saver = EditorDataSaver {
-        path: editor_data.config.config_path.clone(),
-    };
-
-    editor_data_saver
-        .save(&editor_data)
-        .expect("Saving to not fail");
-
-    Ok(())
+    unimplemented!()
+    // let lock = project_container.lock().await;
+    // let map_data = get_current_project(&lock)?;
+    //
+    // let mut editor_data = editor_data.lock().await;
+    // let new_tab_type = TabType::MapEditor(Saved {
+    //     path: PathBuf::from(save_path).join(&map_data.name),
+    // });
+    // editor_data
+    //     .tabs
+    //     .get_mut(lock.current_project.unwrap())
+    //     .unwrap()
+    //     .tab_type = new_tab_type;
+    //
+    // let editor_data_saver = EditorDataSaver {
+    //     path: editor_data.config.config_path.clone(),
+    // };
+    //
+    // editor_data_saver
+    //     .save(&editor_data)
+    //     .expect("Saving to not fail");
+    //
+    // Ok(())
 }

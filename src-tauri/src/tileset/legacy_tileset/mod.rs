@@ -1,7 +1,6 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::TileLayer;
 use crate::tileset::io::{TilesheetConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, LegacyTileConfig, Spritesheet, Tile,
@@ -13,11 +12,9 @@ use crate::tileset::{
 use crate::util::{CDDAIdentifier, Load, MeabyVec};
 use anyhow::{anyhow, Error};
 use log::info;
-use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
-use rand::rng;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::BufReader;
 

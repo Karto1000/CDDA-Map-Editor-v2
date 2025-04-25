@@ -2,7 +2,6 @@ use crate::editor_data::tab::{Tab, TabType};
 use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::util::Save;
 use log::info;
-use serde::Serialize;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 

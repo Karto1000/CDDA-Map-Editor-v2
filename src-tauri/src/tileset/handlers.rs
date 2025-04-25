@@ -1,12 +1,9 @@
 use crate::editor_data::{CDDAPathError, EditorData, SelectedTilesetError};
 use crate::tileset::io::TilesheetConfigLoader;
-use crate::util::Load;
-use image::{ImageError, ImageFormat, ImageReader};
+use image::{ImageFormat, ImageReader};
 use log::info;
 use serde::Serialize;
 use serde_json::Value;
-use std::ffi::OsStr;
-use std::fs;
 use std::io::Cursor;
 use std::path::PathBuf;
 use tauri::ipc::Response;

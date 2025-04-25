@@ -1,16 +1,12 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::palettes::CDDAPalette;
 use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::load_cdda_json_data;
-use crate::util::{CDDAIdentifier, Save};
-use anyhow::Error;
-use log::{error, info, warn};
+use crate::util::Save;
+use log::{error, warn};
 use serde::Serialize;
-use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
-use tauri::{App, AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
 pub async fn get_editor_data(editor_data: State<'_, Mutex<EditorData>>) -> Result<EditorData, ()> {
