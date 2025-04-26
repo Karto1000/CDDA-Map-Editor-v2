@@ -11,6 +11,8 @@ use crate::cdda_data::{CDDAJsonEntry, TileLayer};
 use crate::map::MapData;
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
+use async_walkdir::WalkDir;
+use futures_lite::stream::StreamExt;
 use log::kv::Source;
 use log::{debug, error, info, warn};
 use serde::Serialize;
@@ -19,12 +21,11 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::string::ToString;
-use walkdir::WalkDir;
 
 const NULL_TERRAIN: &'static str = "t_null";
 const NULL_FURNITURE: &'static str = "f_null";
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
     pub map_data: HashMap<CDDAIdentifier, MapData>,
@@ -218,15 +219,16 @@ pub struct CDDADataLoader {
 }
 
 impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
-    fn load(&mut self) -> Result<DeserializedCDDAJsonData, Error> {
-        let walkdir = WalkDir::new(&self.json_path);
+    async fn load(&mut self) -> Result<DeserializedCDDAJsonData, Error> {
+        let mut walkdir = WalkDir::new(&self.json_path);
 
         let mut cdda_data = DeserializedCDDAJsonData::default();
 
-        for entry in walkdir {
+        while let Some(entry) = walkdir.next().await {
             let entry = entry?;
 
-            let extension = match entry.path().extension() {
+            let path = entry.path();
+            let extension = match path.extension() {
                 None => {
                     info!(
                         "Skipping entry {:?} because it does not have an extension",
@@ -422,10 +424,12 @@ mod tests {
 
     #[test]
     fn test_load_cdda_data() {
-        let mut data_loader = CDDADataLoader {
-            json_path: PathBuf::from(CDDA_TEST_JSON_PATH),
-        };
+        tokio_test::block_on(async {
+            let mut data_loader = CDDADataLoader {
+                json_path: PathBuf::from(CDDA_TEST_JSON_PATH),
+            };
 
-        data_loader.load().expect("Loading to not fail");
+            data_loader.load().await.expect("Loading to not fail");
+        })
     }
 }

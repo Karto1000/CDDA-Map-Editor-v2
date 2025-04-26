@@ -1,4 +1,3 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{CDDAMapDataIntermediate, OmTerrain};
 use crate::editor_data::Project;
 use crate::map::DEFAULT_MAP_DATA_SIZE;
@@ -9,15 +8,13 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-pub struct MapDataImporter<'a> {
+pub struct MapDataImporter {
     pub path: PathBuf,
     pub om_terrain: String,
-
-    pub json_data: &'a mut DeserializedCDDAJsonData,
 }
 
-impl Load<Project> for MapDataImporter<'_> {
-    fn load(&mut self) -> Result<Project, anyhow::Error> {
+impl Load<Project> for MapDataImporter {
+    async fn load(&mut self) -> Result<Project, anyhow::Error> {
         let reader = BufReader::new(File::open(&self.path)?);
         let importing_map_datas: Vec<CDDAMapDataIntermediate> =
             serde_json::from_reader(reader).map_err(|e| anyhow::Error::from(e))?;

@@ -30,7 +30,7 @@ pub async fn get_info_of_current_tileset(
     let tileset_path = cdda_path.join("gfx").join(selected_tileset);
 
     let mut config_reader = TilesheetConfigLoader::new(tileset_path);
-    let info = config_reader.load_serde_value().unwrap();
+    let info = config_reader.load_serde_value().await.unwrap();
 
     Ok(info)
 }

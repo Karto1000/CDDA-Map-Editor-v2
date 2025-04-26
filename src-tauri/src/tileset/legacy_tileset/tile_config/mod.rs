@@ -41,7 +41,7 @@ pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
 }
 
 impl Load<LegacyTileConfig> for TileConfigLoader {
-    fn load(&mut self) -> Result<LegacyTileConfig, anyhow::Error> {
+    async fn load(&mut self) -> Result<LegacyTileConfig, anyhow::Error> {
         let file = File::open(&self.path)?;
         let reader = BufReader::new(file);
         serde_json::from_reader(reader).map_err(|e| anyhow::anyhow!(e))

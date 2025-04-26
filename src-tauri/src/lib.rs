@@ -53,28 +53,56 @@ lazy_static! {
 async fn frontend_ready(
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
+    map_data: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
 ) -> Result<(), ()> {
-    let lock = editor_data.lock().await;
+    let editor_data_lock = editor_data.lock().await;
+    let mut map_data_lock = map_data.lock().await;
+    let mut json_data_lock = json_data.lock().await;
+    let mut tilesheet_lock = tilesheet.lock().await;
 
-    for tab in &lock.tabs {
+    for tab in &editor_data_lock.tabs {
         info!("Opened Tab {}", &tab.name);
         app.emit("tab_created", tab).expect("Emit to not fail");
     }
 
     info!("Sent initial editor data change");
-    app.emit(events::EDITOR_DATA_CHANGED, lock.clone())
+    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
         .expect("Emit to not fail");
 
-    let lock = json_data.lock().await;
+    info!("Loading tilesheet");
+    let tilesheet = load_tilesheet(&editor_data_lock).await.map_err(|e| {})?;
+    *tilesheet_lock = tilesheet;
 
-    match lock.deref() {
-        None => {}
-        Some(d) => {
+    info!("trying to load CDDA Json Data");
+    match load_cdda_json_data(&editor_data_lock).await {
+        Ok(cdda_json_data) => {
+            info!("Loading testing map data");
+
+            let mut importer = MapDataImporter {
+                path: r"C:\CDDA\testing\data\json\mapgen\mansion.json".into(),
+                om_terrain: "mansion_t2d".into(),
+            };
+            let mut loaded = importer.load().await.unwrap();
+            loaded
+                .maps
+                .get_mut(&0)
+                .unwrap()
+                .calculate_parameters(&cdda_json_data.palettes);
+
+            map_data_lock.data.push(loaded.clone());
+            map_data_lock.current_project = Some(0);
+
             info!("Sending cdda data");
-            app.emit(events::CDDA_DATA, d).unwrap();
+            app.emit(events::CDDA_DATA, loaded).unwrap();
+
+            json_data_lock.replace(cdda_json_data);
         }
-    }
+        Err(e) => {
+            warn!("Failed to load editor data");
+        }
+    };
 
     Ok(())
 }
@@ -221,7 +249,7 @@ fn get_map_data(editor_data: &EditorData) -> Result<ProjectContainer, anyhow::Er
     Ok(map_data)
 }
 
-fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind>, Error> {
+async fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
         Some(t) => t.clone(),
@@ -238,15 +266,15 @@ fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind>, Err
         .join("tile_config.json");
 
     let mut tile_config_loader = TileConfigLoader::new(config_path);
-    let config = tile_config_loader.load()?;
+    let config = tile_config_loader.load().await?;
 
     let mut tilesheet_loader = TilesheetLoader::new(config);
-    let tilesheet = tilesheet_loader.load()?;
+    let tilesheet = tilesheet_loader.load().await?;
 
     Ok(Some(TilesheetKind::Legacy(tilesheet)))
 }
 
-pub fn load_cdda_json_data(
+pub async fn load_cdda_json_data(
     editor_data: &EditorData,
 ) -> Result<DeserializedCDDAJsonData, anyhow::Error> {
     let cdda_path = editor_data
@@ -260,7 +288,7 @@ pub fn load_cdda_json_data(
         json_path: cdda_path.join(&editor_data.config.json_data_path),
     };
 
-    data_loader.load()
+    data_loader.load().await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -270,7 +298,7 @@ pub fn run() -> () {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(LevelFilter::Warn)
+                .level(LevelFilter::Info)
                 .targets(vec![
                     Target::new(TargetKind::Webview),
                     Target::new(TargetKind::Stdout),
@@ -282,64 +310,13 @@ pub fn run() -> () {
             let editor_data = get_saved_editor_data(app)?;
 
             info!("Loading map data");
-            let mut map_data = get_map_data(&editor_data)?;
+            let map_data = get_map_data(&editor_data)?;
 
-            info!("trying to load CDDA Json Data");
-            match load_cdda_json_data(&editor_data) {
-                Ok(mut cdda_json_data) => {
-                    info!("Loading testing map data");
-
-                    let mut importer = MapDataImporter {
-                        path: r"C:\CDDA\testing\data\json\mapgen\bar.json".into(),
-                        om_terrain: "bar_1".into(),
-                        json_data: &mut cdda_json_data,
-                    };
-                    let mut loaded = importer.load()?;
-                    loaded
-                        .maps
-                        .get_mut(&0)
-                        .unwrap()
-                        .calculate_parameters(&cdda_json_data.palettes);
-
-                    // let mut project = Project::new("Test".to_string(), UVec2::new(24, 24));
-                    //
-                    // let mut test_map = MapData::default();
-                    // test_map.terrain.insert(
-                    //     'g',
-                    //     MapGenValue::Distribution(MeabyVec::Vec(vec![
-                    //         MeabyWeighted::NotWeighted(DistributionInner::String(
-                    //             CDDAIdentifier::from("t_grass"),
-                    //         )),
-                    //         MeabyWeighted::NotWeighted(DistributionInner::String(
-                    //             CDDAIdentifier::from("t_grass_dead"),
-                    //         )),
-                    //     ])),
-                    // );
-                    // test_map
-                    //     .cells
-                    //     .iter_mut()
-                    //     .for_each(|(_, cell)| cell.character = 'g');
-                    //
-                    // project.maps.insert(0, test_map);
-
-                    map_data.data.push(loaded);
-
-                    app.manage(Mutex::new(Some(cdda_json_data)));
-                }
-                Err(e) => {
-                    warn!("Failed to load editor data");
-
-                    app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(None));
-                }
-            };
-
-            info!("Loading tilesheet");
-            let tilesheet = load_tilesheet(&editor_data)?;
-
-            app.manage(Mutex::new(tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
             app.manage::<Mutex<HashMap<IVec3, MappedSprite>>>(Mutex::new(HashMap::new()));
+            app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<TilesheetKind>>>(Mutex::new(None));
 
             Ok(())
         })
