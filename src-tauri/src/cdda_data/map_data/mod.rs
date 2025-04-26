@@ -11,7 +11,7 @@ use crate::map::visible_properties::{
     TerrainProperty,
 };
 use crate::map::{
-    Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
+    Cell, MapData, MapDataFlag, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
     RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
     VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
 };
@@ -24,7 +24,7 @@ use glam::UVec2;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
@@ -154,6 +154,9 @@ pub struct CDDAMapDataObjectCommonIntermediate {
 
     #[serde(default)]
     pub set: Vec<SetIntermediate>,
+
+    #[serde(default)]
+    pub flags: HashSet<MapDataFlag>,
 
     // ---------------
     #[serde(default)]
@@ -487,6 +490,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         map_data.palettes = self.object.common.palettes;
         map_data.fill = self.object.fill_ter;
         map_data.map_size = self.object.mapgen_size.unwrap_or(mapgen_size);
+        map_data.flags = self.object.common.flags;
 
         map_data
     }

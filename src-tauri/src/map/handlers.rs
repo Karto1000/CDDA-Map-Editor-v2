@@ -5,7 +5,7 @@ use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, Project};
 use crate::map::{
     CDDAIdentifierGroup, CellRepresentation, ProjectContainer, VisibleMappingCommand,
-    VisibleMappingKind,
+    VisibleMappingCommandKind, VisibleMappingKind,
 };
 use crate::tileset;
 use crate::tileset::legacy_tileset::MappedSprite;
@@ -472,71 +472,78 @@ pub async fn open_project(
             );
         });
 
+        // We need to store all commands in this list here so we can sort it and act them out in
+        // the order the VisibleMappingCommandKind enum has
+        let mut all_commands: Vec<VisibleMappingCommand> = vec![];
+
         // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
         // the function relies on the mapped sprite of this sprite to already exist
         map_data.cells.iter().for_each(|(p, cell)| {
             let ident_commands =
                 map_data.get_identifier_change_commands(&cell.character, p, &json_data);
 
-            for command in ident_commands {
-                match command {
-                    VisibleMappingCommand::Place {
-                        coordinates,
-                        id: pre_id,
-                        mapping,
-                    } => {
-                        let id = pre_id.as_final_id(
-                            region_settings,
-                            &json_data.terrain,
-                            &json_data.furniture,
-                        );
+            all_commands.extend(ident_commands)
+        });
 
-                        let ident_mut = match identifiers.get_mut(&coordinates) {
-                            None => {
-                                error!(
-                                    "Identifier group at coordinates {:?} not found",
-                                    coordinates
-                                );
-                                continue;
-                            }
-                            Some(i) => i,
-                        };
+        all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
 
-                        match mapping {
-                            VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
-                                ident_mut.terrain = Some(id.clone());
-                            }
-                            VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
-                                ident_mut.furniture = Some(id.clone());
-                            }
-                            VisibleMappingKind::Traps => {
-                                todo!()
-                            }
-                            VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
+        for command in all_commands {
+            match command.kind {
+                VisibleMappingCommandKind::Place => {
+                    let id = command.id.as_final_id(
+                        region_settings,
+                        &json_data.terrain,
+                        &json_data.furniture,
+                    );
+
+                    let ident_mut = match identifiers.get_mut(&command.coordinates) {
+                        None => {
+                            error!(
+                                "Identifier group at coordinates {:?} not found",
+                                command.coordinates
+                            );
+                            continue;
                         }
+                        Some(i) => i,
+                    };
 
-                        let three_dim_coords =
-                            IVec3::new(coordinates.x as i32, coordinates.y as i32, *z);
-                        let mut mapped_sprite = mapped_sprites_lock
-                            .get_mut(&three_dim_coords)
-                            .expect("Mapped sprite to exist");
-
-                        match mapping {
-                            VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
-                                mapped_sprite.terrain = Some(id.clone());
-                            }
-                            VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
-                                mapped_sprite.furniture = Some(id.clone());
-                            }
-                            VisibleMappingKind::Traps => {
-                                todo!()
-                            }
-                            VisibleMappingKind::Monster => mapped_sprite.monster = Some(id.clone()),
+                    match command.mapping {
+                        VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
+                            ident_mut.terrain = Some(id.clone());
                         }
+                        VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
+                            ident_mut.furniture = Some(id.clone());
+                        }
+                        VisibleMappingKind::Traps => {
+                            todo!()
+                        }
+                        VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
+                    }
+
+                    let three_dim_coords = IVec3::new(
+                        command.coordinates.x as i32,
+                        command.coordinates.y as i32,
+                        *z,
+                    );
+                    let mapped_sprite = mapped_sprites_lock
+                        .get_mut(&three_dim_coords)
+                        .expect("Mapped sprite to exist");
+
+                    match command.mapping {
+                        VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
+                            mapped_sprite.terrain = Some(id.clone());
+                        }
+                        VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
+                            mapped_sprite.furniture = Some(id.clone());
+                        }
+                        VisibleMappingKind::Traps => {
+                            todo!()
+                        }
+                        VisibleMappingKind::Monster => mapped_sprite.monster = Some(id.clone()),
                     }
                 }
             }
-        });
+        }
 
         // Now we fill any identifier_group and mapped_sprite with no terrain with the fill sprite
         identifiers.iter_mut().for_each(|(p, i)| {

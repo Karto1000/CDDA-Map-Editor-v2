@@ -154,7 +154,7 @@ clone_trait_object!(RepresentativeProperty);
 
 // Things like terrain, furniture, monsters This allows us to get the Identifier
 pub trait VisibleProperty: RepresentativeProperty {
-    fn get_identifier(
+    fn get_commands(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         position: &UVec2,
@@ -167,12 +167,12 @@ clone_trait_object!(VisibleProperty);
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
 pub enum VisibleMappingKind {
-    Terrain,
-    Furniture,
-    Traps,
-    Monster,
-    NestedTerrain,
-    NestedFurniture,
+    Terrain = 0,
+    Furniture = 1,
+    Traps = 2,
+    Monster = 3,
+    NestedTerrain = 4,
+    NestedFurniture = 5,
 }
 
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
@@ -201,17 +201,18 @@ pub mod visible_properties {
     }
 
     impl VisibleProperty for TerrainProperty {
-        fn get_identifier(
+        fn get_commands(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
             position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
         ) -> Option<Vec<VisibleMappingCommand>> {
             let ident = self.mapgen_value.get_identifier(calculated_parameters);
-            let command = VisibleMappingCommand::Place {
+            let command = VisibleMappingCommand {
                 id: ident,
                 mapping: VisibleMappingKind::Terrain,
                 coordinates: position.clone(),
+                kind: VisibleMappingCommandKind::Place,
             };
 
             Some(vec![command])
@@ -230,7 +231,7 @@ pub mod visible_properties {
     }
 
     impl VisibleProperty for MonsterProperty {
-        fn get_identifier(
+        fn get_commands(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
             position: &UVec2,
@@ -261,10 +262,11 @@ pub mod visible_properties {
                 match ident {
                     None => {}
                     Some(ident) => {
-                        let command = VisibleMappingCommand::Place {
+                        let command = VisibleMappingCommand {
                             id: ident,
                             mapping: VisibleMappingKind::Monster,
                             coordinates: position.clone(),
+                            kind: VisibleMappingCommandKind::Place,
                         };
 
                         return Some(vec![command]);
@@ -288,17 +290,18 @@ pub mod visible_properties {
     }
 
     impl VisibleProperty for FurnitureProperty {
-        fn get_identifier(
+        fn get_commands(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
             position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
         ) -> Option<Vec<VisibleMappingCommand>> {
             let ident = self.mapgen_value.get_identifier(calculated_parameters);
-            let command = VisibleMappingCommand::Place {
+            let command = VisibleMappingCommand {
                 id: ident,
                 mapping: VisibleMappingKind::Furniture,
                 coordinates: position.clone(),
+                kind: VisibleMappingCommandKind::Place,
             };
 
             Some(vec![command])
@@ -317,7 +320,7 @@ pub mod visible_properties {
     }
 
     impl VisibleProperty for NestedTerrainProperty {
-        fn get_identifier(
+        fn get_commands(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
             position: &UVec2,
@@ -340,11 +343,27 @@ pub mod visible_properties {
             let mut commands = vec![];
             for y in 0..nested_mapgen.map_size.y {
                 for x in 0..nested_mapgen.map_size.x {
-                    commands.push(VisibleMappingCommand::Place {
-                        id: CDDAIdentifier::from("t_floor"),
-                        mapping: VisibleMappingKind::Terrain,
-                        coordinates: position.clone() - UVec2::new(x, y),
-                    });
+                    let nested_position = UVec2::new(x, y);
+                    let cell = nested_mapgen.cells.get(&nested_position)?;
+
+                    let mapping = nested_mapgen.get_visible_mapping(
+                        &VisibleMappingKind::Terrain,
+                        &cell.character,
+                        &nested_position,
+                        json_data,
+                    );
+
+                    if let Some(mut mapping_commands) = mapping {
+                        // Offset the commands position
+                        mapping_commands.iter_mut().for_each(|command| {
+                            command.coordinates.x += position.x;
+                            command.coordinates.y = position.y - command.coordinates.y;
+
+                            command.mapping = VisibleMappingKind::NestedTerrain;
+                        });
+
+                        commands.extend(mapping_commands);
+                    }
                 }
             }
 
@@ -364,7 +383,7 @@ pub mod visible_properties {
     }
 
     impl VisibleProperty for NestedFurnitureProperty {
-        fn get_identifier(
+        fn get_commands(
             &self,
             calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
             position: &UVec2,
@@ -387,11 +406,27 @@ pub mod visible_properties {
             let mut commands = vec![];
             for y in 0..nested_mapgen.map_size.y {
                 for x in 0..nested_mapgen.map_size.x {
-                    commands.push(VisibleMappingCommand::Place {
-                        id: CDDAIdentifier::from("f_alien_zapper"),
-                        mapping: VisibleMappingKind::Furniture,
-                        coordinates: position.clone() - UVec2::new(x, y),
-                    });
+                    let nested_position = UVec2::new(x, y);
+                    let cell = nested_mapgen.cells.get(&nested_position)?;
+
+                    let mapping = nested_mapgen.get_visible_mapping(
+                        &VisibleMappingKind::Furniture,
+                        &cell.character,
+                        &nested_position,
+                        json_data,
+                    );
+
+                    if let Some(mut mapping_commands) = mapping {
+                        // Offset the commands position
+                        mapping_commands.iter_mut().for_each(|command| {
+                            command.coordinates.x += position.x;
+                            command.coordinates.y = position.y - command.coordinates.y;
+
+                            command.mapping = VisibleMappingKind::NestedFurniture;
+                        });
+
+                        commands.extend(mapping_commands);
+                    }
                 }
             }
 
@@ -579,12 +614,26 @@ pub struct CellRepresentation {
 }
 
 #[derive(Debug, Serialize)]
-pub enum VisibleMappingCommand {
-    Place {
-        mapping: VisibleMappingKind,
-        coordinates: UVec2,
-        id: CDDAIdentifier,
-    },
+pub enum VisibleMappingCommandKind {
+    Place,
+}
+
+#[derive(Debug, Serialize)]
+pub struct VisibleMappingCommand {
+    id: CDDAIdentifier,
+    mapping: VisibleMappingKind,
+    coordinates: UVec2,
+    kind: VisibleMappingCommandKind,
+}
+
+#[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum MapDataFlag {
+    EraseAllBeforePlacingTerrain,
+    AllowTerrainUnderOtherData,
+
+    #[serde(other)]
+    Other,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -596,6 +645,7 @@ pub struct MapData {
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
     pub palettes: Vec<MapGenValue>,
+    pub flags: HashSet<MapDataFlag>,
 
     #[serde(skip)]
     pub visible: HashMap<VisibleMappingKind, HashMap<char, Arc<dyn VisibleProperty>>>,
@@ -633,6 +683,7 @@ impl Default for MapData {
             set: vec![],
             place: Default::default(),
             representative: Default::default(),
+            flags: Default::default(),
         }
     }
 }
@@ -673,7 +724,7 @@ impl MapData {
         let mapping = self.visible.get(mapping_kind)?;
 
         if let Some(id) = mapping.get(character) {
-            return id.get_identifier(&self.calculated_parameters, position, json_data);
+            return id.get_commands(&self.calculated_parameters, position, json_data);
         }
 
         // If we don't find it, search the palettes from top to bottom
@@ -745,42 +796,37 @@ impl MapData {
     ) -> Vec<VisibleMappingCommand> {
         let mut commands = Vec::new();
 
-        match self
-            .get_visible_mapping(
-                &VisibleMappingKind::NestedTerrain,
-                character,
-                position,
-                json_data,
-            )
-            .map_or(
-                self.get_visible_mapping(
-                    &VisibleMappingKind::Terrain,
-                    character,
-                    position,
-                    json_data,
-                ),
-                |v| Some(v),
-            ) {
+        let nested_terrain_mapping = self.get_visible_mapping(
+            &VisibleMappingKind::NestedTerrain,
+            character,
+            position,
+            json_data,
+        );
+
+        match nested_terrain_mapping.map_or(
+            self.get_visible_mapping(&VisibleMappingKind::Terrain, character, position, json_data),
+            |v| Some(v),
+        ) {
             None => {}
             Some(c) => commands.extend(c),
         }
 
-        match self
-            .get_visible_mapping(
-                &VisibleMappingKind::NestedFurniture,
+        let nested_furniture_mapping = self.get_visible_mapping(
+            &VisibleMappingKind::NestedFurniture,
+            character,
+            position,
+            json_data,
+        );
+
+        match nested_furniture_mapping.map_or(
+            self.get_visible_mapping(
+                &VisibleMappingKind::Furniture,
                 character,
                 position,
                 json_data,
-            )
-            .map_or(
-                self.get_visible_mapping(
-                    &VisibleMappingKind::Furniture,
-                    character,
-                    position,
-                    json_data,
-                ),
-                |v| Some(v),
-            ) {
+            ),
+            |v| Some(v),
+        ) {
             None => {}
             Some(c) => commands.extend(c),
         };

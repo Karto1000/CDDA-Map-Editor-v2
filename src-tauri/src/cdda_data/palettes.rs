@@ -239,7 +239,7 @@ impl CDDAPalette {
         let mapping = self.visible.get(mapping_kind.borrow())?;
 
         if let Some(id) = mapping.get(character.borrow()) {
-            return id.get_identifier(calculated_parameters, position, json_data);
+            return id.get_commands(calculated_parameters, position, json_data);
         }
 
         for mapgen_value in self.palettes.iter() {
