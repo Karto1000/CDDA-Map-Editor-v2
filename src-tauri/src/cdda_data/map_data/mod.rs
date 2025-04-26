@@ -15,7 +15,9 @@ use crate::map::{
     RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
     VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
 };
-use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
+use crate::util::{
+    CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
+};
 use crate::warn;
 use crate::{skip_err, skip_none};
 use glam::UVec2;
@@ -25,9 +27,6 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::Arc;
-
-pub(crate) mod nested;
-pub(crate) mod update;
 
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;
@@ -78,7 +77,7 @@ pub struct SetIntermediate {
     z: Option<i32>,
     x2: Option<NumberOrRange<u32>>,
     y2: Option<NumberOrRange<u32>>,
-    amount: Option<(u32, u32)>,
+    amount: Option<NumberOrRange<u32>>,
     chance: Option<u32>,
     repeat: Option<(u32, u32)>,
 }
@@ -110,8 +109,8 @@ pub struct MapGenItem {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MapGenMonsterType {
-    Monster { monster: CDDAIdentifier },
-    MonsterGroup { group: CDDAIdentifier },
+    Monster { monster: MapGenValue },
+    MonsterGroup { group: MapGenValue },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -148,7 +147,13 @@ pub struct CDDAMapDataObjectCommonIntermediate {
     pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
 
     #[serde(default)]
-    pub nested: HashMap<char, MapGenNested>,
+    pub nested: HashMap<char, MeabyVec<MeabyWeighted<MapGenNested>>>,
+
+    #[serde(default)]
+    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
+
+    #[serde(default)]
+    pub set: Vec<SetIntermediate>,
 
     // ---------------
     #[serde(default)]
@@ -195,12 +200,6 @@ pub struct CDDAMapDataObjectCommonIntermediate {
 
     #[serde(default)]
     pub graffiti: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
-
-    #[serde(default)]
-    pub set: Vec<SetIntermediate>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -209,6 +208,9 @@ pub struct CDDAMapDataObjectIntermediate {
 
     pub rows: Option<Vec<String>>,
 
+    #[serde(rename = "mapgensize")]
+    pub mapgen_size: Option<UVec2>,
+
     #[serde(flatten)]
     pub common: CDDAMapDataObjectCommonIntermediate,
 }
@@ -216,7 +218,11 @@ pub struct CDDAMapDataObjectIntermediate {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapDataIntermediate {
     pub method: String,
-    pub om_terrain: OmTerrain,
+
+    pub update_mapgen_id: Option<CDDAIdentifier>,
+    pub om_terrain: Option<OmTerrain>,
+    pub nested_mapgen_id: Option<CDDAIdentifier>,
+
     pub weight: Option<i32>,
     pub object: CDDAMapDataObjectIntermediate,
 }
@@ -224,6 +230,7 @@ pub struct CDDAMapDataIntermediate {
 impl Into<MapData> for CDDAMapDataIntermediate {
     fn into(self) -> MapData {
         let mut cells = IndexMap::new();
+        let mut mapgen_size = UVec2::new(DEFAULT_MAP_WIDTH as u32, DEFAULT_MAP_HEIGHT as u32);
 
         match &self.object.rows {
             None => {
@@ -239,6 +246,9 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 }
             }
             Some(rows) => {
+                mapgen_size.x = rows[0].len() as u32;
+                mapgen_size.y = rows.len() as u32;
+
                 // We need to reverse the iterators direction since we want the last row of the rows to
                 // be at the bottom left so basically 0, 0
                 for (row_index, row) in rows.into_iter().rev().enumerate() {
@@ -363,7 +373,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                         Some(SetOperation::Remove { ty })
                     }
                     "radiation" => Some(SetOperation::Radiation {
-                        amount: set.amount.unwrap_or((1, 1)),
+                        amount: set.amount.unwrap_or(NumberOrRange::Number(1)),
                     }),
                     _ => {
                         warn!("Unknown set square type {}; Skipping", ty);
@@ -419,12 +429,21 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         let mut nested_furniture_map = HashMap::new();
 
         for (char, nested) in self.object.common.nested {
+            let nested_trans: Vec<Weighted<MapGenNested>> = nested
+                .clone()
+                .into_vec()
+                .into_iter()
+                .map(|v| v.weighted())
+                .collect();
+
             let nested_terrain_prop = Arc::new(NestedTerrainProperty {
-                nested: nested.clone(),
+                nested: nested_trans.clone(),
             });
             nested_terrain_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
 
-            let nested_furniture_prop = Arc::new(NestedFurnitureProperty { nested });
+            let nested_furniture_prop = Arc::new(NestedFurnitureProperty {
+                nested: nested_trans,
+            });
             nested_furniture_map.insert(char, nested_furniture_prop as Arc<dyn VisibleProperty>);
         }
 
@@ -467,6 +486,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         map_data.parameters = self.object.common.parameters;
         map_data.palettes = self.object.common.palettes;
         map_data.fill = self.object.fill_ter;
+        map_data.map_size = self.object.mapgen_size.unwrap_or(mapgen_size);
 
         map_data
     }

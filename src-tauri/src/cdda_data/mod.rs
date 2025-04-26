@@ -9,8 +9,6 @@ pub(crate) mod terrain;
 
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::item::CDDAItemGroupIntermediate;
-use crate::cdda_data::map_data::nested::CDDANestedMapDataIntermediate;
-use crate::cdda_data::map_data::update::CDDAUpdateMapDataIntermediate;
 use crate::cdda_data::map_data::CDDAMapDataIntermediate;
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
@@ -45,11 +43,39 @@ where
     Ok(comments)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum NumberOrRange<T: PrimInt + Clone + SampleUniform> {
     Number(T),
     Range((T, T)),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NumberOrArray<T: PrimInt + Clone + SampleUniform> {
+    Number(T),
+    Array(Vec<T>),
+}
+
+impl<'de, T: PrimInt + Clone + SampleUniform + Deserialize<'de>> Deserialize<'de>
+    for NumberOrRange<T>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = NumberOrArray::<T>::deserialize(deserializer)?;
+        match value {
+            NumberOrArray::Number(n) => Ok(NumberOrRange::Number(n)),
+            NumberOrArray::Array(arr) => match arr.len() {
+                1 => Ok(NumberOrRange::Number(arr[0].clone())),
+                2 => Ok(NumberOrRange::Range((arr[0].clone(), arr[1].clone()))),
+                _ => Err(serde::de::Error::custom(
+                    "Array must contain 1 or 2 elements",
+                )),
+            },
+        }
+    }
 }
 
 impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
@@ -140,18 +166,10 @@ pub struct ConnectGroup {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-#[serde(untagged)]
-pub enum MapgenKind {
-    OmTerrain(CDDAMapDataIntermediate),
-    NestedOmTerrain(CDDANestedMapDataIntermediate),
-    UpdateOmTerrain(CDDAUpdateMapDataIntermediate),
-}
-
-#[derive(Debug, Clone, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
-    Mapgen(MapgenKind),
+    Mapgen(CDDAMapDataIntermediate),
     RegionSettings(CDDARegionSettings),
     Palette(CDDAPaletteIntermediate),
     Terrain(CDDATerrainIntermediate),

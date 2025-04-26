@@ -6,7 +6,7 @@ use crate::tileset::legacy_tileset::{
     AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, MappedSprite, Rotated,
     Rotates, Rotation, SpriteIndex,
 };
-use crate::util::{CDDAIdentifier, MeabyVec};
+use crate::util::{CDDAIdentifier, MeabyVec, Weighted};
 use glam::IVec3;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
@@ -698,6 +698,22 @@ impl<T> GetRandom<T> for Vec<WeightedSprite<T>> {
         let chosen_index = weighted_index.sample(&mut rng);
 
         &self.get(chosen_index).unwrap().sprite
+    }
+}
+
+impl<T> GetRandom<T> for Vec<Weighted<T>> {
+    fn get_random(&self) -> &T {
+        let mut weights = vec![];
+        self.iter().for_each(|v| weights.push(v.weight));
+
+        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+
+        let mut rng = rng();
+        //let mut rng = RANDOM.write().unwrap();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+
+        &self.get(chosen_index).unwrap().data
     }
 }
 

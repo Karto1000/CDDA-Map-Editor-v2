@@ -185,9 +185,9 @@ pub enum RepresentativeMapping {
 pub mod visible_properties {
     use super::*;
     use crate::cdda_data::map_data::MapGenNested;
-    use crate::util::MeabyVec;
+    use crate::tileset::GetRandom;
+    use crate::util::{MeabyVec, MeabyWeighted, Weighted};
     use log::error;
-    use log::kv::Source;
 
     #[derive(Debug, Clone)]
     pub struct TerrainProperty {
@@ -248,9 +248,10 @@ pub mod visible_properties {
                             Some(monster.get_identifier(calculated_parameters))
                         }
                         MapGenMonsterType::MonsterGroup { group } => {
-                            let mon_group = json_data.monstergroups.get(&group)?;
+                            let id = group.get_identifier(calculated_parameters);
+                            let mon_group = json_data.monstergroups.get(&id)?;
                             mon_group
-                                .get_random_monster(&json_data.monstergroups)
+                                .get_random_monster(&json_data.monstergroups, calculated_parameters)
                                 .map(|id| id.get_identifier(calculated_parameters))
                         }
                     },
@@ -306,7 +307,7 @@ pub mod visible_properties {
 
     #[derive(Debug, Clone)]
     pub struct NestedTerrainProperty {
-        pub nested: MapGenNested,
+        pub nested: Vec<Weighted<MapGenNested>>,
     }
 
     impl RepresentativeProperty for NestedTerrainProperty {
@@ -322,8 +323,13 @@ pub mod visible_properties {
             position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
         ) -> Option<Vec<VisibleMappingCommand>> {
-            let selected_chunk = self.nested.chunks.get_identifier(calculated_parameters);
-            let nested_mapgen = match json_data.nested_mapgens.get(&selected_chunk) {
+            let selected_chunk = self
+                .nested
+                .get_random()
+                .chunks
+                .get_identifier(calculated_parameters);
+
+            let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
                 None => {
                     error!("Nested Mapgen {} not found", selected_chunk);
                     return None;
@@ -332,8 +338,8 @@ pub mod visible_properties {
             };
 
             let mut commands = vec![];
-            for y in 0..nested_mapgen.object.mapgen_size.y {
-                for x in 0..nested_mapgen.object.mapgen_size.x {
+            for y in 0..nested_mapgen.map_size.y {
+                for x in 0..nested_mapgen.map_size.x {
                     commands.push(VisibleMappingCommand::Place {
                         id: CDDAIdentifier::from("t_floor"),
                         mapping: VisibleMappingKind::Terrain,
@@ -348,7 +354,7 @@ pub mod visible_properties {
 
     #[derive(Debug, Clone)]
     pub struct NestedFurnitureProperty {
-        pub nested: MapGenNested,
+        pub nested: Vec<Weighted<MapGenNested>>,
     }
 
     impl RepresentativeProperty for NestedFurnitureProperty {
@@ -364,8 +370,13 @@ pub mod visible_properties {
             position: &UVec2,
             json_data: &DeserializedCDDAJsonData,
         ) -> Option<Vec<VisibleMappingCommand>> {
-            let selected_chunk = self.nested.chunks.get_identifier(calculated_parameters);
-            let nested_mapgen = match json_data.nested_mapgens.get(&selected_chunk) {
+            let selected_chunk = self
+                .nested
+                .get_random()
+                .chunks
+                .get_identifier(calculated_parameters);
+
+            let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
                 None => {
                     error!("Nested Mapgen {} not found", selected_chunk);
                     return None;
@@ -374,8 +385,8 @@ pub mod visible_properties {
             };
 
             let mut commands = vec![];
-            for y in 0..nested_mapgen.object.mapgen_size.y {
-                for x in 0..nested_mapgen.object.mapgen_size.x {
+            for y in 0..nested_mapgen.map_size.y {
+                for x in 0..nested_mapgen.map_size.x {
                     commands.push(VisibleMappingCommand::Place {
                         id: CDDAIdentifier::from("f_alien_zapper"),
                         mapping: VisibleMappingKind::Furniture,
@@ -580,6 +591,7 @@ pub enum VisibleMappingCommand {
 pub struct MapData {
     pub cells: IndexMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
+    pub map_size: UVec2,
 
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
@@ -613,6 +625,7 @@ impl Default for MapData {
         Self {
             cells,
             fill,
+            map_size: DEFAULT_MAP_DATA_SIZE,
             calculated_parameters: Default::default(),
             parameters: Default::default(),
             visible: Default::default(),
@@ -882,10 +895,10 @@ pub enum PlaceableSetType {
 #[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
 #[strum(serialize_all = "snake_case")]
 pub enum RemovableSetType {
-    Item,
-    Field,
-    Trap,
-    Creature,
+    ItemRemove,
+    FieldRemove,
+    TrapRemove,
+    CreatureRemove,
 }
 
 #[derive(Debug, Clone)]
@@ -898,7 +911,7 @@ pub enum SetOperation {
         ty: RemovableSetType,
     },
     Radiation {
-        amount: (u32, u32),
+        amount: NumberOrRange<u32>,
     },
     Variable {
         id: CDDAIdentifier,

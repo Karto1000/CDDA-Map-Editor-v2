@@ -25,41 +25,51 @@ impl Load<Project> for MapDataImporter<'_> {
         // TODO: Handle multiple z-levels
         let project = importing_map_datas
             .into_iter()
-            .find_map(|mdi| match &mdi.om_terrain {
-                OmTerrain::Single(s) => match &self.om_terrain == s {
-                    true => {
-                        let mut project = Project::new(s.clone(), DEFAULT_MAP_DATA_SIZE);
-                        project.maps.insert(0, mdi.into());
-                        Some(project)
-                    }
-                    false => None,
-                },
-                OmTerrain::Duplicate(duplicate) => {
-                    match duplicate.iter().find(|d| *d == &self.om_terrain) {
-                        Some(s) => {
-                            let mut project = Project::new(s.clone(), DEFAULT_MAP_DATA_SIZE);
-                            project.maps.insert(0, mdi.into());
-                            Some(project)
+            .find_map(|mdi| {
+                if let Some(om_terrain) = &mdi.om_terrain {
+                    return match om_terrain {
+                        OmTerrain::Single(s) => match &self.om_terrain == s {
+                            true => {
+                                let mut project = Project::new(s.clone(), DEFAULT_MAP_DATA_SIZE);
+                                project.maps.insert(0, mdi.into());
+                                Some(project)
+                            }
+                            false => None,
+                        },
+                        OmTerrain::Duplicate(duplicate) => {
+                            match duplicate.iter().find(|d| *d == &self.om_terrain) {
+                                Some(s) => {
+                                    let mut project =
+                                        Project::new(s.clone(), DEFAULT_MAP_DATA_SIZE);
+                                    project.maps.insert(0, mdi.into());
+                                    Some(project)
+                                }
+                                None => None,
+                            }
                         }
-                        None => None,
-                    }
-                }
-                OmTerrain::Nested(n) => match n.iter().flatten().find(|s| *s == &self.om_terrain) {
-                    None => None,
-                    Some(s) => {
-                        let mut project = Project::new(
-                            s.clone(),
-                            UVec2::new(
-                                (n.len() * DEFAULT_MAP_DATA_SIZE.x as usize) as u32,
-                                (n.first().unwrap().len() * DEFAULT_MAP_DATA_SIZE.y as usize)
-                                    as u32,
-                            ),
-                        );
-                        project.maps.insert(0, mdi.into());
+                        OmTerrain::Nested(n) => {
+                            match n.iter().flatten().find(|s| *s == &self.om_terrain) {
+                                None => None,
+                                Some(s) => {
+                                    let mut project = Project::new(
+                                        s.clone(),
+                                        UVec2::new(
+                                            (n.len() * DEFAULT_MAP_DATA_SIZE.x as usize) as u32,
+                                            (n.first().unwrap().len()
+                                                * DEFAULT_MAP_DATA_SIZE.y as usize)
+                                                as u32,
+                                        ),
+                                    );
+                                    project.maps.insert(0, mdi.into());
 
-                        Some(project)
-                    }
-                },
+                                    Some(project)
+                                }
+                            }
+                        }
+                    };
+                };
+
+                None
             })
             .ok_or(anyhow!("Could not find map data"))?;
 

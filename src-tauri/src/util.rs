@@ -256,7 +256,7 @@ impl<T> MeabyWeighted<T> {
 
     pub fn weighted(self) -> Weighted<T> {
         match self {
-            MeabyWeighted::NotWeighted(d) => Weighted { data: d, weight: 0 },
+            MeabyWeighted::NotWeighted(d) => Weighted { data: d, weight: 1 },
             MeabyWeighted::Weighted(w) => w,
         }
     }
