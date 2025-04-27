@@ -17,6 +17,7 @@ import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
 import "./app.scss"
 import MultiMenu from "./components/multimenu.tsx";
+import {Fieldset} from "./components/fieldset.tsx";
 
 export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
     theme: Theme.Dark,
@@ -60,6 +61,7 @@ function App() {
         let unlistenDataChanged = makeCancelable(listen<EditorData>(
             EditorDataRecvEvent.EditorDataChanged,
             async (e) => {
+                console.log("Received editor data changed event: ", e.payload, "")
                 setEditorData(e.payload)
 
                 const welcomeTab = e.payload.tabs.find(t => t.tab_type.type === TabTypeKind.Welcome)
@@ -141,7 +143,7 @@ function App() {
                         </Window>
 
                         <PanelGroup direction={'horizontal'}>
-                            <Panel defaultSize={20} maxSize={50} onResize={resize}>
+                            <Panel collapsible={true} minSize={10} defaultSize={20} maxSize={50} onResize={resize}>
                                 <div className={"side-panel"}>
                                     <div className={"side-panel-left"}>
                                         {

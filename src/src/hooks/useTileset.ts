@@ -19,7 +19,12 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
         setIsLoaded(false);
 
         (async () => {
-            const infoResponse = await invokeTauri<SpritesheetConfig, unknown>(LegacyTilesetCommand.GetInfoOfCurrentTileset, {})
+            console.log("Loading Tileset")
+
+            const infoResponse = await invokeTauri<SpritesheetConfig, unknown>(
+                LegacyTilesetCommand.GetInfoOfCurrentTileset,
+                {}
+            )
 
             if (infoResponse.type === BackendResponseType.Error) {
                 console.error(infoResponse.error)
@@ -85,11 +90,12 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                 let fallback: Tilesheet;
                 const tileInfo = infoResponse.data.tile_info[0]
 
+                console.log("Loading Tile Info")
                 for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
                     const spritesheetInfo = infoResponse.data["tiles-new"][i]
 
                     const texture = await new TextureLoader()
-                        .loadAsync(`/MSX++UnDeadPeopleEdition/${spritesheetInfo.file}`,
+                        .loadAsync(`/BrownLikeBears/${spritesheetInfo.file}`,
                             () => console.log(`Loading ${spritesheetInfo.file}`))
 
                     texture.magFilter = NearestFilter;
@@ -112,6 +118,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                 return {atlases, fallback, tileInfo}
             }
 
+            console.log("Loading Tilesheet Sprites")
             const atlases = await loadFromPublic();
 
             sceneRef.current.add(atlases.fallback.mesh)
