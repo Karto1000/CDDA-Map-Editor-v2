@@ -95,7 +95,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     const spritesheetInfo = infoResponse.data["tiles-new"][i]
 
                     const texture = await new TextureLoader()
-                        .loadAsync(`/BrownLikeBears/${spritesheetInfo.file}`,
+                        .loadAsync(`/MSX++UnDeadPeopleEdition/${spritesheetInfo.file}`,
                             () => console.log(`Loading ${spritesheetInfo.file}`))
 
                     texture.magFilter = NearestFilter;

@@ -61,6 +61,13 @@ impl CDDAIdentifier {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct ParameterIdentifier(pub String);
+
+impl From<&str> for ParameterIdentifier {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
 pub type Comment = Option<String>;
 
 pub trait GetIdentifier {
@@ -97,7 +104,7 @@ impl GetIdentifier for CDDAIdentifier {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DistributionInner {
     Param {
@@ -111,7 +118,7 @@ pub enum DistributionInner {
     Normal(CDDAIdentifier),
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MeabyVec<T> {
     Single(T),
@@ -186,10 +193,19 @@ impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
 pub struct Weighted<T> {
     pub data: T,
     pub weight: i32,
+}
+
+impl<T> Weighted<T> {
+    pub fn new(data: impl Into<T>, weight: i32) -> Self {
+        Self {
+            data: data.into(),
+            weight,
+        }
+    }
 }
 
 impl<'de, T> Deserialize<'de> for Weighted<T>
@@ -239,11 +255,17 @@ where
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MeabyWeighted<T> {
     Weighted(Weighted<T>),
     NotWeighted(T),
+}
+
+impl<T> From<T> for MeabyWeighted<T> {
+    fn from(value: T) -> Self {
+        Self::NotWeighted(value)
+    }
 }
 
 impl<T> MeabyWeighted<T> {

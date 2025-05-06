@@ -149,17 +149,17 @@ pub enum ItemGroupSubtype {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum EntryItem {
+pub enum ItemEntry {
     Item(Item),
     Group(Group),
     Distribution {
-        distribution: Vec<EntryItem>,
+        distribution: Vec<ItemEntry>,
 
         #[serde(rename = "prob")]
         probability: Option<i32>,
     },
     Collection {
-        collection: Vec<EntryItem>,
+        collection: Vec<ItemEntry>,
 
         #[serde(rename = "prob")]
         probability: Option<i32>,
@@ -174,41 +174,41 @@ pub enum EntryItemShortcut {
     Item(Item),
     Group(Group),
     Distribution {
-        distribution: Vec<EntryItem>,
+        distribution: Vec<ItemEntry>,
 
         #[serde(rename = "prob")]
         probability: Option<i32>,
     },
     Collection {
-        collection: Vec<EntryItem>,
+        collection: Vec<ItemEntry>,
 
         #[serde(rename = "prob")]
         probability: Option<i32>,
     },
 }
 
-impl Into<EntryItem> for EntryItemShortcut {
-    fn into(self) -> EntryItem {
+impl Into<ItemEntry> for EntryItemShortcut {
+    fn into(self) -> ItemEntry {
         match self {
-            EntryItemShortcut::NotWeighted(nw) => EntryItem::Item(Item::from(nw)),
+            EntryItemShortcut::NotWeighted(nw) => ItemEntry::Item(Item::from(nw)),
             EntryItemShortcut::Weighted(w) => {
                 let mut item = Item::from(w.data);
                 item.probability = w.weight;
-                EntryItem::Item(item)
+                ItemEntry::Item(item)
             }
-            EntryItemShortcut::Item(i) => EntryItem::Item(i),
-            EntryItemShortcut::Group(g) => EntryItem::Group(g),
+            EntryItemShortcut::Item(i) => ItemEntry::Item(i),
+            EntryItemShortcut::Group(g) => ItemEntry::Group(g),
             EntryItemShortcut::Distribution {
                 distribution,
                 probability,
-            } => EntryItem::Distribution {
+            } => ItemEntry::Distribution {
                 distribution: distribution.into_iter().map(|i| i.into()).collect(),
                 probability,
             },
             EntryItemShortcut::Collection {
                 collection,
                 probability,
-            } => EntryItem::Collection {
+            } => ItemEntry::Collection {
                 collection: collection.into_iter().map(|i| i.into()).collect(),
                 probability,
             },
@@ -224,41 +224,41 @@ pub enum EntryGroupShortcut {
     Item(Item),
     Group(Group),
     Distribution {
-        distribution: Vec<EntryItem>,
+        distribution: Vec<ItemEntry>,
 
         #[serde(rename = "prob")]
         probability: Option<i32>,
     },
     Collection {
-        collection: Vec<EntryItem>,
+        collection: Vec<ItemEntry>,
 
         #[serde(rename = "prob")]
         probability: Option<i32>,
     },
 }
 
-impl Into<EntryItem> for EntryGroupShortcut {
-    fn into(self) -> EntryItem {
+impl Into<ItemEntry> for EntryGroupShortcut {
+    fn into(self) -> ItemEntry {
         match self {
-            EntryGroupShortcut::NotWeighted(nw) => EntryItem::Group(Group::from(nw)),
+            EntryGroupShortcut::NotWeighted(nw) => ItemEntry::Group(Group::from(nw)),
             EntryGroupShortcut::Weighted(w) => {
                 let mut group = Group::from(w.data);
                 group.probability = w.weight;
-                EntryItem::Group(group)
+                ItemEntry::Group(group)
             }
-            EntryGroupShortcut::Item(i) => EntryItem::Item(i),
-            EntryGroupShortcut::Group(g) => EntryItem::Group(g),
+            EntryGroupShortcut::Item(i) => ItemEntry::Item(i),
+            EntryGroupShortcut::Group(g) => ItemEntry::Group(g),
             EntryGroupShortcut::Distribution {
                 distribution,
                 probability,
-            } => EntryItem::Distribution {
+            } => ItemEntry::Distribution {
                 distribution: distribution.into_iter().map(|i| i.into()).collect(),
                 probability,
             },
             EntryGroupShortcut::Collection {
                 collection,
                 probability,
-            } => EntryItem::Collection {
+            } => ItemEntry::Collection {
                 collection: collection.into_iter().map(|i| i.into()).collect(),
                 probability,
             },
@@ -280,7 +280,7 @@ pub struct CDDAItemGroupIntermediate {
     pub groups: Vec<EntryGroupShortcut>,
 
     #[serde(default)]
-    pub entries: Vec<EntryItem>,
+    pub entries: Vec<ItemEntry>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -315,13 +315,13 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
 
         // Turn items into entries
         self.items.into_iter().for_each(|item| {
-            let entry_item: EntryItem = item.into();
+            let entry_item: ItemEntry = item.into();
             entries.push(entry_item);
         });
 
         // Turn groups into entries
         self.groups.into_iter().for_each(|group| {
-            let entry_item: EntryItem = group.into();
+            let entry_item: ItemEntry = group.into();
             entries.push(entry_item);
         });
 
@@ -339,7 +339,7 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct CDDAItemGroupCommon {
-    pub entries: Vec<EntryItem>,
+    pub entries: Vec<ItemEntry>,
     pub subtype: ItemGroupSubtype,
 }
 

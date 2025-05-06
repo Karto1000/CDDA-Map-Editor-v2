@@ -1,12 +1,12 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::item::{
-    CDDAItemGroup, CDDAItemGroupInPlace, CDDAItemGroupIntermediate, EntryGroupShortcut, EntryItem,
-    EntryItemShortcut, Item, ItemGroupSubtype,
+    CDDAItemGroup, CDDAItemGroupInPlace, CDDAItemGroupIntermediate, EntryGroupShortcut,
+    EntryItemShortcut, Item, ItemEntry, ItemGroupSubtype,
 };
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
-use crate::map::representative_properties::ItemProperty;
-use crate::map::visible_properties::{
+use crate::map::map_properties::representative::ItemProperty;
+use crate::map::map_properties::visible::{
     FurnitureProperty, MonsterProperty, NestedFurnitureProperty, NestedTerrainProperty,
     TerrainProperty,
 };

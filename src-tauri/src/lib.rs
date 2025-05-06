@@ -21,6 +21,7 @@ use crate::tileset::legacy_tileset::MappedSprite;
 use crate::tileset::TilesheetKind;
 use crate::util::Load;
 use anyhow::{anyhow, Error};
+use async_once::AsyncOnce;
 use directories::ProjectDirs;
 use glam::IVec3;
 use lazy_static::lazy_static;
@@ -31,6 +32,7 @@ use rand::SeedableRng;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Deref;
+use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State};
@@ -47,6 +49,23 @@ pub static RANDOM_SEED: u64 = 1;
 lazy_static! {
     pub static ref RANDOM: Arc<RwLock<StdRng>> =
         Arc::new(RwLock::new(StdRng::seed_from_u64(RANDOM_SEED)));
+    static ref TEST_CDDA_DATA: AsyncOnce<DeserializedCDDAJsonData> = AsyncOnce::new(async {
+        dotenv::dotenv().unwrap();
+        env_logger::init();
+
+        info!("Loading CDDA data");
+
+        let cdda_path = std::env::var("CDDA_INSTALL_PATH").expect("CDDA_INSTALL_PATH not set");
+        let cdda_json_path = std::env::var("CDDA_JSON_PATH").unwrap_or("data\\json\\".to_string());
+
+        let json_data = load_cdda_json_data(cdda_path, cdda_json_path)
+            .await
+            .unwrap();
+
+        info!("Successfully Loaded CDDA data");
+
+        json_data
+    });
 }
 
 #[tauri::command]
@@ -75,39 +94,47 @@ async fn frontend_ready(
     let tilesheet = load_tilesheet(&editor_data_lock).await.map_err(|e| {})?;
     *tilesheet_lock = tilesheet;
 
-    info!("trying to load CDDA Json Data");
-    match load_cdda_json_data(&editor_data_lock).await {
-        Ok(cdda_json_data) => {
-            info!("Loading testing map data");
+    match &editor_data_lock.config.cdda_path {
+        None => {
+            info!("No CDDA path set, skipping loading CDDA Json Data");
+        }
+        Some(cdda_path) => {
+            info!("trying to load CDDA Json Data");
+            match load_cdda_json_data(cdda_path, &editor_data_lock.config.json_data_path).await {
+                Ok(cdda_json_data) => {
+                    info!("Loading testing map data");
 
-            let mut importer = MapDataImporter {
-                path: r"C:\CDDA\testing\data\json\mapgen\mansion.json".into(),
-                om_terrain: "mansion_t2d".into(),
+                    let mut importer = MapDataImporter {
+                        path: r"C:\DEV\SelfDEV\Rust\CDDA-Map-Editor-2\src-tauri\test-map.json"
+                            .into(),
+                        om_terrain: "test_map".into(),
+                    };
+                    let mut loaded = importer.load().await.unwrap();
+                    loaded
+                        .maps
+                        .get_mut(&0)
+                        .unwrap()
+                        .calculate_parameters(&cdda_json_data.palettes);
+
+                    map_data_lock.data.push(loaded.clone());
+                    map_data_lock.current_project = Some(0);
+
+                    info!("Sending cdda data");
+                    app.emit(events::CDDA_DATA, loaded).unwrap();
+
+                    json_data_lock.replace(cdda_json_data);
+                }
+                Err(e) => {
+                    warn!("Failed to load editor data");
+                }
             };
-            let mut loaded = importer.load().await.unwrap();
-            loaded
-                .maps
-                .get_mut(&0)
-                .unwrap()
-                .calculate_parameters(&cdda_json_data.palettes);
-
-            map_data_lock.data.push(loaded.clone());
-            map_data_lock.current_project = Some(0);
-
-            info!("Sending cdda data");
-            app.emit(events::CDDA_DATA, loaded).unwrap();
-
-            json_data_lock.replace(cdda_json_data);
         }
-        Err(e) => {
-            warn!("Failed to load editor data");
-        }
-    };
+    }
 
     Ok(())
 }
 
-fn get_saved_editor_data(app: &mut App) -> Result<EditorData, Error> {
+fn get_saved_editor_data() -> Result<EditorData, Error> {
     let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
 
     let directory_path = match project_dir {
@@ -116,14 +143,8 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, Error> {
             let app_dir = match std::env::current_dir() {
                 Ok(d) => d,
                 Err(e) => {
-                    app.dialog()
-                        .message(e.to_string())
-                        .kind(MessageDialogKind::Error)
-                        .title("Error")
-                        .blocking_show();
-
-                    app.app_handle().exit(1);
-                    unreachable!();
+                    error!("{}", e);
+                    panic!()
                 }
             };
 
@@ -161,47 +182,7 @@ fn get_saved_editor_data(app: &mut App) -> Result<EditorData, Error> {
                 }
                 Err(e) => {
                     error!("{}", e.to_string());
-
-                    let full_message = format!(
-                        r#"
-                               An error occurred while reading the config.json file at {:?}.
-                               This is likely due to the file containing unexpected or invalid data.
-
-                               To fix this, you can regenerate the file. However, this would delete
-                               your current configuration and reset it to the default state.
-
-                               Do you want to continue?
-                            "#,
-                        config_file_path
-                    );
-
-                    let answer = app
-                        .dialog()
-                        .message(full_message)
-                        .title("Failed to read config.json file")
-                        .kind(MessageDialogKind::Warning)
-                        .buttons(MessageDialogButtons::YesNo)
-                        .blocking_show();
-
-                    let data = match answer {
-                        true => {
-                            fs::remove_file(&config_file_path).expect("File to have been deleted");
-                            let mut default_editor_data = EditorData::default();
-                            default_editor_data.config.config_path = directory_path.clone();
-
-                            let serialized = serde_json::to_string_pretty(&default_editor_data)
-                                .expect("Serialization to not fail");
-                            fs::write(&config_file_path, serialized)
-                                .expect("Directory path to config to have been created");
-                            default_editor_data
-                        }
-                        false => {
-                            app.app_handle().exit(1);
-                            unreachable!();
-                        }
-                    };
-
-                    data
+                    panic!();
                 }
             };
 
@@ -275,17 +256,11 @@ async fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind
 }
 
 pub async fn load_cdda_json_data(
-    editor_data: &EditorData,
+    cdda_path: impl Into<PathBuf>,
+    json_data_path: impl Into<PathBuf>,
 ) -> Result<DeserializedCDDAJsonData, anyhow::Error> {
-    let cdda_path = editor_data
-        .config
-        .cdda_path
-        .clone()
-        .ok_or(anyhow!("No CDDA Path supplied"))?
-        .clone();
-
     let mut data_loader = CDDADataLoader {
-        json_path: cdda_path.join(&editor_data.config.json_data_path),
+        json_path: cdda_path.into().join(json_data_path.into()),
     };
 
     data_loader.load().await
@@ -307,7 +282,7 @@ pub fn run() -> () {
         )
         .setup(|app| {
             info!("Loading Editor data config");
-            let editor_data = get_saved_editor_data(app)?;
+            let editor_data = get_saved_editor_data()?;
 
             info!("Loading map data");
             let map_data = get_map_data(&editor_data)?;

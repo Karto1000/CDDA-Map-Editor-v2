@@ -94,6 +94,11 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
     pub fn is_random_hit(&self, default_upper_bound: T) -> bool {
         match self.clone() {
             NumberOrRange::Number(n) => {
+                // This will always be true
+                if n >= default_upper_bound {
+                    return true;
+                }
+
                 let mut rng = rng();
                 //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(n..default_upper_bound);
@@ -364,22 +369,22 @@ pub enum KnownCataVariant {
     Other,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Switch {
     pub param: ParameterIdentifier,
     pub fallback: CDDAIdentifier,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Distribution {
     pub distribution: MeabyVec<MeabyWeighted<CDDAIdentifier>>,
 }
 
 // TODO: Kind of a hacky solution to a Stack Overflow problem that i experienced when using
 // a self-referencing MapGenValue enum
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum DistributionInner {
+pub enum CDDADistributionInner {
     String(CDDAIdentifier),
     Param {
         param: ParameterIdentifier,
@@ -396,19 +401,25 @@ pub enum DistributionInner {
     Distribution(Distribution),
 }
 
-impl GetIdentifier for DistributionInner {
+impl From<&str> for CDDADistributionInner {
+    fn from(value: &str) -> Self {
+        Self::String(value.into())
+    }
+}
+
+impl GetIdentifier for CDDADistributionInner {
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
-            DistributionInner::String(s) => s.clone(),
-            DistributionInner::Distribution(d) => d.distribution.get(calculated_parameters),
-            DistributionInner::Param { param, fallback } => calculated_parameters
+            CDDADistributionInner::String(s) => s.clone(),
+            CDDADistributionInner::Distribution(d) => d.distribution.get(calculated_parameters),
+            CDDADistributionInner::Param { param, fallback } => calculated_parameters
                 .get(param)
                 .map(|p| p.clone())
                 .unwrap_or_else(|| fallback.clone().expect("Fallback to exist")),
-            DistributionInner::Switch { switch, cases } => {
+            CDDADistributionInner::Switch { switch, cases } => {
                 let id = calculated_parameters
                     .get(&switch.param)
                     .map(|p| p.clone())
@@ -421,7 +432,7 @@ impl GetIdentifier for DistributionInner {
 }
 
 // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-values
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MapGenValue {
     String(CDDAIdentifier),
@@ -437,7 +448,7 @@ pub enum MapGenValue {
     // require a Box<> since we don't know the size. I tried this but for some reason it causes a Stack Overflow
     // because serde keeps infinitely calling the Deserialize function even though it should deserialize to the String variant.
     // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde.
-    Distribution(MeabyVec<MeabyWeighted<DistributionInner>>),
+    Distribution(MeabyVec<MeabyWeighted<CDDADistributionInner>>),
 }
 
 impl GetIdentifier for MapGenValue {
@@ -458,7 +469,7 @@ impl GetIdentifier for MapGenValue {
                     .map(|p| p.clone())
                     .unwrap_or_else(|| switch.fallback.clone());
 
-                cases.get(&id).expect("MapTo to exist").clone()
+                cases.get(&id).expect("case MapTo to exist").clone()
             }
         }
     }

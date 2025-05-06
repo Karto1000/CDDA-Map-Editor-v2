@@ -1,9 +1,9 @@
 pub(crate) mod handlers;
 pub(crate) mod importing;
+pub(crate) mod map_properties;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::item::{EntryItem, ItemGroupSubtype};
-use crate::cdda_data::map_data::{MapGenItem, MapGenMonster, MapGenMonsterType};
+use crate::cdda_data::map_data::{MapGenMonster, MapGenMonsterType};
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::Project;
@@ -13,6 +13,7 @@ use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
     bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, ParameterIdentifier,
 };
+use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
 use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
@@ -28,7 +29,7 @@ use strum_macros::EnumString;
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
 
-pub trait Set: Debug + DynClone + Send + Sync {
+pub trait Set: Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend {
     fn coordinates(&self) -> Vec<UVec2>;
     fn operation(&self) -> &SetOperation;
     fn tile_layer(&self) -> TileLayer {
@@ -123,8 +124,9 @@ pub trait Set: Debug + DynClone + Send + Sync {
 }
 
 clone_trait_object!(Set);
+impl_downcast!(sync Set);
 
-pub trait Place: Debug + DynClone + Send + Sync {
+pub trait Place: Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend {
     fn coordinates(&self) -> UVec2;
     fn tile_layer(&self) -> TileLayer;
 
@@ -144,13 +146,17 @@ pub trait Place: Debug + DynClone + Send + Sync {
 }
 
 clone_trait_object!(Place);
+impl_downcast!(sync Place);
 
 // Things like items or whatever else will be represented in the sidebar panel
-pub trait RepresentativeProperty: Debug + DynClone + Send + Sync {
+pub trait RepresentativeProperty:
+    Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
+{
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
 }
 
 clone_trait_object!(RepresentativeProperty);
+impl_downcast!(sync RepresentativeProperty);
 
 // Things like terrain, furniture, monsters This allows us to get the Identifier
 pub trait VisibleProperty: RepresentativeProperty {
@@ -163,6 +169,7 @@ pub trait VisibleProperty: RepresentativeProperty {
 }
 
 clone_trait_object!(VisibleProperty);
+impl_downcast!(sync VisibleProperty);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
@@ -182,426 +189,6 @@ pub enum RepresentativeMapping {
     ItemGroups,
 }
 
-pub mod visible_properties {
-    use super::*;
-    use crate::cdda_data::map_data::MapGenNested;
-    use crate::tileset::GetRandom;
-    use crate::util::{MeabyVec, MeabyWeighted, Weighted};
-    use log::error;
-
-    #[derive(Debug, Clone)]
-    pub struct TerrainProperty {
-        pub mapgen_value: MapGenValue,
-    }
-
-    impl RepresentativeProperty for TerrainProperty {
-        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-            todo!()
-        }
-    }
-
-    impl VisibleProperty for TerrainProperty {
-        fn get_commands(
-            &self,
-            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-            position: &UVec2,
-            json_data: &DeserializedCDDAJsonData,
-        ) -> Option<Vec<VisibleMappingCommand>> {
-            let ident = self.mapgen_value.get_identifier(calculated_parameters);
-            let command = VisibleMappingCommand {
-                id: ident,
-                mapping: VisibleMappingKind::Terrain,
-                coordinates: position.clone(),
-                kind: VisibleMappingCommandKind::Place,
-            };
-
-            Some(vec![command])
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct MonsterProperty {
-        pub monster: MeabyVec<MapGenMonster>,
-    }
-
-    impl RepresentativeProperty for MonsterProperty {
-        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-            todo!()
-        }
-    }
-
-    impl VisibleProperty for MonsterProperty {
-        fn get_commands(
-            &self,
-            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-            position: &UVec2,
-            json_data: &DeserializedCDDAJsonData,
-        ) -> Option<Vec<VisibleMappingCommand>> {
-            for monster in self.monster.clone().into_vec() {
-                let ident = match monster
-                    .chance
-                    .clone()
-                    .unwrap_or(NumberOrRange::Number(1))
-                    .is_random_hit(100)
-                {
-                    true => match monster.id {
-                        MapGenMonsterType::Monster { monster } => {
-                            Some(monster.get_identifier(calculated_parameters))
-                        }
-                        MapGenMonsterType::MonsterGroup { group } => {
-                            let id = group.get_identifier(calculated_parameters);
-                            let mon_group = json_data.monstergroups.get(&id)?;
-                            mon_group
-                                .get_random_monster(&json_data.monstergroups, calculated_parameters)
-                                .map(|id| id.get_identifier(calculated_parameters))
-                        }
-                    },
-                    false => None,
-                };
-
-                match ident {
-                    None => {}
-                    Some(ident) => {
-                        let command = VisibleMappingCommand {
-                            id: ident,
-                            mapping: VisibleMappingKind::Monster,
-                            coordinates: position.clone(),
-                            kind: VisibleMappingCommandKind::Place,
-                        };
-
-                        return Some(vec![command]);
-                    }
-                }
-            }
-
-            None
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct FurnitureProperty {
-        pub mapgen_value: MapGenValue,
-    }
-
-    impl RepresentativeProperty for FurnitureProperty {
-        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-            todo!()
-        }
-    }
-
-    impl VisibleProperty for FurnitureProperty {
-        fn get_commands(
-            &self,
-            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-            position: &UVec2,
-            json_data: &DeserializedCDDAJsonData,
-        ) -> Option<Vec<VisibleMappingCommand>> {
-            let ident = self.mapgen_value.get_identifier(calculated_parameters);
-            let command = VisibleMappingCommand {
-                id: ident,
-                mapping: VisibleMappingKind::Furniture,
-                coordinates: position.clone(),
-                kind: VisibleMappingCommandKind::Place,
-            };
-
-            Some(vec![command])
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct NestedTerrainProperty {
-        pub nested: Vec<Weighted<MapGenNested>>,
-    }
-
-    impl RepresentativeProperty for NestedTerrainProperty {
-        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-            todo!()
-        }
-    }
-
-    impl VisibleProperty for NestedTerrainProperty {
-        fn get_commands(
-            &self,
-            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-            position: &UVec2,
-            json_data: &DeserializedCDDAJsonData,
-        ) -> Option<Vec<VisibleMappingCommand>> {
-            let selected_chunk = self
-                .nested
-                .get_random()
-                .chunks
-                .get_identifier(calculated_parameters);
-
-            let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
-                None => {
-                    error!("Nested Mapgen {} not found", selected_chunk);
-                    return None;
-                }
-                Some(v) => v,
-            };
-
-            let mut commands = vec![];
-            for y in 0..nested_mapgen.map_size.y {
-                for x in 0..nested_mapgen.map_size.x {
-                    let nested_position = UVec2::new(x, y);
-                    let cell = nested_mapgen.cells.get(&nested_position)?;
-
-                    let mapping = nested_mapgen.get_visible_mapping(
-                        &VisibleMappingKind::Terrain,
-                        &cell.character,
-                        &nested_position,
-                        json_data,
-                    );
-
-                    if let Some(mut mapping_commands) = mapping {
-                        // Offset the commands position
-                        mapping_commands.iter_mut().for_each(|command| {
-                            command.coordinates.x += position.x;
-                            command.coordinates.y = position.y - command.coordinates.y;
-
-                            command.mapping = VisibleMappingKind::NestedTerrain;
-                        });
-
-                        commands.extend(mapping_commands);
-                    }
-                }
-            }
-
-            Some(commands)
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct NestedFurnitureProperty {
-        pub nested: Vec<Weighted<MapGenNested>>,
-    }
-
-    impl RepresentativeProperty for NestedFurnitureProperty {
-        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-            todo!()
-        }
-    }
-
-    impl VisibleProperty for NestedFurnitureProperty {
-        fn get_commands(
-            &self,
-            calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-            position: &UVec2,
-            json_data: &DeserializedCDDAJsonData,
-        ) -> Option<Vec<VisibleMappingCommand>> {
-            let selected_chunk = self
-                .nested
-                .get_random()
-                .chunks
-                .get_identifier(calculated_parameters);
-
-            let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
-                None => {
-                    error!("Nested Mapgen {} not found", selected_chunk);
-                    return None;
-                }
-                Some(n) => n,
-            };
-
-            let mut commands = vec![];
-            for y in 0..nested_mapgen.map_size.y {
-                for x in 0..nested_mapgen.map_size.x {
-                    let nested_position = UVec2::new(x, y);
-                    let cell = nested_mapgen.cells.get(&nested_position)?;
-
-                    let mapping = nested_mapgen.get_visible_mapping(
-                        &VisibleMappingKind::Furniture,
-                        &cell.character,
-                        &nested_position,
-                        json_data,
-                    );
-
-                    if let Some(mut mapping_commands) = mapping {
-                        // Offset the commands position
-                        mapping_commands.iter_mut().for_each(|command| {
-                            command.coordinates.x += position.x;
-                            command.coordinates.y = position.y - command.coordinates.y;
-
-                            command.mapping = VisibleMappingKind::NestedFurniture;
-                        });
-
-                        commands.extend(mapping_commands);
-                    }
-                }
-            }
-
-            Some(commands)
-        }
-    }
-}
-
-pub mod representative_properties {
-    use super::*;
-    use crate::cdda_data::item::CDDAItemGroupCommon;
-    use crate::cdda_data::map_data::ReferenceOrInPlace;
-
-    #[derive(Debug, Serialize)]
-    #[serde(tag = "type")]
-    pub enum DisplayItemGroup {
-        Single {
-            item: CDDAIdentifier,
-            probability: f32,
-        },
-        Collection {
-            name: Option<String>,
-            items: Vec<DisplayItemGroup>,
-            probability: f32,
-        },
-        Distribution {
-            name: Option<String>,
-            items: Vec<DisplayItemGroup>,
-            probability: f32,
-        },
-    }
-
-    impl DisplayItemGroup {
-        pub fn probability(&self) -> f32 {
-            match self {
-                DisplayItemGroup::Single { probability, .. } => probability.clone(),
-                DisplayItemGroup::Collection { probability, .. } => probability.clone(),
-                DisplayItemGroup::Distribution { probability, .. } => probability.clone(),
-            }
-        }
-    }
-
-    #[derive(Debug, Clone)]
-    pub struct ItemProperty {
-        pub items: Vec<MapGenItem>,
-    }
-
-    impl ItemProperty {
-        fn get_display_item_group_from_item_group(
-            &self,
-            common: &CDDAItemGroupCommon,
-            json_data: &DeserializedCDDAJsonData,
-            group_probability: f32,
-        ) -> Vec<DisplayItemGroup> {
-            let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
-
-            let weight_sum = common.entries.iter().fold(0, |acc, v| match v {
-                EntryItem::Item(i) => acc + i.probability,
-                EntryItem::Group(g) => acc + g.probability,
-                EntryItem::Distribution { probability, .. } => acc + probability.unwrap_or(100),
-                EntryItem::Collection { probability, .. } => acc + probability.unwrap_or(100),
-            });
-
-            for entry in common.entries.iter() {
-                match entry {
-                    EntryItem::Item(i) => {
-                        let display_item = DisplayItemGroup::Single {
-                            item: i.item.clone(),
-                            probability: i.probability as f32 / weight_sum as f32
-                                * group_probability,
-                        };
-                        display_item_groups.push(display_item);
-                    }
-                    EntryItem::Group(g) => {
-                        let other_group = &json_data
-                            .item_groups
-                            .get(&g.group)
-                            .expect("Item Group to exist");
-
-                        let probability =
-                            g.probability as f32 / weight_sum as f32 * group_probability;
-
-                        let display_item = self.get_display_item_group_from_item_group(
-                            &other_group.common,
-                            json_data,
-                            probability,
-                        );
-
-                        match other_group.common.subtype {
-                            ItemGroupSubtype::Collection => {
-                                display_item_groups.push(DisplayItemGroup::Collection {
-                                    items: display_item,
-                                    name: Some(other_group.id.clone().0),
-                                    probability,
-                                });
-                            }
-                            ItemGroupSubtype::Distribution => {
-                                let probability = g.probability as f32 / weight_sum as f32;
-                                display_item_groups.push(DisplayItemGroup::Distribution {
-                                    items: display_item,
-                                    name: Some(other_group.id.clone().0),
-                                    probability,
-                                });
-                            }
-                        }
-                    }
-                    EntryItem::Distribution {
-                        distribution,
-                        probability,
-                    } => {}
-                    EntryItem::Collection {
-                        collection,
-                        probability,
-                    } => {}
-                }
-            }
-
-            display_item_groups.sort_by(|v1, v2| {
-                v2.probability()
-                    .partial_cmp(&v1.probability())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            display_item_groups
-        }
-    }
-
-    impl RepresentativeProperty for ItemProperty {
-        fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-            let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
-
-            for mapgen_item in self.items.iter() {
-                let item_group_entries = match &mapgen_item.item {
-                    ReferenceOrInPlace::Reference(i) => {
-                        &json_data
-                            .item_groups
-                            .get(&i)
-                            .expect("Item group to exist")
-                            .common
-                    }
-                    ReferenceOrInPlace::InPlace(ip) => &ip.common,
-                };
-
-                let probability = mapgen_item
-                    .chance
-                    .clone()
-                    .map(|v| v.get_from_to().0)
-                    .unwrap_or(100) as f32
-                    // the default chance is 100, but we want to have a range from 0-1 so / 100
-                    / 100.;
-
-                let items = self.get_display_item_group_from_item_group(
-                    item_group_entries,
-                    json_data,
-                    probability,
-                );
-
-                display_item_groups.push(DisplayItemGroup::Distribution {
-                    name: Some(mapgen_item.item.ref_or("Unnamed Group").0),
-                    probability,
-                    items,
-                });
-            }
-
-            display_item_groups.sort_by(|v1, v2| {
-                v2.probability()
-                    .partial_cmp(&v1.probability())
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            serde_json::to_value(display_item_groups).unwrap()
-        }
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
     pub character: char,
@@ -613,12 +200,12 @@ pub struct CellRepresentation {
     item_groups: Value,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Eq, PartialEq, Serialize)]
 pub enum VisibleMappingCommandKind {
     Place,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Eq, PartialEq)]
 pub struct VisibleMappingCommand {
     id: CDDAIdentifier,
     mapping: VisibleMappingKind,
@@ -1100,4 +687,272 @@ pub struct CDDAIdentifierGroup {
 pub struct ProjectContainer {
     pub data: Vec<Project>,
     pub current_project: Option<usize>,
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::cdda_data::{CDDADistributionInner, Distribution, MapGenValue, Switch};
+    use crate::map::importing::MapDataImporter;
+    use crate::map::map_properties::visible::TerrainProperty;
+    use crate::map::VisibleMappingKind;
+    use crate::util::{
+        CDDAIdentifier, DistributionInner, Load, MeabyVec, MeabyWeighted, ParameterIdentifier,
+        Weighted,
+    };
+    use crate::TEST_CDDA_DATA;
+    use glam::UVec2;
+    use std::collections::HashMap;
+    use std::path::PathBuf;
+    use tokio;
+
+    const TEST_DATA_PATH: &str = "test_data";
+
+    #[tokio::test]
+    async fn test_fill_ter() {
+        let mut map_loader = MapDataImporter {
+            path: PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json"),
+            om_terrain: "test_fill_ter".into(),
+        };
+
+        let project_data = map_loader.load().await.unwrap();
+        let map_data = project_data.maps.get(&0).unwrap();
+
+        for (coords, cell) in map_data.cells.iter() {
+            assert_eq!(cell.character, ' ');
+            assert!(coords.x < 24 && coords.y < 24);
+        }
+
+        assert_eq!(project_data.maps.len(), 1);
+        assert_eq!(project_data.size, UVec2::new(24, 24));
+        assert_eq!(project_data.name, "test_fill_ter");
+        assert_eq!(
+            map_data.fill,
+            Some(DistributionInner::Normal("t_grass".into()))
+        );
+    }
+
+    #[tokio::test]
+    async fn test_parameters() {
+        let cdda_data = TEST_CDDA_DATA.get().await;
+
+        let mut map_loader = MapDataImporter {
+            path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
+            om_terrain: "test_terrain".into(),
+        };
+
+        let mut project = map_loader.load().await.unwrap();
+        let map_data = project.maps.get_mut(&0).unwrap();
+        map_data.calculate_parameters(&cdda_data.palettes);
+
+        let parameter_identifier = ParameterIdentifier("terrain_type".to_string());
+        let parameter = map_data.parameters.get(&parameter_identifier).unwrap();
+
+        let weighted_grass = Weighted::new("t_grass", 10);
+        let weighted_grass_dead = Weighted::new("t_grass_dead", 1);
+
+        let expected_distribution = Distribution {
+            distribution: MeabyVec::Vec(vec![
+                MeabyWeighted::Weighted(weighted_grass),
+                MeabyWeighted::Weighted(weighted_grass_dead),
+            ]),
+        };
+
+        assert_eq!(parameter.default, expected_distribution);
+
+        let calculated_parameter = map_data
+            .calculated_parameters
+            .get(&parameter_identifier)
+            .unwrap();
+
+        assert!(
+            calculated_parameter.0 == "t_grass".to_string()
+                || calculated_parameter.0 == "t_grass_dead".to_string()
+        )
+    }
+
+    #[tokio::test]
+    async fn test_terrain() {
+        const SINGLE_CHAR: char = '.';
+        const NOT_WEIGHTED_DISTRIBUTION_CHAR: char = '1';
+        const WEIGHTED_DISTRIBUTION_CHAR: char = '2';
+        const WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR: char = '3';
+        const PARAMETER_CHAR: char = '4';
+        const SWITCH_CHAR: char = '5';
+
+        let cdda_data = TEST_CDDA_DATA.get().await;
+
+        let mut map_loader = MapDataImporter {
+            path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
+            om_terrain: "test_terrain".into(),
+        };
+
+        let mut project = map_loader.load().await.unwrap();
+        let map_data = project.maps.get_mut(&0).unwrap();
+        map_data.calculate_parameters(&cdda_data.palettes);
+
+        // Test the terrain mapped to a single sprite
+        {
+            let single_terrain = map_data.cells.get(&UVec2::new(0, 1)).unwrap();
+            assert_eq!(single_terrain.character, SINGLE_CHAR);
+
+            let terrain_property = map_data
+                .visible
+                .get(&VisibleMappingKind::Terrain)
+                .unwrap()
+                .get(&SINGLE_CHAR)
+                .unwrap()
+                .clone();
+
+            let terrain_property = terrain_property.downcast_arc::<TerrainProperty>().unwrap();
+
+            assert_eq!(
+                terrain_property.mapgen_value,
+                MapGenValue::String("t_grass".into())
+            )
+        }
+
+        // Test the distribution that is not weighted
+        {
+            let distr_terrain = map_data.cells.get(&UVec2::new(0, 0)).unwrap();
+            assert_eq!(distr_terrain.character, NOT_WEIGHTED_DISTRIBUTION_CHAR);
+
+            let terrain_property = map_data
+                .visible
+                .get(&VisibleMappingKind::Terrain)
+                .unwrap()
+                .get(&NOT_WEIGHTED_DISTRIBUTION_CHAR)
+                .unwrap()
+                .clone();
+
+            let terrain_property = terrain_property.downcast_arc::<TerrainProperty>().unwrap();
+
+            let expected_distribution = vec![
+                MeabyWeighted::NotWeighted("t_grass".into()),
+                MeabyWeighted::NotWeighted("t_grass_dead".into()),
+            ];
+
+            assert_eq!(
+                terrain_property.mapgen_value,
+                MapGenValue::Distribution(MeabyVec::Vec(expected_distribution))
+            );
+        }
+
+        // Test the distribution that is weighted
+        {
+            let distr_terrain = map_data.cells.get(&UVec2::new(1, 0)).unwrap();
+            assert_eq!(distr_terrain.character, WEIGHTED_DISTRIBUTION_CHAR);
+
+            let terrain_property = map_data
+                .visible
+                .get(&VisibleMappingKind::Terrain)
+                .unwrap()
+                .get(&WEIGHTED_DISTRIBUTION_CHAR)
+                .unwrap()
+                .clone();
+
+            let terrain_property = terrain_property.downcast_arc::<TerrainProperty>().unwrap();
+
+            let weighted_grass = Weighted::new("t_grass", 10);
+            let weighted_grass_dead = Weighted::new("t_grass_dead", 1);
+
+            let expected_distribution = vec![
+                MeabyWeighted::Weighted(weighted_grass),
+                MeabyWeighted::Weighted(weighted_grass_dead),
+            ];
+
+            assert_eq!(
+                terrain_property.mapgen_value,
+                MapGenValue::Distribution(MeabyVec::Vec(expected_distribution))
+            );
+        }
+
+        // Test the weighted distribution with the "distribution" keyword
+        {
+            let distr_terrain = map_data.cells.get(&UVec2::new(2, 0)).unwrap();
+            assert_eq!(
+                distr_terrain.character,
+                WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR
+            );
+
+            let terrain_property = map_data
+                .visible
+                .get(&VisibleMappingKind::Terrain)
+                .unwrap()
+                .get(&WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR)
+                .unwrap()
+                .clone();
+
+            let terrain_property = terrain_property.downcast_arc::<TerrainProperty>().unwrap();
+
+            let weighted_grass = Weighted::new("t_grass", 1);
+            let weighted_grass_dead = Weighted::new("t_grass_dead", 10);
+
+            let expected_distribution = Distribution {
+                distribution: MeabyVec::Vec(vec![
+                    MeabyWeighted::Weighted(weighted_grass),
+                    MeabyWeighted::Weighted(weighted_grass_dead),
+                ]),
+            };
+
+            assert_eq!(
+                terrain_property.mapgen_value,
+                MapGenValue::Distribution(MeabyVec::Single(MeabyWeighted::NotWeighted(
+                    CDDADistributionInner::Distribution(expected_distribution)
+                )))
+            );
+        }
+
+        // Test if a set parameter works
+        {
+            let distr_terrain = map_data.cells.get(&UVec2::new(3, 0)).unwrap();
+            assert_eq!(distr_terrain.character, PARAMETER_CHAR);
+
+            let terrain_property = map_data
+                .visible
+                .get(&VisibleMappingKind::Terrain)
+                .unwrap()
+                .get(&PARAMETER_CHAR)
+                .unwrap()
+                .clone();
+
+            let terrain_property = terrain_property.downcast_arc::<TerrainProperty>().unwrap();
+
+            let to_eq = MapGenValue::Param {
+                param: ParameterIdentifier("terrain_type".to_string()),
+                fallback: Some("t_grass".into()),
+            };
+
+            assert_eq!(terrain_property.mapgen_value, to_eq);
+        }
+
+        // Test if a switch works
+        {
+            let distr_terrain = map_data.cells.get(&UVec2::new(4, 0)).unwrap();
+            assert_eq!(distr_terrain.character, SWITCH_CHAR);
+
+            let terrain_property = map_data
+                .visible
+                .get(&VisibleMappingKind::Terrain)
+                .unwrap()
+                .get(&SWITCH_CHAR)
+                .unwrap()
+                .clone();
+
+            let terrain_property = terrain_property.downcast_arc::<TerrainProperty>().unwrap();
+
+            let mut to_eq_cases: HashMap<CDDAIdentifier, CDDAIdentifier> = HashMap::new();
+            to_eq_cases.insert("t_grass".into(), "t_concrete_railing".into());
+            to_eq_cases.insert("t_grass_dead".into(), "t_concrete_wall".into());
+
+            let to_eq = MapGenValue::Switch {
+                switch: Switch {
+                    param: ParameterIdentifier("terrain_type".into()),
+                    fallback: "t_grass".into(),
+                },
+                cases: to_eq_cases,
+            };
+
+            assert_eq!(terrain_property.mapgen_value, to_eq);
+        }
+    }
 }
