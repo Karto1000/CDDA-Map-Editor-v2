@@ -126,7 +126,7 @@ pub enum CardinalDirection {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedSprite {
+pub struct MappedCDDAIds {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
     pub trap: Option<CDDAIdentifier>,

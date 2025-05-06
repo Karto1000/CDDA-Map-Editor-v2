@@ -17,7 +17,7 @@ use crate::map::handlers::{get_project_cell_data, open_project};
 use crate::map::ProjectContainer;
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
-use crate::tileset::legacy_tileset::MappedSprite;
+use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::TilesheetKind;
 use crate::util::Load;
 use anyhow::{anyhow, Error};
@@ -105,8 +105,10 @@ async fn frontend_ready(
                     info!("Loading testing map data");
 
                     let mut importer = MapDataImporter {
-                        path: r"C:\CDDA\testing\data\json\mapgen\lab\lab_common.json".into(),
-                        om_terrain: "lab_north_wall".into(),
+                        path:
+                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                                .into(),
+                        om_terrain: "nuclear_plant_0_0_0".into(),
                     };
                     let mut loaded = importer.load().await.unwrap();
                     loaded
@@ -288,7 +290,7 @@ pub fn run() -> () {
 
             app.manage(Mutex::new(editor_data));
             app.manage(Mutex::new(map_data));
-            app.manage::<Mutex<HashMap<IVec3, MappedSprite>>>(Mutex::new(HashMap::new()));
+            app.manage::<Mutex<HashMap<IVec3, MappedCDDAIds>>>(Mutex::new(HashMap::new()));
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(None));
             app.manage::<Mutex<Option<TilesheetKind>>>(Mutex::new(None));
 

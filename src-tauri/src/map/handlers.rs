@@ -4,11 +4,11 @@ use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, Project};
 use crate::map::{
-    CDDAIdentifierGroup, CellRepresentation, ProjectContainer, VisibleMappingCommand,
-    VisibleMappingCommandKind, VisibleMappingKind,
+    CellRepresentation, ProjectContainer, VisibleMappingCommand, VisibleMappingCommandKind,
+    VisibleMappingKind,
 };
 use crate::tileset;
-use crate::tileset::legacy_tileset::MappedSprite;
+use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind};
 use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, UVec2JsonKey};
 use glam::{IVec3, UVec2};
@@ -333,7 +333,7 @@ pub async fn open_project(
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
     project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedSprite>>>,
+    mapped_cdda_ids: State<'_, Mutex<HashMap<IVec3, MappedCDDAIds>>>,
 ) -> Result<(), ()> {
     let mut lock = project_container.lock().await;
 
@@ -353,6 +353,11 @@ pub async fn open_project(
         Some(d) => d,
     };
 
+    let region_settings = json_data
+        .region_settings
+        .get(&CDDAIdentifier("default".into()))
+        .expect("Region settings to exist");
+
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
         None => return Err(()),
@@ -361,11 +366,6 @@ pub async fn open_project(
 
     app.emit(events::OPENED_MAP, index)
         .expect("Function to not fail");
-
-    let region_settings = json_data
-        .region_settings
-        .get(&CDDAIdentifier("default".into()))
-        .expect("Region settings to exist");
 
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
@@ -388,192 +388,15 @@ pub async fn open_project(
     }
 
     for (z, map_data) in project.maps.iter() {
-        let fill_terrain_sprite = match &map_data.fill {
-            None => None,
-            Some(id) => {
-                let id = id.get_identifier(&map_data.calculated_parameters);
-
-                Some(id.as_final_id(&region_settings, &json_data.terrain, &json_data.furniture))
-            }
-        };
-
-        let mut mapped_sprites_lock = mapped_sprites.lock().await;
-
-        // Store the identifiers here since they use random numbers to determine them, and if we used
-        // this function in the next iteration through map_data, we would get other identifiers
-        let mut identifiers = HashMap::new();
-
-        for set in map_data.set.iter() {
-            let chosen_coordinates: Vec<IVec3> = set
-                .coordinates()
-                .into_iter()
-                .map(|c| IVec3::new(c.x as i32, c.y as i32, *z))
-                .collect();
-
-            let mapped_sprites = set.get_mapped_sprites(chosen_coordinates.clone());
-            mapped_sprites_lock.extend(mapped_sprites);
-
-            let adjacent_tiles_vec: Vec<AdjacentSprites> = chosen_coordinates
-                .iter()
-                .map(|c| {
-                    tileset::get_adjacent_sprites(
-                        &mapped_sprites_lock,
-                        c.clone(),
-                        &set.tile_layer(),
-                    )
-                })
-                .collect();
-
-            let sprites =
-                set.get_sprites(chosen_coordinates, adjacent_tiles_vec, tilesheet, json_data);
-
-            for sprite in sprites {
-                insert_sprite_type!(sprite);
-            }
-        }
-
-        let mut chosen_coordinates_vec: VecDeque<UVec2> = VecDeque::new();
-
-        // First, we need to add them to the mapped sprites
-        for (_, place_vec) in map_data.place.iter() {
-            for place in place_vec {
-                let chosen_coordinates = place.coordinates();
-
-                let mapped_sprites = place.get_mapped_sprites(&chosen_coordinates, *z);
-                mapped_sprites_lock.extend(mapped_sprites);
-
-                chosen_coordinates_vec.push_back(chosen_coordinates);
-            }
-        }
-
-        // Now we want to actually add the sprites
-        for (_, place_vec) in map_data.place.iter() {
-            for place in place_vec {
-                let chosen_coordinates = chosen_coordinates_vec.pop_front().unwrap();
-
-                let three_dim_coordinates =
-                    IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, *z);
-
-                let adjacent_sprites = tileset::get_adjacent_sprites(
-                    &mapped_sprites_lock,
-                    three_dim_coordinates,
-                    &place.tile_layer(),
-                );
-
-                let sprites = place.get_sprites(
-                    three_dim_coordinates,
-                    &adjacent_sprites,
-                    tilesheet,
-                    json_data,
-                );
-
-                for sprite in sprites {
-                    insert_sprite_type!(sprite)
-                }
-            }
-        }
-
-        // Create the identifiers before we populate them with the ids because a nested mapgen might
-        // edit things outside the defined character
-        map_data.cells.iter().for_each(|(p, _)| {
-            identifiers.insert(p, CDDAIdentifierGroup::default());
-
-            let default_mapped_sprite = MappedSprite::default();
-            mapped_sprites_lock.insert(
-                IVec3::new(p.x as i32, p.y as i32, *z),
-                default_mapped_sprite,
-            );
-        });
-
-        // We need to store all commands in this list here so we can sort it and act them out in
-        // the order the VisibleMappingCommandKind enum has
-        let mut all_commands: Vec<VisibleMappingCommand> = vec![];
-
-        // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
-        // the function relies on the mapped sprite of this sprite to already exist
-        map_data.cells.iter().for_each(|(p, cell)| {
-            let ident_commands =
-                map_data.get_identifier_change_commands(&cell.character, p, &json_data);
-
-            all_commands.extend(ident_commands)
-        });
-
-        all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
-
-        for command in all_commands {
-            match command.kind {
-                VisibleMappingCommandKind::Place => {
-                    let id = command.id.as_final_id(
-                        region_settings,
-                        &json_data.terrain,
-                        &json_data.furniture,
-                    );
-
-                    let ident_mut = match identifiers.get_mut(&command.coordinates) {
-                        None => {
-                            error!(
-                                "Identifier group at coordinates {:?} not found",
-                                command.coordinates
-                            );
-                            continue;
-                        }
-                        Some(i) => i,
-                    };
-
-                    match command.mapping {
-                        VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
-                            ident_mut.terrain = Some(id.clone());
-                        }
-                        VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
-                            ident_mut.furniture = Some(id.clone());
-                        }
-                        VisibleMappingKind::Traps => {
-                            todo!()
-                        }
-                        VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
-                    }
-
-                    let three_dim_coords = IVec3::new(
-                        command.coordinates.x as i32,
-                        command.coordinates.y as i32,
-                        *z,
-                    );
-                    let mapped_sprite = mapped_sprites_lock
-                        .get_mut(&three_dim_coords)
-                        .expect("Mapped sprite to exist");
-
-                    match command.mapping {
-                        VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
-                            mapped_sprite.terrain = Some(id.clone());
-                        }
-                        VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
-                            mapped_sprite.furniture = Some(id.clone());
-                        }
-                        VisibleMappingKind::Traps => {
-                            todo!()
-                        }
-                        VisibleMappingKind::Monster => mapped_sprite.monster = Some(id.clone()),
-                    }
-                }
-            }
-        }
-
-        // Now we fill any identifier_group and mapped_sprite with no terrain with the fill sprite
-        identifiers.iter_mut().for_each(|(p, i)| {
-            if i.terrain.is_none() {
-                i.terrain = fill_terrain_sprite.clone();
-
-                let mapped_sprite = mapped_sprites_lock
-                    .get_mut(&IVec3::new(p.x as i32, p.y as i32, *z))
-                    .expect("Mapped sprite to exist");
-
-                mapped_sprite.terrain = fill_terrain_sprite.clone();
-            }
-        });
+        let (local_mapped_cdda_ids, ..) = map_data.get_mapped_cdda_ids(json_data, *z);
 
         map_data.cells.iter().for_each(|(p, cell)| {
-            let identifier_group = identifiers.remove(p).expect("Identifier group to exist");
-            let cell_coordinates = IVec3::new(p.x as i32, p.y as i32, *z);
+            let cell_3d_coords = IVec3::new(p.x as i32, p.y as i32, *z);
+
+            let identifier_group = local_mapped_cdda_ids
+                .get(&cell_3d_coords)
+                .expect("Identifier group to exist")
+                .clone();
 
             if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
                 warn!("No sprites found for char {:?}", cell);
@@ -599,14 +422,14 @@ pub async fn open_project(
                 };
 
                 let adjacent_sprites = tileset::get_adjacent_sprites(
-                    &mapped_sprites_lock,
-                    cell_coordinates.clone(),
+                    &local_mapped_cdda_ids,
+                    cell_3d_coords.clone(),
                     &layer,
                 );
 
                 let (fg, bg) = get_sprite_type_from_sprite(
                     &id,
-                    cell_coordinates.clone(),
+                    cell_3d_coords.clone(),
                     &adjacent_sprites,
                     layer.clone(),
                     &sprite_kind,
@@ -680,7 +503,7 @@ pub async fn get_project_cell_data(
 #[tauri::command]
 pub async fn close_project(
     project_container: State<'_, Mutex<ProjectContainer>>,
-    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedSprite>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedCDDAIds>>>,
 ) -> Result<(), ()> {
     let mut lock = project_container.lock().await;
     lock.current_project = None;

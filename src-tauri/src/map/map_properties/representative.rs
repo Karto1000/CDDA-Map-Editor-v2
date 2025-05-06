@@ -88,7 +88,6 @@ impl ItemProperty {
                             });
                         }
                         ItemGroupSubtype::Distribution => {
-                            let probability = g.probability as f32 / weight_sum as f32;
                             display_item_groups.push(DisplayItemGroup::Distribution {
                                 items: display_items,
                                 name: Some(other_group.id.clone().0),
@@ -101,8 +100,9 @@ impl ItemProperty {
                     distribution,
                     probability,
                 } => {
-                    let probability =
-                        probability.unwrap_or(100) as f32 / weight_sum as f32 * group_probability;
+                    let probability = probability
+                        .map(|p| p as f32 / weight_sum as f32 * group_probability)
+                        .unwrap_or(group_probability / weight_sum as f32);
 
                     let display_items =
                         self.get_display_items_from_entries(distribution, json_data, probability);
@@ -117,8 +117,9 @@ impl ItemProperty {
                     collection,
                     probability,
                 } => {
-                    let probability =
-                        probability.unwrap_or(100) as f32 / weight_sum as f32 * group_probability;
+                    let probability = probability
+                        .map(|p| p as f32 / weight_sum as f32 * group_probability)
+                        .unwrap_or(group_probability / weight_sum as f32);
 
                     let display_items =
                         self.get_display_items_from_entries(collection, json_data, probability);
@@ -149,6 +150,11 @@ impl RepresentativeProperty for ItemProperty {
         for mapgen_item in self.items.iter() {
             let item_group_entries = match &mapgen_item.item {
                 ReferenceOrInPlace::Reference(i) => {
+                    if i == &"office_paper".into() {
+                        dbg!(&mapgen_item.chance);
+                        dbg!("NOW");
+                    }
+
                     &json_data
                         .item_groups
                         .get(&i)
@@ -159,12 +165,12 @@ impl RepresentativeProperty for ItemProperty {
             };
 
             let probability = mapgen_item
-                    .chance
-                    .clone()
-                    .map(|v| v.get_from_to().0)
-                    .unwrap_or(100) as f32
-                    // the default chance is 100, but we want to have a range from 0-1 so / 100
-                    / 100.;
+                .chance
+                .clone()
+                .map(|v| v.get_from_to().0)
+                .unwrap_or(100) as f32
+                // the default chance is 100, but we want to have a range from 0-1 so / 100
+                / 100.;
 
             let items = self.get_display_items_from_entries(
                 &item_group_entries.entries,

@@ -5,10 +5,11 @@ pub(crate) mod map_properties;
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenMonster, MapGenMonsterType};
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
+use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
-use crate::editor_data::Project;
+use crate::editor_data::{Project, ZLevel};
 use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
-use crate::tileset::legacy_tileset::MappedSprite;
+use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
     bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, ParameterIdentifier,
@@ -17,11 +18,12 @@ use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
 use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
+use log::error;
 use rand::{rng, Rng};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
 use strum_macros::EnumString;
@@ -44,13 +46,13 @@ pub trait Set: Debug + DynClone + Send + Sync + Downcast + DowncastSync + Downca
         }
     }
 
-    fn get_mapped_sprites(&self, chosen_coordinates: Vec<IVec3>) -> HashMap<IVec3, MappedSprite> {
+    fn get_mapped_sprites(&self, chosen_coordinates: Vec<IVec3>) -> HashMap<IVec3, MappedCDDAIds> {
         let mut new_mapped_sprites = HashMap::new();
 
         for coordinates in chosen_coordinates {
             match self.operation() {
                 SetOperation::Place { ty, id } => {
-                    let mut mapped_sprite = MappedSprite::default();
+                    let mut mapped_sprite = MappedCDDAIds::default();
 
                     match ty {
                         PlaceableSetType::Terrain => {
@@ -142,7 +144,7 @@ pub trait Place: Debug + DynClone + Send + Sync + Downcast + DowncastSync + Down
         &self,
         chosen_coordinates: &UVec2,
         z: i32,
-    ) -> HashMap<IVec3, MappedSprite>;
+    ) -> HashMap<IVec3, MappedCDDAIds>;
 }
 
 clone_trait_object!(Place);
@@ -299,6 +301,143 @@ impl MapData {
         }
 
         self.calculated_parameters = calculated_parameters
+    }
+
+    pub fn get_mapped_cdda_ids(
+        &self,
+        json_data: &DeserializedCDDAJsonData,
+        z: ZLevel,
+    ) -> (
+        HashMap<IVec3, MappedCDDAIds>,
+        VecDeque<IVec3>,
+        VecDeque<IVec3>,
+    ) {
+        let mut local_mapped_cdda_ids = HashMap::new();
+        let mut chosen_set_coordinates: VecDeque<IVec3> = VecDeque::new();
+        let mut chosen_place_coordinates: VecDeque<IVec3> = VecDeque::new();
+
+        let region_settings = json_data
+            .region_settings
+            .get(&CDDAIdentifier("default".into()))
+            .expect("Region settings to exist");
+
+        let fill_terrain_sprite = match &self.fill {
+            None => None,
+            Some(id) => {
+                let id = id.get_identifier(&self.calculated_parameters);
+
+                Some(id.as_final_id(&region_settings, &json_data.terrain, &json_data.furniture))
+            }
+        };
+
+        self.cells.iter().for_each(|(p, _)| {
+            local_mapped_cdda_ids.insert(
+                IVec3::new(p.x as i32, p.y as i32, z),
+                MappedCDDAIds::default(),
+            );
+        });
+
+        for set in self.set.iter() {
+            let chosen_coordinates: Vec<IVec3> = set
+                .coordinates()
+                .into_iter()
+                .map(|c| IVec3::new(c.x as i32, c.y as i32, z))
+                .collect();
+
+            let mapped_sprites = set.get_mapped_sprites(chosen_coordinates.clone());
+
+            local_mapped_cdda_ids.extend(mapped_sprites);
+            chosen_set_coordinates.extend(chosen_coordinates);
+        }
+
+        for (_, place_vec) in self.place.iter() {
+            let mut chosen_coordinates_vec = vec![];
+
+            for place in place_vec {
+                let chosen_coordinates = place.coordinates();
+
+                let mapped_sprites = place.get_mapped_sprites(&chosen_coordinates, z);
+
+                local_mapped_cdda_ids.extend(mapped_sprites);
+                chosen_coordinates_vec.push(IVec3::new(
+                    chosen_coordinates.x as i32,
+                    chosen_coordinates.y as i32,
+                    z,
+                ));
+            }
+
+            chosen_place_coordinates.extend(chosen_coordinates_vec);
+        }
+
+        // We need to store all commands in this list here so we can sort it and act them out in
+        // the order the VisibleMappingCommandKind enum has
+        let mut all_commands: Vec<VisibleMappingCommand> = vec![];
+
+        // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
+        // the function relies on the mapped sprite of this sprite to already exist
+        self.cells.iter().for_each(|(p, cell)| {
+            let ident_commands =
+                self.get_identifier_change_commands(&cell.character, p, &json_data);
+
+            all_commands.extend(ident_commands)
+        });
+
+        all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
+
+        for command in all_commands {
+            let command_3d_coords = IVec3::new(
+                command.coordinates.x as i32,
+                command.coordinates.y as i32,
+                z,
+            );
+
+            match command.kind {
+                VisibleMappingCommandKind::Place => {
+                    let id = command.id.as_final_id(
+                        region_settings,
+                        &json_data.terrain,
+                        &json_data.furniture,
+                    );
+
+                    let ident_mut = match local_mapped_cdda_ids.get_mut(&command_3d_coords) {
+                        None => {
+                            error!(
+                                "Identifier group at coordinates {:?} not found",
+                                command.coordinates
+                            );
+                            continue;
+                        }
+                        Some(i) => i,
+                    };
+
+                    match command.mapping {
+                        VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
+                            ident_mut.terrain = Some(id.clone());
+                        }
+                        VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
+                            ident_mut.furniture = Some(id.clone());
+                        }
+                        VisibleMappingKind::Traps => {
+                            ident_mut.trap = Some(id.clone());
+                        }
+                        VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
+                    }
+                }
+            }
+        }
+
+        // Now we fill any identifier_group and mapped_sprite with no terrain with the fill sprite
+        local_mapped_cdda_ids.iter_mut().for_each(|(p, i)| {
+            if i.terrain.is_none() {
+                i.terrain = fill_terrain_sprite.clone();
+            }
+        });
+
+        (
+            local_mapped_cdda_ids,
+            chosen_set_coordinates,
+            chosen_place_coordinates,
+        )
     }
 
     pub fn get_visible_mapping(
@@ -503,10 +642,10 @@ impl Place for PlaceFurniture {
         &self,
         chosen_coordinates: &UVec2,
         z: i32,
-    ) -> HashMap<IVec3, MappedSprite> {
+    ) -> HashMap<IVec3, MappedCDDAIds> {
         let mut mapped_sprites = HashMap::new();
 
-        let mut mapped_sprite = MappedSprite::default();
+        let mut mapped_sprite = MappedCDDAIds::default();
         mapped_sprite.furniture = Some(self.furniture_id.clone());
 
         mapped_sprites.insert(
@@ -573,10 +712,10 @@ impl Place for PlaceTerrain {
         &self,
         chosen_coordinates: &UVec2,
         z: i32,
-    ) -> HashMap<IVec3, MappedSprite> {
+    ) -> HashMap<IVec3, MappedCDDAIds> {
         let mut mapped_sprites = HashMap::new();
 
-        let mut mapped_sprite = MappedSprite::default();
+        let mut mapped_sprite = MappedCDDAIds::default();
         mapped_sprite.terrain = Some(self.terrain_id.clone());
 
         mapped_sprites.insert(
@@ -745,13 +884,6 @@ impl Set for SetSquare {
     fn operation(&self) -> &SetOperation {
         &self.operation
     }
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct CDDAIdentifierGroup {
-    pub terrain: Option<CDDAIdentifier>,
-    pub furniture: Option<CDDAIdentifier>,
-    pub monster: Option<CDDAIdentifier>,
 }
 
 #[derive(Debug, Default, Serialize, Deserialize, Clone)]

@@ -3,7 +3,7 @@ use crate::cdda_data::TileLayer;
 use crate::tileset::current_tileset::CurrentTilesheet;
 use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
 use crate::tileset::legacy_tileset::{
-    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, MappedSprite, Rotated,
+    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet, MappedCDDAIds, Rotated,
     Rotates, Rotation, SpriteIndex,
 };
 use crate::util::{CDDAIdentifier, MeabyVec, Weighted};
@@ -14,7 +14,6 @@ use rand::distr::Distribution;
 use rand::rng;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
-use tokio::sync::MutexGuard;
 
 pub(crate) mod current_tileset;
 pub(crate) mod handlers;
@@ -779,11 +778,11 @@ pub enum SpriteLayer {
 }
 
 pub fn get_id_from_mapped_sprites(
-    mapped_sprites_lock: &MutexGuard<HashMap<IVec3, MappedSprite>>,
+    mapped_cdda_ids: &HashMap<IVec3, MappedCDDAIds>,
     cords: &IVec3,
     layer: &TileLayer,
 ) -> Option<CDDAIdentifier> {
-    mapped_sprites_lock
+    mapped_cdda_ids
         .get(cords)
         .map(|v| match layer {
             TileLayer::Terrain => v.terrain.clone(),
@@ -795,20 +794,20 @@ pub fn get_id_from_mapped_sprites(
 }
 
 pub fn get_adjacent_sprites(
-    mapped_sprites_lock: &MutexGuard<HashMap<IVec3, MappedSprite>>,
+    mapped_cdda_ids: &HashMap<IVec3, MappedCDDAIds>,
     coordinates: IVec3,
     layer: &TileLayer,
 ) -> AdjacentSprites {
     let top_cords = coordinates + IVec3::new(0, 1, 0);
-    let top = get_id_from_mapped_sprites(&mapped_sprites_lock, &top_cords, &layer);
+    let top = get_id_from_mapped_sprites(&mapped_cdda_ids, &top_cords, &layer);
 
     let right_cords = coordinates + IVec3::new(1, 0, 0);
-    let right = get_id_from_mapped_sprites(&mapped_sprites_lock, &right_cords, &layer);
+    let right = get_id_from_mapped_sprites(&mapped_cdda_ids, &right_cords, &layer);
 
     let bottom = match coordinates.y > 0 {
         true => {
             let bottom_cords = coordinates - IVec3::new(0, 1, 0);
-            get_id_from_mapped_sprites(&mapped_sprites_lock, &bottom_cords, &layer)
+            get_id_from_mapped_sprites(&mapped_cdda_ids, &bottom_cords, &layer)
         }
         false => None,
     };
@@ -816,7 +815,7 @@ pub fn get_adjacent_sprites(
     let left = match coordinates.x > 0 {
         true => {
             let left_cords = coordinates - IVec3::new(1, 0, 0);
-            get_id_from_mapped_sprites(&mapped_sprites_lock, &left_cords, &layer)
+            get_id_from_mapped_sprites(&mapped_cdda_ids, &left_cords, &layer)
         }
         false => None,
     };
