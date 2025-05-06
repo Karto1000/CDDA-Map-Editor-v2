@@ -11,9 +11,9 @@ use crate::map::map_properties::visible::{
     TerrainProperty,
 };
 use crate::map::{
-    Cell, MapData, MapDataFlag, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
-    RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
-    VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
+    Cell, MapData, MapDataFlag, Place, PlaceFurniture, PlaceTerrain, PlaceableSetType,
+    RemovableSetType, RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation,
+    SetPoint, SetSquare, VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
 };
 use crate::util::{
     CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
@@ -135,13 +135,16 @@ pub struct CDDAMapDataObjectCommonIntermediate {
     pub terrain: HashMap<char, MapGenValue>,
 
     #[serde(default)]
+    pub place_terrain: Vec<PlaceTerrain>,
+
+    #[serde(default)]
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub items: HashMap<char, MeabyVec<MapGenItem>>,
+    pub place_furniture: Vec<PlaceFurniture>,
 
     #[serde(default)]
-    pub place_furniture: Vec<PlaceFurniture>,
+    pub items: HashMap<char, MeabyVec<MapGenItem>>,
 
     #[serde(default)]
     pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
@@ -469,6 +472,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         representative.insert(RepresentativeMapping::ItemGroups, item_map);
 
         let mut place = HashMap::new();
+
         place.insert(
             VisibleMappingKind::Furniture,
             self.object
@@ -476,6 +480,16 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .place_furniture
                 .into_iter()
                 .map(|f| Arc::new(f) as Arc<dyn Place>)
+                .collect(),
+        );
+
+        place.insert(
+            VisibleMappingKind::Terrain,
+            self.object
+                .common
+                .place_terrain
+                .into_iter()
+                .map(|t| Arc::new(t) as Arc<dyn Place>)
                 .collect(),
         );
 

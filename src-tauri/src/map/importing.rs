@@ -4,6 +4,7 @@ use crate::map::DEFAULT_MAP_DATA_SIZE;
 use crate::util::Load;
 use anyhow::anyhow;
 use glam::UVec2;
+use serde_json::Value;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -17,12 +18,44 @@ impl Load<Project> for MapDataImporter {
     async fn load(&mut self) -> Result<Project, anyhow::Error> {
         let reader = BufReader::new(File::open(&self.path)?);
         let importing_map_datas: Vec<CDDAMapDataIntermediate> =
-            serde_json::from_reader(reader).map_err(|e| anyhow::Error::from(e))?;
+            serde_json::from_reader::<BufReader<File>, Vec<Value>>(reader)
+                .map_err(|e| anyhow::Error::from(e))?
+                .into_iter()
+                .filter_map(|v: Value| serde_json::from_value::<CDDAMapDataIntermediate>(v).ok())
+                .collect();
 
         // TODO: Handle multiple z-levels
         let project = importing_map_datas
             .into_iter()
             .find_map(|mdi| {
+                if let Some(update_terrain) = &mdi.update_mapgen_id {
+                    return match self.om_terrain == update_terrain.0 {
+                        true => {
+                            let mut project = Project::new(
+                                update_terrain.0.clone(),
+                                mdi.object.mapgen_size.unwrap(),
+                            );
+                            project.maps.insert(0, mdi.into());
+                            Some(project)
+                        }
+                        false => None,
+                    };
+                }
+
+                if let Some(nested_terrain) = &mdi.nested_mapgen_id {
+                    return match self.om_terrain == nested_terrain.0 {
+                        true => {
+                            let mut project = Project::new(
+                                nested_terrain.0.clone(),
+                                mdi.object.mapgen_size.unwrap(),
+                            );
+                            project.maps.insert(0, mdi.into());
+                            Some(project)
+                        }
+                        false => None,
+                    };
+                }
+
                 if let Some(om_terrain) = &mdi.om_terrain {
                     return match om_terrain {
                         OmTerrain::Single(s) => match &self.om_terrain == s {

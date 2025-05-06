@@ -14,7 +14,7 @@ use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, UVec2JsonKey};
 use glam::{IVec3, UVec2};
 use log::{debug, error, warn};
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use tauri::async_runtime::Mutex;
@@ -432,9 +432,25 @@ pub async fn open_project(
             }
         }
 
+        let mut chosen_coordinates_vec: VecDeque<UVec2> = VecDeque::new();
+
+        // First, we need to add them to the mapped sprites
         for (_, place_vec) in map_data.place.iter() {
             for place in place_vec {
                 let chosen_coordinates = place.coordinates();
+
+                let mapped_sprites = place.get_mapped_sprites(&chosen_coordinates, *z);
+                mapped_sprites_lock.extend(mapped_sprites);
+
+                chosen_coordinates_vec.push_back(chosen_coordinates);
+            }
+        }
+
+        // Now we want to actually add the sprites
+        for (_, place_vec) in map_data.place.iter() {
+            for place in place_vec {
+                let chosen_coordinates = chosen_coordinates_vec.pop_front().unwrap();
+
                 let three_dim_coordinates =
                     IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, *z);
 
@@ -443,9 +459,6 @@ pub async fn open_project(
                     three_dim_coordinates,
                     &place.tile_layer(),
                 );
-
-                let mapped_sprites = place.get_mapped_sprites(&chosen_coordinates, *z);
-                mapped_sprites_lock.extend(mapped_sprites);
 
                 let sprites = place.get_sprites(
                     three_dim_coordinates,

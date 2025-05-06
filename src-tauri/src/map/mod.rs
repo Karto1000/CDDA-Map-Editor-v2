@@ -450,7 +450,8 @@ impl Serialize for MapData {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceFurniture {
-    furn: CDDAIdentifier,
+    #[serde(rename = "furn")]
+    furniture_id: CDDAIdentifier,
     x: NumberOrRange<u32>,
     y: NumberOrRange<u32>,
 }
@@ -472,12 +473,12 @@ impl Place for PlaceFurniture {
         json_data: &DeserializedCDDAJsonData,
     ) -> Vec<SpriteType> {
         let sprite_kind = match tilesheet {
-            TilesheetKind::Legacy(l) => l.get_sprite(&self.furn, json_data),
-            TilesheetKind::Current(c) => c.get_sprite(&self.furn, json_data),
+            TilesheetKind::Legacy(l) => l.get_sprite(&self.furniture_id, json_data),
+            TilesheetKind::Current(c) => c.get_sprite(&self.furniture_id, json_data),
         };
 
         let (fg, bg) = get_sprite_type_from_sprite(
-            &self.furn,
+            &self.furniture_id,
             coordinates,
             adjacent_sprites,
             TileLayer::Furniture,
@@ -506,7 +507,77 @@ impl Place for PlaceFurniture {
         let mut mapped_sprites = HashMap::new();
 
         let mut mapped_sprite = MappedSprite::default();
-        mapped_sprite.furniture = Some(self.furn.clone());
+        mapped_sprite.furniture = Some(self.furniture_id.clone());
+
+        mapped_sprites.insert(
+            IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, z),
+            mapped_sprite,
+        );
+
+        mapped_sprites
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceTerrain {
+    #[serde(rename = "ter")]
+    terrain_id: CDDAIdentifier,
+    x: NumberOrRange<u32>,
+    y: NumberOrRange<u32>,
+}
+
+impl Place for PlaceTerrain {
+    fn coordinates(&self) -> UVec2 {
+        UVec2::new(self.x.rand_number(), self.y.rand_number())
+    }
+
+    fn tile_layer(&self) -> TileLayer {
+        TileLayer::Terrain
+    }
+
+    fn get_sprites(
+        &self,
+        coordinates: IVec3,
+        adjacent_sprites: &AdjacentSprites,
+        tilesheet: &TilesheetKind,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Vec<SpriteType> {
+        let sprite_kind = match tilesheet {
+            TilesheetKind::Legacy(l) => l.get_sprite(&self.terrain_id, json_data),
+            TilesheetKind::Current(c) => c.get_sprite(&self.terrain_id, json_data),
+        };
+
+        let (fg, bg) = get_sprite_type_from_sprite(
+            &self.terrain_id,
+            coordinates,
+            adjacent_sprites,
+            TileLayer::Terrain,
+            &sprite_kind,
+            json_data,
+        );
+
+        let mut sprite_types = vec![];
+
+        if let Some(fg) = fg {
+            sprite_types.push(fg)
+        }
+
+        if let Some(bg) = bg {
+            sprite_types.push(bg)
+        }
+
+        sprite_types
+    }
+
+    fn get_mapped_sprites(
+        &self,
+        chosen_coordinates: &UVec2,
+        z: i32,
+    ) -> HashMap<IVec3, MappedSprite> {
+        let mut mapped_sprites = HashMap::new();
+
+        let mut mapped_sprite = MappedSprite::default();
+        mapped_sprite.terrain = Some(self.terrain_id.clone());
 
         mapped_sprites.insert(
             IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, z),
