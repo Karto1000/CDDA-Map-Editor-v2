@@ -13,7 +13,7 @@ use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
-    bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, ParameterIdentifier,
+    bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, ParameterIdentifier, Weighted,
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
@@ -177,13 +177,12 @@ pub enum VisibleMappingKind {
     Furniture = 1,
     Traps = 2,
     Monster = 3,
-    NestedTerrain = 4,
-    NestedFurniture = 5,
+    Nested = 4,
 }
 
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
-pub enum RepresentativeMapping {
+pub enum RepresentativeMappingKind {
     Monster,
     ItemGroups,
 }
@@ -223,6 +222,11 @@ pub enum MapDataFlag {
 }
 
 #[derive(Debug, Clone, Deserialize)]
+pub struct MapGenNested {
+    pub chunks: Vec<Weighted<MapGenValue>>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
 pub struct MapData {
     pub cells: IndexMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
@@ -238,7 +242,7 @@ pub struct MapData {
 
     #[serde(skip)]
     pub representative:
-        HashMap<RepresentativeMapping, HashMap<char, Arc<dyn RepresentativeProperty>>>,
+        HashMap<RepresentativeMappingKind, HashMap<char, Arc<dyn RepresentativeProperty>>>,
 
     #[serde(skip)]
     pub set: Vec<Arc<dyn Set>>,
@@ -322,44 +326,13 @@ impl MapData {
         };
 
         self.cells.iter().for_each(|(p, _)| {
-            local_mapped_cdda_ids.insert(
-                IVec3::new(p.x as i32, p.y as i32, z),
-                MappedCDDAIds::default(),
-            );
+            let mut mapped_ids = MappedCDDAIds::default();
+            mapped_ids.terrain = fill_terrain_sprite.clone();
+
+            local_mapped_cdda_ids.insert(IVec3::new(p.x as i32, p.y as i32, z), mapped_ids);
         });
 
-        // We need to store all commands in this list here so we can sort it and act them out in
-        // the order the VisibleMappingCommandKind enum has
-        let mut all_commands: Vec<VisibleMappingCommand> = vec![];
-
-        // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
-        // the function relies on the mapped sprite of this sprite to already exist
-        self.cells.iter().for_each(|(p, cell)| {
-            let ident_commands =
-                self.get_identifier_change_commands(&cell.character, p, &json_data);
-
-            all_commands.extend(ident_commands)
-        });
-
-        for (_, place_vec) in self.place.iter() {
-            for place in place_vec {
-                let position = place.coordinates();
-
-                match place.inner.get_commands(
-                    &position.as_uvec2(),
-                    &self.calculated_parameters,
-                    json_data,
-                ) {
-                    None => {}
-                    Some(commands) => {
-                        dbg!(&commands);
-                        all_commands.extend(commands);
-                    }
-                }
-            }
-        }
-
-        all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
+        let all_commands = self.get_commands(&json_data);
 
         for command in all_commands {
             let command_3d_coords = IVec3::new(
@@ -388,16 +361,17 @@ impl MapData {
                     };
 
                     match command.mapping {
-                        VisibleMappingKind::Terrain | VisibleMappingKind::NestedTerrain => {
+                        VisibleMappingKind::Terrain => {
                             ident_mut.terrain = Some(id.clone());
                         }
-                        VisibleMappingKind::Furniture | VisibleMappingKind::NestedFurniture => {
+                        VisibleMappingKind::Furniture => {
                             ident_mut.furniture = Some(id.clone());
                         }
                         VisibleMappingKind::Traps => {
                             ident_mut.trap = Some(id.clone());
                         }
                         VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
+                        VisibleMappingKind::Nested => unreachable!(),
                     }
                 }
             }
@@ -424,14 +398,42 @@ impl MapData {
                 );
         }
 
-        // Now we fill any identifier_group and mapped_sprite with no terrain with the fill sprite
-        local_mapped_cdda_ids.iter_mut().for_each(|(p, i)| {
-            if i.terrain.is_none() {
-                i.terrain = fill_terrain_sprite.clone();
-            }
+        local_mapped_cdda_ids
+    }
+
+    pub fn get_commands(&self, json_data: &DeserializedCDDAJsonData) -> Vec<VisibleMappingCommand> {
+        // We need to store all commands in this list here so we can sort it and act them out in
+        // the order the VisibleMappingCommandKind enum has
+        let mut all_commands: Vec<VisibleMappingCommand> = vec![];
+
+        // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
+        // the function relies on the mapped sprite of this sprite to already exist
+        self.cells.iter().for_each(|(p, cell)| {
+            let ident_commands =
+                self.get_identifier_change_commands(&cell.character, p, &json_data);
+
+            all_commands.extend(ident_commands)
         });
 
-        local_mapped_cdda_ids
+        for (_, place_vec) in self.place.iter() {
+            for place in place_vec {
+                let position = place.coordinates();
+
+                match place.inner.get_commands(
+                    &position.as_uvec2(),
+                    &self.calculated_parameters,
+                    json_data,
+                ) {
+                    None => {}
+                    Some(commands) => {
+                        all_commands.extend(commands);
+                    }
+                }
+            }
+        }
+
+        all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
+        all_commands
     }
 
     pub fn get_visible_mapping(
@@ -468,7 +470,7 @@ impl MapData {
 
     pub fn get_representative_mapping(
         &self,
-        mapping_kind: &RepresentativeMapping,
+        mapping_kind: &RepresentativeMappingKind,
         character: &char,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Value> {
@@ -502,7 +504,11 @@ impl MapData {
         json_data: &DeserializedCDDAJsonData,
     ) -> CellRepresentation {
         let item_groups = self
-            .get_representative_mapping(&RepresentativeMapping::ItemGroups, character, json_data)
+            .get_representative_mapping(
+                &RepresentativeMappingKind::ItemGroups,
+                character,
+                json_data,
+            )
             .unwrap_or(Value::Array(vec![]));
 
         CellRepresentation { item_groups }
@@ -516,46 +522,31 @@ impl MapData {
     ) -> Vec<VisibleMappingCommand> {
         let mut commands = Vec::new();
 
-        let nested_terrain_mapping = self.get_visible_mapping(
-            &VisibleMappingKind::NestedTerrain,
-            character,
-            position,
-            json_data,
-        );
+        let nested_commands = self
+            .get_visible_mapping(&VisibleMappingKind::Nested, character, position, json_data)
+            .unwrap_or_default();
 
-        match nested_terrain_mapping.map_or(
-            self.get_visible_mapping(&VisibleMappingKind::Terrain, character, position, json_data),
-            |v| Some(v),
-        ) {
-            None => {}
-            Some(c) => commands.extend(c),
-        }
+        let terrain_commands = self
+            .get_visible_mapping(&VisibleMappingKind::Terrain, character, position, json_data)
+            .unwrap_or_default();
 
-        let nested_furniture_mapping = self.get_visible_mapping(
-            &VisibleMappingKind::NestedFurniture,
-            character,
-            position,
-            json_data,
-        );
-
-        match nested_furniture_mapping.map_or(
-            self.get_visible_mapping(
+        let furniture_commands = self
+            .get_visible_mapping(
                 &VisibleMappingKind::Furniture,
                 character,
                 position,
                 json_data,
-            ),
-            |v| Some(v),
-        ) {
-            None => {}
-            Some(c) => commands.extend(c),
-        };
+            )
+            .unwrap_or_default();
 
-        match self.get_visible_mapping(&VisibleMappingKind::Monster, character, position, json_data)
-        {
-            None => {}
-            Some(c) => commands.extend(c),
-        }
+        let monster_commands = self
+            .get_visible_mapping(&VisibleMappingKind::Monster, character, position, json_data)
+            .unwrap_or_default();
+
+        commands.extend(terrain_commands);
+        commands.extend(furniture_commands);
+        commands.extend(monster_commands);
+        commands.extend(nested_commands);
 
         commands
     }

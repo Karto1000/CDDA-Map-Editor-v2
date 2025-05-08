@@ -4,7 +4,7 @@ use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
 use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{FurnitureProperty, MonsterProperty, TerrainProperty};
 use crate::map::{
-    RepresentativeMapping, RepresentativeProperty, VisibleMappingCommand, VisibleMappingKind,
+    RepresentativeMappingKind, RepresentativeProperty, VisibleMappingCommand, VisibleMappingKind,
     VisibleProperty,
 };
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
@@ -163,7 +163,7 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
             item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
         }
 
-        representative.insert(RepresentativeMapping::ItemGroups, item_map);
+        representative.insert(RepresentativeMappingKind::ItemGroups, item_map);
 
         CDDAPalette {
             id: self.id,
@@ -185,7 +185,7 @@ pub struct CDDAPalette {
 
     #[serde(skip)]
     pub representative:
-        HashMap<RepresentativeMapping, HashMap<char, Arc<dyn RepresentativeProperty>>>,
+        HashMap<RepresentativeMappingKind, HashMap<char, Arc<dyn RepresentativeProperty>>>,
 
     #[serde(rename = "//")]
     pub comment: Comment,
@@ -262,7 +262,7 @@ impl CDDAPalette {
 
     pub fn get_representative_mapping(
         &self,
-        mapping_kind: impl Borrow<RepresentativeMapping>,
+        mapping_kind: impl Borrow<RepresentativeMappingKind>,
         character: impl Borrow<char>,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         json_data: &DeserializedCDDAJsonData,

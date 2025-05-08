@@ -1,4 +1,4 @@
-use crate::cdda_data::map_data::MapGenNested;
+use crate::cdda_data::map_data::MapGenNestedIntermediate;
 use crate::map::*;
 use crate::tileset::GetRandom;
 use crate::util::{MeabyVec, MeabyWeighted, Weighted};
@@ -124,17 +124,17 @@ impl VisibleProperty for FurnitureProperty {
 }
 
 #[derive(Debug, Clone)]
-pub struct NestedTerrainProperty {
-    pub nested: Vec<Weighted<MapGenNested>>,
+pub struct NestedProperty {
+    pub nested: MapGenNested,
 }
 
-impl RepresentativeProperty for NestedTerrainProperty {
+impl RepresentativeProperty for NestedProperty {
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         todo!()
     }
 }
 
-impl VisibleProperty for NestedTerrainProperty {
+impl VisibleProperty for NestedProperty {
     fn get_commands(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
@@ -143,8 +143,8 @@ impl VisibleProperty for NestedTerrainProperty {
     ) -> Option<Vec<VisibleMappingCommand>> {
         let selected_chunk = self
             .nested
-            .get_random()
             .chunks
+            .get_random()
             .get_identifier(calculated_parameters);
 
         let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
@@ -155,95 +155,12 @@ impl VisibleProperty for NestedTerrainProperty {
             Some(v) => v,
         };
 
-        let mut commands = vec![];
-        for y in 0..nested_mapgen.map_size.y {
-            for x in 0..nested_mapgen.map_size.x {
-                let nested_position = UVec2::new(x, y);
-                let cell = nested_mapgen.cells.get(&nested_position)?;
+        let mut commands = nested_mapgen.get_commands(json_data);
 
-                let mapping = nested_mapgen.get_visible_mapping(
-                    &VisibleMappingKind::Terrain,
-                    &cell.character,
-                    &nested_position,
-                    json_data,
-                );
-
-                if let Some(mut mapping_commands) = mapping {
-                    // Offset the commands position
-                    mapping_commands.iter_mut().for_each(|command| {
-                        command.coordinates.x += position.x;
-                        command.coordinates.y = position.y - command.coordinates.y;
-
-                        command.mapping = VisibleMappingKind::NestedTerrain;
-                    });
-
-                    commands.extend(mapping_commands);
-                }
-            }
-        }
-
-        Some(commands)
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct NestedFurnitureProperty {
-    pub nested: Vec<Weighted<MapGenNested>>,
-}
-
-impl RepresentativeProperty for NestedFurnitureProperty {
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        todo!()
-    }
-}
-
-impl VisibleProperty for NestedFurnitureProperty {
-    fn get_commands(
-        &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        position: &UVec2,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
-        let selected_chunk = self
-            .nested
-            .get_random()
-            .chunks
-            .get_identifier(calculated_parameters);
-
-        let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
-            None => {
-                error!("Nested Mapgen {} not found", selected_chunk);
-                return None;
-            }
-            Some(n) => n,
-        };
-
-        let mut commands = vec![];
-        for y in 0..nested_mapgen.map_size.y {
-            for x in 0..nested_mapgen.map_size.x {
-                let nested_position = UVec2::new(x, y);
-                let cell = nested_mapgen.cells.get(&nested_position)?;
-
-                let mapping = nested_mapgen.get_visible_mapping(
-                    &VisibleMappingKind::Furniture,
-                    &cell.character,
-                    &nested_position,
-                    json_data,
-                );
-
-                if let Some(mut mapping_commands) = mapping {
-                    // Offset the commands position
-                    mapping_commands.iter_mut().for_each(|command| {
-                        command.coordinates.x += position.x;
-                        command.coordinates.y = position.y - command.coordinates.y;
-
-                        command.mapping = VisibleMappingKind::NestedFurniture;
-                    });
-
-                    commands.extend(mapping_commands);
-                }
-            }
-        }
+        commands.iter_mut().for_each(|c| {
+            c.coordinates.x += position.x;
+            c.coordinates.y = position.y - c.coordinates.y;
+        });
 
         Some(commands)
     }

@@ -399,7 +399,10 @@ pub async fn open_project(
                 .clone();
 
             if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
-                warn!("No sprites found for char {:?}", cell);
+                warn!(
+                    "No sprites found for char {:?} with identifier_group {:?}",
+                    cell, identifier_group
+                );
                 return;
             }
 

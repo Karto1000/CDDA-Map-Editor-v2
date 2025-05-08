@@ -7,14 +7,13 @@ use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{
-    FurnitureProperty, MonsterProperty, NestedFurnitureProperty, NestedTerrainProperty,
-    TerrainProperty,
+    FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
 use crate::map::place::{PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain};
 use crate::map::{
-    Cell, MapData, MapDataFlag, Place, PlaceableSetType, RemovableSetType, RepresentativeMapping,
-    RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare, VisibleMappingKind,
-    VisibleProperty, SPECIAL_EMPTY_CHAR,
+    Cell, MapData, MapDataFlag, MapGenNested, Place, PlaceableSetType, RemovableSetType,
+    RepresentativeMappingKind, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint,
+    SetSquare, VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
 };
 use crate::util::{
     CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
@@ -124,8 +123,35 @@ pub struct MapGenMonster {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MapGenNested {
-    pub chunks: MapGenValue,
+#[serde(untagged)]
+pub enum MapGenNestedIntermediate {
+    Chunks {
+        chunks: MeabyVec<MeabyWeighted<MapGenValue>>,
+    },
+    ElseChunks {
+        else_chunks: MeabyVec<MeabyWeighted<MapGenValue>>,
+    },
+}
+
+impl Into<MapGenNested> for MapGenNestedIntermediate {
+    fn into(self) -> MapGenNested {
+        let transformed_chunks = match self {
+            MapGenNestedIntermediate::Chunks { chunks } => chunks
+                .into_vec()
+                .into_iter()
+                .map(MeabyWeighted::to_weighted)
+                .collect(),
+            MapGenNestedIntermediate::ElseChunks { else_chunks } => else_chunks
+                .into_vec()
+                .into_iter()
+                .map(MeabyWeighted::to_weighted)
+                .collect(),
+        };
+
+        MapGenNested {
+            chunks: transformed_chunks,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -136,10 +162,10 @@ pub struct PlaceInnerFurniture {
 
 impl Into<Arc<dyn Place>> for PlaceInnerFurniture {
     fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceTerrain {
-            visible: Arc::new(FurnitureProperty {
+        Arc::new(PlaceFurniture {
+            visible: FurnitureProperty {
                 mapgen_value: MapGenValue::String(self.furniture_id.clone()),
-            }),
+            },
         })
     }
 }
@@ -153,9 +179,9 @@ pub struct PlaceInnerTerrain {
 impl Into<Arc<dyn Place>> for PlaceInnerTerrain {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceTerrain {
-            visible: Arc::new(TerrainProperty {
+            visible: TerrainProperty {
                 mapgen_value: MapGenValue::String(self.terrain_id.clone()),
-            }),
+            },
         })
     }
 }
@@ -168,7 +194,7 @@ pub struct PlaceInnerItems {
 impl Into<Arc<dyn Place>> for PlaceInnerItems {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceItems {
-            representative: Arc::new(ItemProperty { items: vec![] }),
+            representative: ItemProperty { items: vec![] },
         })
     }
 }
@@ -183,7 +209,7 @@ pub struct PlaceInnerMonsters {
 impl Into<Arc<dyn Place>> for PlaceInnerMonsters {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceMonster {
-            visible: Arc::new(MonsterProperty {
+            visible: MonsterProperty {
                 monster: MeabyVec::Single(MapGenMonster {
                     id: MapGenMonsterType::MonsterGroup {
                         group: MapGenValue::String(self.monster),
@@ -191,17 +217,24 @@ impl Into<Arc<dyn Place>> for PlaceInnerMonsters {
                     chance: self.chance,
                     pack_size: None,
                 }),
-            }),
+            },
         })
     }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerNested {}
+pub struct PlaceInnerNested {
+    #[serde(flatten)]
+    pub chunks: MapGenNestedIntermediate,
+}
 
 impl Into<Arc<dyn Place>> for PlaceInnerNested {
     fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceNested {})
+        Arc::new(PlaceNested {
+            nested_property: NestedProperty {
+                nested: self.chunks.into(),
+            },
+        })
     }
 }
 
@@ -216,7 +249,6 @@ pub struct PlaceOuter<T> {
 
 // TODO: For some reason i cannot implement <T: Into<Arc<dyn Place>> From<PlaceOuter<T>> for PlaceOuter<Arc<dyn Place>>
 // Since it conflicts with inbuilt implementations?
-
 impl From<PlaceOuter<PlaceInnerFurniture>> for PlaceOuter<Arc<dyn Place>> {
     fn from(value: PlaceOuter<PlaceInnerFurniture>) -> Self {
         PlaceOuter {
@@ -239,6 +271,16 @@ impl From<PlaceOuter<PlaceInnerTerrain>> for PlaceOuter<Arc<dyn Place>> {
 
 impl From<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
     fn from(value: PlaceOuter<PlaceInnerMonsters>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl From<PlaceOuter<PlaceInnerNested>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<PlaceInnerNested>) -> Self {
         PlaceOuter {
             x: value.x,
             y: value.y,
@@ -295,7 +337,7 @@ map_data_object!(
     furniture: MapGenValue,
     items: MeabyVec<MapGenItem>,
     monsters: MeabyVec<MapGenMonster>,
-    nested: MeabyVec<MeabyWeighted<MapGenNested>>
+    nested: MapGenNestedIntermediate
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -521,33 +563,19 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
         }
 
-        let mut nested_terrain_map = HashMap::new();
-        let mut nested_furniture_map = HashMap::new();
+        let mut nested_map = HashMap::new();
 
         for (char, nested) in self.object.common.nested {
-            let nested_trans: Vec<Weighted<MapGenNested>> = nested
-                .clone()
-                .into_vec()
-                .into_iter()
-                .map(|v| v.weighted())
-                .collect();
-
-            let nested_terrain_prop = Arc::new(NestedTerrainProperty {
-                nested: nested_trans.clone(),
+            let nested_terrain_prop = Arc::new(NestedProperty {
+                nested: nested.clone().into(),
             });
-            nested_terrain_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
-
-            let nested_furniture_prop = Arc::new(NestedFurnitureProperty {
-                nested: nested_trans,
-            });
-            nested_furniture_map.insert(char, nested_furniture_prop as Arc<dyn VisibleProperty>);
+            nested_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
         }
 
         visible.insert(VisibleMappingKind::Terrain, terrain_map);
         visible.insert(VisibleMappingKind::Furniture, furniture_map);
         visible.insert(VisibleMappingKind::Monster, monster_map);
-        visible.insert(VisibleMappingKind::NestedTerrain, nested_terrain_map);
-        visible.insert(VisibleMappingKind::NestedFurniture, nested_furniture_map);
+        visible.insert(VisibleMappingKind::Nested, nested_map);
 
         let mut representative = HashMap::new();
 
@@ -559,7 +587,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
         }
 
-        representative.insert(RepresentativeMapping::ItemGroups, item_map);
+        representative.insert(RepresentativeMappingKind::ItemGroups, item_map);
 
         let mut place = HashMap::new();
 
@@ -593,13 +621,15 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .collect(),
         );
 
-        if let Some(om) = self.om_terrain {
-            if let OmTerrain::Single(st) = om {
-                if st == "test_place".to_string() {
-                    dbg!(&place);
-                }
-            }
-        }
+        place.insert(
+            VisibleMappingKind::Nested,
+            self.object
+                .common
+                .place_nested
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        );
 
         let mut map_data = MapData::default();
 
