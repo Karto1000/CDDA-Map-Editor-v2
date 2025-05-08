@@ -1,6 +1,7 @@
 pub(crate) mod handlers;
 pub(crate) mod importing;
 pub(crate) mod map_properties;
+pub(crate) mod place;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenMonster, MapGenMonsterType, PlaceOuter};
@@ -129,21 +130,18 @@ clone_trait_object!(Set);
 impl_downcast!(sync Set);
 
 pub trait Place: Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend {
-    fn tile_layer(&self) -> TileLayer;
-
-    fn get_sprites(
+    fn get_commands(
         &self,
-        coordinates: IVec3,
-        adjacent_sprites: &AdjacentSprites,
-        tilesheet: &TilesheetKind,
+        position: &UVec2,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<SpriteType>;
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        None
+    }
 
-    fn get_mapped_sprites(
-        &self,
-        chosen_coordinates: &UVec2,
-        z: i32,
-    ) -> HashMap<IVec3, MappedCDDAIds>;
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
+    }
 }
 
 clone_trait_object!(Place);
@@ -343,6 +341,24 @@ impl MapData {
             all_commands.extend(ident_commands)
         });
 
+        for (_, place_vec) in self.place.iter() {
+            for place in place_vec {
+                let position = place.coordinates();
+
+                match place.inner.get_commands(
+                    &position.as_uvec2(),
+                    &self.calculated_parameters,
+                    json_data,
+                ) {
+                    None => {}
+                    Some(commands) => {
+                        dbg!(&commands);
+                        all_commands.extend(commands);
+                    }
+                }
+            }
+        }
+
         all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
 
         for command in all_commands {
@@ -406,27 +422,6 @@ impl MapData {
                         }
                     },
                 );
-        }
-
-        for (_, place_vec) in self.place.iter() {
-            for place in place_vec {
-                let chosen_coordinates = place.coordinates();
-
-                place
-                    .inner
-                    .get_mapped_sprites(&chosen_coordinates, z)
-                    .into_iter()
-                    .for_each(
-                        |(coords, ids)| match local_mapped_cdda_ids.get_mut(&coords) {
-                            None => {
-                                warn!("Coordinates {:?} for place are out of bounds", coords);
-                            }
-                            Some(existing_mapped) => {
-                                existing_mapped.update_override(ids);
-                            }
-                        },
-                    );
-            }
         }
 
         // Now we fill any identifier_group and mapped_sprite with no terrain with the fill sprite
@@ -583,134 +578,6 @@ impl Serialize for MapData {
         state.serialize_field("cells", &serialized_cells)?;
 
         state.end()
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceFurniture {
-    #[serde(rename = "furn")]
-    furniture_id: CDDAIdentifier,
-}
-
-impl Place for PlaceFurniture {
-    fn tile_layer(&self) -> TileLayer {
-        TileLayer::Furniture
-    }
-
-    fn get_sprites(
-        &self,
-        coordinates: IVec3,
-        adjacent_sprites: &AdjacentSprites,
-        tilesheet: &TilesheetKind,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<SpriteType> {
-        let sprite_kind = match tilesheet {
-            TilesheetKind::Legacy(l) => l.get_sprite(&self.furniture_id, json_data),
-            TilesheetKind::Current(c) => c.get_sprite(&self.furniture_id, json_data),
-        };
-
-        let (fg, bg) = get_sprite_type_from_sprite(
-            &self.furniture_id,
-            coordinates,
-            adjacent_sprites,
-            TileLayer::Furniture,
-            &sprite_kind,
-            json_data,
-        );
-
-        let mut sprite_types = vec![];
-
-        if let Some(fg) = fg {
-            sprite_types.push(fg)
-        }
-
-        if let Some(bg) = bg {
-            sprite_types.push(bg)
-        }
-
-        sprite_types
-    }
-
-    fn get_mapped_sprites(
-        &self,
-        chosen_coordinates: &UVec2,
-        z: i32,
-    ) -> HashMap<IVec3, MappedCDDAIds> {
-        let mut mapped_sprites = HashMap::new();
-
-        let mut mapped_sprite = MappedCDDAIds::default();
-        mapped_sprite.furniture = Some(self.furniture_id.clone());
-
-        mapped_sprites.insert(
-            IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, z),
-            mapped_sprite,
-        );
-
-        mapped_sprites
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceTerrain {
-    #[serde(rename = "ter")]
-    terrain_id: CDDAIdentifier,
-}
-
-impl Place for PlaceTerrain {
-    fn tile_layer(&self) -> TileLayer {
-        TileLayer::Terrain
-    }
-
-    fn get_sprites(
-        &self,
-        coordinates: IVec3,
-        adjacent_sprites: &AdjacentSprites,
-        tilesheet: &TilesheetKind,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<SpriteType> {
-        let sprite_kind = match tilesheet {
-            TilesheetKind::Legacy(l) => l.get_sprite(&self.terrain_id, json_data),
-            TilesheetKind::Current(c) => c.get_sprite(&self.terrain_id, json_data),
-        };
-
-        let (fg, bg) = get_sprite_type_from_sprite(
-            &self.terrain_id,
-            coordinates,
-            adjacent_sprites,
-            TileLayer::Terrain,
-            &sprite_kind,
-            json_data,
-        );
-
-        let mut sprite_types = vec![];
-
-        if let Some(fg) = fg {
-            sprite_types.push(fg)
-        }
-
-        if let Some(bg) = bg {
-            sprite_types.push(bg)
-        }
-
-        sprite_types
-    }
-
-    fn get_mapped_sprites(
-        &self,
-        chosen_coordinates: &UVec2,
-        z: i32,
-    ) -> HashMap<IVec3, MappedCDDAIds> {
-        let mut mapped_sprites = HashMap::new();
-
-        let mut mapped_sprite = MappedCDDAIds::default();
-        mapped_sprite.terrain = Some(self.terrain_id.clone());
-
-        mapped_sprites.insert(
-            IVec3::new(chosen_coordinates.x as i32, chosen_coordinates.y as i32, z),
-            mapped_sprite,
-        );
-
-        mapped_sprites
     }
 }
 
