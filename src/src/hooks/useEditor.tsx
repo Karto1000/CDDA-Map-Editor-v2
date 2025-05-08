@@ -97,7 +97,7 @@ export function ItemPanel(props: ItemPanelProps) {
 
                 innerGroup.push(
                     <div
-                        key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {probability < 0.009 ? ">0.00" : probability.toFixed(2)}%
+                        key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {probability < 0.009 ? "0.00<" : probability.toFixed(2)}%
                     </div>
                 )
             } else if (itemGroup.type === DisplayItemGroupType.Distribution || itemGroup.type === DisplayItemGroupType.Collection) {
@@ -111,7 +111,7 @@ export function ItemPanel(props: ItemPanelProps) {
 
                 innerGroup.push(
                     <Fieldset
-                        legend={`${itemGroup.name} ${itemGroup.type} ${probability < 0.009 ? ">0.00" : probability.toFixed(2)}%`}
+                        legend={`${itemGroup.name} ${itemGroup.type} ${probability < 0.009 ? "0.00<" : probability.toFixed(2)}%`}
                         key={`${index}-${level}-${itemGroup.type}-${itemGroup.probability}`}
                         style={{marginLeft: level * 2}}
                         className={"item-container"}>
@@ -430,10 +430,13 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
                 .divide(new Vector3(tile_info.width, tile_info.height, 1))
                 .add(offset)
                 .floor()
+            // We need to invert the world mouse position since the cdda map goes from up to down
+            worldMousePosition.current.y = -worldMousePosition.current.y
 
+            // Here we need to invert the y again to make it fit correctly for three.js
             hoveredCellMeshRef.current.position.set(
                 worldMousePosition.current.x * tile_info.width,
-                worldMousePosition.current.y * tile_info.height,
+                -worldMousePosition.current.y * tile_info.height,
                 MAX_DEPTH + 1
             )
         }
@@ -525,7 +528,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         selectedCellMeshRef.current.position.set(
             selectedCellPosition.x * tile_info.width,
-            selectedCellPosition.y * tile_info.height,
+            -selectedCellPosition.y * tile_info.height,
             MAX_DEPTH + 1
         )
         selectedCellMeshRef.current.visible = true
