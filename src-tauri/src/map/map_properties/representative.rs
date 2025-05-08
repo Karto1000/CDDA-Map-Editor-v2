@@ -150,11 +150,6 @@ impl RepresentativeProperty for ItemProperty {
         for mapgen_item in self.items.iter() {
             let item_group_entries = match &mapgen_item.item {
                 ReferenceOrInPlace::Reference(i) => {
-                    if i == &"office_paper".into() {
-                        dbg!(&mapgen_item.chance);
-                        dbg!("NOW");
-                    }
-
                     &json_data
                         .item_groups
                         .get(&i)

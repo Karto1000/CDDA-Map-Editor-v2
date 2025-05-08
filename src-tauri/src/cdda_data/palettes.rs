@@ -269,10 +269,6 @@ impl CDDAPalette {
     ) -> Option<Value> {
         let mapping = self.representative.get(mapping_kind.borrow())?;
 
-        if character.borrow() == &'B' {
-            dbg!("NOW");
-        }
-
         match mapping.get(character.borrow()) {
             None => {}
             Some(s) => return Some(s.representation(json_data)),

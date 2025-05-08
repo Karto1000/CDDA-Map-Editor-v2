@@ -388,7 +388,7 @@ pub async fn open_project(
     }
 
     for (z, map_data) in project.maps.iter() {
-        let (local_mapped_cdda_ids, ..) = map_data.get_mapped_cdda_ids(json_data, *z);
+        let local_mapped_cdda_ids = map_data.get_mapped_cdda_ids(json_data, *z);
 
         map_data.cells.iter().for_each(|(p, cell)| {
             let cell_3d_coords = IVec3::new(p.x as i32, p.y as i32, *z);

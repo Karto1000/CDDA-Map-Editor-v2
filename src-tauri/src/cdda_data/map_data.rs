@@ -127,6 +127,31 @@ pub struct MapGenNested {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceOuter<T> {
+    pub x: NumberOrRange<u32>,
+    pub y: NumberOrRange<u32>,
+
+    #[serde(flatten)]
+    pub inner: T,
+}
+
+impl<T> PlaceOuter<T> {
+    pub fn coordinates(&self) -> UVec2 {
+        UVec2::new(self.x.rand_number(), self.y.rand_number())
+    }
+}
+
+impl<T: Place> From<PlaceOuter<T>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<T>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: Arc::new(value.inner) as Arc<dyn Place>,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapDataObjectCommonIntermediate {
     #[serde(default)]
     pub palettes: Vec<MapGenValue>,
@@ -135,13 +160,13 @@ pub struct CDDAMapDataObjectCommonIntermediate {
     pub terrain: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub place_terrain: Vec<PlaceTerrain>,
+    pub place_terrain: Vec<PlaceOuter<PlaceTerrain>>,
 
     #[serde(default)]
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub place_furniture: Vec<PlaceFurniture>,
+    pub place_furniture: Vec<PlaceOuter<PlaceFurniture>>,
 
     #[serde(default)]
     pub items: HashMap<char, MeabyVec<MapGenItem>>,
@@ -479,7 +504,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .common
                 .place_furniture
                 .into_iter()
-                .map(|f| Arc::new(f) as Arc<dyn Place>)
+                .map(Into::into)
                 .collect(),
         );
 
@@ -489,7 +514,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .common
                 .place_terrain
                 .into_iter()
-                .map(|t| Arc::new(t) as Arc<dyn Place>)
+                .map(Into::into)
                 .collect(),
         );
 

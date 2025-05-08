@@ -106,9 +106,9 @@ async fn frontend_ready(
 
                     let mut importer = MapDataImporter {
                         path:
-                            r"C:\CDDA\testing\data\json\mapgen\nuclear_plant\nuclear_plant_z0.json"
+                            r"C:\DEV\SelfDEV\Rust\CDDA-Map-Editor-2\src-tauri\test_data\test_place.json"
                                 .into(),
-                        om_terrain: "nuclear_plant_0_0_0".into(),
+                        om_terrain: "test_place".into(),
                     };
                     let mut loaded = importer.load().await.unwrap();
                     loaded

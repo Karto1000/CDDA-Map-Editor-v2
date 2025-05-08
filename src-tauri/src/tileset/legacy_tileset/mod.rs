@@ -133,6 +133,44 @@ pub struct MappedCDDAIds {
     pub monster: Option<CDDAIdentifier>,
 }
 
+impl MappedCDDAIds {
+    pub fn update_missing(&mut self, other: MappedCDDAIds) {
+        if self.terrain.is_none() {
+            self.terrain = other.terrain;
+        }
+
+        if self.furniture.is_none() {
+            self.furniture = other.furniture;
+        }
+
+        if self.trap.is_none() {
+            self.trap = other.trap;
+        }
+
+        if self.monster.is_none() {
+            self.monster = other.monster;
+        }
+    }
+
+    pub fn update_override(&mut self, other: MappedCDDAIds) {
+        if other.terrain.is_some() {
+            self.terrain = other.terrain;
+        }
+
+        if other.furniture.is_some() {
+            self.furniture = other.furniture;
+        }
+
+        if other.trap.is_some() {
+            self.trap = other.trap;
+        }
+
+        if other.monster.is_some() {
+            self.monster = other.monster;
+        }
+    }
+}
+
 fn to_weighted_vec(
     indices: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
 ) -> Option<Vec<WeightedSprite<SpriteIndex>>> {
