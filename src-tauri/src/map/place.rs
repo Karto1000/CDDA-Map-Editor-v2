@@ -3,10 +3,8 @@ use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{
     FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
-use crate::map::{Place, RepresentativeProperty, VisibleMappingCommand, VisibleProperty};
-use crate::util::{CDDAIdentifier, ParameterIdentifier};
-use glam::UVec2;
-use indexmap::IndexMap;
+use crate::map::{MapData, Place, RepresentativeProperty, VisibleMappingCommand, VisibleProperty};
+use glam::IVec2;
 use serde_json::Value;
 
 #[derive(Debug, Clone)]
@@ -17,12 +15,11 @@ pub struct PlaceTerrain {
 impl Place for PlaceTerrain {
     fn get_commands(
         &self,
-        position: &UVec2,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        self.visible
-            .get_commands(calculated_parameters, position, json_data)
+        self.visible.get_commands(position, map_data, json_data)
     }
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
@@ -38,12 +35,11 @@ pub struct PlaceFurniture {
 impl Place for PlaceFurniture {
     fn get_commands(
         &self,
-        position: &UVec2,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        self.visible
-            .get_commands(calculated_parameters, position, json_data)
+        self.visible.get_commands(position, map_data, json_data)
     }
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
@@ -66,12 +62,11 @@ pub struct PlaceMonster {
 impl Place for PlaceMonster {
     fn get_commands(
         &self,
-        position: &UVec2,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        self.visible
-            .get_commands(calculated_parameters, position, json_data)
+        self.visible.get_commands(position, map_data, json_data)
     }
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
@@ -87,11 +82,11 @@ pub struct PlaceNested {
 impl Place for PlaceNested {
     fn get_commands(
         &self,
-        position: &UVec2,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         self.nested_property
-            .get_commands(calculated_parameters, position, json_data)
+            .get_commands(position, map_data, json_data)
     }
 }

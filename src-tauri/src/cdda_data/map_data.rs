@@ -23,7 +23,7 @@ use crate::{skip_err, skip_none};
 use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
 use paste::paste;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -122,34 +122,182 @@ pub struct MapGenMonster {
     pub pack_size: Option<NumberOrRange<u32>>,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NeighborDirection {
+    North,
+    East,
+    South,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
+    Above,
+    Below,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum OmTerrainMatchType {
+    Exact,
+    Type,
+    Subtype,
+    Prefix,
+    Contains,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OmTerrainMatch {
+    pub om_terrain: CDDAIdentifier,
+    pub om_terrain_match_type: OmTerrainMatchType,
+}
+
+impl<'de> Deserialize<'de> for OmTerrainMatch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct OmTerrainMatchVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for OmTerrainMatchVisitor {
+            type Value = OmTerrainMatch;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("string or map")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(OmTerrainMatch {
+                    om_terrain: value.into(),
+                    om_terrain_match_type: OmTerrainMatchType::Contains,
+                })
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut om_terrain = None;
+                let mut om_terrain_match_type = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "om_terrain" => {
+                            om_terrain = Some(map.next_value()?);
+                        }
+                        "om_terrain_match_type" => {
+                            om_terrain_match_type = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+
+                let om_terrain =
+                    om_terrain.ok_or_else(|| serde::de::Error::missing_field("om_terrain"))?;
+                let om_terrain_match_type =
+                    om_terrain_match_type.unwrap_or(OmTerrainMatchType::Contains);
+
+                Ok(OmTerrainMatch {
+                    om_terrain,
+                    om_terrain_match_type,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(OmTerrainMatchVisitor)
+    }
+}
+
+impl OmTerrainMatch {
+    pub fn matches_identifier(&self, ident: &CDDAIdentifier) -> bool {
+        // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/JSON_INFO.md#Starting-locations
+        match self.om_terrain_match_type {
+            OmTerrainMatchType::Exact => &self.om_terrain == ident,
+            OmTerrainMatchType::Type => {
+                // Strip any suffixes like rotation or linear directions
+                let base_type = ident.0.split('_').next().unwrap_or("");
+                let match_type = self.om_terrain.0.split('_').next().unwrap_or("");
+                base_type == match_type
+            }
+            OmTerrainMatchType::Subtype => {
+                // Match base type and linear type suffix
+                let parts: Vec<&str> = ident.0.split('_').collect();
+                let match_parts: Vec<&str> = self.om_terrain.0.split('_').collect();
+
+                if parts.len() >= 2 && match_parts.len() >= 2 {
+                    parts[0] == match_parts[0] && parts[1] == match_parts[1]
+                } else {
+                    false
+                }
+            }
+            OmTerrainMatchType::Prefix => {
+                // Must be complete prefix with underscore delimiter
+                ident.0.starts_with(&self.om_terrain.0)
+                    && (ident.0.len() == self.om_terrain.0.len()
+                        || ident.0.chars().nth(self.om_terrain.0.len()) == Some('_'))
+            }
+            OmTerrainMatchType::Contains => {
+                // Simple substring match
+                ident.0.contains(&self.om_terrain.0)
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MapGenNestedIntermediate {
     Chunks {
         chunks: MeabyVec<MeabyWeighted<MapGenValue>>,
+        neighbors: Option<HashMap<NeighborDirection, MeabyVec<OmTerrainMatch>>>,
     },
     ElseChunks {
         else_chunks: MeabyVec<MeabyWeighted<MapGenValue>>,
+        neighbors: Option<HashMap<NeighborDirection, MeabyVec<OmTerrainMatch>>>,
     },
 }
 
 impl Into<MapGenNested> for MapGenNestedIntermediate {
     fn into(self) -> MapGenNested {
-        let transformed_chunks = match self {
-            MapGenNestedIntermediate::Chunks { chunks } => chunks
-                .into_vec()
-                .into_iter()
-                .map(MeabyWeighted::to_weighted)
-                .collect(),
-            MapGenNestedIntermediate::ElseChunks { else_chunks } => else_chunks
-                .into_vec()
-                .into_iter()
-                .map(MeabyWeighted::to_weighted)
-                .collect(),
+        let (transformed_chunks, mut neighbors, is_else) = match self {
+            MapGenNestedIntermediate::Chunks { chunks, neighbors } => (
+                chunks
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+                neighbors,
+                false,
+            ),
+            MapGenNestedIntermediate::ElseChunks {
+                else_chunks,
+                neighbors,
+            } => (
+                else_chunks
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+                neighbors,
+                true,
+            ),
         };
 
+        let neighbors = neighbors.map(|neighbors| {
+            HashMap::from_iter(neighbors.into_iter().map(|(p, n)| (p, n.into_vec())))
+        });
+
         MapGenNested {
+            neighbors,
+            joins: None,
             chunks: transformed_chunks,
+            invert_condition: is_else,
         }
     }
 }
@@ -387,9 +535,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 mapgen_size.x = rows[0].len() as u32;
                 mapgen_size.y = rows.len() as u32;
 
-                // We need to reverse the iterators direction since we want the last row of the rows to
-                // be at the bottom left so basically 0, 0
-                for (row_index, row) in rows.into_iter().rev().enumerate() {
+                for (row_index, row) in rows.into_iter().enumerate() {
                     for (column_index, character) in row.chars().enumerate() {
                         cells.insert(
                             UVec2::new(column_index as u32, row_index as u32),

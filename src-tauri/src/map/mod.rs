@@ -3,8 +3,11 @@ pub(crate) mod importing;
 pub(crate) mod map_properties;
 pub(crate) mod place;
 
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::map_data::{MapGenMonster, MapGenMonsterType, PlaceOuter};
+use crate::cdda_data::io::{DeserializedCDDAJsonData, NULL_FURNITURE, NULL_TERRAIN};
+use crate::cdda_data::map_data::{
+    MapGenMonster, MapGenMonsterType, NeighborDirection, OmTerrainMatch, OmTerrainMatchType,
+    PlaceOuter,
+};
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
@@ -17,7 +20,7 @@ use crate::util::{
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
-use glam::{IVec3, UVec2};
+use glam::{IVec2, IVec3, UVec2};
 use indexmap::IndexMap;
 use log::{error, warn};
 use rand::{rng, Rng};
@@ -132,8 +135,8 @@ impl_downcast!(sync Set);
 pub trait Place: Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend {
     fn get_commands(
         &self,
-        position: &UVec2,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         None
@@ -161,8 +164,8 @@ impl_downcast!(sync RepresentativeProperty);
 pub trait VisibleProperty: RepresentativeProperty {
     fn get_commands(
         &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        position: &UVec2,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>>;
 }
@@ -207,7 +210,7 @@ pub enum VisibleMappingCommandKind {
 pub struct VisibleMappingCommand {
     id: CDDAIdentifier,
     mapping: VisibleMappingKind,
-    coordinates: UVec2,
+    coordinates: IVec2,
     kind: VisibleMappingCommandKind,
 }
 
@@ -223,7 +226,39 @@ pub enum MapDataFlag {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapGenNested {
+    pub neighbors: Option<HashMap<NeighborDirection, Vec<OmTerrainMatch>>>,
+    pub joins: Option<HashMap<NeighborDirection, Vec<OmTerrainMatch>>>,
+
     pub chunks: Vec<Weighted<MapGenValue>>,
+
+    #[serde(default)]
+    // This is basically just any "else_chunks"
+    pub invert_condition: bool,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MapDataConfig {
+    pub simulated_neighbors: HashMap<NeighborDirection, Vec<CDDAIdentifier>>,
+}
+
+impl Default for MapDataConfig {
+    fn default() -> Self {
+        let mut simulated_neighbors = HashMap::new();
+        simulated_neighbors.insert(NeighborDirection::Above, vec![]);
+        simulated_neighbors.insert(NeighborDirection::Below, vec![]);
+        simulated_neighbors.insert(NeighborDirection::East, vec![]);
+        simulated_neighbors.insert(NeighborDirection::West, vec![]);
+        simulated_neighbors.insert(NeighborDirection::North, vec![]);
+        simulated_neighbors.insert(NeighborDirection::South, vec![]);
+        simulated_neighbors.insert(NeighborDirection::NorthEast, vec![]);
+        simulated_neighbors.insert(NeighborDirection::NorthWest, vec![]);
+        simulated_neighbors.insert(NeighborDirection::SouthEast, vec![]);
+        simulated_neighbors.insert(NeighborDirection::SouthWest, vec![]);
+
+        MapDataConfig {
+            simulated_neighbors,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -231,6 +266,8 @@ pub struct MapData {
     pub cells: IndexMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
     pub map_size: UVec2,
+
+    pub config: MapDataConfig,
 
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
@@ -266,6 +303,7 @@ impl Default for MapData {
             cells,
             fill,
             map_size: DEFAULT_MAP_DATA_SIZE,
+            config: Default::default(),
             calculated_parameters: Default::default(),
             parameters: Default::default(),
             visible: Default::default(),
@@ -335,11 +373,7 @@ impl MapData {
         let all_commands = self.get_commands(&json_data);
 
         for command in all_commands {
-            let command_3d_coords = IVec3::new(
-                command.coordinates.x as i32,
-                command.coordinates.y as i32,
-                z,
-            );
+            let command_3d_coords = IVec3::new(command.coordinates.x, command.coordinates.y, z);
 
             match command.kind {
                 VisibleMappingCommandKind::Place => {
@@ -351,11 +385,9 @@ impl MapData {
 
                     let ident_mut = match local_mapped_cdda_ids.get_mut(&command_3d_coords) {
                         None => {
-                            error!(
-                                "Identifier group at coordinates {:?} not found",
-                                command.coordinates
-                            );
-                            continue;
+                            local_mapped_cdda_ids
+                                .insert(command_3d_coords.clone(), MappedCDDAIds::default());
+                            local_mapped_cdda_ids.get_mut(&command_3d_coords).unwrap()
                         }
                         Some(i) => i,
                     };
@@ -410,7 +442,7 @@ impl MapData {
         // the function relies on the mapped sprite of this sprite to already exist
         self.cells.iter().for_each(|(p, cell)| {
             let ident_commands =
-                self.get_identifier_change_commands(&cell.character, p, &json_data);
+                self.get_identifier_change_commands(&cell.character, &p.as_ivec2(), &json_data);
 
             all_commands.extend(ident_commands)
         });
@@ -419,11 +451,7 @@ impl MapData {
             for place in place_vec {
                 let position = place.coordinates();
 
-                match place.inner.get_commands(
-                    &position.as_uvec2(),
-                    &self.calculated_parameters,
-                    json_data,
-                ) {
+                match place.inner.get_commands(&position, self, json_data) {
                     None => {}
                     Some(commands) => {
                         all_commands.extend(commands);
@@ -440,13 +468,13 @@ impl MapData {
         &self,
         mapping_kind: &VisibleMappingKind,
         character: &char,
-        position: &UVec2,
+        position: &IVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let mapping = self.visible.get(mapping_kind)?;
 
         if let Some(id) = mapping.get(character) {
-            return id.get_commands(&self.calculated_parameters, position, json_data);
+            return id.get_commands(position, self, json_data);
         }
 
         // If we don't find it, search the palettes from top to bottom
@@ -454,13 +482,9 @@ impl MapData {
             let palette_id = mapgen_value.get_identifier(&self.calculated_parameters);
             let palette = json_data.palettes.get(&palette_id)?;
 
-            if let Some(id) = palette.get_visible_mapping(
-                mapping_kind,
-                character,
-                position,
-                &self.calculated_parameters,
-                json_data,
-            ) {
+            if let Some(id) =
+                palette.get_visible_mapping(mapping_kind, character, position, self, json_data)
+            {
                 return Some(id);
             }
         }
@@ -517,7 +541,7 @@ impl MapData {
     pub fn get_identifier_change_commands(
         &self,
         character: &char,
-        position: &UVec2,
+        position: &IVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Vec<VisibleMappingCommand> {
         let mut commands = Vec::new();

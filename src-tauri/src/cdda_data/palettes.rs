@@ -4,11 +4,11 @@ use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
 use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{FurnitureProperty, MonsterProperty, TerrainProperty};
 use crate::map::{
-    RepresentativeMappingKind, RepresentativeProperty, VisibleMappingCommand, VisibleMappingKind,
-    VisibleProperty,
+    MapData, RepresentativeMappingKind, RepresentativeProperty, VisibleMappingCommand,
+    VisibleMappingKind, VisibleProperty,
 };
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
-use glam::UVec2;
+use glam::IVec2;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -232,25 +232,25 @@ impl CDDAPalette {
         &self,
         mapping_kind: impl Borrow<VisibleMappingKind>,
         character: impl Borrow<char>,
-        position: &UVec2,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let mapping = self.visible.get(mapping_kind.borrow())?;
 
         if let Some(id) = mapping.get(character.borrow()) {
-            return id.get_commands(calculated_parameters, position, json_data);
+            return id.get_commands(position, map_data, json_data);
         }
 
         for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(calculated_parameters);
+            let palette_id = mapgen_value.get_identifier(&map_data.calculated_parameters);
             let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_visible_mapping(
                 mapping_kind.borrow(),
                 character.borrow(),
                 position,
-                calculated_parameters,
+                map_data,
                 json_data,
             ) {
                 return Some(id);

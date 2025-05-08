@@ -1,3 +1,4 @@
+use crate::cdda_data::io::NULL_NESTED;
 use crate::cdda_data::map_data::MapGenNestedIntermediate;
 use crate::map::*;
 use crate::tileset::GetRandom;
@@ -18,11 +19,18 @@ impl RepresentativeProperty for TerrainProperty {
 impl VisibleProperty for TerrainProperty {
     fn get_commands(
         &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        position: &UVec2,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let ident = self.mapgen_value.get_identifier(calculated_parameters);
+        let ident = self
+            .mapgen_value
+            .get_identifier(&map_data.calculated_parameters);
+
+        if ident == CDDAIdentifier::from(NULL_TERRAIN) {
+            return None;
+        }
+
         let command = VisibleMappingCommand {
             id: ident,
             mapping: VisibleMappingKind::Terrain,
@@ -48,8 +56,8 @@ impl RepresentativeProperty for MonsterProperty {
 impl VisibleProperty for MonsterProperty {
     fn get_commands(
         &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        position: &UVec2,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         for monster in self.monster.clone().into_vec() {
@@ -61,14 +69,17 @@ impl VisibleProperty for MonsterProperty {
             {
                 true => match monster.id {
                     MapGenMonsterType::Monster { monster } => {
-                        Some(monster.get_identifier(calculated_parameters))
+                        Some(monster.get_identifier(&map_data.calculated_parameters))
                     }
                     MapGenMonsterType::MonsterGroup { group } => {
-                        let id = group.get_identifier(calculated_parameters);
+                        let id = group.get_identifier(&map_data.calculated_parameters);
                         let mon_group = json_data.monstergroups.get(&id)?;
                         mon_group
-                            .get_random_monster(&json_data.monstergroups, calculated_parameters)
-                            .map(|id| id.get_identifier(calculated_parameters))
+                            .get_random_monster(
+                                &json_data.monstergroups,
+                                &map_data.calculated_parameters,
+                            )
+                            .map(|id| id.get_identifier(&map_data.calculated_parameters))
                     }
                 },
                 false => None,
@@ -107,11 +118,18 @@ impl RepresentativeProperty for FurnitureProperty {
 impl VisibleProperty for FurnitureProperty {
     fn get_commands(
         &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        position: &UVec2,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let ident = self.mapgen_value.get_identifier(calculated_parameters);
+        let ident = self
+            .mapgen_value
+            .get_identifier(&map_data.calculated_parameters);
+
+        if ident == CDDAIdentifier::from(NULL_FURNITURE) {
+            return None;
+        }
+
         let command = VisibleMappingCommand {
             id: ident,
             mapping: VisibleMappingKind::Furniture,
@@ -137,15 +155,48 @@ impl RepresentativeProperty for NestedProperty {
 impl VisibleProperty for NestedProperty {
     fn get_commands(
         &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        position: &UVec2,
+        position: &IVec2,
+        map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
+        let should_place = match &self.nested.neighbors {
+            None => true,
+            Some(neighbors) => neighbors.iter().all(|(dir, om_terrain_match)| {
+                let simulated_neighbor = map_data
+                    .config
+                    .simulated_neighbors
+                    .get(dir)
+                    .expect("Simulated neighbor must always exist");
+
+                om_terrain_match.iter().all(|om_terrain| {
+                    if simulated_neighbor.is_empty() {
+                        return false;
+                    }
+
+                    simulated_neighbor
+                        .iter()
+                        .all(|id| om_terrain.matches_identifier(id))
+                })
+            }),
+        };
+
+        if self.nested.invert_condition {
+            if should_place {
+                return None;
+            }
+        } else if !should_place {
+            return None;
+        }
+
         let selected_chunk = self
             .nested
             .chunks
             .get_random()
-            .get_identifier(calculated_parameters);
+            .get_identifier(&map_data.calculated_parameters);
+
+        if selected_chunk == CDDAIdentifier::from(NULL_NESTED) {
+            return None;
+        }
 
         let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
             None => {
@@ -159,7 +210,7 @@ impl VisibleProperty for NestedProperty {
 
         commands.iter_mut().for_each(|c| {
             c.coordinates.x += position.x;
-            c.coordinates.y = position.y - c.coordinates.y;
+            c.coordinates.y = position.y + c.coordinates.y;
         });
 
         Some(commands)
@@ -171,17 +222,18 @@ mod tests {
     use crate::cdda_data::{CDDADistributionInner, MapGenValue};
     use crate::map::map_properties::visible::TerrainProperty;
     use crate::map::{
-        VisibleMappingCommand, VisibleMappingCommandKind, VisibleMappingKind, VisibleProperty,
+        MapData, VisibleMappingCommand, VisibleMappingCommandKind, VisibleMappingKind,
+        VisibleProperty,
     };
     use crate::util::{MeabyVec, MeabyWeighted};
     use crate::TEST_CDDA_DATA;
-    use glam::UVec2;
-    use indexmap::IndexMap;
+    use glam::IVec2;
 
     #[tokio::test]
     async fn test_get_terrain_commands() {
         let cdda_data = TEST_CDDA_DATA.get().await;
-        let coordinates = UVec2::new(0, 0);
+        let coordinates = IVec2::new(0, 0);
+        let map_data = MapData::default();
 
         // Test it with a single string
         {
@@ -190,7 +242,7 @@ mod tests {
             };
 
             let mut commands = terrain_property
-                .get_commands(&IndexMap::new(), &coordinates, &cdda_data)
+                .get_commands(&coordinates, &map_data, &cdda_data)
                 .unwrap();
 
             let first = commands.pop().unwrap();
@@ -218,7 +270,7 @@ mod tests {
             };
 
             let mut commands = terrain_property
-                .get_commands(&IndexMap::new(), &coordinates, &cdda_data)
+                .get_commands(&coordinates, &map_data, &cdda_data)
                 .unwrap();
 
             let first = commands.pop().unwrap();

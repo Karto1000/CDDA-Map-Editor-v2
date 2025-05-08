@@ -388,7 +388,7 @@ impl Sprite {
                             Some(t_connection) => match &t_connection.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::South,
+                                    CardinalDirection::North,
                                     AdditionalTileId::TConnection,
                                     t_connection.rotates,
                                     fg,
@@ -412,7 +412,7 @@ impl Sprite {
                             Some(t_connection) => match &t_connection.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::North,
+                                    CardinalDirection::South,
                                     AdditionalTileId::TConnection,
                                     t_connection.rotates,
                                     fg,
@@ -424,7 +424,7 @@ impl Sprite {
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::East,
+                                    CardinalDirection::North,
                                     AdditionalTileId::Corner,
                                     corner.rotates,
                                     fg,
@@ -436,7 +436,7 @@ impl Sprite {
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::South,
+                                    CardinalDirection::West,
                                     AdditionalTileId::Corner,
                                     corner.rotates,
                                     fg,
@@ -448,7 +448,7 @@ impl Sprite {
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::North,
+                                    CardinalDirection::East,
                                     AdditionalTileId::Corner,
                                     corner.rotates,
                                     fg,
@@ -460,7 +460,7 @@ impl Sprite {
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::West,
+                                    CardinalDirection::South,
                                     AdditionalTileId::Corner,
                                     corner.rotates,
                                     fg,
@@ -472,7 +472,7 @@ impl Sprite {
                             Some(end_piece) => match &end_piece.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::South,
+                                    CardinalDirection::North,
                                     AdditionalTileId::EndPiece,
                                     end_piece.rotates,
                                     fg,
@@ -496,7 +496,7 @@ impl Sprite {
                             Some(end_piece) => match &end_piece.ids.fg {
                                 None => None,
                                 Some(fg) => Self::get_random_additional_tile_sprite(
-                                    CardinalDirection::North,
+                                    CardinalDirection::South,
                                     AdditionalTileId::EndPiece,
                                     end_piece.rotates,
                                     fg,

@@ -22,8 +22,9 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::string::ToString;
 
-const NULL_TERRAIN: &'static str = "t_null";
-const NULL_FURNITURE: &'static str = "f_null";
+pub const NULL_TERRAIN: &'static str = "t_null";
+pub const NULL_FURNITURE: &'static str = "f_null";
+pub const NULL_NESTED: &'static str = "null";
 
 #[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {

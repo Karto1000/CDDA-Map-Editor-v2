@@ -390,27 +390,23 @@ pub async fn open_project(
     for (z, map_data) in project.maps.iter() {
         let local_mapped_cdda_ids = map_data.get_mapped_cdda_ids(json_data, *z);
 
-        map_data.cells.iter().for_each(|(p, cell)| {
-            let cell_3d_coords = IVec3::new(p.x as i32, p.y as i32, *z);
-
-            let identifier_group = local_mapped_cdda_ids
-                .get(&cell_3d_coords)
-                .expect("Identifier group to exist")
-                .clone();
+        for (p, identifier_group) in local_mapped_cdda_ids.iter() {
+            let cell_3d_coords = IVec3::new(p.x, p.y, *z);
 
             if identifier_group.terrain.is_none() && identifier_group.furniture.is_none() {
                 warn!(
-                    "No sprites found for char {:?} with identifier_group {:?}",
-                    cell, identifier_group
+                    "No sprites found for identifier_group {:?}",
+                    identifier_group
                 );
-                return;
+                continue;
             }
 
             // Layer here is done so furniture is above terrain
             for (layer, o_id) in [
-                (TileLayer::Terrain, identifier_group.terrain),
-                (TileLayer::Furniture, identifier_group.furniture),
-                (TileLayer::Monster, identifier_group.monster),
+                (TileLayer::Terrain, &identifier_group.terrain),
+                (TileLayer::Furniture, &identifier_group.furniture),
+                (TileLayer::Trap, &identifier_group.trap),
+                (TileLayer::Monster, &identifier_group.monster),
             ] {
                 let id = match o_id {
                     None => continue,
@@ -447,7 +443,7 @@ pub async fn open_project(
                     insert_sprite_type!(bg)
                 }
             }
-        });
+        }
     }
 
     app.emit(

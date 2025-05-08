@@ -5,6 +5,7 @@ mod tileset;
 mod util;
 
 use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
+use crate::cdda_data::map_data::NeighborDirection;
 use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
@@ -105,17 +106,29 @@ async fn frontend_ready(
                     info!("Loading testing map data");
 
                     let mut importer = MapDataImporter {
-                        path:
-                            r"C:\DEV\SelfDEV\Rust\CDDA-Map-Editor-2\src-tauri\test_data\test_place.json"
-                                .into(),
-                        om_terrain: "test_place".into(),
+                        path: r"C:\CDDA\testing\data\json\mapgen\farm_horse.json".into(),
+                        om_terrain: "paddock_UL".into(),
                     };
                     let mut loaded = importer.load().await.unwrap();
-                    loaded
-                        .maps
-                        .get_mut(&0)
-                        .unwrap()
-                        .calculate_parameters(&cdda_json_data.palettes);
+
+                    let mut loaded_map = loaded.maps.get_mut(&0).unwrap();
+                    loaded_map.calculate_parameters(&cdda_json_data.palettes);
+
+                    let neighbor_north = loaded_map
+                        .config
+                        .simulated_neighbors
+                        .get_mut(&NeighborDirection::North)
+                        .unwrap();
+
+                    neighbor_north.push("rural_road".into());
+
+                    let neighbor_west = loaded_map
+                        .config
+                        .simulated_neighbors
+                        .get_mut(&NeighborDirection::West)
+                        .unwrap();
+
+                    neighbor_west.push("rural_road".into());
 
                     map_data_lock.data.push(loaded.clone());
                     map_data_lock.current_project = Some(0);
