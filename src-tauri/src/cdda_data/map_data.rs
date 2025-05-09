@@ -7,10 +7,10 @@ use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{
-    FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
+    FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
 use crate::map::place::{
-    PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain, PlaceToilets,
+    PlaceFields, PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain, PlaceToilets,
 };
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, Place, PlaceableSetType, RemovableSetType,
@@ -305,6 +305,13 @@ impl Into<MapGenNested> for MapGenNestedIntermediate {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenField {
+    pub field: CDDAIdentifier,
+    pub intensity: Option<i32>,
+    pub age: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerFurniture {
     #[serde(rename = "furn")]
     furniture_id: CDDAIdentifier,
@@ -398,9 +405,37 @@ impl Into<Arc<dyn Place>> for PlaceInnerToilets {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerFields {
+    #[serde(flatten)]
+    pub field: MapGenField,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerFields {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceFields {
+            visible: FieldProperty { field: self.field },
+        })
+    }
+}
+
+const fn default_chance() -> i32 {
+    100
+}
+
+const fn default_repeat() -> NumberOrRange<i32> {
+    NumberOrRange::Number(1)
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceOuter<T> {
     pub x: NumberOrRange<i32>,
     pub y: NumberOrRange<i32>,
+
+    #[serde(default = "default_repeat")]
+    pub repeat: NumberOrRange<i32>,
+
+    #[serde(default = "default_chance")]
+    pub chance: i32,
 
     #[serde(flatten)]
     pub inner: T,
@@ -408,55 +443,32 @@ pub struct PlaceOuter<T> {
 
 // TODO: For some reason i cannot implement <T: Into<Arc<dyn Place>> From<PlaceOuter<T>> for PlaceOuter<Arc<dyn Place>>
 // Since it conflicts with inbuilt implementations?
-impl From<PlaceOuter<PlaceInnerFurniture>> for PlaceOuter<Arc<dyn Place>> {
-    fn from(value: PlaceOuter<PlaceInnerFurniture>) -> Self {
-        PlaceOuter {
-            x: value.x,
-            y: value.y,
-            inner: value.inner.into(),
+
+macro_rules! impl_from {
+    (
+        $identifier: ident
+    ) => {
+        impl From<PlaceOuter<$identifier>> for PlaceOuter<Arc<dyn Place>> {
+            fn from(value: PlaceOuter<$identifier>) -> Self {
+                PlaceOuter {
+                    x: value.x,
+                    y: value.y,
+                    repeat: value.repeat,
+                    chance: value.chance,
+                    inner: value.inner.into(),
+                }
+            }
         }
-    }
+    };
 }
 
-impl From<PlaceOuter<PlaceInnerTerrain>> for PlaceOuter<Arc<dyn Place>> {
-    fn from(value: PlaceOuter<PlaceInnerTerrain>) -> Self {
-        PlaceOuter {
-            x: value.x,
-            y: value.y,
-            inner: value.inner.into(),
-        }
-    }
-}
-
-impl From<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
-    fn from(value: PlaceOuter<PlaceInnerMonsters>) -> Self {
-        PlaceOuter {
-            x: value.x,
-            y: value.y,
-            inner: value.inner.into(),
-        }
-    }
-}
-
-impl From<PlaceOuter<PlaceInnerNested>> for PlaceOuter<Arc<dyn Place>> {
-    fn from(value: PlaceOuter<PlaceInnerNested>) -> Self {
-        PlaceOuter {
-            x: value.x,
-            y: value.y,
-            inner: value.inner.into(),
-        }
-    }
-}
-
-impl From<PlaceOuter<PlaceInnerToilets>> for PlaceOuter<Arc<dyn Place>> {
-    fn from(value: PlaceOuter<PlaceInnerToilets>) -> Self {
-        PlaceOuter {
-            x: value.x,
-            y: value.y,
-            inner: value.inner.into(),
-        }
-    }
-}
+impl_from!(PlaceInnerFurniture);
+impl_from!(PlaceInnerTerrain);
+impl_from!(PlaceInnerItems);
+impl_from!(PlaceInnerMonsters);
+impl_from!(PlaceInnerNested);
+impl_from!(PlaceInnerToilets);
+impl_from!(PlaceInnerFields);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -508,7 +520,8 @@ map_data_object!(
     monsters: MeabyVec<MapGenMonster>,
     nested: MapGenNestedIntermediate,
     // Toilets do not have any data
-    toilets: ()
+    toilets: (),
+    fields: MapGenField
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -749,10 +762,18 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             nested_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
         }
 
+        let mut field_map = HashMap::new();
+
+        for (char, field) in self.object.common.fields {
+            let field_prop = Arc::new(FieldProperty { field });
+            field_map.insert(char, field_prop as Arc<dyn VisibleProperty>);
+        }
+
         visible.insert(VisibleMappingKind::Terrain, terrain_map);
         visible.insert(VisibleMappingKind::Furniture, furniture_map);
         visible.insert(VisibleMappingKind::Monster, monster_map);
         visible.insert(VisibleMappingKind::Nested, nested_map);
+        visible.insert(VisibleMappingKind::Field, field_map);
 
         let mut representative = HashMap::new();
 
@@ -814,6 +835,16 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             self.object
                 .common
                 .place_nested
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        );
+
+        place.insert(
+            VisibleMappingKind::Field,
+            self.object
+                .common
+                .place_fields
                 .into_iter()
                 .map(Into::into)
                 .collect(),

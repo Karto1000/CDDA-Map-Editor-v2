@@ -1,5 +1,5 @@
-use crate::cdda_data::io::NULL_NESTED;
-use crate::cdda_data::map_data::MapGenNestedIntermediate;
+use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED};
+use crate::cdda_data::map_data::{MapGenField, MapGenNestedIntermediate};
 use crate::map::*;
 use crate::tileset::GetRandom;
 use crate::util::{MeabyVec, MeabyWeighted, Weighted};
@@ -214,6 +214,39 @@ impl VisibleProperty for NestedProperty {
         });
 
         Some(commands)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FieldProperty {
+    pub field: MapGenField,
+}
+
+impl RepresentativeProperty for FieldProperty {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        todo!()
+    }
+}
+
+impl VisibleProperty for FieldProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        if self.field.field == CDDAIdentifier::from(NULL_FIELD) {
+            return None;
+        }
+
+        let command = VisibleMappingCommand {
+            id: self.field.field.clone(),
+            mapping: VisibleMappingKind::Field,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
     }
 }
 

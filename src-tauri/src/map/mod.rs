@@ -181,6 +181,7 @@ pub enum VisibleMappingKind {
     Traps = 2,
     Monster = 3,
     Nested = 4,
+    Field = 5,
 }
 
 #[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
@@ -403,6 +404,7 @@ impl MapData {
                             ident_mut.trap = Some(id.clone());
                         }
                         VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
+                        VisibleMappingKind::Field => ident_mut.field = Some(id.clone()),
                         VisibleMappingKind::Nested => unreachable!(),
                     }
                 }
@@ -449,12 +451,22 @@ impl MapData {
 
         for (_, place_vec) in self.place.iter() {
             for place in place_vec {
-                let position = place.coordinates();
+                let upper_bound = place.repeat.rand_number();
 
-                match place.inner.get_commands(&position, self, json_data) {
-                    None => {}
-                    Some(commands) => {
-                        all_commands.extend(commands);
+                for _ in 0..upper_bound {
+                    let position = place.coordinates();
+
+                    // We only want to place one in place.chance times
+                    let rand_chance_num = rng().random_range(0..=100);
+                    if rand_chance_num > place.chance {
+                        continue;
+                    }
+
+                    match place.inner.get_commands(&position, self, json_data) {
+                        None => {}
+                        Some(commands) => {
+                            all_commands.extend(commands);
+                        }
                     }
                 }
             }

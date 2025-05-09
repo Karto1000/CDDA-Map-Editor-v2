@@ -15,6 +15,12 @@
 - nested
 - place_nested
 
+- toilets
+- place_toilets
+
+- place_fields
+- fields
+
 ## Specials
 
 - place_monster
@@ -26,9 +32,6 @@
 - place_item
 - loot
 - sealed_item
-
-- place_fields
-- fields
 
 - place_signs
 - signs
@@ -44,9 +47,6 @@
 
 - place_computers
 - computers
-
-- place_toilets
-- toilets
 
 - place_gaspumps
 - gaspumps

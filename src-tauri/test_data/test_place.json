@@ -68,6 +68,13 @@
           "x": 5,
           "y": 5
         }
+      ],
+      "place_fields": [
+        {
+          "x": 6,
+          "y": 6,
+          "field": "fd_toxic_gas"
+        }
       ]
     }
   }

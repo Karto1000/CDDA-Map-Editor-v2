@@ -139,6 +139,7 @@ pub enum TileLayer {
     Furniture = 1,
     Trap = 2,
     Monster = 3,
+    Field = 4,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

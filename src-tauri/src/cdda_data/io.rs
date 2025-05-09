@@ -25,6 +25,7 @@ use std::string::ToString;
 pub const NULL_TERRAIN: &'static str = "t_null";
 pub const NULL_FURNITURE: &'static str = "f_null";
 pub const NULL_NESTED: &'static str = "null";
+pub const NULL_FIELD: &'static str = "fd_null";
 
 #[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {
@@ -77,6 +78,7 @@ impl DeserializedCDDAJsonData {
                 // TODO: I don't know if traps have connect groups, have to check later
                 TileLayer::Trap => HashSet::new(),
                 TileLayer::Monster => HashSet::new(),
+                TileLayer::Field => HashSet::new(),
             }
         })
         .unwrap_or_default()
@@ -109,6 +111,7 @@ impl DeserializedCDDAJsonData {
             // TODO: Again, not sure if they have flags
             TileLayer::Trap => vec![],
             TileLayer::Monster => vec![],
+            TileLayer::Field => vec![],
         })
         .unwrap_or_default()
     }
@@ -145,6 +148,7 @@ impl DeserializedCDDAJsonData {
                 // TODO: See comments up top
                 TileLayer::Trap => HashSet::new(),
                 TileLayer::Monster => HashSet::new(),
+                TileLayer::Field => HashSet::new(),
             }
         })
         .unwrap_or_default()

@@ -407,6 +407,7 @@ pub async fn open_project(
                 (TileLayer::Furniture, &identifier_group.furniture),
                 (TileLayer::Trap, &identifier_group.trap),
                 (TileLayer::Monster, &identifier_group.monster),
+                (TileLayer::Field, &identifier_group.field),
             ] {
                 let id = match o_id {
                     None => continue,
