@@ -31,7 +31,8 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::fmt::Debug;
 use std::sync::Arc;
-use strum_macros::EnumString;
+use strum::IntoEnumIterator;
+use strum_macros::{EnumIter, EnumString};
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
@@ -148,7 +149,7 @@ impl_downcast!(sync Place);
 
 // Things like terrain, furniture, monsters This allows us to get the Identifier
 pub trait Property:
-Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
+    Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
 {
     fn get_commands(
         &self,
@@ -165,7 +166,7 @@ Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
 clone_trait_object!(Property);
 impl_downcast!(sync Property);
 
-#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
+#[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord, EnumIter)]
 #[serde(rename_all = "snake_case")]
 pub enum MappingKind {
     Terrain,
@@ -600,36 +601,13 @@ impl MapData {
     ) -> Vec<VisibleMappingCommand> {
         let mut commands = Vec::new();
 
-        let nested_commands = self
-            .get_visible_mapping(&MappingKind::Nested, character, position, json_data)
-            .unwrap_or_default();
+        for kind in MappingKind::iter() {
+            let kind_commands = self
+                .get_visible_mapping(&kind, character, position, json_data)
+                .unwrap_or_default();
 
-        let terrain_commands = self
-            .get_visible_mapping(&MappingKind::Terrain, character, position, json_data)
-            .unwrap_or_default();
-
-        let furniture_commands = self
-            .get_visible_mapping(&MappingKind::Furniture, character, position, json_data)
-            .unwrap_or_default();
-
-        let computer_commands = self
-            .get_visible_mapping(&MappingKind::Computer, character, position, json_data)
-            .unwrap_or_default();
-
-        let toilet_commands = self
-            .get_visible_mapping(&MappingKind::Toilet, character, position, json_data)
-            .unwrap_or_default();
-
-        let monster_commands = self
-            .get_visible_mapping(&MappingKind::Monster, character, position, json_data)
-            .unwrap_or_default();
-
-        commands.extend(terrain_commands);
-        commands.extend(furniture_commands);
-        commands.extend(monster_commands);
-        commands.extend(nested_commands);
-        commands.extend(computer_commands);
-        commands.extend(toilet_commands);
+            commands.extend(kind_commands)
+        }
 
         commands
     }
