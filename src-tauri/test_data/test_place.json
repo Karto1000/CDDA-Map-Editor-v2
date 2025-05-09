@@ -83,6 +83,13 @@
           "field": "fd_toxic_gas"
         }
       ],
+      "place_signs": [
+        {
+          "x": 0,
+          "y": 0,
+          "signage": "Hello World"
+        }
+      ],
       "place_computers": [
         {
           "name": "Testing Computer",

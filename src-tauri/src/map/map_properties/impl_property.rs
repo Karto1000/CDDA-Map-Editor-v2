@@ -2,13 +2,14 @@ use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
 use crate::cdda_data::map_data::{MapGenField, MapGenNestedIntermediate, ReferenceOrInPlace};
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, ItemProperty, MonsterProperty, NestedProperty,
+    FieldProperty, FurnitureProperty, ItemProperty, MonsterProperty, NestedProperty, SignProperty,
     TerrainProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
 use crate::util::{MeabyVec, MeabyWeighted, Weighted};
 use log::error;
+use serde_json::json;
 
 impl Property for TerrainProperty {
     fn get_commands(
@@ -122,6 +123,37 @@ impl Property for FurnitureProperty {
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         Value::Null
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct SignRepresentation {
+    pub signage: String,
+    pub snipped: String,
+}
+
+impl Property for SignProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        let command = VisibleMappingCommand {
+            id: "f_sign".into(),
+            mapping: MappingKind::Sign,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
+    }
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        serde_json::to_value(SignRepresentation {
+            signage: self.text.clone().unwrap_or("".into()),
+            snipped: self.snippet.clone().unwrap_or("".into()),
+        })
+        .unwrap()
     }
 }
 

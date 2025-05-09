@@ -16,18 +16,14 @@ pub struct MonsterProperty {
 }
 
 #[derive(Debug, Clone)]
-pub enum FurniturePropertySubtype {
-    Furniture,
-    Computer,
-    Sign,
-    Toilet,
-    Gaspump,
+pub struct SignProperty {
+    pub text: Option<String>,
+    pub snippet: Option<String>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FurnitureProperty {
     pub mapgen_value: MapGenValue,
-    pub subtype: FurniturePropertySubtype,
 }
 
 #[derive(Debug, Clone)]

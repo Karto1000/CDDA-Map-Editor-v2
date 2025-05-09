@@ -5,12 +5,14 @@ use crate::cdda_data::item::{
 };
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
+use crate::map::map_properties::ItemProperty;
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
+    FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, SignProperty,
+    TerrainProperty,
 };
-use crate::map::map_properties::{FurniturePropertySubtype, ItemProperty};
 use crate::map::place::{
-    PlaceFields, PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain, PlaceToilets,
+    PlaceFields, PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceSigns, PlaceTerrain,
+    PlaceToilets,
 };
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
@@ -342,6 +344,12 @@ pub struct MapGenComputer {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenSign {
+    pub signage: Option<String>,
+    pub snippet: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerFurniture {
     #[serde(rename = "furn")]
     furniture_id: CDDAIdentifier,
@@ -352,7 +360,6 @@ impl Into<Arc<dyn Place>> for PlaceInnerFurniture {
         Arc::new(PlaceFurniture {
             visible: FurnitureProperty {
                 mapgen_value: MapGenValue::String(self.furniture_id.clone()),
-                subtype: FurniturePropertySubtype::Furniture,
             },
         })
     }
@@ -463,7 +470,23 @@ impl Into<Arc<dyn Place>> for PlaceInnerComputers {
         Arc::new(PlaceFurniture {
             visible: FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_console".into()),
-                subtype: FurniturePropertySubtype::Computer,
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerSigns {
+    #[serde(flatten)]
+    pub sign: MapGenSign,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerSigns {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceSigns {
+            property: SignProperty {
+                text: self.sign.signage,
+                snippet: self.sign.snippet,
             },
         })
     }
@@ -521,6 +544,7 @@ impl_from!(PlaceInnerNested);
 impl_from!(PlaceInnerToilets);
 impl_from!(PlaceInnerFields);
 impl_from!(PlaceInnerComputers);
+impl_from!(PlaceInnerSigns);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -574,7 +598,8 @@ map_data_object!(
     // Toilets do not have any data
     toilets: (),
     fields: MapGenField,
-    computers: MapGenComputer
+    computers: MapGenComputer,
+    signs: MapGenSign
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -786,7 +811,6 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         for (char, furniture) in self.object.common.furniture {
             let fur_prop = Arc::new(FurnitureProperty {
                 mapgen_value: furniture,
-                subtype: FurniturePropertySubtype::Furniture,
             });
 
             furniture_map.insert(char, fur_prop as Arc<dyn Property>);
@@ -796,7 +820,6 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         for (char, _) in self.object.common.toilets {
             let toilet_prop = Arc::new(FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_toilet".into()),
-                subtype: FurniturePropertySubtype::Toilet,
             });
 
             toilet_map.insert(char, toilet_prop as Arc<dyn Property>);
@@ -806,7 +829,6 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         for (char, _) in self.object.common.computers {
             let ter_prop = Arc::new(FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_console".into()),
-                subtype: FurniturePropertySubtype::Computer,
             });
 
             computer_map.insert(char, ter_prop as Arc<dyn Property>);
@@ -841,6 +863,15 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             item_map.insert(char, item_prop as Arc<dyn Property>);
         }
 
+        let mut sign_map = HashMap::new();
+        for (char, sign) in self.object.common.signs {
+            let item_prop = Arc::new(SignProperty {
+                text: sign.signage,
+                snippet: sign.snippet,
+            });
+            sign_map.insert(char, item_prop as Arc<dyn Property>);
+        }
+
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
         properties.insert(MappingKind::Monster, monster_map);
@@ -849,6 +880,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         properties.insert(MappingKind::ItemGroups, item_map);
         properties.insert(MappingKind::Computer, computer_map);
         properties.insert(MappingKind::Toilet, toilet_map);
+        properties.insert(MappingKind::Sign, sign_map);
 
         let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
 
@@ -887,6 +919,16 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             self.object
                 .common
                 .place_computers
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
+        );
+
+        place.insert(
+            MappingKind::Sign,
+            self.object
+                .common
+                .place_signs
                 .into_iter()
                 .map(Into::into)
                 .collect::<Vec<_>>(),

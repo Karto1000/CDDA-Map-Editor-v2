@@ -1,8 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::map::map_properties::ItemProperty;
 use crate::map::map_properties::{
     FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
+use crate::map::map_properties::{ItemProperty, SignProperty};
 use crate::map::{
     MapData, MappingKind, Place, Property, VisibleMappingCommand, VisibleMappingCommandKind,
 };
@@ -46,6 +46,26 @@ impl Place for PlaceFurniture {
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         self.visible.representation(json_data)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaceSigns {
+    pub property: SignProperty,
+}
+
+impl Place for PlaceSigns {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        self.property.get_commands(position, map_data, json_data)
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        self.property.representation(json_data)
     }
 }
 

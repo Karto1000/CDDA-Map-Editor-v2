@@ -1,8 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
 use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
+use crate::map::map_properties::ItemProperty;
 use crate::map::map_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
-use crate::map::map_properties::{FurniturePropertySubtype, ItemProperty};
 use crate::map::{MapData, MappingKind, Property, VisibleMappingCommand};
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
 use glam::IVec2;
@@ -134,7 +134,6 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
         for (char, furniture) in self.furniture {
             let fur_prop = Arc::new(FurnitureProperty {
                 mapgen_value: furniture,
-                subtype: FurniturePropertySubtype::Furniture,
             });
 
             furniture_map.insert(char, fur_prop as Arc<dyn Property>);
