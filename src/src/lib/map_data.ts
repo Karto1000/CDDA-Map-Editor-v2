@@ -1,3 +1,5 @@
+import React from "react";
+
 export type CDDAIdentifier = string;
 
 export enum MapDataEvent {
@@ -6,15 +8,29 @@ export enum MapDataEvent {
     ItemData = "item_data"
 }
 
-export type CellData = {
-    item: string,
-    computers: string,
-    signs: string
-    // TODO: Add other fields
+export type DisplayItemGroup = {
+    type: DisplayItemGroupType.Single,
+    item: CDDAIdentifier
+    probability: number
+} | {
+    type: DisplayItemGroupType.Collection
+    name: string
+    items: DisplayItemGroup[]
+    probability: number
+} | {
+    type: DisplayItemGroupType.Distribution
+    name: string
+    items: DisplayItemGroup[]
+    probability: number
 }
 
-export type ItemDataEvent = {
-    [coordinates: string]: CellData[]
+export type DisplaySign = {
+    signage: string
+    snippet: string
+}
+
+export type CellData = {
+    [coords: string]: { item_groups: DisplayItemGroup[], signs: DisplaySign }
 }
 
 export type StaticSprite = {
@@ -51,21 +67,6 @@ export enum DisplayItemGroupType {
     Distribution = "Distribution"
 }
 
-export type DisplayItemGroup = {
-    type: DisplayItemGroupType.Single,
-    item: CDDAIdentifier
-    probability: number
-} | {
-    type: DisplayItemGroupType.Collection
-    name: string
-    items: DisplayItemGroup[]
-    probability: number
-} | {
-    type: DisplayItemGroupType.Distribution
-    name: string
-    items: DisplayItemGroup[]
-    probability: number
-}
 
 export enum MapDataSendCommand {
     CreateProject = "create_project",

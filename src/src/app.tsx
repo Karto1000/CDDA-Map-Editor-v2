@@ -157,6 +157,10 @@ function App() {
                                                         {
                                                             name: "Monsters",
                                                             content: displayInLeftPanel.monsters
+                                                        },
+                                                        {
+                                                            name: "Signs",
+                                                            content: displayInLeftPanel.signs
                                                         }
                                                     ]}
                                                 />

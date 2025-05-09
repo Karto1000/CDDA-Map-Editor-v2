@@ -22,6 +22,7 @@ import {useMousePosition} from "./useMousePosition.ts";
 import {BackendResponseType, invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
 import {listen} from "@tauri-apps/api/event";
 import {
+    CellData,
     DisplayItemGroup,
     DisplayItemGroupType,
     MapDataEvent,
@@ -34,10 +35,6 @@ import {Fieldset} from "../components/fieldset.tsx";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
-
-type CellData = {
-    [coords: string]: { item_groups: DisplayItemGroup[] }
-}
 
 type UseEditorProps = {
     sceneRef: MutableRefObject<Scene>,
@@ -56,7 +53,8 @@ type UseEditorRet = {
     resize: () => void,
     displayInLeftPanel: {
         items: React.JSX.Element[] | React.JSX.Element
-        monsters: React.JSX.Element[] | React.JSX.Element
+        monsters: React.JSX.Element[] | React.JSX.Element,
+        signs: React.JSX.Element[] | React.JSX.Element
     }
 }
 
@@ -185,6 +183,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
     const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
 
     const [itemDisplay, setItemDisplay] = useState<ReactElement<ItemPanelProps>>()
+    const [signDisplay, setSignDisplay] = useState<React.JSX.Element>()
     const [cellData, setCellData] = useState<CellData>({})
 
     const onResize = useCallback(() => {
@@ -257,6 +256,8 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
     }, [onResize, props.canvasContainerRef, props.canvasRef, props.sceneRef]);
 
     useEffect(() => {
+        if (!selectedCellPosition) return
+
         setItemDisplay(
             <ItemPanel
                 rendererRef={rendererRef}
@@ -267,6 +268,25 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
                 cellData={cellData}
                 selectedCellPosition={selectedCellPosition}
             />
+        )
+
+        const selectedData = cellData[`${selectedCellPosition.x},${selectedCellPosition.y},${currentZLayer}`]
+
+        setSignDisplay(
+            <>
+                {
+                    selectedData.signs.signage &&
+                    <p>
+                        Signage: {selectedData.signs.signage}
+                    </p>
+                }
+                {
+                    selectedData.signs.snippet &&
+                    <p>
+                        Snippet: {selectedData.signs.snippet}
+                    </p>
+                }
+            </>
         )
     }, [cellData, currentZLayer, mousePosition, selectedCellPosition]);
 
@@ -541,5 +561,5 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
         selectedCellMeshRef.current.visible = true
     }, [props.isDisplaying, props.spritesheetConfig, selectedCellPosition]);
 
-    return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: []}}
+    return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: [], signs: signDisplay}}
 }
