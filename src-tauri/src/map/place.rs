@@ -3,7 +3,10 @@ use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{
     FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
-use crate::map::{MapData, Place, RepresentativeProperty, VisibleMappingCommand, VisibleProperty};
+use crate::map::{
+    MapData, Place, RepresentativeProperty, VisibleMappingCommand, VisibleMappingCommandKind,
+    VisibleMappingKind, VisibleProperty,
+};
 use glam::IVec2;
 use serde_json::Value;
 
@@ -88,5 +91,26 @@ impl Place for PlaceNested {
     ) -> Option<Vec<VisibleMappingCommand>> {
         self.nested_property
             .get_commands(position, map_data, json_data)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaceToilets;
+
+impl Place for PlaceToilets {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        let command = VisibleMappingCommand {
+            id: "f_toilet".into(),
+            mapping: VisibleMappingKind::Furniture,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
     }
 }

@@ -9,7 +9,9 @@ use crate::map::map_properties::representative::ItemProperty;
 use crate::map::map_properties::visible::{
     FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
-use crate::map::place::{PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain};
+use crate::map::place::{
+    PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain, PlaceToilets,
+};
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, Place, PlaceableSetType, RemovableSetType,
     RepresentativeMappingKind, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint,
@@ -387,6 +389,15 @@ impl Into<Arc<dyn Place>> for PlaceInnerNested {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerToilets;
+
+impl Into<Arc<dyn Place>> for PlaceInnerToilets {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceToilets)
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceOuter<T> {
     pub x: NumberOrRange<i32>,
     pub y: NumberOrRange<i32>,
@@ -429,6 +440,16 @@ impl From<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
 
 impl From<PlaceOuter<PlaceInnerNested>> for PlaceOuter<Arc<dyn Place>> {
     fn from(value: PlaceOuter<PlaceInnerNested>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl From<PlaceOuter<PlaceInnerToilets>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<PlaceInnerToilets>) -> Self {
         PlaceOuter {
             x: value.x,
             y: value.y,
@@ -485,7 +506,9 @@ map_data_object!(
     furniture: MapGenValue,
     items: MeabyVec<MapGenItem>,
     monsters: MeabyVec<MapGenMonster>,
-    nested: MapGenNestedIntermediate
+    nested: MapGenNestedIntermediate,
+    // Toilets do not have any data
+    toilets: ()
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -702,6 +725,14 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             furniture_map.insert(char, fur_prop as Arc<dyn VisibleProperty>);
         }
 
+        for (char, _) in self.object.common.toilets {
+            let toilet_prop = Arc::new(FurnitureProperty {
+                mapgen_value: MapGenValue::String("f_toilet".into()),
+            });
+
+            furniture_map.insert(char, toilet_prop as Arc<dyn VisibleProperty>);
+        }
+
         let mut monster_map = HashMap::new();
         for (char, monster) in self.object.common.monsters {
             let monster_prop = Arc::new(MonsterProperty { monster });
@@ -735,7 +766,8 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
         representative.insert(RepresentativeMappingKind::ItemGroups, item_map);
 
-        let mut place = HashMap::new();
+        let mut place: HashMap<VisibleMappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> =
+            HashMap::new();
 
         place.insert(
             VisibleMappingKind::Furniture,
@@ -745,6 +777,16 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+        );
+
+        let place_furniture = place.get_mut(&VisibleMappingKind::Furniture).unwrap();
+        place_furniture.extend(
+            self.object
+                .common
+                .place_toilets
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
         );
 
         place.insert(

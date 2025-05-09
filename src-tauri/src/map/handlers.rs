@@ -381,7 +381,7 @@ pub async fn open_project(
                     animated_sprites.insert(a);
                 }
                 SpriteType::Fallback(f) => {
-                    fallback_sprites.insert(f);
+                    // fallback_sprites.insert(f);
                 }
             }
         };
