@@ -1,8 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
 use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
-use crate::map::map_properties::ItemProperty;
-use crate::map::map_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
+use crate::map::map_properties::ItemsProperty;
+use crate::map::map_properties::{FurnitureProperty, MonstersProperty, TerrainProperty};
 use crate::map::{MapData, MappingKind, Property, VisibleMappingCommand};
 use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
 use glam::IVec2;
@@ -141,14 +141,14 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
 
         let mut monster_map = HashMap::new();
         for (char, monster) in self.monster {
-            let monster_prop = Arc::new(MonsterProperty { monster });
+            let monster_prop = Arc::new(MonstersProperty { monster });
 
             monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
 
         let mut item_map = HashMap::new();
         for (char, items) in self.items {
-            let item_prop = Arc::new(ItemProperty {
+            let item_prop = Arc::new(ItemsProperty {
                 items: items.into_vec(),
             });
             item_map.insert(char, item_prop as Arc<dyn Property>);

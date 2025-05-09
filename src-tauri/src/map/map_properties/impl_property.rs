@@ -4,8 +4,8 @@ use crate::cdda_data::map_data::{
     MapGenField, MapGenGaspumpFuelType, MapGenNestedIntermediate, ReferenceOrInPlace,
 };
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, GaspumpProperty, ItemProperty, MonsterProperty,
-    NestedProperty, SignProperty, TerrainProperty,
+    ComputerProperty, FieldProperty, FurnitureProperty, GaspumpProperty, ItemsProperty,
+    MonstersProperty, NestedProperty, SignProperty, TerrainProperty, ToiletProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
@@ -43,7 +43,7 @@ impl Property for TerrainProperty {
     }
 }
 
-impl Property for MonsterProperty {
+impl Property for MonstersProperty {
     fn get_commands(
         &self,
         position: &IVec2,
@@ -313,7 +313,7 @@ impl DisplayItemGroup {
     }
 }
 
-impl ItemProperty {
+impl ItemsProperty {
     fn get_display_items_from_entries(
         &self,
         entries: &Vec<ItemEntry>,
@@ -416,7 +416,7 @@ impl ItemProperty {
     }
 }
 
-impl Property for ItemProperty {
+impl Property for ItemsProperty {
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
 
@@ -471,6 +471,50 @@ impl Property for ItemProperty {
         });
 
         serde_json::to_value(display_item_groups).unwrap()
+    }
+}
+
+impl Property for ComputerProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        let command = VisibleMappingCommand {
+            id: "f_console".into(),
+            mapping: MappingKind::Furniture,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
+    }
+}
+
+impl Property for ToiletProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        let command = VisibleMappingCommand {
+            id: "f_toilet".into(),
+            mapping: MappingKind::Furniture,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
     }
 }
 

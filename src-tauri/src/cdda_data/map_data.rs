@@ -5,15 +5,15 @@ use crate::cdda_data::item::{
 };
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
+use crate::map::map_properties::ComputerProperty;
+use crate::map::map_properties::ToiletProperty;
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, SignProperty,
+    FieldProperty, FurnitureProperty, MonstersProperty, NestedProperty, SignProperty,
     TerrainProperty,
 };
-use crate::map::map_properties::{GaspumpProperty, ItemProperty};
-use crate::map::place::{
-    PlaceFields, PlaceFurniture, PlaceGaspumps, PlaceItems, PlaceMonster, PlaceNested, PlaceSigns,
-    PlaceTerrain, PlaceToilets,
-};
+use crate::map::map_properties::{GaspumpProperty, ItemsProperty};
+use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
+use crate::map::VisibleMappingCommand;
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
     RemovableSetType, Set, SetLine, SetOperation, SetPoint, SetSquare, SPECIAL_EMPTY_CHAR,
@@ -364,17 +364,60 @@ pub enum MapGenGaspumpFuelType {
     Avgas,
 }
 
+macro_rules! create_place_inner {
+    (
+        $name: ident,
+        $inner_value: ty
+    ) => {
+        paste! {
+            #[derive(Debug, Clone)]
+            pub struct [<Place $name>] {
+                pub property: [<$name Property>]
+            }
+
+            impl Place for [<Place $name>] {
+                fn get_commands(
+                    &self,
+                    position: &IVec2,
+                    map_data: &MapData,
+                    json_data: &DeserializedCDDAJsonData,
+                ) -> Option<Vec<VisibleMappingCommand>> {
+                    self.property.get_commands(position, map_data, json_data)
+                }
+
+                fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+                    self.property.representation(json_data)
+                }
+            }
+
+            #[derive(Debug, Clone, Deserialize, Serialize)]
+            pub struct [<PlaceInner $name>] {
+                #[serde(flatten)]
+                pub value: $inner_value,
+            }
+
+            impl Into<Arc<dyn Place>> for [<PlaceInner $name>] {
+                fn into(self) -> Arc<dyn Place> {
+                    Arc::new([<Place $name>] {
+                        property: [<$name Property>]::from(self)
+                    })
+                }
+            }
+        }
+    };
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerFurniture {
     #[serde(rename = "furn")]
-    furniture_id: CDDAIdentifier,
+    pub furniture_id: DistributionInner,
 }
 
 impl Into<Arc<dyn Place>> for PlaceInnerFurniture {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceFurniture {
             visible: FurnitureProperty {
-                mapgen_value: MapGenValue::String(self.furniture_id.clone()),
+                mapgen_value: self.furniture_id.clone().into(),
             },
         })
     }
@@ -383,53 +426,14 @@ impl Into<Arc<dyn Place>> for PlaceInnerFurniture {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerTerrain {
     #[serde(rename = "ter")]
-    terrain_id: CDDAIdentifier,
+    pub terrain_id: DistributionInner,
 }
 
 impl Into<Arc<dyn Place>> for PlaceInnerTerrain {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceTerrain {
             visible: TerrainProperty {
-                mapgen_value: MapGenValue::String(self.terrain_id.clone()),
-            },
-        })
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerItems {
-    #[serde(flatten)]
-    item: MapGenItem,
-}
-
-impl Into<Arc<dyn Place>> for PlaceInnerItems {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceItems {
-            representative: ItemProperty {
-                items: vec![self.item],
-            },
-        })
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerMonsters {
-    monster: CDDAIdentifier,
-    chance: Option<NumberOrRange<u32>>,
-    density: Option<f32>,
-}
-
-impl Into<Arc<dyn Place>> for PlaceInnerMonsters {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceMonster {
-            visible: MonsterProperty {
-                monster: MeabyVec::Single(MapGenMonster {
-                    id: MapGenMonsterType::MonsterGroup {
-                        group: MapGenValue::String(self.monster),
-                    },
-                    chance: self.chance,
-                    pack_size: None,
-                }),
+                mapgen_value: self.terrain_id.clone().into(),
             },
         })
     }
@@ -451,78 +455,19 @@ impl Into<Arc<dyn Place>> for PlaceInnerNested {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerToilets;
+create_place_inner!(Items, MapGenItem);
 
-impl Into<Arc<dyn Place>> for PlaceInnerToilets {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceToilets)
-    }
-}
+create_place_inner!(Field, MapGenField);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerFields {
-    #[serde(flatten)]
-    pub field: MapGenField,
-}
+create_place_inner!(Computer, MapGenComputer);
 
-impl Into<Arc<dyn Place>> for PlaceInnerFields {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceFields {
-            visible: FieldProperty { field: self.field },
-        })
-    }
-}
+create_place_inner!(Sign, MapGenSign);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerComputers {
-    #[serde(flatten)]
-    pub computer: MapGenComputer,
-}
+create_place_inner!(Gaspump, MapGenGaspump);
 
-impl Into<Arc<dyn Place>> for PlaceInnerComputers {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceFurniture {
-            visible: FurnitureProperty {
-                mapgen_value: MapGenValue::String("f_console".into()),
-            },
-        })
-    }
-}
+create_place_inner!(Monsters, MapGenMonster);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerSigns {
-    #[serde(flatten)]
-    pub sign: MapGenSign,
-}
-
-impl Into<Arc<dyn Place>> for PlaceInnerSigns {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceSigns {
-            property: SignProperty {
-                text: self.sign.signage,
-                snippet: self.sign.snippet,
-            },
-        })
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct PlaceInnerGaspumps {
-    #[serde(flatten)]
-    pub gaspump: MapGenGaspump,
-}
-
-impl Into<Arc<dyn Place>> for PlaceInnerGaspumps {
-    fn into(self) -> Arc<dyn Place> {
-        Arc::new(PlaceGaspumps {
-            property: GaspumpProperty {
-                amount: self.gaspump.amount,
-                fuel: self.gaspump.fuel,
-            },
-        })
-    }
-}
+create_place_inner!(Toilet, ());
 
 const fn default_chance() -> i32 {
     100
@@ -573,11 +518,11 @@ impl_from!(PlaceInnerTerrain);
 impl_from!(PlaceInnerItems);
 impl_from!(PlaceInnerMonsters);
 impl_from!(PlaceInnerNested);
-impl_from!(PlaceInnerToilets);
-impl_from!(PlaceInnerFields);
-impl_from!(PlaceInnerComputers);
-impl_from!(PlaceInnerSigns);
-impl_from!(PlaceInnerGaspumps);
+impl_from!(PlaceInnerToilet);
+impl_from!(PlaceInnerField);
+impl_from!(PlaceInnerComputer);
+impl_from!(PlaceInnerSign);
+impl_from!(PlaceInnerGaspump);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -591,7 +536,7 @@ macro_rules! map_data_object {
         [REGULAR_FIELDS]
         $($r_field: ident: $r_ty: ty),*
         [FIELDS_WITH_PLACE]
-        $($place_field: ident: $place_ty: ty),*
+        $(($place_field: ident, $place_field_singular: ident): $place_ty: ty),*
     ) => {
         paste! {
             #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -606,7 +551,7 @@ macro_rules! map_data_object {
                     pub $place_field: HashMap<char, $place_ty>,
 
                     #[serde(default)]
-                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field: camel>]>>,
+                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field_singular: camel>]>>,
                 )*
             }
         }
@@ -623,17 +568,17 @@ map_data_object!(
     flags: HashSet<MapDataFlag>
 
     [FIELDS_WITH_PLACE]
-    terrain: MapGenValue,
-    furniture: MapGenValue,
-    items: MeabyVec<MapGenItem>,
-    monsters: MeabyVec<MapGenMonster>,
-    nested: MapGenNestedIntermediate,
+    (terrain, terrain): MapGenValue,
+    (furniture, furniture): MapGenValue,
+    (items, items): MeabyVec<MapGenItem>,
+    (monsters, monsters): MeabyVec<MapGenMonster>,
+    (nested, nested): MapGenNestedIntermediate,
     // Toilets do not have any data
-    toilets: (),
-    fields: MapGenField,
-    computers: MapGenComputer,
-    signs: MapGenSign,
-    gaspumps: MapGenGaspump
+    (toilets, toilet): (),
+    (fields, field): MapGenField,
+    (computers, computer): MapGenComputer,
+    (signs, sign): MapGenSign,
+    (gaspumps, gaspump): MapGenGaspump
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -870,7 +815,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
         let mut monster_map = HashMap::new();
         for (char, monster) in self.object.common.monsters {
-            let monster_prop = Arc::new(MonsterProperty { monster });
+            let monster_prop = Arc::new(MonstersProperty { monster });
 
             monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
@@ -891,7 +836,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
         let mut item_map = HashMap::new();
         for (char, items) in self.object.common.items {
-            let item_prop = Arc::new(ItemProperty {
+            let item_prop = Arc::new(ItemsProperty {
                 items: items.into_vec(),
             });
             item_map.insert(char, item_prop as Arc<dyn Property>);
