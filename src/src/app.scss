@@ -37,6 +37,8 @@
       flex: 1;
       padding: 12px;
       box-sizing: border-box;
+      text-overflow: ellipsis;
+      overflow: hidden;
 
       .menu-body-container {
         display: flex;

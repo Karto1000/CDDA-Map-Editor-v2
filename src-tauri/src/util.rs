@@ -3,12 +3,12 @@ use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::Switch;
 use crate::tileset::GetRandom;
-use crate::RANDOM;
 use derive_more::with_trait::Display;
 use glam::{IVec3, UVec2};
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
+use rand::rng;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -61,6 +61,13 @@ impl CDDAIdentifier {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
 pub struct ParameterIdentifier(pub String);
+
+impl From<&str> for ParameterIdentifier {
+    fn from(value: &str) -> Self {
+        Self(value.into())
+    }
+}
+
 pub type Comment = Option<String>;
 
 pub trait GetIdentifier {
@@ -97,7 +104,7 @@ impl GetIdentifier for CDDAIdentifier {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum DistributionInner {
     Param {
@@ -111,7 +118,7 @@ pub enum DistributionInner {
     Normal(CDDAIdentifier),
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MeabyVec<T> {
     Single(T),
@@ -175,7 +182,9 @@ impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
         self.for_each(|v| weights.push(v.weight_or_one()));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-        let mut rng = RANDOM.write().unwrap();
+
+        // let mut rng = RANDOM.write().unwrap();
+        let mut rng = rng();
 
         let chosen_index = weighted_index.sample(&mut rng);
         let item = self_vec.remove(chosen_index);
@@ -184,10 +193,19 @@ impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize)]
 pub struct Weighted<T> {
     pub data: T,
     pub weight: i32,
+}
+
+impl<T> Weighted<T> {
+    pub fn new(data: impl Into<T>, weight: i32) -> Self {
+        Self {
+            data: data.into(),
+            weight,
+        }
+    }
 }
 
 impl<'de, T> Deserialize<'de> for Weighted<T>
@@ -237,11 +255,17 @@ where
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MeabyWeighted<T> {
     Weighted(Weighted<T>),
     NotWeighted(T),
+}
+
+impl<T> From<T> for MeabyWeighted<T> {
+    fn from(value: T) -> Self {
+        Self::NotWeighted(value)
+    }
 }
 
 impl<T> MeabyWeighted<T> {
@@ -252,9 +276,9 @@ impl<T> MeabyWeighted<T> {
         }
     }
 
-    pub fn weighted(self) -> Weighted<T> {
+    pub fn to_weighted(self) -> Weighted<T> {
         match self {
-            MeabyWeighted::NotWeighted(d) => Weighted { data: d, weight: 0 },
+            MeabyWeighted::NotWeighted(d) => Weighted { data: d, weight: 1 },
             MeabyWeighted::Weighted(w) => w,
         }
     }
@@ -349,7 +373,7 @@ pub trait Save<T> {
 }
 
 pub trait Load<T> {
-    fn load(&self) -> Result<T, anyhow::Error>;
+    async fn load(&mut self) -> Result<T, anyhow::Error>;
 }
 
 pub fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {

@@ -1,0 +1,50 @@
+[
+  {
+    "type": "item_group",
+    "id": "test_itemgroup2",
+    "subtype": "collection",
+    "entries": [
+      {
+        "item": "dirt",
+        "count": [
+          0,
+          4
+        ]
+      }
+    ]
+  },
+  {
+    "type": "item_group",
+    "id": "test_itemgroup",
+    "subtype": "collection",
+    "entries": [
+      {
+        "item": "rock",
+        "count": [
+          0,
+          4
+        ]
+      },
+      {
+        "item": "wood_panel",
+        "count": [
+          0,
+          2
+        ]
+      },
+      {
+        "item": "nail"
+      },
+      {
+        "item": "splinter",
+        "count": [
+          0,
+          4
+        ]
+      },
+      {
+        "group": "test_itemgroup2"
+      }
+    ]
+  }
+]

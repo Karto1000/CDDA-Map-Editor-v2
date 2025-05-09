@@ -1,0 +1,37 @@
+[
+  {
+    "type": "mapgen",
+    "method": "json",
+    "om_terrain": "test_fill_ter",
+    "object": {
+      "//": "Test the fill_ter",
+      "fill_ter": "t_grass",
+      "rows": [
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        ",
+        "                        "
+      ]
+    }
+  }
+]

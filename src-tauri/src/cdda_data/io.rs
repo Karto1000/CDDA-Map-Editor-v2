@@ -1,13 +1,19 @@
 use crate::cdda_data::furniture::CDDAFurniture;
-use crate::cdda_data::item::CDDDAItemGroup;
-use crate::cdda_data::map_data::{CDDAMapData, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH};
+use crate::cdda_data::item::CDDAItemGroup;
+use crate::cdda_data::map_data::{
+    CDDAMapDataIntermediate, OmTerrain, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_ROWS, DEFAULT_MAP_WIDTH,
+};
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::{CDDAJsonEntry, TileLayer};
+use crate::map::MapData;
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
+use async_walkdir::WalkDir;
+use futures_lite::stream::StreamExt;
+use log::kv::Source;
 use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -15,19 +21,19 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::string::ToString;
-use walkdir::WalkDir;
 
-const NULL_TERRAIN: &'static str = "t_null";
-const NULL_FURNITURE: &'static str = "f_null";
+pub const NULL_TERRAIN: &'static str = "t_null";
+pub const NULL_FURNITURE: &'static str = "f_null";
+pub const NULL_NESTED: &'static str = "null";
 
-#[derive(Default, Serialize)]
+#[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
-    pub mapgens: HashMap<CDDAIdentifier, CDDAMapData>,
+    pub map_data: HashMap<CDDAIdentifier, MapData>,
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
-    pub item_groups: HashMap<CDDAIdentifier, CDDDAItemGroup>,
+    pub item_groups: HashMap<CDDAIdentifier, CDDAItemGroup>,
     pub monstergroups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
 }
 
@@ -214,15 +220,16 @@ pub struct CDDADataLoader {
 }
 
 impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
-    fn load(&self) -> Result<DeserializedCDDAJsonData, Error> {
-        let walkdir = WalkDir::new(&self.json_path);
+    async fn load(&mut self) -> Result<DeserializedCDDAJsonData, Error> {
+        let mut walkdir = WalkDir::new(&self.json_path);
 
         let mut cdda_data = DeserializedCDDAJsonData::default();
 
-        for entry in walkdir {
+        while let Some(entry) = walkdir.next().await {
             let entry = entry?;
 
-            let extension = match entry.path().extension() {
+            let path = entry.path();
+            let extension = match path.extension() {
                 None => {
                     info!(
                         "Skipping entry {:?} because it does not have an extension",
@@ -251,61 +258,104 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
 
             for des_entry in des {
                 match des_entry {
-                    CDDAJsonEntry::Mapgen(mg) => match &mg.om_terrain {
-                        OmTerrain::Single(id) => {
-                            debug!("Found Single Mapgen '{}' in {:?}", id, entry.path());
-                            cdda_data
-                                .mapgens
-                                .insert(CDDAIdentifier(id.clone()), mg.clone());
-                        }
-                        OmTerrain::Duplicate(duplicate) => {
-                            debug!(
-                                "Found Duplicate Mapgen '{:?}' in {:?}",
-                                duplicate,
-                                entry.path()
-                            );
-                            for id in duplicate.iter() {
-                                cdda_data
-                                    .mapgens
-                                    .insert(CDDAIdentifier(id.clone()), mg.clone());
-                            }
-                        }
-                        OmTerrain::Nested(nested) => {
-                            debug!("Found Nested Mapgen '{:?}' in {:?}", nested, entry.path());
-
-                            for (row, vec) in nested.iter().enumerate() {
-                                for (column, om_terrain) in vec.iter().enumerate() {
-                                    let rows = mg
-                                        .object
-                                        .rows
-                                        // Get correct range of rows for this om_terrain from row..row + DEFAULT_MAP_HEIGHT
-                                        .get(
-                                            row * DEFAULT_MAP_HEIGHT
-                                                ..row * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT,
-                                        )
-                                        .expect("Row to not be out of bounds")
-                                        .iter()
-                                        .map(|colstring| {
-                                            colstring
-                                                .chars()
-                                                .skip(column * DEFAULT_MAP_WIDTH)
-                                                .take(
-                                                    column * DEFAULT_MAP_WIDTH + DEFAULT_MAP_WIDTH,
-                                                )
-                                                .collect()
-                                        })
-                                        .collect();
-
-                                    let mut new_mapgen = mg.clone();
-                                    new_mapgen.object.rows = rows;
-
+                    CDDAJsonEntry::Mapgen(mapgen) => {
+                        if let Some(om_terrain) = &mapgen.om_terrain {
+                            match &om_terrain {
+                                OmTerrain::Single(id) => {
+                                    debug!("Found Single Mapgen '{}' in {:?}", id, entry.path());
                                     cdda_data
-                                        .mapgens
-                                        .insert(CDDAIdentifier(om_terrain.clone()), new_mapgen);
+                                        .map_data
+                                        .insert(CDDAIdentifier(id.clone()), mapgen.into());
+                                }
+                                OmTerrain::Duplicate(duplicate) => {
+                                    debug!(
+                                        "Found Duplicate Mapgen '{:?}' in {:?}",
+                                        duplicate,
+                                        entry.path()
+                                    );
+                                    for id in duplicate.iter() {
+                                        cdda_data.map_data.insert(
+                                            CDDAIdentifier(id.clone()),
+                                            mapgen.clone().into(),
+                                        );
+                                    }
+                                }
+                                OmTerrain::Nested(nested) => {
+                                    debug!(
+                                        "Found Nested Mapgen '{:?}' in {:?}",
+                                        nested,
+                                        entry.path()
+                                    );
+
+                                    for (row, vec) in nested.iter().enumerate() {
+                                        for (column, om_terrain) in vec.iter().enumerate() {
+                                            let sliced_rows = match &mapgen.object.rows {
+                                                None => Some(Vec::from_iter(
+                                                    DEFAULT_MAP_ROWS
+                                                        .into_iter()
+                                                        .map(|s| s.to_string()),
+                                                )),
+                                                Some(rows) => {
+                                                    Some(
+                                                        rows.clone()
+                                                            // Get correct range of rows for this om_terrain from row..row + DEFAULT_MAP_HEIGHT
+                                                            .get(
+                                                                row * DEFAULT_MAP_HEIGHT
+                                                                    ..row * DEFAULT_MAP_HEIGHT
+                                                                        + DEFAULT_MAP_HEIGHT,
+                                                            )
+                                                            .expect("Row to not be out of bounds")
+                                                            .iter()
+                                                            .map(|colstring| {
+                                                                colstring
+                                                                    .chars()
+                                                                    .skip(
+                                                                        column * DEFAULT_MAP_WIDTH,
+                                                                    )
+                                                                    .take(
+                                                                        column * DEFAULT_MAP_WIDTH
+                                                                            + DEFAULT_MAP_WIDTH,
+                                                                    )
+                                                                    .collect()
+                                                            })
+                                                            .collect(),
+                                                    )
+                                                }
+                                            };
+
+                                            let mut new_mapgen = mapgen.clone();
+                                            new_mapgen.object.rows = sliced_rows;
+
+                                            cdda_data.map_data.insert(
+                                                CDDAIdentifier(om_terrain.clone()),
+                                                new_mapgen.into(),
+                                            );
+                                        }
+                                    }
                                 }
                             }
+                        } else if let Some(nested_mapgen) = &mapgen.nested_mapgen_id {
+                            debug!(
+                                "Found Nested Mapgen Object '{}' in {:?}",
+                                nested_mapgen,
+                                entry.path()
+                            );
+
+                            cdda_data
+                                .map_data
+                                .insert(nested_mapgen.clone(), mapgen.into());
+                        } else if let Some(update_mapgen) = &mapgen.update_mapgen_id {
+                            debug!(
+                                "Found Update Mapgen Object '{:?}' in {:?}",
+                                update_mapgen,
+                                entry.path()
+                            );
+
+                            cdda_data
+                                .map_data
+                                .insert(update_mapgen.clone(), mapgen.into());
                         }
-                    },
+                    }
                     CDDAJsonEntry::RegionSettings(rs) => {
                         debug!("Found Region setting {} in {:?}", rs.id, entry.path());
                         cdda_data.region_settings.insert(rs.id.clone(), rs);
@@ -337,7 +387,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             .insert(new_furniture.id.clone(), new_furniture);
                     }
                     CDDAJsonEntry::ItemGroup(group) => {
-                        let new_group: CDDDAItemGroup = group.into();
+                        let new_group: CDDAItemGroup = group.into();
                         debug!(
                             "Found ItemGroup entry {} in {:?}",
                             new_group.id,
@@ -375,10 +425,12 @@ mod tests {
 
     #[test]
     fn test_load_cdda_data() {
-        let data_loader = CDDADataLoader {
-            json_path: PathBuf::from(CDDA_TEST_JSON_PATH),
-        };
+        tokio_test::block_on(async {
+            let mut data_loader = CDDADataLoader {
+                json_path: PathBuf::from(CDDA_TEST_JSON_PATH),
+            };
 
-        data_loader.load().expect("Loading to not fail");
+            data_loader.load().await.expect("Loading to not fail");
+        })
     }
 }

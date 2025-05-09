@@ -51,7 +51,12 @@ pub async fn cdda_installation_directory_picked(
     lock.available_tilesets = Some(available_tilesets);
     lock.config.cdda_path = Some(path);
 
-    match load_cdda_json_data(&lock) {
+    match load_cdda_json_data(
+        &lock.config.cdda_path.clone().unwrap(),
+        &lock.config.json_data_path,
+    )
+    .await
+    {
         Ok(data) => {
             app.manage(Mutex::new(data));
         }

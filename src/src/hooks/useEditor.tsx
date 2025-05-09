@@ -30,6 +30,7 @@ import {
 } from "../lib/map_data.ts";
 import {Project} from "../lib/project.js";
 import {SpritesheetConfig} from "../lib/tileset/legacy.js";
+import {Fieldset} from "../components/fieldset.tsx";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -89,12 +90,16 @@ export function ItemPanel(props: ItemPanelProps) {
             index: number
         ): React.JSX.Element[] | null {
             const innerGroup: React.JSX.Element[] = []
+            const probability = itemGroup.probability * 100
 
             if (itemGroup.type === DisplayItemGroupType.Single) {
                 if (!itemGroup.item.includes(query)) return null
 
-                innerGroup.push(<div
-                    key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {(itemGroup.probability * 100).toFixed(2)}%</div>)
+                innerGroup.push(
+                    <div
+                        key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {probability < 0.009 ? "0.00<" : probability.toFixed(2)}%
+                    </div>
+                )
             } else if (itemGroup.type === DisplayItemGroupType.Distribution || itemGroup.type === DisplayItemGroupType.Collection) {
                 if (itemGroup.items.length === 0) return null
 
@@ -105,11 +110,13 @@ export function ItemPanel(props: ItemPanelProps) {
                 if (children.length === 0) return null
 
                 innerGroup.push(
-                    <fieldset style={{marginLeft: level * 2}} className={"item-container"}
-                              key={`${index}-${level}-${itemGroup.type}-${itemGroup.probability}`}>
-                        <legend>{itemGroup.name} {itemGroup.type} {(itemGroup.probability * 100).toFixed(2)}%</legend>
+                    <Fieldset
+                        legend={`${itemGroup.name} ${itemGroup.type} ${probability < 0.009 ? "0.00<" : probability.toFixed(2)}%`}
+                        key={`${index}-${level}-${itemGroup.type}-${itemGroup.probability}`}
+                        style={{marginLeft: level * 2}}
+                        className={"item-container"}>
                         {children}
-                    </fieldset>
+                    </Fieldset>
                 )
             }
 
@@ -423,10 +430,13 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
                 .divide(new Vector3(tile_info.width, tile_info.height, 1))
                 .add(offset)
                 .floor()
+            // We need to invert the world mouse position since the cdda map goes from up to down
+            worldMousePosition.current.y = -worldMousePosition.current.y
 
+            // Here we need to invert the y again to make it fit correctly for three.js
             hoveredCellMeshRef.current.position.set(
                 worldMousePosition.current.x * tile_info.width,
-                worldMousePosition.current.y * tile_info.height,
+                -worldMousePosition.current.y * tile_info.height,
                 MAX_DEPTH + 1
             )
         }
@@ -518,7 +528,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         selectedCellMeshRef.current.position.set(
             selectedCellPosition.x * tile_info.width,
-            selectedCellPosition.y * tile_info.height,
+            -selectedCellPosition.y * tile_info.height,
             MAX_DEPTH + 1
         )
         selectedCellMeshRef.current.visible = true

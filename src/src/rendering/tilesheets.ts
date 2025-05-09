@@ -127,11 +127,13 @@ export class Tilesheets {
     const worldY = position.y / this.tileInfo.width
     const worldX = position.x / this.tileInfo.height
 
+    // Since the three.js world goes from down to up and our cdda map goes from up to down, we need to invert the
+    // cell y position
     const newPosition = new Vector3(
       position.x,
-      position.y,
+      -position.y - this.tileInfo.height,
       // + 1 to always add an offset because if we didn't, a few sprites would not show up
-      (MAX_DEPTH - MAX_ROW * (worldY + 1)) + worldX + layer
+      (MAX_ROW * (worldY + 1)) + worldX + layer
     )
 
     return {

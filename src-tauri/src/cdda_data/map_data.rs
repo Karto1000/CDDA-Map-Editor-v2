@@ -1,25 +1,63 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::item::{
+    CDDAItemGroup, CDDAItemGroupInPlace, CDDAItemGroupIntermediate, EntryGroupShortcut,
+    EntryItemShortcut, Item, ItemEntry, ItemGroupSubtype,
+};
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
-use crate::map::representative_properties::ItemProperty;
-use crate::map::visible_properties::{FurnitureProperty, MonsterProperty, TerrainProperty};
-use crate::map::{
-    Cell, MapData, Place, PlaceFurniture, PlaceableSetType, RemovableSetType,
-    RepresentativeMapping, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint, SetSquare,
-    VisibleMapping, VisibleProperty,
+use crate::map::map_properties::representative::ItemProperty;
+use crate::map::map_properties::visible::{
+    FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
-use crate::util::{CDDAIdentifier, DistributionInner, MeabyVec, ParameterIdentifier};
+use crate::map::place::{PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain};
+use crate::map::{
+    Cell, MapData, MapDataFlag, MapGenNested, Place, PlaceableSetType, RemovableSetType,
+    RepresentativeMappingKind, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint,
+    SetSquare, VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
+};
+use crate::util::{
+    CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
+};
+use crate::warn;
 use crate::{skip_err, skip_none};
-use glam::UVec2;
+use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
-use log::warn;
-use serde::{Deserialize, Serialize};
+use paste::paste;
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;
+pub const DEFAULT_CELL_CHARACTER: char = ' ';
+pub const DEFAULT_MAP_ROWS: [&'static str; 24] = [
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+    "                        ",
+];
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
@@ -40,14 +78,30 @@ pub struct SetIntermediate {
     z: Option<i32>,
     x2: Option<NumberOrRange<u32>>,
     y2: Option<NumberOrRange<u32>>,
-    amount: Option<(u32, u32)>,
+    amount: Option<NumberOrRange<u32>>,
     chance: Option<u32>,
     repeat: Option<(u32, u32)>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum ReferenceOrInPlace<P> {
+    Reference(CDDAIdentifier),
+    InPlace(P),
+}
+
+impl<P> ReferenceOrInPlace<P> {
+    pub fn ref_or(&self, value: impl Into<CDDAIdentifier>) -> CDDAIdentifier {
+        match self {
+            ReferenceOrInPlace::Reference(r) => r.clone(),
+            ReferenceOrInPlace::InPlace(_) => value.into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct MapGenItem {
-    pub item: CDDAIdentifier,
+    pub item: ReferenceOrInPlace<CDDAItemGroupInPlace>,
     pub chance: Option<NumberOrRange<u32>>,
     pub repeat: Option<NumberOrRange<u32>>,
     pub faction: Option<CDDAIdentifier>,
@@ -56,8 +110,8 @@ pub struct MapGenItem {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum MapGenMonsterType {
-    Monster { monster: CDDAIdentifier },
-    MonsterGroup { group: CDDAIdentifier },
+    Monster { monster: MapGenValue },
+    MonsterGroup { group: MapGenValue },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -68,110 +122,433 @@ pub struct MapGenMonster {
     pub pack_size: Option<NumberOrRange<u32>>,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NeighborDirection {
+    North,
+    East,
+    South,
+    West,
+    NorthEast,
+    NorthWest,
+    SouthEast,
+    SouthWest,
+    Above,
+    Below,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAMapDataObject {
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum OmTerrainMatchType {
+    Exact,
+    Type,
+    Subtype,
+    Prefix,
+    Contains,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OmTerrainMatch {
+    pub om_terrain: CDDAIdentifier,
+    pub om_terrain_match_type: OmTerrainMatchType,
+}
+
+impl<'de> Deserialize<'de> for OmTerrainMatch {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        struct OmTerrainMatchVisitor;
+
+        impl<'de> serde::de::Visitor<'de> for OmTerrainMatchVisitor {
+            type Value = OmTerrainMatch;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("string or map")
+            }
+
+            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
+            where
+                E: serde::de::Error,
+            {
+                Ok(OmTerrainMatch {
+                    om_terrain: value.into(),
+                    om_terrain_match_type: OmTerrainMatchType::Contains,
+                })
+            }
+
+            fn visit_map<V>(self, mut map: V) -> Result<Self::Value, V::Error>
+            where
+                V: serde::de::MapAccess<'de>,
+            {
+                let mut om_terrain = None;
+                let mut om_terrain_match_type = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "om_terrain" => {
+                            om_terrain = Some(map.next_value()?);
+                        }
+                        "om_terrain_match_type" => {
+                            om_terrain_match_type = Some(map.next_value()?);
+                        }
+                        _ => {
+                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
+                        }
+                    }
+                }
+
+                let om_terrain =
+                    om_terrain.ok_or_else(|| serde::de::Error::missing_field("om_terrain"))?;
+                let om_terrain_match_type =
+                    om_terrain_match_type.unwrap_or(OmTerrainMatchType::Contains);
+
+                Ok(OmTerrainMatch {
+                    om_terrain,
+                    om_terrain_match_type,
+                })
+            }
+        }
+
+        deserializer.deserialize_any(OmTerrainMatchVisitor)
+    }
+}
+
+impl OmTerrainMatch {
+    pub fn matches_identifier(&self, ident: &CDDAIdentifier) -> bool {
+        // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/JSON_INFO.md#Starting-locations
+        match self.om_terrain_match_type {
+            OmTerrainMatchType::Exact => &self.om_terrain == ident,
+            OmTerrainMatchType::Type => {
+                // Strip any suffixes like rotation or linear directions
+                let base_type = ident.0.split('_').next().unwrap_or("");
+                let match_type = self.om_terrain.0.split('_').next().unwrap_or("");
+                base_type == match_type
+            }
+            OmTerrainMatchType::Subtype => {
+                // Match base type and linear type suffix
+                let parts: Vec<&str> = ident.0.split('_').collect();
+                let match_parts: Vec<&str> = self.om_terrain.0.split('_').collect();
+
+                if parts.len() >= 2 && match_parts.len() >= 2 {
+                    parts[0] == match_parts[0] && parts[1] == match_parts[1]
+                } else {
+                    false
+                }
+            }
+            OmTerrainMatchType::Prefix => {
+                // Must be complete prefix with underscore delimiter
+                ident.0.starts_with(&self.om_terrain.0)
+                    && (ident.0.len() == self.om_terrain.0.len()
+                        || ident.0.chars().nth(self.om_terrain.0.len()) == Some('_'))
+            }
+            OmTerrainMatchType::Contains => {
+                // Simple substring match
+                ident.0.contains(&self.om_terrain.0)
+            }
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum MapGenNestedIntermediate {
+    Chunks {
+        chunks: MeabyVec<MeabyWeighted<MapGenValue>>,
+        neighbors: Option<HashMap<NeighborDirection, MeabyVec<OmTerrainMatch>>>,
+    },
+    ElseChunks {
+        else_chunks: MeabyVec<MeabyWeighted<MapGenValue>>,
+        neighbors: Option<HashMap<NeighborDirection, MeabyVec<OmTerrainMatch>>>,
+    },
+}
+
+impl Into<MapGenNested> for MapGenNestedIntermediate {
+    fn into(self) -> MapGenNested {
+        let (transformed_chunks, mut neighbors, is_else) = match self {
+            MapGenNestedIntermediate::Chunks { chunks, neighbors } => (
+                chunks
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+                neighbors,
+                false,
+            ),
+            MapGenNestedIntermediate::ElseChunks {
+                else_chunks,
+                neighbors,
+            } => (
+                else_chunks
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+                neighbors,
+                true,
+            ),
+        };
+
+        let neighbors = neighbors.map(|neighbors| {
+            HashMap::from_iter(neighbors.into_iter().map(|(p, n)| (p, n.into_vec())))
+        });
+
+        MapGenNested {
+            neighbors,
+            joins: None,
+            chunks: transformed_chunks,
+            invert_condition: is_else,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerFurniture {
+    #[serde(rename = "furn")]
+    furniture_id: CDDAIdentifier,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerFurniture {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceFurniture {
+            visible: FurnitureProperty {
+                mapgen_value: MapGenValue::String(self.furniture_id.clone()),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerTerrain {
+    #[serde(rename = "ter")]
+    terrain_id: CDDAIdentifier,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerTerrain {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceTerrain {
+            visible: TerrainProperty {
+                mapgen_value: MapGenValue::String(self.terrain_id.clone()),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerItems {
+    item: CDDAIdentifier,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerItems {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceItems {
+            representative: ItemProperty { items: vec![] },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerMonsters {
+    monster: CDDAIdentifier,
+    chance: Option<NumberOrRange<u32>>,
+    density: Option<f32>,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerMonsters {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceMonster {
+            visible: MonsterProperty {
+                monster: MeabyVec::Single(MapGenMonster {
+                    id: MapGenMonsterType::MonsterGroup {
+                        group: MapGenValue::String(self.monster),
+                    },
+                    chance: self.chance,
+                    pack_size: None,
+                }),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerNested {
+    #[serde(flatten)]
+    pub chunks: MapGenNestedIntermediate,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerNested {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceNested {
+            nested_property: NestedProperty {
+                nested: self.chunks.into(),
+            },
+        })
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceOuter<T> {
+    pub x: NumberOrRange<i32>,
+    pub y: NumberOrRange<i32>,
+
+    #[serde(flatten)]
+    pub inner: T,
+}
+
+// TODO: For some reason i cannot implement <T: Into<Arc<dyn Place>> From<PlaceOuter<T>> for PlaceOuter<Arc<dyn Place>>
+// Since it conflicts with inbuilt implementations?
+impl From<PlaceOuter<PlaceInnerFurniture>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<PlaceInnerFurniture>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl From<PlaceOuter<PlaceInnerTerrain>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<PlaceInnerTerrain>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl From<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<PlaceInnerMonsters>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl From<PlaceOuter<PlaceInnerNested>> for PlaceOuter<Arc<dyn Place>> {
+    fn from(value: PlaceOuter<PlaceInnerNested>) -> Self {
+        PlaceOuter {
+            x: value.x,
+            y: value.y,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl<T> PlaceOuter<T> {
+    pub fn coordinates(&self) -> IVec2 {
+        IVec2::new(self.x.rand_number(), self.y.rand_number())
+    }
+}
+
+macro_rules! map_data_object {
+    (
+        $name: ident,
+        [REGULAR_FIELDS]
+        $($r_field: ident: $r_ty: ty),*
+        [FIELDS_WITH_PLACE]
+        $($place_field: ident: $place_ty: ty),*
+    ) => {
+        paste! {
+            #[derive(Debug, Clone, Deserialize, Serialize)]
+            pub struct $name {
+                $(
+                    #[serde(default)]
+                    pub $r_field: $r_ty,
+                )*
+
+                $(
+                    #[serde(default)]
+                    pub $place_field: HashMap<char, $place_ty>,
+
+                    #[serde(default)]
+                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field: camel>]>>,
+                )*
+            }
+        }
+    };
+}
+
+map_data_object!(
+    CDDAMapDataObjectCommonIntermediate,
+
+    [REGULAR_FIELDS]
+    palettes: Vec<MapGenValue>,
+    parameters: IndexMap<ParameterIdentifier, Parameter>,
+    set: Vec<SetIntermediate>,
+    flags: HashSet<MapDataFlag>
+
+    [FIELDS_WITH_PLACE]
+    terrain: MapGenValue,
+    furniture: MapGenValue,
+    items: MeabyVec<MapGenItem>,
+    monsters: MeabyVec<MapGenMonster>,
+    nested: MapGenNestedIntermediate
+);
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CDDAMapDataObjectIntermediate {
     pub fill_ter: Option<DistributionInner>,
-    pub rows: Vec<String>,
 
-    #[serde(default)]
-    pub palettes: Vec<MapGenValue>,
+    pub rows: Option<Vec<String>>,
 
-    #[serde(default)]
-    pub terrain: HashMap<char, MapGenValue>,
+    #[serde(rename = "mapgensize")]
+    pub mapgen_size: Option<UVec2>,
 
-    #[serde(default)]
-    pub furniture: HashMap<char, MapGenValue>,
-
-    #[serde(default)]
-    pub items: HashMap<char, MeabyVec<MapGenItem>>,
-
-    #[serde(default)]
-    pub place_furniture: Vec<PlaceFurniture>,
-
-    #[serde(default)]
-    pub monster: HashMap<char, MapGenMonster>,
-
-    #[serde(default)]
-    pub monsters: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub npcs: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub loot: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub sealed_item: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub fields: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub signs: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub rubble: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub liquids: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub corpses: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub computers: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub nested: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub toilets: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub gaspumps: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub vehicles: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub traps: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub graffiti: HashMap<char, Value>,
-
-    #[serde(default)]
-    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
-
-    #[serde(default)]
-    pub set: Vec<SetIntermediate>,
+    #[serde(flatten)]
+    pub common: CDDAMapDataObjectCommonIntermediate,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAMapData {
+pub struct CDDAMapDataIntermediate {
     pub method: String,
-    pub om_terrain: OmTerrain,
+
+    pub update_mapgen_id: Option<CDDAIdentifier>,
+    pub om_terrain: Option<OmTerrain>,
+    pub nested_mapgen_id: Option<CDDAIdentifier>,
+
     pub weight: Option<i32>,
-    pub object: CDDAMapDataObject,
+    pub object: CDDAMapDataObjectIntermediate,
 }
 
-impl Into<MapData> for CDDAMapData {
+impl Into<MapData> for CDDAMapDataIntermediate {
     fn into(self) -> MapData {
         let mut cells = IndexMap::new();
+        let mut mapgen_size = UVec2::new(DEFAULT_MAP_WIDTH as u32, DEFAULT_MAP_HEIGHT as u32);
 
-        // We need to reverse the iterators direction since we want the last row of the rows to
-        // be at the bottom left so basically 0, 0
-        for (row_index, row) in self.object.rows.into_iter().rev().enumerate() {
-            for (column_index, character) in row.chars().enumerate() {
-                cells.insert(
-                    UVec2::new(column_index as u32, row_index as u32),
-                    Cell { character },
-                );
+        match &self.object.rows {
+            None => {
+                for y in 0..DEFAULT_MAP_HEIGHT {
+                    for x in 0..DEFAULT_MAP_WIDTH {
+                        cells.insert(
+                            UVec2::new(x as u32, y as u32),
+                            Cell {
+                                character: SPECIAL_EMPTY_CHAR,
+                            },
+                        );
+                    }
+                }
+            }
+            Some(rows) => {
+                mapgen_size.x = rows[0].len() as u32;
+                mapgen_size.y = rows.len() as u32;
+
+                for (row_index, row) in rows.into_iter().enumerate() {
+                    for (column_index, character) in row.chars().enumerate() {
+                        cells.insert(
+                            UVec2::new(column_index as u32, row_index as u32),
+                            Cell { character },
+                        );
+                    }
+                }
             }
         }
 
         let mut set_vec: Vec<Arc<dyn Set>> = vec![];
 
-        for set in self.object.set {
+        for set in self.object.common.set {
             if let Some(ty) = set.line {
                 let x = skip_none!(set.x);
                 let y = skip_none!(set.y);
@@ -280,7 +657,7 @@ impl Into<MapData> for CDDAMapData {
                         Some(SetOperation::Remove { ty })
                     }
                     "radiation" => Some(SetOperation::Radiation {
-                        amount: set.amount.unwrap_or((1, 1)),
+                        amount: set.amount.unwrap_or(NumberOrRange::Number(1)),
                     }),
                     _ => {
                         warn!("Unknown set square type {}; Skipping", ty);
@@ -308,7 +685,7 @@ impl Into<MapData> for CDDAMapData {
         let mut visible = HashMap::new();
 
         let mut terrain_map = HashMap::new();
-        for (char, terrain) in self.object.terrain {
+        for (char, terrain) in self.object.common.terrain {
             let ter_prop = Arc::new(TerrainProperty {
                 mapgen_value: terrain,
             });
@@ -317,7 +694,7 @@ impl Into<MapData> for CDDAMapData {
         }
 
         let mut furniture_map = HashMap::new();
-        for (char, furniture) in self.object.furniture {
+        for (char, furniture) in self.object.common.furniture {
             let fur_prop = Arc::new(FurnitureProperty {
                 mapgen_value: furniture,
             });
@@ -326,35 +703,77 @@ impl Into<MapData> for CDDAMapData {
         }
 
         let mut monster_map = HashMap::new();
-        for (char, monster) in self.object.monster {
+        for (char, monster) in self.object.common.monsters {
             let monster_prop = Arc::new(MonsterProperty { monster });
 
             monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
         }
 
-        visible.insert(VisibleMapping::Terrain, terrain_map);
-        visible.insert(VisibleMapping::Furniture, furniture_map);
-        visible.insert(VisibleMapping::Monster, monster_map);
+        let mut nested_map = HashMap::new();
+
+        for (char, nested) in self.object.common.nested {
+            let nested_terrain_prop = Arc::new(NestedProperty {
+                nested: nested.clone().into(),
+            });
+            nested_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
+        }
+
+        visible.insert(VisibleMappingKind::Terrain, terrain_map);
+        visible.insert(VisibleMappingKind::Furniture, furniture_map);
+        visible.insert(VisibleMappingKind::Monster, monster_map);
+        visible.insert(VisibleMappingKind::Nested, nested_map);
 
         let mut representative = HashMap::new();
 
         let mut item_map = HashMap::new();
-        for (char, items) in self.object.items {
+        for (char, items) in self.object.common.items {
             let item_prop = Arc::new(ItemProperty {
                 items: items.into_vec(),
             });
             item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
         }
 
-        representative.insert(RepresentativeMapping::ItemGroups, item_map);
+        representative.insert(RepresentativeMappingKind::ItemGroups, item_map);
 
         let mut place = HashMap::new();
+
         place.insert(
-            VisibleMapping::Furniture,
+            VisibleMappingKind::Furniture,
             self.object
+                .common
                 .place_furniture
                 .into_iter()
-                .map(|f| Arc::new(f) as Arc<dyn Place>)
+                .map(Into::into)
+                .collect(),
+        );
+
+        place.insert(
+            VisibleMappingKind::Terrain,
+            self.object
+                .common
+                .place_terrain
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        );
+
+        place.insert(
+            VisibleMappingKind::Monster,
+            self.object
+                .common
+                .place_monsters
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        );
+
+        place.insert(
+            VisibleMappingKind::Nested,
+            self.object
+                .common
+                .place_nested
+                .into_iter()
+                .map(Into::into)
                 .collect(),
         );
 
@@ -365,9 +784,11 @@ impl Into<MapData> for CDDAMapData {
         map_data.visible = visible;
         map_data.representative = representative;
         map_data.place = place;
-        map_data.parameters = self.object.parameters;
-        map_data.palettes = self.object.palettes;
+        map_data.parameters = self.object.common.parameters;
+        map_data.palettes = self.object.common.palettes;
         map_data.fill = self.object.fill_ter;
+        map_data.map_size = self.object.mapgen_size.unwrap_or(mapgen_size);
+        map_data.flags = self.object.common.flags;
 
         map_data
     }

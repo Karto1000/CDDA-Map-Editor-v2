@@ -1,18 +1,29 @@
-## Specials
+## Done
 
-- place_furniture
+- terrain
 - place_terrain
+
+- furniture
+- place_furniture
+
+- monsters
+- place_monsters
+
+- items
+- place_items
+
+- nested
+- place_nested
+
+## Specials
 
 - place_monster
 - monster
-- place_monsters
-- monsters
 
 - place_npcs
 - npcs
 
 - place_item
-- items
 - loot
 - sealed_item
 
@@ -33,9 +44,6 @@
 
 - place_computers
 - computers
-
-- place_nested
-- nested
 
 - place_toilets
 - toilets

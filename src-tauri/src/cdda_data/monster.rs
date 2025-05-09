@@ -1,5 +1,6 @@
 use crate::cdda_data::map_data::MapGenMonsterType;
-use crate::util::CDDAIdentifier;
+use crate::util::{CDDAIdentifier, GetIdentifier, ParameterIdentifier};
+use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,7 @@ impl CDDAMonsterGroup {
     pub fn get_random_monster(
         &self,
         monstergroups: &HashMap<CDDAIdentifier, CDDAMonsterGroup>,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Option<CDDAIdentifier> {
         let mut weights = vec![];
         self.monsters.iter().for_each(|m| weights.push(m.weight));
@@ -45,10 +47,13 @@ impl CDDAMonsterGroup {
         let chosen_monster = &self.monsters[chosen_index];
 
         let id = match &chosen_monster.id {
-            MapGenMonsterType::Monster { monster } => monster.clone(),
+            MapGenMonsterType::Monster { monster } => monster.get_identifier(calculated_parameters),
             MapGenMonsterType::MonsterGroup { group } => {
-                let group = monstergroups.get(&group)?;
-                group.get_random_monster(monstergroups)?.clone()
+                let id = group.get_identifier(calculated_parameters);
+                let group = monstergroups.get(&id)?;
+                group
+                    .get_random_monster(monstergroups, calculated_parameters)?
+                    .clone()
             }
         };
 

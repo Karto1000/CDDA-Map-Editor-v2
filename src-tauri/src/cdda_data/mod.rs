@@ -8,19 +8,18 @@ pub(crate) mod region_settings;
 pub(crate) mod terrain;
 
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
-use crate::cdda_data::item::IntermediateItemGroup;
-use crate::cdda_data::map_data::CDDAMapData;
+use crate::cdda_data::item::CDDAItemGroupIntermediate;
+use crate::cdda_data::map_data::CDDAMapDataIntermediate;
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
 use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
-use crate::RANDOM;
 use derive_more::Display;
 use indexmap::IndexMap;
 use num_traits::PrimInt;
 use rand::distr::uniform::SampleUniform;
-use rand::Rng;
+use rand::{rng, Rng};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -44,11 +43,39 @@ where
     Ok(comments)
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 #[serde(untagged)]
 pub enum NumberOrRange<T: PrimInt + Clone + SampleUniform> {
     Number(T),
     Range((T, T)),
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum NumberOrArray<T: PrimInt + Clone + SampleUniform> {
+    Number(T),
+    Array(Vec<T>),
+}
+
+impl<'de, T: PrimInt + Clone + SampleUniform + Deserialize<'de>> Deserialize<'de>
+    for NumberOrRange<T>
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = NumberOrArray::<T>::deserialize(deserializer)?;
+        match value {
+            NumberOrArray::Number(n) => Ok(NumberOrRange::Number(n)),
+            NumberOrArray::Array(arr) => match arr.len() {
+                1 => Ok(NumberOrRange::Number(arr[0].clone())),
+                2 => Ok(NumberOrRange::Range((arr[0].clone(), arr[1].clone()))),
+                _ => Err(serde::de::Error::custom(
+                    "Array must contain 1 or 2 elements",
+                )),
+            },
+        }
+    }
 }
 
 impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
@@ -56,7 +83,8 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
         match self.clone() {
             NumberOrRange::Number(n) => n,
             NumberOrRange::Range((from, to)) => {
-                let mut rng = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
                 num
             }
@@ -66,13 +94,20 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
     pub fn is_random_hit(&self, default_upper_bound: T) -> bool {
         match self.clone() {
             NumberOrRange::Number(n) => {
-                let mut rng = RANDOM.write().unwrap();
+                // This will always be true
+                if n >= default_upper_bound {
+                    return true;
+                }
+
+                let mut rng = rng();
+                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(n..default_upper_bound);
 
                 num == n
             }
             NumberOrRange::Range((from, to)) => {
-                let mut rng = RANDOM.write().unwrap();
+                let mut rng = rng();
+                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
 
                 num == from
@@ -139,13 +174,13 @@ pub struct ConnectGroup {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
-    Mapgen(CDDAMapData),
+    Mapgen(CDDAMapDataIntermediate),
     RegionSettings(CDDARegionSettings),
     Palette(CDDAPaletteIntermediate),
     Terrain(CDDATerrainIntermediate),
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
-    ItemGroup(IntermediateItemGroup),
+    ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
     MonsterGroup(CDDAMonsterGroup),
 
@@ -334,22 +369,22 @@ pub enum KnownCataVariant {
     Other,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Switch {
     pub param: ParameterIdentifier,
     pub fallback: CDDAIdentifier,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 pub struct Distribution {
     pub distribution: MeabyVec<MeabyWeighted<CDDAIdentifier>>,
 }
 
 // TODO: Kind of a hacky solution to a Stack Overflow problem that i experienced when using
 // a self-referencing MapGenValue enum
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum DistributionInner {
+pub enum CDDADistributionInner {
     String(CDDAIdentifier),
     Param {
         param: ParameterIdentifier,
@@ -366,19 +401,25 @@ pub enum DistributionInner {
     Distribution(Distribution),
 }
 
-impl GetIdentifier for DistributionInner {
+impl From<&str> for CDDADistributionInner {
+    fn from(value: &str) -> Self {
+        Self::String(value.into())
+    }
+}
+
+impl GetIdentifier for CDDADistributionInner {
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
-            DistributionInner::String(s) => s.clone(),
-            DistributionInner::Distribution(d) => d.distribution.get(calculated_parameters),
-            DistributionInner::Param { param, fallback } => calculated_parameters
+            CDDADistributionInner::String(s) => s.clone(),
+            CDDADistributionInner::Distribution(d) => d.distribution.get(calculated_parameters),
+            CDDADistributionInner::Param { param, fallback } => calculated_parameters
                 .get(param)
                 .map(|p| p.clone())
                 .unwrap_or_else(|| fallback.clone().expect("Fallback to exist")),
-            DistributionInner::Switch { switch, cases } => {
+            CDDADistributionInner::Switch { switch, cases } => {
                 let id = calculated_parameters
                     .get(&switch.param)
                     .map(|p| p.clone())
@@ -391,7 +432,7 @@ impl GetIdentifier for DistributionInner {
 }
 
 // https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-values
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum MapGenValue {
     String(CDDAIdentifier),
@@ -407,7 +448,7 @@ pub enum MapGenValue {
     // require a Box<> since we don't know the size. I tried this but for some reason it causes a Stack Overflow
     // because serde keeps infinitely calling the Deserialize function even though it should deserialize to the String variant.
     // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde.
-    Distribution(MeabyVec<MeabyWeighted<DistributionInner>>),
+    Distribution(MeabyVec<MeabyWeighted<CDDADistributionInner>>),
 }
 
 impl GetIdentifier for MapGenValue {
@@ -428,7 +469,7 @@ impl GetIdentifier for MapGenValue {
                     .map(|p| p.clone())
                     .unwrap_or_else(|| switch.fallback.clone());
 
-                cases.get(&id).expect("MapTo to exist").clone()
+                cases.get(&id).expect("case MapTo to exist").clone()
             }
         }
     }
