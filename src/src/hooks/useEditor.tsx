@@ -366,7 +366,11 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
         hoveredMaterial.transparent = true
         hoveredMaterial.opacity = 0.5
         const highlightedMesh = new Mesh(hovered, hoveredMaterial)
-        highlightedMesh.position.set(worldMousePosition.current.x * tile_info.width, worldMousePosition.current.y * tile_info.height, MAX_DEPTH + 1)
+        highlightedMesh.position.set(
+            worldMousePosition.current.x * tile_info.width,
+            worldMousePosition.current.y * tile_info.height,
+            MAX_DEPTH + 1
+        )
 
         const selected = new PlaneGeometry(tile_info.width, tile_info.height)
         const selectedMaterial = new MeshBasicMaterial({color: getColorFromTheme(props.theme, "selected")})
@@ -430,13 +434,16 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
                 .divide(new Vector3(tile_info.width, tile_info.height, 1))
                 .add(offset)
                 .floor()
+
             // We need to invert the world mouse position since the cdda map goes from up to down
-            worldMousePosition.current.y = -worldMousePosition.current.y
+            // Additionally, we need to remove 1 since the top left tile starts at +1
+            worldMousePosition.current.y = -worldMousePosition.current.y - 1
 
             // Here we need to invert the y again to make it fit correctly for three.js
             hoveredCellMeshRef.current.position.set(
                 worldMousePosition.current.x * tile_info.width,
-                -worldMousePosition.current.y * tile_info.height,
+                // Remove one again for three.js since the top left tile is -1 in three.js
+                (-worldMousePosition.current.y - 1) * tile_info.height,
                 MAX_DEPTH + 1
             )
         }
@@ -528,7 +535,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         selectedCellMeshRef.current.position.set(
             selectedCellPosition.x * tile_info.width,
-            -selectedCellPosition.y * tile_info.height,
+            (-selectedCellPosition.y - 1) * tile_info.height,
             MAX_DEPTH + 1
         )
         selectedCellMeshRef.current.visible = true

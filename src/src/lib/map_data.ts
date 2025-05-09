@@ -6,13 +6,15 @@ export enum MapDataEvent {
     ItemData = "item_data"
 }
 
-export type MapGenItem = {
+export type CellData = {
     item: string,
+    computers: string,
+    signs: string
     // TODO: Add other fields
 }
 
 export type ItemDataEvent = {
-    [coordinates: string]: MapGenItem[]
+    [coordinates: string]: CellData[]
 }
 
 export type StaticSprite = {
