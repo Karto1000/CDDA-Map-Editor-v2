@@ -1,16 +1,17 @@
-use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED};
+use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
 use crate::cdda_data::map_data::{
     MapGenField, MapGenGaspumpFuelType, MapGenNestedIntermediate, ReferenceOrInPlace,
 };
 use crate::map::map_properties::{
     ComputerProperty, FieldProperty, FurnitureProperty, GaspumpProperty, ItemsProperty,
-    MonstersProperty, NestedProperty, SignProperty, TerrainProperty, ToiletProperty,
+    MonstersProperty, NestedProperty, SignProperty, TerrainProperty, ToiletProperty, TrapsProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
 use crate::util::{MeabyVec, MeabyWeighted, Weighted};
 use log::error;
+use rand::prelude::IndexedRandom;
 use serde_json::json;
 
 impl Property for TerrainProperty {
@@ -166,7 +167,10 @@ impl Property for NestedProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let should_place = match &self.nested.neighbors {
+        let mut rng = rng();
+        let nested_chunk = self.nested.choose(&mut rng).unwrap();
+
+        let should_place = match &nested_chunk.neighbors {
             None => true,
             Some(neighbors) => neighbors.iter().all(|(dir, om_terrain_match)| {
                 let simulated_neighbor = map_data
@@ -187,7 +191,7 @@ impl Property for NestedProperty {
             }),
         };
 
-        if self.nested.invert_condition {
+        if nested_chunk.invert_condition {
             if should_place {
                 return None;
             }
@@ -195,8 +199,7 @@ impl Property for NestedProperty {
             return None;
         }
 
-        let selected_chunk = self
-            .nested
+        let selected_chunk = nested_chunk
             .chunks
             .get_random()
             .get_identifier(&map_data.calculated_parameters);
@@ -506,6 +509,34 @@ impl Property for ToiletProperty {
         let command = VisibleMappingCommand {
             id: "f_toilet".into(),
             mapping: MappingKind::Furniture,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
+    }
+}
+
+impl Property for TrapsProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        let ident = self.trap.get_identifier(&map_data.calculated_parameters);
+
+        if ident == CDDAIdentifier::from(NULL_TRAP) {
+            return None;
+        }
+
+        let command = VisibleMappingCommand {
+            id: ident,
+            mapping: MappingKind::Trap,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
         };

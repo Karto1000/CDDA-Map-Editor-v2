@@ -1,9 +1,9 @@
 use crate::cdda_data::map_data::{
-    MapGenComputer, MapGenField, MapGenGaspumpFuelType, MapGenItem, MapGenMonster,
+    MapGenComputer, MapGenField, MapGenGaspumpFuelType, MapGenItem, MapGenMonster, MapGenTrap,
     PlaceInnerComputer, PlaceInnerField, PlaceInnerFurniture, PlaceInnerGaspump, PlaceInnerItems,
-    PlaceInnerMonsters, PlaceInnerSign, PlaceInnerTerrain, PlaceInnerToilet,
+    PlaceInnerMonsters, PlaceInnerSign, PlaceInnerTerrain, PlaceInnerToilet, PlaceInnerTraps,
 };
-use crate::cdda_data::MapGenValue;
+use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::map::MapGenNested;
 use crate::util::MeabyVec;
 
@@ -53,7 +53,7 @@ impl From<PlaceInnerSign> for SignProperty {
 #[derive(Debug, Clone)]
 pub struct GaspumpProperty {
     pub fuel: Option<MapGenGaspumpFuelType>,
-    pub amount: Option<i32>,
+    pub amount: Option<NumberOrRange<i32>>,
 }
 
 impl From<PlaceInnerGaspump> for GaspumpProperty {
@@ -80,7 +80,7 @@ impl From<PlaceInnerFurniture> for FurnitureProperty {
 
 #[derive(Debug, Clone)]
 pub struct NestedProperty {
-    pub nested: MapGenNested,
+    pub nested: Vec<MapGenNested>,
 }
 
 #[derive(Debug, Clone)]
@@ -126,5 +126,21 @@ pub struct ToiletProperty;
 impl From<PlaceInnerToilet> for ToiletProperty {
     fn from(value: PlaceInnerToilet) -> Self {
         Self
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TrapsProperty {
+    pub trap: MapGenValue,
+}
+
+impl From<PlaceInnerTraps> for TrapsProperty {
+    fn from(value: PlaceInnerTraps) -> Self {
+        let mgv = match value.value {
+            MapGenTrap::TrapRef { trap } => trap,
+            MapGenTrap::MapGenValue(mgv) => mgv,
+        };
+
+        Self { trap: mgv }
     }
 }

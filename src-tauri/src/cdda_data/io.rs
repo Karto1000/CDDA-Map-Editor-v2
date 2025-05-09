@@ -26,6 +26,7 @@ pub const NULL_TERRAIN: &'static str = "t_null";
 pub const NULL_FURNITURE: &'static str = "f_null";
 pub const NULL_NESTED: &'static str = "null";
 pub const NULL_FIELD: &'static str = "fd_null";
+pub const NULL_TRAP: &'static str = "tr_null";
 
 #[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {

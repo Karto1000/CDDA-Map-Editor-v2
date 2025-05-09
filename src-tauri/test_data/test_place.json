@@ -109,6 +109,13 @@
           "x": 2,
           "y": 0
         }
+      ],
+      "place_traps": [
+        {
+          "trap": "tr_nailboard",
+          "x": 3,
+          "y": 0
+        }
       ]
     }
   }
