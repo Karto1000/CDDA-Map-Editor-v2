@@ -102,6 +102,13 @@
           "x": 7,
           "y": 7
         }
+      ],
+      "place_gaspumps": [
+        {
+          "fuel": "diesel",
+          "x": 2,
+          "y": 0
+        }
       ]
     }
   }

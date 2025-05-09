@@ -1,4 +1,4 @@
-use crate::cdda_data::map_data::{MapGenField, MapGenItem, MapGenMonster};
+use crate::cdda_data::map_data::{MapGenField, MapGenGaspumpFuelType, MapGenItem, MapGenMonster};
 use crate::cdda_data::MapGenValue;
 use crate::map::MapGenNested;
 use crate::util::MeabyVec;
@@ -19,6 +19,12 @@ pub struct MonsterProperty {
 pub struct SignProperty {
     pub text: Option<String>,
     pub snippet: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GaspumpProperty {
+    pub fuel: Option<MapGenGaspumpFuelType>,
+    pub amount: Option<i32>,
 }
 
 #[derive(Debug, Clone)]

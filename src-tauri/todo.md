@@ -21,6 +21,15 @@
 - place_fields
 - fields
 
+- place_signs
+- signs
+
+- place_computers
+- computers
+
+- place_gaspumps
+- gaspumps
+
 ## Specials
 
 - place_monster
@@ -33,9 +42,6 @@
 - loot
 - sealed_item
 
-- place_signs
-- signs
-
 - place_rubble
 - rubble
 
@@ -44,12 +50,6 @@
 
 - place_corpses
 - corpses
-
-- place_computers
-- computers
-
-- place_gaspumps
-- gaspumps
 
 - place_vehicles
 - remove_vehicles

@@ -1,6 +1,7 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
+    FieldProperty, FurnitureProperty, GaspumpProperty, MonsterProperty, NestedProperty,
+    TerrainProperty,
 };
 use crate::map::map_properties::{ItemProperty, SignProperty};
 use crate::map::{
@@ -64,6 +65,25 @@ impl Place for PlaceSigns {
         self.property.get_commands(position, map_data, json_data)
     }
 
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        self.property.representation(json_data)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaceGaspumps {
+    pub property: GaspumpProperty,
+}
+
+impl Place for PlaceGaspumps {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        self.property.get_commands(position, map_data, json_data)
+    }
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         self.property.representation(json_data)
     }

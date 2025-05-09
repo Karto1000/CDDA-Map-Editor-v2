@@ -1,9 +1,11 @@
 use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
-use crate::cdda_data::map_data::{MapGenField, MapGenNestedIntermediate, ReferenceOrInPlace};
+use crate::cdda_data::map_data::{
+    MapGenField, MapGenGaspumpFuelType, MapGenNestedIntermediate, ReferenceOrInPlace,
+};
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, ItemProperty, MonsterProperty, NestedProperty, SignProperty,
-    TerrainProperty,
+    FieldProperty, FurnitureProperty, GaspumpProperty, ItemProperty, MonsterProperty,
+    NestedProperty, SignProperty, TerrainProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
@@ -247,6 +249,36 @@ impl Property for FieldProperty {
         Some(vec![command])
     }
 
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
+    }
+}
+
+impl Property for GaspumpProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        let id = match &self.fuel {
+            None => "t_gas_pump",
+            Some(fuel) => match fuel {
+                MapGenGaspumpFuelType::Gasoline | MapGenGaspumpFuelType::Avgas => "t_gas_pump",
+                MapGenGaspumpFuelType::Diesel => "t_diesel_pump",
+                MapGenGaspumpFuelType::Jp8 => "t_jp8_pump",
+            },
+        };
+
+        let command = VisibleMappingCommand {
+            id: id.into(),
+            mapping: MappingKind::Gaspump,
+            coordinates: position.clone(),
+            kind: VisibleMappingCommandKind::Place,
+        };
+
+        Some(vec![command])
+    }
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         Value::Null
     }

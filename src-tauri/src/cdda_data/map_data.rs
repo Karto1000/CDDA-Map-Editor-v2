@@ -5,14 +5,14 @@ use crate::cdda_data::item::{
 };
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
-use crate::map::map_properties::ItemProperty;
 use crate::map::map_properties::{
     FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, SignProperty,
     TerrainProperty,
 };
+use crate::map::map_properties::{GaspumpProperty, ItemProperty};
 use crate::map::place::{
-    PlaceFields, PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceSigns, PlaceTerrain,
-    PlaceToilets,
+    PlaceFields, PlaceFurniture, PlaceGaspumps, PlaceItems, PlaceMonster, PlaceNested, PlaceSigns,
+    PlaceTerrain, PlaceToilets,
 };
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
@@ -350,6 +350,21 @@ pub struct MapGenSign {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenGaspump {
+    pub fuel: Option<MapGenGaspumpFuelType>,
+    pub amount: Option<i32>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MapGenGaspumpFuelType {
+    Gasoline,
+    Diesel,
+    Jp8,
+    Avgas,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerFurniture {
     #[serde(rename = "furn")]
     furniture_id: CDDAIdentifier,
@@ -492,6 +507,23 @@ impl Into<Arc<dyn Place>> for PlaceInnerSigns {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerGaspumps {
+    #[serde(flatten)]
+    pub gaspump: MapGenGaspump,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerGaspumps {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceGaspumps {
+            property: GaspumpProperty {
+                amount: self.gaspump.amount,
+                fuel: self.gaspump.fuel,
+            },
+        })
+    }
+}
+
 const fn default_chance() -> i32 {
     100
 }
@@ -545,6 +577,7 @@ impl_from!(PlaceInnerToilets);
 impl_from!(PlaceInnerFields);
 impl_from!(PlaceInnerComputers);
 impl_from!(PlaceInnerSigns);
+impl_from!(PlaceInnerGaspumps);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -599,7 +632,8 @@ map_data_object!(
     toilets: (),
     fields: MapGenField,
     computers: MapGenComputer,
-    signs: MapGenSign
+    signs: MapGenSign,
+    gaspumps: MapGenGaspump
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -872,6 +906,15 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             sign_map.insert(char, item_prop as Arc<dyn Property>);
         }
 
+        let mut gaspumps_map = HashMap::new();
+        for (char, gaspump) in self.object.common.gaspumps {
+            let item_prop = Arc::new(GaspumpProperty {
+                amount: gaspump.amount,
+                fuel: gaspump.fuel,
+            });
+            gaspumps_map.insert(char, item_prop as Arc<dyn Property>);
+        }
+
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
         properties.insert(MappingKind::Monster, monster_map);
@@ -881,6 +924,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         properties.insert(MappingKind::Computer, computer_map);
         properties.insert(MappingKind::Toilet, toilet_map);
         properties.insert(MappingKind::Sign, sign_map);
+        properties.insert(MappingKind::Gaspump, gaspumps_map);
 
         let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
 
@@ -901,7 +945,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .place_toilets
                 .into_iter()
                 .map(Into::into)
-                .collect::<Vec<_>>(),
+                .collect(),
         );
 
         place.insert(
@@ -921,7 +965,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .place_computers
                 .into_iter()
                 .map(Into::into)
-                .collect::<Vec<_>>(),
+                .collect(),
         );
 
         place.insert(
@@ -931,7 +975,17 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .place_signs
                 .into_iter()
                 .map(Into::into)
-                .collect::<Vec<_>>(),
+                .collect(),
+        );
+
+        place.insert(
+            MappingKind::Gaspump,
+            self.object
+                .common
+                .place_gaspumps
+                .into_iter()
+                .map(Into::into)
+                .collect(),
         );
 
         place.insert(
