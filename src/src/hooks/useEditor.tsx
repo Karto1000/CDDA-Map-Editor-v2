@@ -256,8 +256,6 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
     }, [onResize, props.canvasContainerRef, props.canvasRef, props.sceneRef]);
 
     useEffect(() => {
-        if (!selectedCellPosition) return
-
         setItemDisplay(
             <ItemPanel
                 rendererRef={rendererRef}
@@ -270,18 +268,18 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
             />
         )
 
-        const selectedData = cellData[`${selectedCellPosition.x},${selectedCellPosition.y},${currentZLayer}`]
+        const selectedData = cellData[`${selectedCellPosition?.x},${selectedCellPosition?.y},${currentZLayer}`]
 
         setSignDisplay(
             <>
                 {
-                    selectedData.signs.signage &&
+                    selectedData?.signs.signage &&
                     <p>
                         Signage: {selectedData.signs.signage}
                     </p>
                 }
                 {
-                    selectedData.signs.snippet &&
+                    selectedData?.signs.snippet &&
                     <p>
                         Snippet: {selectedData.signs.snippet}
                     </p>

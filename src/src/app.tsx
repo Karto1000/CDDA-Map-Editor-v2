@@ -151,6 +151,14 @@ function App() {
                                                 <MultiMenu tabs={
                                                     [
                                                         {
+                                                            name: "Terrain",
+                                                            content: <></>
+                                                        },
+                                                        {
+                                                            name: "Furniture",
+                                                            content: <></>
+                                                        },
+                                                        {
                                                             name: "Items",
                                                             content: displayInLeftPanel.items
                                                         },
@@ -161,6 +169,18 @@ function App() {
                                                         {
                                                             name: "Signs",
                                                             content: displayInLeftPanel.signs
+                                                        },
+                                                        {
+                                                            name: "Computers",
+                                                            content: <></>
+                                                        },
+                                                        {
+                                                            name: "Gaspumps",
+                                                            content: <></>
+                                                        },
+                                                        {
+                                                            name: "Toilets",
+                                                            content: <></>
                                                         }
                                                     ]}
                                                 />
