@@ -1,11 +1,12 @@
 use crate::cdda_data::map_data::{
-    MapGenComputer, MapGenField, MapGenGaspumpFuelType, MapGenItem, MapGenMonster, MapGenTrap,
-    PlaceInnerComputer, PlaceInnerField, PlaceInnerFurniture, PlaceInnerGaspump, PlaceInnerItems,
-    PlaceInnerMonsters, PlaceInnerSign, PlaceInnerTerrain, PlaceInnerToilet, PlaceInnerTraps,
+    MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonster,
+    MapGenSign, MapGenTrap, PlaceInnerComputer, PlaceInnerField, PlaceInnerFurniture,
+    PlaceInnerGaspump, PlaceInnerItems, PlaceInnerMonsters, PlaceInnerSign, PlaceInnerTerrain,
+    PlaceInnerToilet, PlaceInnerTraps,
 };
-use crate::cdda_data::{MapGenValue, NumberOrRange};
+use crate::cdda_data::MapGenValue;
 use crate::map::MapGenNested;
-use crate::util::MeabyVec;
+use crate::util::Weighted;
 
 pub(crate) mod impl_property;
 
@@ -24,43 +25,39 @@ impl From<PlaceInnerTerrain> for TerrainProperty {
 
 #[derive(Debug, Clone)]
 pub struct MonstersProperty {
-    pub monster: MeabyVec<MapGenMonster>,
+    pub monster: Vec<Weighted<MapGenMonster>>,
 }
 
 impl From<PlaceInnerMonsters> for MonstersProperty {
     fn from(value: PlaceInnerMonsters) -> Self {
         Self {
-            monster: MeabyVec::Single(value.value),
+            monster: vec![Weighted::new(value.value, 1)],
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct SignProperty {
-    pub text: Option<String>,
-    pub snippet: Option<String>,
+    pub signs: Vec<Weighted<MapGenSign>>,
 }
 
 impl From<PlaceInnerSign> for SignProperty {
     fn from(value: PlaceInnerSign) -> Self {
         Self {
-            text: value.value.signage,
-            snippet: value.value.snippet,
+            signs: vec![Weighted::new(value.value, 1)],
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct GaspumpProperty {
-    pub fuel: Option<MapGenGaspumpFuelType>,
-    pub amount: Option<NumberOrRange<i32>>,
+    pub gaspumps: Vec<Weighted<MapGenGaspump>>,
 }
 
 impl From<PlaceInnerGaspump> for GaspumpProperty {
     fn from(value: PlaceInnerGaspump) -> Self {
         Self {
-            fuel: value.value.fuel,
-            amount: value.value.amount,
+            gaspumps: vec![Weighted::new(value.value, 1)],
         }
     }
 }
@@ -80,42 +77,44 @@ impl From<PlaceInnerFurniture> for FurnitureProperty {
 
 #[derive(Debug, Clone)]
 pub struct NestedProperty {
-    pub nested: Vec<MapGenNested>,
+    pub nested: Vec<Weighted<MapGenNested>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FieldProperty {
-    pub field: MapGenField,
+    pub field: Vec<Weighted<MapGenField>>,
 }
 
 impl From<PlaceInnerField> for FieldProperty {
     fn from(value: PlaceInnerField) -> Self {
-        Self { field: value.value }
+        Self {
+            field: vec![Weighted::new(value.value, 1)],
+        }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ItemsProperty {
-    pub items: Vec<MapGenItem>,
+    pub items: Vec<Weighted<MapGenItem>>,
 }
 
 impl From<PlaceInnerItems> for ItemsProperty {
     fn from(value: PlaceInnerItems) -> Self {
         Self {
-            items: vec![value.value],
+            items: vec![Weighted::new(value.value, 1)],
         }
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ComputerProperty {
-    computer: MapGenComputer,
+    computer: Vec<Weighted<MapGenComputer>>,
 }
 
 impl From<PlaceInnerComputer> for ComputerProperty {
     fn from(value: PlaceInnerComputer) -> Self {
         Self {
-            computer: value.value,
+            computer: vec![Weighted::new(value.value, 1)],
         }
     }
 }
@@ -131,7 +130,7 @@ impl From<PlaceInnerToilet> for ToiletProperty {
 
 #[derive(Debug, Clone)]
 pub struct TrapsProperty {
-    pub trap: MapGenValue,
+    pub trap: Vec<Weighted<MapGenValue>>,
 }
 
 impl From<PlaceInnerTraps> for TrapsProperty {
@@ -141,6 +140,8 @@ impl From<PlaceInnerTraps> for TrapsProperty {
             MapGenTrap::MapGenValue(mgv) => mgv,
         };
 
-        Self { trap: mgv }
+        Self {
+            trap: vec![Weighted::new(mgv, 1)],
+        }
     }
 }

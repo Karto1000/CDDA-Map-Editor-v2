@@ -30,6 +30,9 @@
 - place_gaspumps
 - gaspumps
 
+- place_traps
+- traps
+
 ## Specials
 
 - place_monster
@@ -54,9 +57,6 @@
 - place_vehicles
 - remove_vehicles
 - vehicles
-
-- place_traps
-- traps
 
 - place_graffiti
 - graffiti

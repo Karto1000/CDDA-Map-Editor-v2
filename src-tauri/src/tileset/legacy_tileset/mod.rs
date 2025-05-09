@@ -172,14 +172,14 @@ fn to_weighted_vec_additional_exception(
 
             Some(WeightedSprite::new(single, weighted.weight))
         })
-        .into_iter()
-        .filter_map(|v| {
-            if v.is_none() {
-                return None;
-            }
-            return Some(v.unwrap());
-        })
-        .collect()
+            .into_iter()
+            .filter_map(|v| {
+                if v.is_none() {
+                    return None;
+                }
+                return Some(v.unwrap());
+            })
+            .collect()
     })
 }
 

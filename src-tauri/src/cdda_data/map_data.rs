@@ -457,7 +457,7 @@ impl Into<Arc<dyn Place>> for PlaceInnerNested {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceNested {
             nested_property: NestedProperty {
-                nested: vec![self.chunks.into()],
+                nested: vec![Weighted::new(self.chunks, 1)],
             },
         })
     }
@@ -581,18 +581,18 @@ map_data_object!(
     [FIELDS_WITH_PLACE]
     (terrain, terrain): MapGenValue,
     (furniture, furniture): MapGenValue,
-    (items, items): MeabyVec<MapGenItem>,
-    (monsters, monsters): MeabyVec<MapGenMonster>,
-    (nested, nested): MeabyVec<MapGenNestedIntermediate>,
+    (items, items): MeabyVec<MeabyWeighted<MapGenItem>>,
+    (monsters, monsters): MeabyVec<MeabyWeighted<MapGenMonster>>,
+    (nested, nested): MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
     // Toilets do not have any data
     // TODO: we have to use Value here since there is a comment in one of the files with fails
     // to deserialize since a object with the key // cannot deserialize to a unit
     (toilets, toilet): Value,
-    (fields, field): MapGenField,
-    (computers, computer): MapGenComputer,
-    (signs, sign): MapGenSign,
-    (gaspumps, gaspump): MapGenGaspump,
-    (traps, traps): MapGenTrap
+    (fields, field): MeabyVec<MeabyWeighted<MapGenField>>,
+    (computers, computer):  MeabyVec<MeabyWeighted<MapGenComputer>>,
+    (signs, sign):  MeabyVec<MeabyWeighted<MapGenSign>>,
+    (gaspumps, gaspump):  MeabyVec<MeabyWeighted<MapGenGaspump>>,
+    (traps, traps):  MeabyVec<MeabyWeighted<MapGenTrap>>
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -839,7 +839,13 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
         let mut monster_map = HashMap::new();
         for (char, monster) in self.object.common.monsters {
-            let monster_prop = Arc::new(MonstersProperty { monster });
+            let monster_prop = Arc::new(MonstersProperty {
+                monster: monster
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
 
             monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
@@ -851,7 +857,8 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                     .clone()
                     .into_vec()
                     .into_iter()
-                    .map(Into::into)
+                    .map(|mw| mw.to_weighted())
+                    .map(|w| Weighted::<MapGenNested>::new(w.data, w.weight))
                     .collect(),
             });
             nested_map.insert(char, nested_terrain_prop as Arc<dyn Property>);
@@ -859,14 +866,24 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
         let mut field_map = HashMap::new();
         for (char, field) in self.object.common.fields {
-            let field_prop = Arc::new(FieldProperty { field });
+            let field_prop = Arc::new(FieldProperty {
+                field: field
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
             field_map.insert(char, field_prop as Arc<dyn Property>);
         }
 
         let mut item_map = HashMap::new();
         for (char, items) in self.object.common.items {
             let item_prop = Arc::new(ItemsProperty {
-                items: items.into_vec(),
+                items: items
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
             });
             item_map.insert(char, item_prop as Arc<dyn Property>);
         }
@@ -874,8 +891,11 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         let mut sign_map = HashMap::new();
         for (char, sign) in self.object.common.signs {
             let sign_prop = Arc::new(SignProperty {
-                text: sign.signage,
-                snippet: sign.snippet,
+                signs: sign
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
             });
             sign_map.insert(char, sign_prop as Arc<dyn Property>);
         }
@@ -883,21 +903,31 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         let mut gaspumps_map = HashMap::new();
         for (char, gaspump) in self.object.common.gaspumps {
             let gaspump_prop = Arc::new(GaspumpProperty {
-                amount: gaspump.amount,
-                fuel: gaspump.fuel,
+                gaspumps: gaspump
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
             });
             gaspumps_map.insert(char, gaspump_prop as Arc<dyn Property>);
         }
 
         let mut trap_map = HashMap::new();
         for (char, trap) in self.object.common.traps {
-            let transformed_trap = match trap {
-                MapGenTrap::TrapRef { trap } => trap,
-                MapGenTrap::MapGenValue(mg) => mg,
-            };
-
             let trap_prop = Arc::new(TrapsProperty {
-                trap: transformed_trap,
+                trap: trap
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .map(|v| {
+                        let id = match v.data {
+                            MapGenTrap::TrapRef { trap } => trap,
+                            MapGenTrap::MapGenValue(v) => v,
+                        };
+
+                        Weighted::new(id, v.weight)
+                    })
+                    .collect(),
             });
             trap_map.insert(char, trap_prop as Arc<dyn Property>);
         }

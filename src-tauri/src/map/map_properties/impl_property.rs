@@ -51,43 +51,43 @@ impl Property for MonstersProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        for monster in self.monster.clone().into_vec() {
-            let ident = match monster
-                .chance
-                .clone()
-                .unwrap_or(NumberOrRange::Number(1))
-                .is_random_hit(100)
-            {
-                true => match monster.id {
-                    MapGenMonsterType::Monster { monster } => {
-                        Some(monster.get_identifier(&map_data.calculated_parameters))
-                    }
-                    MapGenMonsterType::MonsterGroup { group } => {
-                        let id = group.get_identifier(&map_data.calculated_parameters);
-                        let mon_group = json_data.monstergroups.get(&id)?;
-                        mon_group
-                            .get_random_monster(
-                                &json_data.monstergroups,
-                                &map_data.calculated_parameters,
-                            )
-                            .map(|id| id.get_identifier(&map_data.calculated_parameters))
-                    }
-                },
-                false => None,
-            };
+        let monster = self.monster.get_random();
 
-            match ident {
-                None => {}
-                Some(ident) => {
-                    let command = VisibleMappingCommand {
-                        id: ident,
-                        mapping: MappingKind::Monster,
-                        coordinates: position.clone(),
-                        kind: VisibleMappingCommandKind::Place,
-                    };
-
-                    return Some(vec![command]);
+        let ident = match monster
+            .chance
+            .clone()
+            .unwrap_or(NumberOrRange::Number(1))
+            .is_random_hit(100)
+        {
+            true => match &monster.id {
+                MapGenMonsterType::Monster { monster } => {
+                    Some(monster.get_identifier(&map_data.calculated_parameters))
                 }
+                MapGenMonsterType::MonsterGroup { group } => {
+                    let id = group.get_identifier(&map_data.calculated_parameters);
+                    let mon_group = json_data.monstergroups.get(&id)?;
+                    mon_group
+                        .get_random_monster(
+                            &json_data.monstergroups,
+                            &map_data.calculated_parameters,
+                        )
+                        .map(|id| id.get_identifier(&map_data.calculated_parameters))
+                }
+            },
+            false => None,
+        };
+
+        match ident {
+            None => {}
+            Some(ident) => {
+                let command = VisibleMappingCommand {
+                    id: ident,
+                    mapping: MappingKind::Monster,
+                    coordinates: position.clone(),
+                    kind: VisibleMappingCommandKind::Place,
+                };
+
+                return Some(vec![command]);
             }
         }
 
@@ -152,9 +152,11 @@ impl Property for SignProperty {
         Some(vec![command])
     }
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        let sign = self.signs.get_random();
+
         serde_json::to_value(SignRepresentation {
-            signage: self.text.clone().unwrap_or("".into()),
-            snipped: self.snippet.clone().unwrap_or("".into()),
+            signage: sign.signage.clone().unwrap_or("".into()),
+            snipped: sign.snippet.clone().unwrap_or("".into()),
         })
         .unwrap()
     }
@@ -168,7 +170,7 @@ impl Property for NestedProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let mut rng = rng();
-        let nested_chunk = self.nested.choose(&mut rng).unwrap();
+        let nested_chunk = self.nested.get_random();
 
         let should_place = match &nested_chunk.neighbors {
             None => true,
@@ -238,12 +240,14 @@ impl Property for FieldProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        if self.field.field == CDDAIdentifier::from(NULL_FIELD) {
+        let field = self.field.get_random();
+
+        if field.field == CDDAIdentifier::from(NULL_FIELD) {
             return None;
         }
 
         let command = VisibleMappingCommand {
-            id: self.field.field.clone(),
+            id: field.field.clone(),
             mapping: MappingKind::Field,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -264,7 +268,9 @@ impl Property for GaspumpProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let id = match &self.fuel {
+        let gaspump = self.gaspumps.get_random();
+
+        let id = match &gaspump.fuel {
             None => "t_gas_pump",
             Some(fuel) => match fuel {
                 MapGenGaspumpFuelType::Gasoline | MapGenGaspumpFuelType::Avgas => "t_gas_pump",
@@ -424,7 +430,7 @@ impl Property for ItemsProperty {
         let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
 
         for mapgen_item in self.items.iter() {
-            let item_group_entries = match &mapgen_item.item {
+            let item_group_entries = match &mapgen_item.data.item {
                 ReferenceOrInPlace::Reference(i) => {
                     &json_data
                         .item_groups
@@ -436,6 +442,7 @@ impl Property for ItemsProperty {
             };
 
             let probability = mapgen_item
+                .data
                 .chance
                 .clone()
                 .map(|v| v.get_from_to().0)
@@ -452,14 +459,14 @@ impl Property for ItemsProperty {
             match &item_group_entries.subtype {
                 ItemGroupSubtype::Collection => {
                     display_item_groups.push(DisplayItemGroup::Collection {
-                        name: Some(mapgen_item.item.ref_or("Unnamed Collection").0),
+                        name: Some(mapgen_item.data.item.ref_or("Unnamed Collection").0),
                         probability,
                         items,
                     });
                 }
                 ItemGroupSubtype::Distribution => {
                     display_item_groups.push(DisplayItemGroup::Distribution {
-                        name: Some(mapgen_item.item.ref_or("Unnamed Distribution").0),
+                        name: Some(mapgen_item.data.item.ref_or("Unnamed Distribution").0),
                         probability,
                         items,
                     });
@@ -528,7 +535,8 @@ impl Property for TrapsProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let ident = self.trap.get_identifier(&map_data.calculated_parameters);
+        let trap = self.trap.get_random();
+        let ident = trap.get_identifier(&map_data.calculated_parameters);
 
         if ident == CDDAIdentifier::from(NULL_TRAP) {
             return None;

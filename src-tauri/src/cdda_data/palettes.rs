@@ -4,7 +4,10 @@ use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
 use crate::map::map_properties::ItemsProperty;
 use crate::map::map_properties::{FurnitureProperty, MonstersProperty, TerrainProperty};
 use crate::map::{MapData, MappingKind, Property, VisibleMappingCommand};
-use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
+use crate::util::{
+    CDDAIdentifier, Comment, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier,
+};
+use futures_lite::StreamExt;
 use glam::IVec2;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -63,7 +66,7 @@ pub struct CDDAPaletteIntermediate {
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
+    pub monster: HashMap<char, MeabyVec<MeabyWeighted<MapGenMonster>>>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
@@ -72,7 +75,7 @@ pub struct CDDAPaletteIntermediate {
     pub npcs: HashMap<char, Value>,
 
     #[serde(default)]
-    pub items: HashMap<char, MeabyVec<MapGenItem>>,
+    pub items: HashMap<char, MeabyVec<MeabyWeighted<MapGenItem>>>,
 
     #[serde(default)]
     pub loot: HashMap<char, Value>,
@@ -141,7 +144,13 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
 
         let mut monster_map = HashMap::new();
         for (char, monster) in self.monster {
-            let monster_prop = Arc::new(MonstersProperty { monster });
+            let monster_prop = Arc::new(MonstersProperty {
+                monster: monster
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
 
             monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
@@ -149,7 +158,11 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
         let mut item_map = HashMap::new();
         for (char, items) in self.items {
             let item_prop = Arc::new(ItemsProperty {
-                items: items.into_vec(),
+                items: items
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
             });
             item_map.insert(char, item_prop as Arc<dyn Property>);
         }

@@ -148,7 +148,7 @@ impl_downcast!(sync Place);
 
 // Things like terrain, furniture, monsters This allows us to get the Identifier
 pub trait Property:
-    Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
+Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
 {
     fn get_commands(
         &self,
