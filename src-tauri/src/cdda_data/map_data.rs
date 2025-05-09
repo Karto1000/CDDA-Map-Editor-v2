@@ -311,6 +311,37 @@ pub struct MapGenField {
     pub age: Option<i32>,
 }
 
+const fn default_security() -> i32 {
+    1
+}
+
+pub type HardcodedAction = String;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenComputerAction {
+    pub name: String,
+    pub action: HardcodedAction,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenComputerFailure {
+    pub action: HardcodedAction,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenComputer {
+    pub name: String,
+
+    #[serde(default = "default_security")]
+    pub security: i32,
+
+    #[serde(default)]
+    pub options: Vec<MapGenComputerAction>,
+
+    #[serde(default)]
+    pub failures: Vec<MapGenComputerFailure>,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerFurniture {
     #[serde(rename = "furn")]
@@ -418,6 +449,22 @@ impl Into<Arc<dyn Place>> for PlaceInnerFields {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerComputers {
+    #[serde(flatten)]
+    pub computer: MapGenComputer,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerComputers {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceFurniture {
+            visible: FurnitureProperty {
+                mapgen_value: MapGenValue::String("f_console".into()),
+            },
+        })
+    }
+}
+
 const fn default_chance() -> i32 {
     100
 }
@@ -469,6 +516,7 @@ impl_from!(PlaceInnerMonsters);
 impl_from!(PlaceInnerNested);
 impl_from!(PlaceInnerToilets);
 impl_from!(PlaceInnerFields);
+impl_from!(PlaceInnerComputers);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -521,7 +569,8 @@ map_data_object!(
     nested: MapGenNestedIntermediate,
     // Toilets do not have any data
     toilets: (),
-    fields: MapGenField
+    fields: MapGenField,
+    computers: MapGenComputer
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -737,13 +786,19 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
             furniture_map.insert(char, fur_prop as Arc<dyn VisibleProperty>);
         }
-
         for (char, _) in self.object.common.toilets {
             let toilet_prop = Arc::new(FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_toilet".into()),
             });
 
             furniture_map.insert(char, toilet_prop as Arc<dyn VisibleProperty>);
+        }
+        for (char, _) in self.object.common.computers {
+            let ter_prop = Arc::new(FurnitureProperty {
+                mapgen_value: MapGenValue::String("f_console".into()),
+            });
+
+            furniture_map.insert(char, ter_prop as Arc<dyn VisibleProperty>);
         }
 
         let mut monster_map = HashMap::new();
@@ -818,6 +873,16 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .into_iter()
                 .map(Into::into)
                 .collect(),
+        );
+
+        let place_terrain = place.get_mut(&VisibleMappingKind::Terrain).unwrap();
+        place_terrain.extend(
+            self.object
+                .common
+                .place_computers
+                .into_iter()
+                .map(Into::into)
+                .collect::<Vec<_>>(),
         );
 
         place.insert(

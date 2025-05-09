@@ -75,6 +75,19 @@
           "y": 6,
           "field": "fd_toxic_gas"
         }
+      ],
+      "place_computers": [
+        {
+          "name": "Testing Computer",
+          "options": [
+            {
+              "name": "Do something",
+              "action": "unlock"
+            }
+          ],
+          "x": 7,
+          "y": 7
+        }
       ]
     }
   }
