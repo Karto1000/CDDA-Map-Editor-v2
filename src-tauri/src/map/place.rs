@@ -1,11 +1,10 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::map::map_properties::representative::ItemProperty;
-use crate::map::map_properties::visible::{
+use crate::map::map_properties::ItemProperty;
+use crate::map::map_properties::{
     FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
 use crate::map::{
-    MapData, Place, RepresentativeProperty, VisibleMappingCommand, VisibleMappingCommandKind,
-    VisibleMappingKind, VisibleProperty,
+    MapData, MappingKind, Place, Property, VisibleMappingCommand, VisibleMappingCommandKind,
 };
 use glam::IVec2;
 use serde_json::Value;
@@ -55,7 +54,11 @@ pub struct PlaceItems {
     pub representative: ItemProperty,
 }
 
-impl Place for PlaceItems {}
+impl Place for PlaceItems {
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        self.representative.representation(json_data)
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct PlaceMonster {
@@ -92,6 +95,10 @@ impl Place for PlaceNested {
         self.nested_property
             .get_commands(position, map_data, json_data)
     }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        self.nested_property.representation(json_data)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -106,12 +113,16 @@ impl Place for PlaceToilets {
     ) -> Option<Vec<VisibleMappingCommand>> {
         let command = VisibleMappingCommand {
             id: "f_toilet".into(),
-            mapping: VisibleMappingKind::Furniture,
+            mapping: MappingKind::Furniture,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
         };
 
         Some(vec![command])
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
     }
 }
 
@@ -128,5 +139,9 @@ impl Place for PlaceFields {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         self.visible.get_commands(position, map_data, json_data)
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        self.visible.representation(json_data)
     }
 }

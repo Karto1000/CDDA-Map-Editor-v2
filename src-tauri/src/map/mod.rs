@@ -16,7 +16,8 @@ use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
-    bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, ParameterIdentifier, Weighted,
+    bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier, IVec3JsonKey,
+    ParameterIdentifier, Weighted,
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
@@ -42,8 +43,7 @@ pub trait Set: Debug + DynClone + Send + Sync + Downcast + DowncastSync + Downca
         match self.operation() {
             SetOperation::Place { ty, .. } => match ty {
                 PlaceableSetType::Terrain => TileLayer::Terrain,
-                PlaceableSetType::Furniture => TileLayer::Furniture,
-                PlaceableSetType::Trap => TileLayer::Trap,
+                PlaceableSetType::Furniture | PlaceableSetType::Trap => TileLayer::Furniture,
             },
             // TODO: Default to terrain, change
             _ => TileLayer::Terrain,
@@ -59,14 +59,11 @@ pub trait Set: Debug + DynClone + Send + Sync + Downcast + DowncastSync + Downca
                     let mut mapped_sprite = MappedCDDAIds::default();
 
                     match ty {
-                        PlaceableSetType::Terrain => {
+                        PlaceableSetType::Terrain | PlaceableSetType::Trap => {
                             mapped_sprite.terrain = Some(id.clone());
                         }
                         PlaceableSetType::Furniture => {
                             mapped_sprite.furniture = Some(id.clone());
-                        }
-                        PlaceableSetType::Trap => {
-                            mapped_sprite.trap = Some(id.clone());
                         }
                     };
 
@@ -99,8 +96,9 @@ pub trait Set: Debug + DynClone + Send + Sync + Downcast + DowncastSync + Downca
 
                     let layer = match ty {
                         PlaceableSetType::Terrain => TileLayer::Terrain,
-                        PlaceableSetType::Furniture => TileLayer::Furniture,
-                        PlaceableSetType::Trap => TileLayer::Trap,
+                        PlaceableSetType::Furniture | PlaceableSetType::Trap => {
+                            TileLayer::Furniture
+                        }
                     };
 
                     let fg_bg = get_sprite_type_from_sprite(
@@ -142,53 +140,45 @@ pub trait Place: Debug + DynClone + Send + Sync + Downcast + DowncastSync + Down
         None
     }
 
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
-    }
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
 }
 
 clone_trait_object!(Place);
 impl_downcast!(sync Place);
 
-// Things like items or whatever else will be represented in the sidebar panel
-pub trait RepresentativeProperty:
+// Things like terrain, furniture, monsters This allows us to get the Identifier
+pub trait Property:
     Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
 {
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
-}
-
-clone_trait_object!(RepresentativeProperty);
-impl_downcast!(sync RepresentativeProperty);
-
-// Things like terrain, furniture, monsters This allows us to get the Identifier
-pub trait VisibleProperty: RepresentativeProperty {
     fn get_commands(
         &self,
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>>;
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        None
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
 }
 
-clone_trait_object!(VisibleProperty);
-impl_downcast!(sync VisibleProperty);
+clone_trait_object!(Property);
+impl_downcast!(sync Property);
 
 #[derive(Debug, Clone, Serialize, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
 #[serde(rename_all = "snake_case")]
-pub enum VisibleMappingKind {
-    Terrain = 0,
-    Furniture = 1,
-    Traps = 2,
-    Monster = 3,
-    Nested = 4,
-    Field = 5,
-}
-
-#[derive(Debug, Clone, Deserialize, Hash, PartialOrd, PartialEq, Eq, Ord)]
-#[serde(rename_all = "snake_case")]
-pub enum RepresentativeMappingKind {
-    Monster,
+pub enum MappingKind {
+    Terrain,
+    Furniture,
+    Trap,
     ItemGroups,
+    Computer,
+    Sign,
+    Toilet,
+    Gaspump,
+    Monster,
+    Field,
+    Nested,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -200,6 +190,8 @@ pub struct Cell {
 #[derive(Debug, Serialize)]
 pub struct CellRepresentation {
     item_groups: Value,
+    signs: Value,
+    computers: Value,
 }
 
 #[derive(Debug, Eq, PartialEq, Serialize)]
@@ -210,7 +202,7 @@ pub enum VisibleMappingCommandKind {
 #[derive(Debug, Serialize, Eq, PartialEq)]
 pub struct VisibleMappingCommand {
     id: CDDAIdentifier,
-    mapping: VisibleMappingKind,
+    mapping: MappingKind,
     coordinates: IVec2,
     kind: VisibleMappingCommandKind,
 }
@@ -276,17 +268,13 @@ pub struct MapData {
     pub flags: HashSet<MapDataFlag>,
 
     #[serde(skip)]
-    pub visible: HashMap<VisibleMappingKind, HashMap<char, Arc<dyn VisibleProperty>>>,
-
-    #[serde(skip)]
-    pub representative:
-        HashMap<RepresentativeMappingKind, HashMap<char, Arc<dyn RepresentativeProperty>>>,
+    pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
 
     #[serde(skip)]
     pub set: Vec<Arc<dyn Set>>,
 
     #[serde(skip)]
-    pub place: HashMap<VisibleMappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
+    pub place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
 }
 
 impl Default for MapData {
@@ -307,11 +295,10 @@ impl Default for MapData {
             config: Default::default(),
             calculated_parameters: Default::default(),
             parameters: Default::default(),
-            visible: Default::default(),
+            properties: Default::default(),
             palettes: Default::default(),
             set: vec![],
             place: Default::default(),
-            representative: Default::default(),
             flags: Default::default(),
         }
     }
@@ -394,18 +381,20 @@ impl MapData {
                     };
 
                     match command.mapping {
-                        VisibleMappingKind::Terrain => {
+                        MappingKind::Terrain => {
                             ident_mut.terrain = Some(id.clone());
                         }
-                        VisibleMappingKind::Furniture => {
+                        MappingKind::Furniture
+                        | MappingKind::Computer
+                        | MappingKind::Toilet
+                        | MappingKind::Gaspump
+                        | MappingKind::Sign
+                        | MappingKind::Trap => {
                             ident_mut.furniture = Some(id.clone());
                         }
-                        VisibleMappingKind::Traps => {
-                            ident_mut.trap = Some(id.clone());
-                        }
-                        VisibleMappingKind::Monster => ident_mut.monster = Some(id.clone()),
-                        VisibleMappingKind::Field => ident_mut.field = Some(id.clone()),
-                        VisibleMappingKind::Nested => unreachable!(),
+                        MappingKind::Monster => ident_mut.monster = Some(id.clone()),
+                        MappingKind::Field => ident_mut.field = Some(id.clone()),
+                        MappingKind::Nested | MappingKind::ItemGroups => unreachable!(),
                     }
                 }
             }
@@ -476,14 +465,59 @@ impl MapData {
         all_commands
     }
 
+    pub fn get_representations(
+        &self,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> HashMap<UVec2, CellRepresentation> {
+        let mut cell_data = HashMap::new();
+
+        for (cell_coordinates, cell) in self.cells.iter() {
+            let cell_repr = self.get_cell_data(&cell.character, &json_data);
+
+            cell_data.insert(
+                UVec2::new(cell_coordinates.x, cell_coordinates.y),
+                cell_repr,
+            );
+        }
+
+        for (kind, place_vec) in self.place.iter() {
+            for place in place_vec {
+                for _ in 0..place.repeat.get_from_to().1 {
+                    let position = place.coordinates();
+
+                    let cell_data = cell_data.get_mut(&position.as_uvec2()).unwrap();
+                    let repr = place.inner.representation(json_data);
+
+                    match kind {
+                        MappingKind::Terrain => {}
+                        MappingKind::Furniture => {}
+                        MappingKind::Trap => {}
+                        MappingKind::ItemGroups => {
+                            cell_data.item_groups = repr;
+                        }
+                        MappingKind::Computer => cell_data.computers = repr,
+                        MappingKind::Sign => cell_data.signs = repr,
+                        MappingKind::Toilet => {}
+                        MappingKind::Gaspump => {}
+                        MappingKind::Monster => {}
+                        MappingKind::Field => {}
+                        MappingKind::Nested => {}
+                    }
+                }
+            }
+        }
+
+        cell_data
+    }
+
     pub fn get_visible_mapping(
         &self,
-        mapping_kind: &VisibleMappingKind,
+        mapping_kind: &MappingKind,
         character: &char,
         position: &IVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let mapping = self.visible.get(mapping_kind)?;
+        let mapping = self.properties.get(mapping_kind)?;
 
         if let Some(id) = mapping.get(character) {
             return id.get_commands(position, self, json_data);
@@ -506,11 +540,11 @@ impl MapData {
 
     pub fn get_representative_mapping(
         &self,
-        mapping_kind: &RepresentativeMappingKind,
+        mapping_kind: &MappingKind,
         character: &char,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Value> {
-        let mapping = self.representative.get(mapping_kind)?;
+        let mapping = self.properties.get(mapping_kind)?;
 
         match mapping.get(character) {
             None => {}
@@ -540,14 +574,22 @@ impl MapData {
         json_data: &DeserializedCDDAJsonData,
     ) -> CellRepresentation {
         let item_groups = self
-            .get_representative_mapping(
-                &RepresentativeMappingKind::ItemGroups,
-                character,
-                json_data,
-            )
+            .get_representative_mapping(&MappingKind::ItemGroups, character, json_data)
             .unwrap_or(Value::Array(vec![]));
 
-        CellRepresentation { item_groups }
+        let computers = self
+            .get_representative_mapping(&MappingKind::Computer, character, json_data)
+            .unwrap_or(Value::Array(vec![]));
+
+        let signs = self
+            .get_representative_mapping(&MappingKind::Sign, character, json_data)
+            .unwrap_or(Value::Array(vec![]));
+
+        CellRepresentation {
+            item_groups,
+            signs,
+            computers,
+        }
     }
 
     pub fn get_identifier_change_commands(
@@ -559,30 +601,35 @@ impl MapData {
         let mut commands = Vec::new();
 
         let nested_commands = self
-            .get_visible_mapping(&VisibleMappingKind::Nested, character, position, json_data)
+            .get_visible_mapping(&MappingKind::Nested, character, position, json_data)
             .unwrap_or_default();
 
         let terrain_commands = self
-            .get_visible_mapping(&VisibleMappingKind::Terrain, character, position, json_data)
+            .get_visible_mapping(&MappingKind::Terrain, character, position, json_data)
             .unwrap_or_default();
 
         let furniture_commands = self
-            .get_visible_mapping(
-                &VisibleMappingKind::Furniture,
-                character,
-                position,
-                json_data,
-            )
+            .get_visible_mapping(&MappingKind::Furniture, character, position, json_data)
+            .unwrap_or_default();
+
+        let computer_commands = self
+            .get_visible_mapping(&MappingKind::Computer, character, position, json_data)
+            .unwrap_or_default();
+
+        let toilet_commands = self
+            .get_visible_mapping(&MappingKind::Toilet, character, position, json_data)
             .unwrap_or_default();
 
         let monster_commands = self
-            .get_visible_mapping(&VisibleMappingKind::Monster, character, position, json_data)
+            .get_visible_mapping(&MappingKind::Monster, character, position, json_data)
             .unwrap_or_default();
 
         commands.extend(terrain_commands);
         commands.extend(furniture_commands);
         commands.extend(monster_commands);
         commands.extend(nested_commands);
+        commands.extend(computer_commands);
+        commands.extend(toilet_commands);
 
         commands
     }
@@ -777,8 +824,8 @@ pub struct ProjectContainer {
 mod tests {
     use crate::cdda_data::{CDDADistributionInner, Distribution, MapGenValue, Switch};
     use crate::map::importing::MapDataImporter;
-    use crate::map::map_properties::visible::TerrainProperty;
-    use crate::map::VisibleMappingKind;
+    use crate::map::map_properties::TerrainProperty;
+    use crate::map::MappingKind;
     use crate::util::{
         CDDAIdentifier, DistributionInner, Load, MeabyVec, MeabyWeighted, ParameterIdentifier,
         Weighted,
@@ -880,8 +927,8 @@ mod tests {
             assert_eq!(single_terrain.character, SINGLE_CHAR);
 
             let terrain_property = map_data
-                .visible
-                .get(&VisibleMappingKind::Terrain)
+                .properties
+                .get(&MappingKind::Terrain)
                 .unwrap()
                 .get(&SINGLE_CHAR)
                 .unwrap()
@@ -901,8 +948,8 @@ mod tests {
             assert_eq!(distr_terrain.character, NOT_WEIGHTED_DISTRIBUTION_CHAR);
 
             let terrain_property = map_data
-                .visible
-                .get(&VisibleMappingKind::Terrain)
+                .properties
+                .get(&MappingKind::Terrain)
                 .unwrap()
                 .get(&NOT_WEIGHTED_DISTRIBUTION_CHAR)
                 .unwrap()
@@ -927,8 +974,8 @@ mod tests {
             assert_eq!(distr_terrain.character, WEIGHTED_DISTRIBUTION_CHAR);
 
             let terrain_property = map_data
-                .visible
-                .get(&VisibleMappingKind::Terrain)
+                .properties
+                .get(&MappingKind::Terrain)
                 .unwrap()
                 .get(&WEIGHTED_DISTRIBUTION_CHAR)
                 .unwrap()
@@ -959,8 +1006,8 @@ mod tests {
             );
 
             let terrain_property = map_data
-                .visible
-                .get(&VisibleMappingKind::Terrain)
+                .properties
+                .get(&MappingKind::Terrain)
                 .unwrap()
                 .get(&WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR)
                 .unwrap()
@@ -992,8 +1039,8 @@ mod tests {
             assert_eq!(distr_terrain.character, PARAMETER_CHAR);
 
             let terrain_property = map_data
-                .visible
-                .get(&VisibleMappingKind::Terrain)
+                .properties
+                .get(&MappingKind::Terrain)
                 .unwrap()
                 .get(&PARAMETER_CHAR)
                 .unwrap()
@@ -1015,8 +1062,8 @@ mod tests {
             assert_eq!(distr_terrain.character, SWITCH_CHAR);
 
             let terrain_property = map_data
-                .visible
-                .get(&VisibleMappingKind::Terrain)
+                .properties
+                .get(&MappingKind::Terrain)
                 .unwrap()
                 .get(&SWITCH_CHAR)
                 .unwrap()

@@ -137,9 +137,8 @@ pub struct CDDADeleteOp {
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
-    Trap = 2,
-    Monster = 3,
-    Field = 4,
+    Monster = 2,
+    Field = 3,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

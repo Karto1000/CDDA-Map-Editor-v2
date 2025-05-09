@@ -787,7 +787,6 @@ pub fn get_id_from_mapped_sprites(
         .map(|v| match layer {
             TileLayer::Terrain => v.terrain.clone(),
             TileLayer::Furniture => v.furniture.clone(),
-            TileLayer::Trap => v.trap.clone(),
             TileLayer::Monster => v.monster.clone(),
             TileLayer::Field => v.field.clone(),
         })

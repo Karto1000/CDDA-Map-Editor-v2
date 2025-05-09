@@ -5,17 +5,16 @@ use crate::cdda_data::item::{
 };
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
-use crate::map::map_properties::representative::ItemProperty;
-use crate::map::map_properties::visible::{
+use crate::map::map_properties::{
     FieldProperty, FurnitureProperty, MonsterProperty, NestedProperty, TerrainProperty,
 };
+use crate::map::map_properties::{FurniturePropertySubtype, ItemProperty};
 use crate::map::place::{
     PlaceFields, PlaceFurniture, PlaceItems, PlaceMonster, PlaceNested, PlaceTerrain, PlaceToilets,
 };
 use crate::map::{
-    Cell, MapData, MapDataFlag, MapGenNested, Place, PlaceableSetType, RemovableSetType,
-    RepresentativeMappingKind, RepresentativeProperty, Set, SetLine, SetOperation, SetPoint,
-    SetSquare, VisibleMappingKind, VisibleProperty, SPECIAL_EMPTY_CHAR,
+    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
+    RemovableSetType, Set, SetLine, SetOperation, SetPoint, SetSquare, SPECIAL_EMPTY_CHAR,
 };
 use crate::util::{
     CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
@@ -353,6 +352,7 @@ impl Into<Arc<dyn Place>> for PlaceInnerFurniture {
         Arc::new(PlaceFurniture {
             visible: FurnitureProperty {
                 mapgen_value: MapGenValue::String(self.furniture_id.clone()),
+                subtype: FurniturePropertySubtype::Furniture,
             },
         })
     }
@@ -376,13 +376,16 @@ impl Into<Arc<dyn Place>> for PlaceInnerTerrain {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceInnerItems {
-    item: CDDAIdentifier,
+    #[serde(flatten)]
+    item: MapGenItem,
 }
 
 impl Into<Arc<dyn Place>> for PlaceInnerItems {
     fn into(self) -> Arc<dyn Place> {
         Arc::new(PlaceItems {
-            representative: ItemProperty { items: vec![] },
+            representative: ItemProperty {
+                items: vec![self.item],
+            },
         })
     }
 }
@@ -460,6 +463,7 @@ impl Into<Arc<dyn Place>> for PlaceInnerComputers {
         Arc::new(PlaceFurniture {
             visible: FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_console".into()),
+                subtype: FurniturePropertySubtype::Computer,
             },
         })
     }
@@ -767,7 +771,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             }
         }
 
-        let mut visible = HashMap::new();
+        let mut properties = HashMap::new();
 
         let mut terrain_map = HashMap::new();
         for (char, terrain) in self.object.common.terrain {
@@ -775,78 +779,81 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 mapgen_value: terrain,
             });
 
-            terrain_map.insert(char, ter_prop as Arc<dyn VisibleProperty>);
+            terrain_map.insert(char, ter_prop as Arc<dyn Property>);
         }
 
         let mut furniture_map = HashMap::new();
         for (char, furniture) in self.object.common.furniture {
             let fur_prop = Arc::new(FurnitureProperty {
                 mapgen_value: furniture,
+                subtype: FurniturePropertySubtype::Furniture,
             });
 
-            furniture_map.insert(char, fur_prop as Arc<dyn VisibleProperty>);
+            furniture_map.insert(char, fur_prop as Arc<dyn Property>);
         }
+
+        let mut toilet_map = HashMap::new();
         for (char, _) in self.object.common.toilets {
             let toilet_prop = Arc::new(FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_toilet".into()),
+                subtype: FurniturePropertySubtype::Toilet,
             });
 
-            furniture_map.insert(char, toilet_prop as Arc<dyn VisibleProperty>);
+            toilet_map.insert(char, toilet_prop as Arc<dyn Property>);
         }
+
+        let mut computer_map = HashMap::new();
         for (char, _) in self.object.common.computers {
             let ter_prop = Arc::new(FurnitureProperty {
                 mapgen_value: MapGenValue::String("f_console".into()),
+                subtype: FurniturePropertySubtype::Computer,
             });
 
-            furniture_map.insert(char, ter_prop as Arc<dyn VisibleProperty>);
+            computer_map.insert(char, ter_prop as Arc<dyn Property>);
         }
 
         let mut monster_map = HashMap::new();
         for (char, monster) in self.object.common.monsters {
             let monster_prop = Arc::new(MonsterProperty { monster });
 
-            monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
+            monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
 
         let mut nested_map = HashMap::new();
-
         for (char, nested) in self.object.common.nested {
             let nested_terrain_prop = Arc::new(NestedProperty {
                 nested: nested.clone().into(),
             });
-            nested_map.insert(char, nested_terrain_prop as Arc<dyn VisibleProperty>);
+            nested_map.insert(char, nested_terrain_prop as Arc<dyn Property>);
         }
 
         let mut field_map = HashMap::new();
-
         for (char, field) in self.object.common.fields {
             let field_prop = Arc::new(FieldProperty { field });
-            field_map.insert(char, field_prop as Arc<dyn VisibleProperty>);
+            field_map.insert(char, field_prop as Arc<dyn Property>);
         }
-
-        visible.insert(VisibleMappingKind::Terrain, terrain_map);
-        visible.insert(VisibleMappingKind::Furniture, furniture_map);
-        visible.insert(VisibleMappingKind::Monster, monster_map);
-        visible.insert(VisibleMappingKind::Nested, nested_map);
-        visible.insert(VisibleMappingKind::Field, field_map);
-
-        let mut representative = HashMap::new();
 
         let mut item_map = HashMap::new();
         for (char, items) in self.object.common.items {
             let item_prop = Arc::new(ItemProperty {
                 items: items.into_vec(),
             });
-            item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
+            item_map.insert(char, item_prop as Arc<dyn Property>);
         }
 
-        representative.insert(RepresentativeMappingKind::ItemGroups, item_map);
+        properties.insert(MappingKind::Terrain, terrain_map);
+        properties.insert(MappingKind::Furniture, furniture_map);
+        properties.insert(MappingKind::Monster, monster_map);
+        properties.insert(MappingKind::Nested, nested_map);
+        properties.insert(MappingKind::Field, field_map);
+        properties.insert(MappingKind::ItemGroups, item_map);
+        properties.insert(MappingKind::Computer, computer_map);
+        properties.insert(MappingKind::Toilet, toilet_map);
 
-        let mut place: HashMap<VisibleMappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> =
-            HashMap::new();
+        let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
 
         place.insert(
-            VisibleMappingKind::Furniture,
+            MappingKind::Furniture,
             self.object
                 .common
                 .place_furniture
@@ -855,8 +862,8 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .collect(),
         );
 
-        let place_furniture = place.get_mut(&VisibleMappingKind::Furniture).unwrap();
-        place_furniture.extend(
+        place.insert(
+            MappingKind::Toilet,
             self.object
                 .common
                 .place_toilets
@@ -866,7 +873,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         );
 
         place.insert(
-            VisibleMappingKind::Terrain,
+            MappingKind::Terrain,
             self.object
                 .common
                 .place_terrain
@@ -875,8 +882,8 @@ impl Into<MapData> for CDDAMapDataIntermediate {
                 .collect(),
         );
 
-        let place_terrain = place.get_mut(&VisibleMappingKind::Terrain).unwrap();
-        place_terrain.extend(
+        place.insert(
+            MappingKind::Computer,
             self.object
                 .common
                 .place_computers
@@ -886,7 +893,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         );
 
         place.insert(
-            VisibleMappingKind::Monster,
+            MappingKind::Monster,
             self.object
                 .common
                 .place_monsters
@@ -896,7 +903,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         );
 
         place.insert(
-            VisibleMappingKind::Nested,
+            MappingKind::Nested,
             self.object
                 .common
                 .place_nested
@@ -906,10 +913,20 @@ impl Into<MapData> for CDDAMapDataIntermediate {
         );
 
         place.insert(
-            VisibleMappingKind::Field,
+            MappingKind::Field,
             self.object
                 .common
                 .place_fields
+                .into_iter()
+                .map(Into::into)
+                .collect(),
+        );
+
+        place.insert(
+            MappingKind::ItemGroups,
+            self.object
+                .common
+                .place_items
                 .into_iter()
                 .map(Into::into)
                 .collect(),
@@ -919,8 +936,7 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
         map_data.cells = cells;
         map_data.set = set_vec;
-        map_data.visible = visible;
-        map_data.representative = representative;
+        map_data.properties = properties;
         map_data.place = place;
         map_data.parameters = self.object.common.parameters;
         map_data.palettes = self.object.common.palettes;

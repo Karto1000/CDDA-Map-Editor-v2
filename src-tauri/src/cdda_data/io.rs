@@ -76,7 +76,6 @@ impl DeserializedCDDAJsonData {
                         .unwrap_or_default()
                 }
                 // TODO: I don't know if traps have connect groups, have to check later
-                TileLayer::Trap => HashSet::new(),
                 TileLayer::Monster => HashSet::new(),
                 TileLayer::Field => HashSet::new(),
             }
@@ -109,7 +108,6 @@ impl DeserializedCDDAJsonData {
                 furniture.flags.clone().unwrap_or_default()
             }
             // TODO: Again, not sure if they have flags
-            TileLayer::Trap => vec![],
             TileLayer::Monster => vec![],
             TileLayer::Field => vec![],
         })
@@ -146,7 +144,6 @@ impl DeserializedCDDAJsonData {
                         .unwrap_or_default()
                 }
                 // TODO: See comments up top
-                TileLayer::Trap => HashSet::new(),
                 TileLayer::Monster => HashSet::new(),
                 TileLayer::Field => HashSet::new(),
             }

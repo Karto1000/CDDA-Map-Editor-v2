@@ -129,7 +129,6 @@ pub enum CardinalDirection {
 pub struct MappedCDDAIds {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
-    pub trap: Option<CDDAIdentifier>,
     pub monster: Option<CDDAIdentifier>,
     pub field: Option<CDDAIdentifier>,
 }
@@ -142,10 +141,6 @@ impl MappedCDDAIds {
 
         if other.furniture.is_some() {
             self.furniture = other.furniture;
-        }
-
-        if other.trap.is_some() {
-            self.trap = other.trap;
         }
 
         if other.monster.is_some() {

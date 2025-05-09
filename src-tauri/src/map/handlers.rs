@@ -4,8 +4,8 @@ use crate::editor_data::tab::handlers::create_tab;
 use crate::editor_data::tab::{ProjectState, TabType};
 use crate::editor_data::{EditorData, Project};
 use crate::map::{
-    CellRepresentation, ProjectContainer, VisibleMappingCommand, VisibleMappingCommandKind,
-    VisibleMappingKind,
+    CellRepresentation, MappingKind, ProjectContainer, VisibleMappingCommand,
+    VisibleMappingCommandKind,
 };
 use crate::tileset;
 use crate::tileset::legacy_tileset::MappedCDDAIds;
@@ -405,7 +405,6 @@ pub async fn open_project(
             for (layer, o_id) in [
                 (TileLayer::Terrain, &identifier_group.terrain),
                 (TileLayer::Furniture, &identifier_group.furniture),
-                (TileLayer::Trap, &identifier_group.trap),
                 (TileLayer::Monster, &identifier_group.monster),
                 (TileLayer::Field, &identifier_group.field),
             ] {
@@ -483,18 +482,20 @@ pub async fn get_project_cell_data(
     let mut item_data: HashMap<IVec3JsonKey, CellRepresentation> = HashMap::new();
 
     for (z, map_data) in project.maps.iter() {
-        for (cell_coordinates, cell) in map_data.cells.iter() {
-            let cell_data = map_data.get_cell_data(&cell.character, &json_data);
+        let map_cell_data = map_data.get_representations(json_data);
 
-            item_data.insert(
-                IVec3JsonKey(IVec3::new(
-                    cell_coordinates.x as i32,
-                    cell_coordinates.y as i32,
-                    *z,
-                )),
-                cell_data,
-            );
-        }
+        map_cell_data
+            .into_iter()
+            .for_each(|(cell_coordinates, cell_data)| {
+                item_data.insert(
+                    IVec3JsonKey(IVec3::new(
+                        cell_coordinates.x as i32,
+                        cell_coordinates.y as i32,
+                        *z,
+                    )),
+                    cell_data,
+                );
+            });
     }
 
     Ok(item_data)
