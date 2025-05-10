@@ -1,9 +1,11 @@
 import React, {useState} from "react"
 import "./multimenu.scss"
+import {clsx} from "clsx";
 
 export type MultiMenuTab = {
     name: string
     content: React.JSX.Element | React.JSX.Element[]
+    isDisabled?: boolean
 }
 
 export type MultiMenuProps = {
@@ -11,7 +13,7 @@ export type MultiMenuProps = {
 }
 
 export default function MultiMenu(props: MultiMenuProps) {
-    const [selectedTab, setSelectedTab] = useState<number>(0)
+    const [selectedTab, setSelectedTab] = useState<number>(props.tabs.findIndex(t => !t.isDisabled))
 
     return (
         <div className={"multimenu"}>
@@ -19,7 +21,13 @@ export default function MultiMenu(props: MultiMenuProps) {
                 <div className={"tabs"}>
                     {
                         props.tabs.map((t, i) => (
-                            <div key={t.name} className={selectedTab === i ? "selected" : ""} onClick={() => setSelectedTab(i)}>
+                            <div key={t.name}
+                                 className={clsx("tab", selectedTab === i && "selected", t.isDisabled && "disabled")}
+                                 onClick={() => {
+                                     if (t.isDisabled) return;
+
+                                     setSelectedTab(i)
+                                 }}>
                                 {t.name}
                             </div>
                         ))

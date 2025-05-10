@@ -3,7 +3,9 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main"
+    "main",
+    "open-map",
+    "settings"
   ],
   "permissions": [
     "core:window:default",
@@ -18,6 +20,7 @@
     "shell:allow-open",
     "shell:default",
     "dialog:allow-message",
-    "dialog:default"
+    "dialog:default",
+    "core:webview:allow-create-webview-window"
   ]
 }

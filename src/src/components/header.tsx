@@ -1,26 +1,27 @@
-import React, {Dispatch, SetStateAction, useContext} from "react";
+import React, {Dispatch, MutableRefObject, SetStateAction, useContext} from "react";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
 import {Dropdown} from "./dropdown.tsx";
 import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
-import {TabContext} from "../app.tsx";
+import {TabContext, ThemeContext} from "../app.tsx";
 import {invoke} from "@tauri-apps/api/core";
 
 import {MapDataSendCommand} from "../lib/map_data.ts";
+import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
+import {Theme} from "../hooks/useTheme.js";
+import {emitTo} from "@tauri-apps/api/event";
 
 type Props = {
-    isSettingsWindowOpen: boolean,
-    setIsSettingsWindowOpen: Dispatch<SetStateAction<boolean>>,
-
-    isCreatingMapWindowOpen: boolean,
-    setIsCreatingMapWindowOpen: Dispatch<SetStateAction<boolean>>,
+    openMapWindowRef: MutableRefObject<WebviewWindow>
+    settingsWindowRef: MutableRefObject<WebviewWindow>
 }
 
 export function Header(props: Props) {
     const tauriWindow = getCurrentWindow();
     const tabs = useContext(TabContext)
+    const {theme, setTheme} = useContext(ThemeContext)
 
     function onTabClose(e: React.MouseEvent<HTMLDivElement>, index: number) {
         e.preventDefault()
@@ -30,15 +31,13 @@ export function Header(props: Props) {
     }
 
     function onTabCreate() {
-        props.setIsCreatingMapWindowOpen(true)
     }
 
     async function onTabOpen(index: number) {
         if (tabs.openedTab === index) {
             tabs.setOpenedTab(null)
             await invoke(MapDataSendCommand.CloseProject, {})
-        }
-        else {
+        } else {
             tabs.setOpenedTab(index)
             await invoke(MapDataSendCommand.OpenProject, {index})
         }
@@ -50,7 +49,7 @@ export function Header(props: Props) {
                 <div data-tauri-drag-region className={`header`}>
                     <div className={"header-title"}>
                         <img
-                            src={`${process.env.PUBLIC_URL}/icons/icon.ico`}
+                            src={`/icons/icon.ico`}
                             alt={"icon"}
                             width={24}
                             height={24}
@@ -165,7 +164,18 @@ export function Header(props: Props) {
                                     name: "Settings",
                                     shortcut: "Ctrl+Alt+s",
                                     onClick: (ref) => {
-                                        props.setIsSettingsWindowOpen(!props.isSettingsWindowOpen);
+                                        props.settingsWindowRef.current = new WebviewWindow('settings', {
+                                            url: `src/windows/settings/window.html?theme=${theme.toString()}`,
+                                            width: 200,
+                                            height: 200,
+                                            decorations: false,
+                                            center: true
+                                        });
+
+                                        props.settingsWindowRef.current.listen("change-theme", () => {
+                                            setTheme((theme) => theme === Theme.Dark ? Theme.Light : Theme.Dark)
+                                        })
+
                                         ref.current.closeMenu()
                                     }
                                 },

@@ -1,7 +1,7 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::Switch;
+use crate::cdda_data::{MapGenValue, Switch};
 use crate::tileset::GetRandom;
 use derive_more::with_trait::Display;
 use glam::{IVec3, UVec2};
@@ -116,6 +116,19 @@ pub enum DistributionInner {
         cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
     },
     Normal(CDDAIdentifier),
+}
+
+impl Into<MapGenValue> for DistributionInner {
+    fn into(self) -> MapGenValue {
+        match self {
+            DistributionInner::Param { param, fallback } => MapGenValue::Param {
+                param,
+                fallback: Some(fallback),
+            },
+            DistributionInner::Switch { switch, cases } => MapGenValue::Switch { switch, cases },
+            DistributionInner::Normal(n) => MapGenValue::String(n),
+        }
+    }
 }
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]

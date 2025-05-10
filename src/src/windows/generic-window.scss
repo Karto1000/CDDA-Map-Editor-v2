@@ -1,0 +1,49 @@
+@import "../theme.scss";
+
+@include themed($themes) {
+  .header {
+    background-color: theme-var("dark-blue");
+
+    .close-button {
+      &:hover {
+        background-color: theme-var("delete");
+      }
+    }
+  }
+
+  .window-body {
+    background-color: theme-var("darker");
+  }
+}
+
+.generic-window {
+  height: 100%;
+
+  .header {
+    height: 32px;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    justify-content: space-between;
+
+    h2 {
+      font-size: 16px;
+      font-weight: unset;
+      user-select: none;
+      margin: 0;
+    }
+
+    .close-button {
+      background-color: transparent;
+      border: none;
+      cursor: pointer;
+      width: 32px;
+      height: 32px;
+    }
+  }
+
+  .window-body {
+    height: 100%;
+    padding: 8px;
+  }
+}

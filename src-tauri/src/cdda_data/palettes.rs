@@ -1,13 +1,13 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
 use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
-use crate::map::map_properties::representative::ItemProperty;
-use crate::map::map_properties::visible::{FurnitureProperty, MonsterProperty, TerrainProperty};
-use crate::map::{
-    MapData, RepresentativeMappingKind, RepresentativeProperty, VisibleMappingCommand,
-    VisibleMappingKind, VisibleProperty,
+use crate::map::map_properties::ItemsProperty;
+use crate::map::map_properties::{FurnitureProperty, MonstersProperty, TerrainProperty};
+use crate::map::{MapData, MappingKind, Property, VisibleMappingCommand};
+use crate::util::{
+    CDDAIdentifier, Comment, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier,
 };
-use crate::util::{CDDAIdentifier, Comment, GetIdentifier, MeabyVec, ParameterIdentifier};
+use futures_lite::StreamExt;
 use glam::IVec2;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
@@ -66,7 +66,7 @@ pub struct CDDAPaletteIntermediate {
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub monster: HashMap<char, MeabyVec<MapGenMonster>>,
+    pub monster: HashMap<char, MeabyVec<MeabyWeighted<MapGenMonster>>>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
@@ -75,7 +75,7 @@ pub struct CDDAPaletteIntermediate {
     pub npcs: HashMap<char, Value>,
 
     #[serde(default)]
-    pub items: HashMap<char, MeabyVec<MapGenItem>>,
+    pub items: HashMap<char, MeabyVec<MeabyWeighted<MapGenItem>>>,
 
     #[serde(default)]
     pub loot: HashMap<char, Value>,
@@ -122,7 +122,7 @@ pub struct CDDAPaletteIntermediate {
 
 impl Into<CDDAPalette> for CDDAPaletteIntermediate {
     fn into(self) -> CDDAPalette {
-        let mut visible = HashMap::new();
+        let mut properties = HashMap::new();
 
         let mut terrain_map = HashMap::new();
         for (char, terrain) in self.terrain {
@@ -130,7 +130,7 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
                 mapgen_value: terrain,
             });
 
-            terrain_map.insert(char, ter_prop as Arc<dyn VisibleProperty>);
+            terrain_map.insert(char, ter_prop as Arc<dyn Property>);
         }
 
         let mut furniture_map = HashMap::new();
@@ -139,36 +139,42 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
                 mapgen_value: furniture,
             });
 
-            furniture_map.insert(char, fur_prop as Arc<dyn VisibleProperty>);
+            furniture_map.insert(char, fur_prop as Arc<dyn Property>);
         }
 
         let mut monster_map = HashMap::new();
         for (char, monster) in self.monster {
-            let monster_prop = Arc::new(MonsterProperty { monster });
+            let monster_prop = Arc::new(MonstersProperty {
+                monster: monster
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
 
-            monster_map.insert(char, monster_prop as Arc<dyn VisibleProperty>);
+            monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
-
-        visible.insert(VisibleMappingKind::Terrain, terrain_map);
-        visible.insert(VisibleMappingKind::Furniture, furniture_map);
-        visible.insert(VisibleMappingKind::Monster, monster_map);
-
-        let mut representative = HashMap::new();
 
         let mut item_map = HashMap::new();
         for (char, items) in self.items {
-            let item_prop = Arc::new(ItemProperty {
-                items: items.into_vec(),
+            let item_prop = Arc::new(ItemsProperty {
+                items: items
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
             });
-            item_map.insert(char, item_prop as Arc<dyn RepresentativeProperty>);
+            item_map.insert(char, item_prop as Arc<dyn Property>);
         }
 
-        representative.insert(RepresentativeMappingKind::ItemGroups, item_map);
+        properties.insert(MappingKind::Terrain, terrain_map);
+        properties.insert(MappingKind::Furniture, furniture_map);
+        properties.insert(MappingKind::Monster, monster_map);
+        properties.insert(MappingKind::ItemGroups, item_map);
 
         CDDAPalette {
             id: self.id,
-            visible,
-            representative,
+            properties,
             comment: self.comment,
             parameters: self.parameters,
             palettes: self.palettes,
@@ -181,11 +187,7 @@ pub struct CDDAPalette {
     pub id: CDDAIdentifier,
 
     #[serde(skip)]
-    pub visible: HashMap<VisibleMappingKind, HashMap<char, Arc<dyn VisibleProperty>>>,
-
-    #[serde(skip)]
-    pub representative:
-        HashMap<RepresentativeMappingKind, HashMap<char, Arc<dyn RepresentativeProperty>>>,
+    pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
 
     #[serde(rename = "//")]
     pub comment: Comment,
@@ -230,13 +232,13 @@ impl CDDAPalette {
 
     pub fn get_visible_mapping(
         &self,
-        mapping_kind: impl Borrow<VisibleMappingKind>,
+        mapping_kind: impl Borrow<MappingKind>,
         character: impl Borrow<char>,
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let mapping = self.visible.get(mapping_kind.borrow())?;
+        let mapping = self.properties.get(mapping_kind.borrow())?;
 
         if let Some(id) = mapping.get(character.borrow()) {
             return id.get_commands(position, map_data, json_data);
@@ -262,12 +264,12 @@ impl CDDAPalette {
 
     pub fn get_representative_mapping(
         &self,
-        mapping_kind: impl Borrow<RepresentativeMappingKind>,
+        mapping_kind: impl Borrow<MappingKind>,
         character: impl Borrow<char>,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Value> {
-        let mapping = self.representative.get(mapping_kind.borrow())?;
+        let mapping = self.properties.get(mapping_kind.borrow())?;
 
         match mapping.get(character.borrow()) {
             None => {}

@@ -22,6 +22,7 @@ import {useMousePosition} from "./useMousePosition.ts";
 import {BackendResponseType, invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
 import {listen} from "@tauri-apps/api/event";
 import {
+    CellData,
     DisplayItemGroup,
     DisplayItemGroupType,
     MapDataEvent,
@@ -34,10 +35,6 @@ import {Fieldset} from "../components/fieldset.tsx";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
-
-type CellData = {
-    [coords: string]: { item_groups: DisplayItemGroup[] }
-}
 
 type UseEditorProps = {
     sceneRef: MutableRefObject<Scene>,
@@ -56,7 +53,8 @@ type UseEditorRet = {
     resize: () => void,
     displayInLeftPanel: {
         items: React.JSX.Element[] | React.JSX.Element
-        monsters: React.JSX.Element[] | React.JSX.Element
+        monsters: React.JSX.Element[] | React.JSX.Element,
+        signs: React.JSX.Element[] | React.JSX.Element
     }
 }
 
@@ -185,6 +183,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
     const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
 
     const [itemDisplay, setItemDisplay] = useState<ReactElement<ItemPanelProps>>()
+    const [signDisplay, setSignDisplay] = useState<React.JSX.Element>()
     const [cellData, setCellData] = useState<CellData>({})
 
     const onResize = useCallback(() => {
@@ -267,6 +266,25 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
                 cellData={cellData}
                 selectedCellPosition={selectedCellPosition}
             />
+        )
+
+        const selectedData = cellData[`${selectedCellPosition?.x},${selectedCellPosition?.y},${currentZLayer}`]
+
+        setSignDisplay(
+            <>
+                {
+                    selectedData?.signs.signage &&
+                    <p>
+                        Signage: {selectedData.signs.signage}
+                    </p>
+                }
+                {
+                    selectedData?.signs.snippet &&
+                    <p>
+                        Snippet: {selectedData.signs.snippet}
+                    </p>
+                }
+            </>
         )
     }, [cellData, currentZLayer, mousePosition, selectedCellPosition]);
 
@@ -366,7 +384,11 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
         hoveredMaterial.transparent = true
         hoveredMaterial.opacity = 0.5
         const highlightedMesh = new Mesh(hovered, hoveredMaterial)
-        highlightedMesh.position.set(worldMousePosition.current.x * tile_info.width, worldMousePosition.current.y * tile_info.height, MAX_DEPTH + 1)
+        highlightedMesh.position.set(
+            worldMousePosition.current.x * tile_info.width,
+            worldMousePosition.current.y * tile_info.height,
+            MAX_DEPTH + 1
+        )
 
         const selected = new PlaneGeometry(tile_info.width, tile_info.height)
         const selectedMaterial = new MeshBasicMaterial({color: getColorFromTheme(props.theme, "selected")})
@@ -430,13 +452,16 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
                 .divide(new Vector3(tile_info.width, tile_info.height, 1))
                 .add(offset)
                 .floor()
+
             // We need to invert the world mouse position since the cdda map goes from up to down
-            worldMousePosition.current.y = -worldMousePosition.current.y
+            // Additionally, we need to remove 1 since the top left tile starts at +1
+            worldMousePosition.current.y = -worldMousePosition.current.y - 1
 
             // Here we need to invert the y again to make it fit correctly for three.js
             hoveredCellMeshRef.current.position.set(
                 worldMousePosition.current.x * tile_info.width,
-                -worldMousePosition.current.y * tile_info.height,
+                // Remove one again for three.js since the top left tile is -1 in three.js
+                (-worldMousePosition.current.y - 1) * tile_info.height,
                 MAX_DEPTH + 1
             )
         }
@@ -528,11 +553,11 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         selectedCellMeshRef.current.position.set(
             selectedCellPosition.x * tile_info.width,
-            -selectedCellPosition.y * tile_info.height,
+            (-selectedCellPosition.y - 1) * tile_info.height,
             MAX_DEPTH + 1
         )
         selectedCellMeshRef.current.visible = true
     }, [props.isDisplaying, props.spritesheetConfig, selectedCellPosition]);
 
-    return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: []}}
+    return {resize: onResize, displayInLeftPanel: {items: itemDisplay, monsters: [], signs: signDisplay}}
 }

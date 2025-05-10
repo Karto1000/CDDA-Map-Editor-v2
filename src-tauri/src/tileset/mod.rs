@@ -275,40 +275,40 @@ impl Sprite {
             // although im not sure
             .is_some()
             || this_id
-                == &adjacent_sprites
-                    .top
-                    .clone()
-                    .unwrap_or(CDDAIdentifier("".to_string()));
+            == &adjacent_sprites
+            .top
+            .clone()
+            .unwrap_or(CDDAIdentifier("".to_string()));
 
         let can_connect_right = this_connects_to
             .intersection(&right_connect_groups)
             .next()
             .is_some()
             || this_id
-                == &adjacent_sprites
-                    .right
-                    .clone()
-                    .unwrap_or(CDDAIdentifier("".to_string()));
+            == &adjacent_sprites
+            .right
+            .clone()
+            .unwrap_or(CDDAIdentifier("".to_string()));
 
         let can_connect_bottom = this_connects_to
             .intersection(&bottom_connect_groups)
             .next()
             .is_some()
             || this_id
-                == &adjacent_sprites
-                    .bottom
-                    .clone()
-                    .unwrap_or(CDDAIdentifier("".to_string()));
+            == &adjacent_sprites
+            .bottom
+            .clone()
+            .unwrap_or(CDDAIdentifier("".to_string()));
 
         let can_connect_left = this_connects_to
             .intersection(&left_connect_groups)
             .next()
             .is_some()
             || this_id
-                == &adjacent_sprites
-                    .left
-                    .clone()
-                    .unwrap_or(CDDAIdentifier("".to_string()));
+            == &adjacent_sprites
+            .left
+            .clone()
+            .unwrap_or(CDDAIdentifier("".to_string()));
 
         (
             can_connect_top,
@@ -787,8 +787,8 @@ pub fn get_id_from_mapped_sprites(
         .map(|v| match layer {
             TileLayer::Terrain => v.terrain.clone(),
             TileLayer::Furniture => v.furniture.clone(),
-            TileLayer::Trap => v.trap.clone(),
-            &TileLayer::Monster => v.monster.clone(),
+            TileLayer::Monster => v.monster.clone(),
+            TileLayer::Field => v.field.clone(),
         })
         .flatten()
 }

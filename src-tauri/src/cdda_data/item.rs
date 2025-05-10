@@ -1,4 +1,5 @@
-use crate::util::{CDDAIdentifier, MeabyVec, Weighted};
+use crate::cdda_data::NumberOrRange;
+use crate::util::{CDDAIdentifier, Weighted};
 use serde::{Deserialize, Serialize};
 
 const fn default_probability() -> i32 {
@@ -10,57 +11,12 @@ const fn default_probability() -> i32 {
 pub struct Item {
     pub item: CDDAIdentifier,
 
-    #[serde(default)]
-    pub damage: Option<MeabyVec<i32>>,
-
     #[serde(default = "default_probability")]
     #[serde(rename = "prob")]
     pub probability: i32,
 
     #[serde(default)]
-    pub count: Option<MeabyVec<i32>>,
-
-    #[serde(default)]
-    pub charges: Option<MeabyVec<i32>>,
-
-    #[serde(default)]
-    pub components: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub contents_item: Option<MeabyVec<String>>,
-
-    #[serde(default)]
-    pub contents_group: Option<MeabyVec<String>>,
-
-    #[serde(default)]
-    pub ammo_item: Option<String>,
-
-    #[serde(default)]
-    pub ammo_group: Option<String>,
-
-    #[serde(default)]
-    pub container_group: Option<String>,
-
-    #[serde(default)]
-    pub entry_wrapper: Option<String>,
-
-    #[serde(default)]
-    pub sealed: Option<bool>,
-
-    #[serde(default)]
-    pub active: Option<bool>,
-
-    #[serde(default)]
-    pub custom_flags: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub variant: Option<String>,
-
-    #[serde(default)]
-    pub event: Option<String>,
-
-    #[serde(default)]
-    pub snippets: Option<String>,
+    pub count: Option<NumberOrRange<i32>>,
 }
 
 impl From<CDDAIdentifier> for Item {
@@ -78,56 +34,11 @@ pub struct Group {
     pub group: CDDAIdentifier,
 
     #[serde(default)]
-    pub damage: Option<MeabyVec<i32>>,
+    pub damage: Option<NumberOrRange<i32>>,
 
     #[serde(default = "default_probability")]
     #[serde(rename = "prob")]
     pub probability: i32,
-
-    #[serde(default)]
-    pub count: Option<MeabyVec<i32>>,
-
-    #[serde(default)]
-    pub charges: Option<MeabyVec<i32>>,
-
-    #[serde(default)]
-    pub components: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub contents_item: Option<MeabyVec<String>>,
-
-    #[serde(default)]
-    pub contents_group: Option<MeabyVec<String>>,
-
-    #[serde(default)]
-    pub ammo_item: Option<String>,
-
-    #[serde(default)]
-    pub ammo_group: Option<String>,
-
-    #[serde(default)]
-    pub container_group: Option<String>,
-
-    #[serde(default)]
-    pub entry_wrapper: Option<String>,
-
-    #[serde(default)]
-    pub sealed: Option<bool>,
-
-    #[serde(default)]
-    pub active: Option<bool>,
-
-    #[serde(default)]
-    pub custom_flags: Option<Vec<String>>,
-
-    #[serde(default)]
-    pub variant: Option<String>,
-
-    #[serde(default)]
-    pub event: Option<String>,
-
-    #[serde(default)]
-    pub snippets: Option<String>,
 }
 
 impl From<CDDAIdentifier> for Group {
@@ -340,6 +251,8 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct CDDAItemGroupCommon {
     pub entries: Vec<ItemEntry>,
+
+    #[serde(default)]
     pub subtype: ItemGroupSubtype,
 }
 

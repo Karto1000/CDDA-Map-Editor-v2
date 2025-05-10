@@ -34,6 +34,16 @@
       "terrain": {
         ".": "t_grass"
       },
+      "traps": {
+        ".": "tr_nailboard"
+      },
+      "place_items": [
+        {
+          "item": "forest",
+          "x": 1,
+          "y": 1
+        }
+      ],
       "place_terrain": [
         {
           "ter": "t_rock_floor",
@@ -61,6 +71,53 @@
           "chunks": "ruins_8x8_yard",
           "x": 8,
           "y": 8
+        }
+      ],
+      "place_toilets": [
+        {
+          "x": 5,
+          "y": 5
+        }
+      ],
+      "place_fields": [
+        {
+          "x": 6,
+          "y": 6,
+          "field": "fd_toxic_gas"
+        }
+      ],
+      "place_signs": [
+        {
+          "x": 0,
+          "y": 0,
+          "signage": "Hello World"
+        }
+      ],
+      "place_computers": [
+        {
+          "name": "Testing Computer",
+          "options": [
+            {
+              "name": "Do something",
+              "action": "unlock"
+            }
+          ],
+          "x": 7,
+          "y": 7
+        }
+      ],
+      "place_gaspumps": [
+        {
+          "fuel": "diesel",
+          "x": 2,
+          "y": 0
+        }
+      ],
+      "place_traps": [
+        {
+          "trap": "tr_nailboard",
+          "x": 3,
+          "y": 0
         }
       ]
     }

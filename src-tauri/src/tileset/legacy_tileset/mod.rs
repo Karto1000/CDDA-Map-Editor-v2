@@ -129,29 +129,11 @@ pub enum CardinalDirection {
 pub struct MappedCDDAIds {
     pub terrain: Option<CDDAIdentifier>,
     pub furniture: Option<CDDAIdentifier>,
-    pub trap: Option<CDDAIdentifier>,
     pub monster: Option<CDDAIdentifier>,
+    pub field: Option<CDDAIdentifier>,
 }
 
 impl MappedCDDAIds {
-    pub fn update_missing(&mut self, other: MappedCDDAIds) {
-        if self.terrain.is_none() {
-            self.terrain = other.terrain;
-        }
-
-        if self.furniture.is_none() {
-            self.furniture = other.furniture;
-        }
-
-        if self.trap.is_none() {
-            self.trap = other.trap;
-        }
-
-        if self.monster.is_none() {
-            self.monster = other.monster;
-        }
-    }
-
     pub fn update_override(&mut self, other: MappedCDDAIds) {
         if other.terrain.is_some() {
             self.terrain = other.terrain;
@@ -161,12 +143,12 @@ impl MappedCDDAIds {
             self.furniture = other.furniture;
         }
 
-        if other.trap.is_some() {
-            self.trap = other.trap;
-        }
-
         if other.monster.is_some() {
             self.monster = other.monster;
+        }
+
+        if other.field.is_some() {
+            self.field = other.field;
         }
     }
 }
@@ -190,14 +172,14 @@ fn to_weighted_vec_additional_exception(
 
             Some(WeightedSprite::new(single, weighted.weight))
         })
-        .into_iter()
-        .filter_map(|v| {
-            if v.is_none() {
-                return None;
-            }
-            return Some(v.unwrap());
-        })
-        .collect()
+            .into_iter()
+            .filter_map(|v| {
+                if v.is_none() {
+                    return None;
+                }
+                return Some(v.unwrap());
+            })
+            .collect()
     })
 }
 

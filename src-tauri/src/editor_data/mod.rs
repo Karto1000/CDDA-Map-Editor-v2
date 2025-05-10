@@ -19,19 +19,31 @@ pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 pub type ZLevel = i32;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ProjectType {
+    Editor,
+    Viewer,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Project {
     pub name: String,
     pub maps: HashMap<ZLevel, MapData>,
     pub size: UVec2,
+    pub ty: ProjectType,
 }
 
 impl Project {
-    pub fn new(name: String, size: UVec2) -> Self {
+    pub fn new(name: String, size: UVec2, ty: ProjectType) -> Self {
         let mut maps = HashMap::new();
 
         maps.insert(0, MapData::default());
 
-        Self { name, maps, size }
+        Self {
+            name,
+            maps,
+            size,
+            ty,
+        }
     }
 }
 
@@ -44,6 +56,7 @@ impl Default for Project {
             name: "Unnamed".to_string(),
             maps,
             size: DEFAULT_MAP_DATA_SIZE,
+            ty: ProjectType::Editor,
         }
     }
 }

@@ -137,8 +137,8 @@ pub struct CDDADeleteOp {
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
-    Trap = 2,
-    Monster = 3,
+    Monster = 2,
+    Field = 3,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -170,7 +170,7 @@ pub struct ConnectGroup {
     pub id: CDDAIdentifier,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
@@ -353,6 +353,11 @@ pub enum CDDAJsonEntry {
     ButcheryRequirement,
     SubBodyPart,
     BodyGraph,
+    #[serde(rename = "ITEM")]
+    Item,
+    FaultGroup,
+    #[default]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Display, Serialize, Deserialize)]

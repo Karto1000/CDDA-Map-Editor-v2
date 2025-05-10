@@ -15,6 +15,24 @@
 - nested
 - place_nested
 
+- toilets
+- place_toilets
+
+- place_fields
+- fields
+
+- place_signs
+- signs
+
+- place_computers
+- computers
+
+- place_gaspumps
+- gaspumps
+
+- place_traps
+- traps
+
 ## Specials
 
 - place_monster
@@ -27,12 +45,6 @@
 - loot
 - sealed_item
 
-- place_fields
-- fields
-
-- place_signs
-- signs
-
 - place_rubble
 - rubble
 
@@ -42,21 +54,9 @@
 - place_corpses
 - corpses
 
-- place_computers
-- computers
-
-- place_toilets
-- toilets
-
-- place_gaspumps
-- gaspumps
-
 - place_vehicles
 - remove_vehicles
 - vehicles
-
-- place_traps
-- traps
 
 - place_graffiti
 - graffiti
