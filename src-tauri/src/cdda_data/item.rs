@@ -1,5 +1,5 @@
 use crate::cdda_data::NumberOrRange;
-use crate::util::{CDDAIdentifier, MeabyVec, Weighted};
+use crate::util::{CDDAIdentifier, Weighted};
 use serde::{Deserialize, Serialize};
 
 const fn default_probability() -> i32 {
@@ -34,7 +34,7 @@ pub struct Group {
     pub group: CDDAIdentifier,
 
     #[serde(default)]
-    pub damage: Option<MeabyVec<i32>>,
+    pub damage: Option<NumberOrRange<i32>>,
 
     #[serde(default = "default_probability")]
     #[serde(rename = "prob")]
@@ -251,6 +251,8 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct CDDAItemGroupCommon {
     pub entries: Vec<ItemEntry>,
+
+    #[serde(default)]
     pub subtype: ItemGroupSubtype,
 }
 

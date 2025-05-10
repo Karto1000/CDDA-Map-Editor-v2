@@ -58,7 +58,7 @@ enum NumberOrArray<T: PrimInt + Clone + SampleUniform> {
 }
 
 impl<'de, T: PrimInt + Clone + SampleUniform + Deserialize<'de>> Deserialize<'de>
-for NumberOrRange<T>
+    for NumberOrRange<T>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -170,7 +170,7 @@ pub struct ConnectGroup {
     pub id: CDDAIdentifier,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CDDAJsonEntry {
     // TODO: Handle update_mapgen_id
@@ -353,6 +353,11 @@ pub enum CDDAJsonEntry {
     ButcheryRequirement,
     SubBodyPart,
     BodyGraph,
+    #[serde(rename = "ITEM")]
+    Item,
+    FaultGroup,
+    #[default]
+    Unknown,
 }
 
 #[derive(Debug, Clone, Display, Serialize, Deserialize)]
