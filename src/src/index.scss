@@ -24,6 +24,9 @@
 
   input {
     &:focus, &:hover {
+      background-color: theme-var("selected");
+      outline: none;
+
       &::placeholder {
         color: theme-var("lightest")
       }

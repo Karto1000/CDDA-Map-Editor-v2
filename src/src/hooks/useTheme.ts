@@ -1,5 +1,6 @@
-import {useEffect, useState} from "react";
+import React, {useEffect, useState} from "react";
 import {Vector3} from "three";
+import {emit, emitTo} from "@tauri-apps/api/event";
 
 export const darkColors = {
     light: "#282828",
@@ -50,7 +51,7 @@ export function hexToRBGNormalized(hex: string): Vector3 {
     return new Vector3(r, g, b)
 }
 
-export function useTheme(): [Theme, (theme: Theme) => void] {
+export function useTheme(): [Theme, React.Dispatch<React.SetStateAction<Theme>>] {
     const [theme, setTheme] = useState<Theme>(Theme.Dark);
 
     useEffect(() => {
@@ -64,10 +65,11 @@ export function useTheme(): [Theme, (theme: Theme) => void] {
         setTheme(localTheme as Theme)
     }, []);
 
-    function setThemeWrapper(theme: Theme): void {
+    useEffect(() => {
         localStorage.setItem("theme", theme.toString());
-        setTheme(theme);
-    }
+        console.log(theme, theme.toString())
+        emitTo("setting", "theme-changed", {theme: theme.toString()});
+    }, [theme]);
 
-    return [theme, setThemeWrapper];
+    return [theme, setTheme];
 }

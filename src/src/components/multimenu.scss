@@ -7,13 +7,19 @@
 
     .tabs-container {
       .tabs {
-        div {
+        .tab {
+          color: theme-var("lightest");
+
           &.selected {
             background-color: theme-var("selected");
           }
 
           &:not(.selected) {
             background-color: theme-var("dark-blue")
+          }
+
+          &.disabled {
+            background-color: theme-var("disabled");
           }
         }
       }
@@ -39,11 +45,15 @@
       gap: 6px;
       height: max-content;
 
-      div {
+      .tab {
         padding: 4px;
         border-top-right-radius: 6px;
         border-top-left-radius: 6px;
         cursor: pointer;
+
+        &.disabled {
+          cursor: default;
+        }
       }
     }
 

@@ -1,11 +1,8 @@
-import React, {createContext, useEffect, useRef, useState} from 'react';
+import React, {createContext, SetStateAction, useEffect, useRef, useState} from 'react';
 import {Header} from "./components/header.tsx";
 import {Theme, useTheme} from "./hooks/useTheme.ts";
-import Window from "./components/window.tsx";
 import {invoke} from "@tauri-apps/api/core";
 import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
-import {NoTabScreen} from "./mainScreens/noTabScreen.tsx";
-import {WelcomeScreen} from "./mainScreens/welcomeScreen.tsx";
 import {listen} from "@tauri-apps/api/event";
 import {makeCancelable} from "./lib/index.ts";
 import {Scene} from "three";
@@ -18,8 +15,14 @@ import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 import "./app.scss"
 import MultiMenu from "./components/multimenu.tsx";
 import {Fieldset} from "./components/fieldset.tsx";
+import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
+import {Webview} from "@tauri-apps/api/webview";
+import {getCurrentWindow} from "@tauri-apps/api/window";
+import settingsWindow from "./windows/settings/main.js";
+import {NoTabScreen} from "./components/mainScreens/noTabScreen.js";
+import {WelcomeScreen} from "./components/mainScreens/welcomeScreen.js";
 
-export const ThemeContext = createContext<{ theme: Theme, setTheme: (theme: Theme) => void }>({
+export const ThemeContext = createContext<{ theme: Theme, setTheme: React.Dispatch<SetStateAction<Theme>> }>({
     theme: Theme.Dark,
     setTheme: () => {
     }
@@ -34,9 +37,6 @@ function App() {
     const [creatingMapName, setCreatingMapName] = useState<string>("")
     const tabs = useTabs()
 
-    const [isSettingsWindowOpen, setIsSettingsWindowOpen] = useState<boolean>(false);
-    const [isCreatingMapWindowOpen, setIsCreatingMapWindowOpen] = useState<boolean>(false);
-
     const mapEditorCanvasContainerRef = useRef<HTMLDivElement>()
     const mapEditorCanvasRef = useRef<HTMLCanvasElement>();
     const mapEditorSceneRef = useRef<Scene>(new Scene())
@@ -44,6 +44,10 @@ function App() {
     const [tilesheets, spritesheetConfig, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
     const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.MapEditor
     const mapEditorCanvasDisplay = isDisplayingMapEditor ? "flex" : "none"
+
+    // Thanks to the legend at https://stackoverflow.com/questions/77775315/how-to-create-mulitwindows-in-tauri-rust-react-typescript-html-css
+    const openMapWindowRef = useRef<Webview>()
+    const settingsWindowRef = useRef<Webview>()
 
     const {resize, displayInLeftPanel} = useEditor({
         canvasRef: mapEditorCanvasRef,
@@ -101,14 +105,13 @@ function App() {
                 return <></>
         }
 
-        return <NoTabScreen setIsCreatingMapWindowOpen={setIsCreatingMapWindowOpen}/>
+        return <NoTabScreen setIsCreatingMapWindowOpen={() => {
+        }}/>
     }
 
     async function createMap() {
         await invoke(MapDataSendCommand.CreateProject, {data: {name: creatingMapName, size: "24,24"}})
 
-        setIsCreatingMapWindowOpen(false)
-        setCreatingMapName("")
     }
 
     return (
@@ -116,31 +119,7 @@ function App() {
             <EditorDataContext.Provider value={editorData}>
                 <ThemeContext.Provider value={{theme, setTheme}}>
                     <TabContext.Provider value={tabs}>
-                        <Header
-                            isSettingsWindowOpen={isSettingsWindowOpen}
-                            setIsSettingsWindowOpen={setIsSettingsWindowOpen}
-                            isCreatingMapWindowOpen={isCreatingMapWindowOpen}
-                            setIsCreatingMapWindowOpen={setIsCreatingMapWindowOpen}
-                        />
-
-                        <Window isOpen={isSettingsWindowOpen} title={"Settings"} setIsOpen={setIsSettingsWindowOpen}>
-                            <button onClick={() => setTheme(theme === Theme.Dark ? Theme.Light : Theme.Dark)}>Switch
-                                Theme
-                            </button>
-                        </Window>
-
-                        <Window title={"Create a new Map"} isOpen={isCreatingMapWindowOpen}
-                                setIsOpen={setIsCreatingMapWindowOpen}>
-                            <label htmlFor={"map-name"}>Map Name</label>
-                            <input name={"map-name"} value={creatingMapName}
-                                   type={"text"}
-                                   placeholder={"Map Name"}
-                                   onChange={e => setCreatingMapName(e.target.value)}
-                            />
-                            <button onClick={createMap}>
-                                Create
-                            </button>
-                        </Window>
+                        <Header openMapWindowRef={openMapWindowRef} settingsWindowRef={settingsWindowRef}/>
 
                         <PanelGroup direction={'horizontal'}>
                             <Panel collapsible={true} minSize={10} defaultSize={20} maxSize={50} onResize={resize}>
