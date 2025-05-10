@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.cdda-map-editor-2.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
-    "beforeBuildCommand": "npm run build",
+    "beforeDevCommand": "vite dev --port 3000",
+    "beforeBuildCommand": "vite build",
     "devUrl": "http://localhost:3000",
-    "frontendDist": "../out"
+    "frontendDist": "../src/dist"
   },
   "app": {
     "windows": [

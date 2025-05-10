@@ -8,13 +8,19 @@ use std::path::PathBuf;
 pub enum TabType {
     #[default]
     Welcome,
-    MapEditor(ProjectState),
-    LiveViewer,
+    MapEditor(ProjectSaveState),
+    LiveViewer(LiveViewerData),
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct LiveViewerData {
+    pub path: PathBuf,
+    pub om_terrain: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(tag = "state")]
-pub enum ProjectState {
+pub enum ProjectSaveState {
     #[default]
     Unsaved,
     Saved {

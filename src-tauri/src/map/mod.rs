@@ -823,17 +823,13 @@ mod tests {
             om_terrain: "test_fill_ter".into(),
         };
 
-        let project_data = map_loader.load().await.unwrap();
-        let map_data = project_data.maps.get(&0).unwrap();
+        let map_data = map_loader.load().await.unwrap();
 
         for (coords, cell) in map_data.cells.iter() {
             assert_eq!(cell.character, ' ');
             assert!(coords.x < 24 && coords.y < 24);
         }
 
-        assert_eq!(project_data.maps.len(), 1);
-        assert_eq!(project_data.size, UVec2::new(24, 24));
-        assert_eq!(project_data.name, "test_fill_ter");
         assert_eq!(
             map_data.fill,
             Some(DistributionInner::Normal("t_grass".into()))
@@ -849,8 +845,7 @@ mod tests {
             om_terrain: "test_terrain".into(),
         };
 
-        let mut project = map_loader.load().await.unwrap();
-        let map_data = project.maps.get_mut(&0).unwrap();
+        let mut map_data = map_loader.load().await.unwrap();
         map_data.calculate_parameters(&cdda_data.palettes);
 
         let parameter_identifier = ParameterIdentifier("terrain_type".to_string());
@@ -895,8 +890,7 @@ mod tests {
             om_terrain: "test_terrain".into(),
         };
 
-        let mut project = map_loader.load().await.unwrap();
-        let map_data = project.maps.get_mut(&0).unwrap();
+        let mut map_data = map_loader.load().await.unwrap();
         map_data.calculate_parameters(&cdda_data.palettes);
 
         // Test the terrain mapped to a single sprite

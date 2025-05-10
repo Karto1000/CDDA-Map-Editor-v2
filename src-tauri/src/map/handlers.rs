@@ -1,8 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
 use crate::editor_data::tab::handlers::create_tab;
-use crate::editor_data::tab::{ProjectState, TabType};
-use crate::editor_data::{EditorData, Project};
+use crate::editor_data::tab::{ProjectSaveState, TabType};
+use crate::editor_data::{EditorData, Project, ProjectType};
 use crate::map::{
     CellRepresentation, MappingKind, ProjectContainer, VisibleMappingCommand,
     VisibleMappingCommandKind,
@@ -127,6 +127,7 @@ pub struct PlaceSpritesEvent {
 pub struct CreateMapData {
     name: String,
     size: UVec2JsonKey,
+    ty: ProjectType,
 }
 
 #[tauri::command]
@@ -150,12 +151,12 @@ pub async fn create_project(
         name
     });
 
-    let project = Project::new(project_name, data.size.0);
+    let project = Project::new(project_name, data.size.0, data.ty);
     lock.data.push(project.clone());
 
     create_tab(
         project.name,
-        TabType::MapEditor(ProjectState::Unsaved),
+        TabType::MapEditor(ProjectSaveState::Unsaved),
         app,
         editor_data,
     )

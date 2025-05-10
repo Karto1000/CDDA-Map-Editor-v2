@@ -10,7 +10,8 @@ use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
-use crate::editor_data::EditorData;
+use crate::editor_data::tab::TabType;
+use crate::editor_data::{EditorData, Project, ProjectType};
 use crate::map::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
@@ -36,13 +37,14 @@ use std::ops::Deref;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use tauri::async_runtime::Mutex;
-use tauri::{App, AppHandle, Emitter, Manager, State};
+use tauri::{App, AppHandle, Emitter, Manager, State, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
 
 mod events {
     pub const EDITOR_DATA_CHANGED: &'static str = "editor_data_changed";
     pub const CDDA_DATA: &'static str = "cdda_data";
+    pub const TAB_CREATED: &'static str = "tab_created";
 }
 
 pub static RANDOM_SEED: u64 = 1;
@@ -73,18 +75,41 @@ lazy_static! {
 async fn frontend_ready(
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
-    map_data: State<'_, Mutex<ProjectContainer>>,
+    project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
 ) -> Result<(), ()> {
     let editor_data_lock = editor_data.lock().await;
-    let mut map_data_lock = map_data.lock().await;
+    let mut project_container_lock = project_container.lock().await;
     let mut json_data_lock = json_data.lock().await;
     let mut tilesheet_lock = tilesheet.lock().await;
 
     for tab in &editor_data_lock.tabs {
         info!("Opened Tab {}", &tab.name);
-        app.emit("tab_created", tab).expect("Emit to not fail");
+
+        match &tab.tab_type {
+            TabType::Welcome => {}
+            TabType::MapEditor(me) => {}
+            TabType::LiveViewer(lvd) => {
+                let mut map_data_importer = MapDataImporter {
+                    path: lvd.path.clone(),
+                    om_terrain: lvd.om_terrain.clone(),
+                };
+
+                let map_data = map_data_importer.load().await.unwrap();
+                let mut new_project = Project::new(
+                    tab.name.clone(),
+                    map_data.map_size.clone(),
+                    ProjectType::Viewer,
+                );
+                new_project.maps.insert(0, map_data);
+
+                project_container_lock.data.push(new_project);
+            }
+        }
+
+        app.emit(events::TAB_CREATED, tab)
+            .expect("Emit to not fail");
     }
 
     info!("Sent initial editor data change");
@@ -103,27 +128,10 @@ async fn frontend_ready(
             info!("trying to load CDDA Json Data");
             match load_cdda_json_data(cdda_path, &editor_data_lock.config.json_data_path).await {
                 Ok(cdda_json_data) => {
-                    info!("Loading testing map data");
-
-                    let mut importer = MapDataImporter {
-                        path: r"C:\DEV\SelfDEV\Rust\CDDA-Map-Editor-2\src-tauri\test_data\test_place.json".into(),
-                        om_terrain: "test_place".into(),
-                    };
-                    let mut loaded = importer.load().await.unwrap();
-
-                    let mut loaded_map = loaded.maps.get_mut(&0).unwrap();
-                    loaded_map.calculate_parameters(&cdda_json_data.palettes);
-
-                    map_data_lock.data.push(loaded.clone());
-                    map_data_lock.current_project = Some(0);
-
-                    info!("Sending cdda data");
-                    app.emit(events::CDDA_DATA, loaded).unwrap();
-
                     json_data_lock.replace(cdda_json_data);
                 }
                 Err(e) => {
-                    warn!("Failed to load editor data");
+                    warn!("Failed to load editor data {}", e);
                 }
             };
         }
@@ -180,7 +188,16 @@ fn get_saved_editor_data() -> Result<EditorData, Error> {
                 }
                 Err(e) => {
                     error!("{}", e.to_string());
-                    panic!();
+                    info!("Error while reading config.json file, recreating file");
+
+                    let mut default_editor_data = EditorData::default();
+                    default_editor_data.config.config_path = directory_path.clone();
+
+                    let serialized = serde_json::to_string_pretty(&default_editor_data)
+                        .expect("Serialization to not fail");
+                    fs::write(&config_file_path, serialized)
+                        .expect("Directory path to config to have been created");
+                    default_editor_data
                 }
             };
 
