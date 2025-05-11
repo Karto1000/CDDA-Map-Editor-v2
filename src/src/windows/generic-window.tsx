@@ -26,8 +26,6 @@ export default function GenericWindow(props: GenericWindowProps) {
             })
         )
 
-        console.log(unlisten)
-
         return () => {
             unlisten.cancel()
         }

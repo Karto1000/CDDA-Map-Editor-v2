@@ -1,4 +1,4 @@
-import React, {Dispatch, MutableRefObject, SetStateAction, useContext} from "react";
+import React, {MutableRefObject, useContext} from "react";
 import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
@@ -11,7 +11,7 @@ import {invoke} from "@tauri-apps/api/core";
 import {MapDataSendCommand} from "../lib/map_data.ts";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "../hooks/useTheme.js";
-import {emitTo} from "@tauri-apps/api/event";
+import {openWindow, WindowLabel} from "../windows/lib.js";
 
 type Props = {
     openMapWindowRef: MutableRefObject<WebviewWindow>
@@ -31,6 +31,7 @@ export function Header(props: Props) {
     }
 
     function onTabCreate() {
+        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
     }
 
     async function onTabOpen(index: number) {
@@ -178,19 +179,13 @@ export function Header(props: Props) {
                                     name: "Settings",
                                     shortcut: "Ctrl+Alt+s",
                                     onClick: (ref) => {
-                                        props.settingsWindowRef.current = new WebviewWindow('settings', {
-                                            url: `src/windows/settings/window.html?theme=${theme.toString()}`,
-                                            width: 200,
-                                            height: 200,
-                                            decorations: false,
-                                            center: true,
-                                            alwaysOnTop: true,
-                                        });
+                                        const window = openWindow(WindowLabel.Settings, theme)
 
-                                        props.settingsWindowRef.current.listen("change-theme", () => {
+                                        window.listen("change-theme", () => {
                                             setTheme((theme) => theme === Theme.Dark ? Theme.Light : Theme.Dark)
                                         })
 
+                                        props.settingsWindowRef.current = window
                                         ref.current.closeMenu()
                                     }
                                 },
