@@ -1,5 +1,5 @@
 import React, {Dispatch, MutableRefObject, SetStateAction, useContext} from "react";
-import {getCurrentWindow} from "@tauri-apps/api/window";
+import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
 import {Dropdown} from "./dropdown.tsx";
@@ -41,6 +41,20 @@ export function Header(props: Props) {
             tabs.setOpenedTab(index)
             await invoke(MapDataSendCommand.OpenProject, {index})
         }
+    }
+
+    async function onWindowClose() {
+        const windows = await getAllWindows()
+        // We only want to close the other windows.
+        // If we close the main window, sometimes the other windows will not
+        // close since the code that closes the window is inside the main window
+        windows.filter(w => w.label !== "main")
+
+        for (const w of windows) {
+            await w.close();
+        }
+
+        await tauriWindow.close();
     }
 
     return (
@@ -87,7 +101,7 @@ export function Header(props: Props) {
                         }}>
                             <Icon name={IconName.WindowedSmall} width={14} height={14}/>
                         </div>
-                        <div className="native-window-control" id="close" onClick={() => tauriWindow.close()}>
+                        <div className="native-window-control" id="close" onClick={onWindowClose}>
                             <Icon name={IconName.CloseSmall} width={14} height={14}/>
                         </div>
 
@@ -169,7 +183,8 @@ export function Header(props: Props) {
                                             width: 200,
                                             height: 200,
                                             decorations: false,
-                                            center: true
+                                            center: true,
+                                            alwaysOnTop: true,
                                         });
 
                                         props.settingsWindowRef.current.listen("change-theme", () => {
