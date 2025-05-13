@@ -7,14 +7,14 @@ use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::CDDAJsonEntry::Furniture;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::editor_data::{MapCoordinates, MapDataCollection};
-use crate::map::map_properties::ComputerProperty;
-use crate::map::map_properties::ToiletProperty;
+use crate::map::map_properties::ComputersProperty;
+use crate::map::map_properties::ToiletsProperty;
 use crate::map::map_properties::TrapsProperty;
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, MonstersProperty, NestedProperty, SignProperty,
+    FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty, SignsProperty,
     TerrainProperty,
 };
-use crate::map::map_properties::{GaspumpProperty, ItemsProperty};
+use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
@@ -467,17 +467,17 @@ impl Into<Arc<dyn Place>> for PlaceInnerNested {
 
 create_place_inner!(Items, MapGenItem);
 
-create_place_inner!(Field, MapGenField);
+create_place_inner!(Fields, MapGenField);
 
-create_place_inner!(Computer, MapGenComputer);
+create_place_inner!(Computers, MapGenComputer);
 
-create_place_inner!(Sign, MapGenSign);
+create_place_inner!(Signs, MapGenSign);
 
-create_place_inner!(Gaspump, MapGenGaspump);
+create_place_inner!(Gaspumps, MapGenGaspump);
 
 create_place_inner!(Monsters, MapGenMonster);
 
-create_place_inner!(Toilet, ());
+create_place_inner!(Toilets, ());
 
 create_place_inner!(Traps, MapGenTrap);
 
@@ -542,11 +542,11 @@ impl_from!(PlaceInnerTerrain);
 impl_from!(PlaceInnerItems);
 impl_from!(PlaceInnerMonsters);
 impl_from!(PlaceInnerNested);
-impl_from!(PlaceInnerToilet);
-impl_from!(PlaceInnerField);
-impl_from!(PlaceInnerComputer);
-impl_from!(PlaceInnerSign);
-impl_from!(PlaceInnerGaspump);
+impl_from!(PlaceInnerToilets);
+impl_from!(PlaceInnerFields);
+impl_from!(PlaceInnerComputers);
+impl_from!(PlaceInnerSigns);
+impl_from!(PlaceInnerGaspumps);
 impl_from!(PlaceInnerTraps);
 
 impl<T> PlaceOuter<T> {
@@ -561,7 +561,7 @@ macro_rules! map_data_object {
         [REGULAR_FIELDS]
         $($r_field: ident: $r_ty: ty),*
         [FIELDS_WITH_PLACE]
-        $(($place_field: ident, $place_field_singular: ident): $place_ty: ty),*
+        $($place_field: ident: $place_ty: ty),*
     ) => {
         paste! {
             #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -576,7 +576,7 @@ macro_rules! map_data_object {
                     pub $place_field: HashMap<char, $place_ty>,
 
                     #[serde(default)]
-                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field_singular: camel>]>>,
+                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field: camel>]>>,
                 )*
             }
         }
@@ -590,23 +590,24 @@ map_data_object!(
     palettes: Vec<MapGenValue>,
     parameters: IndexMap<ParameterIdentifier, Parameter>,
     set: Vec<SetIntermediate>,
-    flags: HashSet<MapDataFlag>
+    flags: HashSet<MapDataFlag>,
+    predecessor_mapgen: CDDAIdentifier
 
     [FIELDS_WITH_PLACE]
-    (terrain, terrain): MapGenValue,
-    (furniture, furniture): MapGenValue,
-    (items, items): MeabyVec<MeabyWeighted<MapGenItem>>,
-    (monsters, monsters): MeabyVec<MeabyWeighted<MapGenMonster>>,
-    (nested, nested): MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
+    terrain: MapGenValue,
+    furniture: MapGenValue,
+    items: MeabyVec<MeabyWeighted<MapGenItem>>,
+    monsters: MeabyVec<MeabyWeighted<MapGenMonster>>,
+    nested: MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
     // Toilets do not have any data
     // TODO: we have to use Value here since there is a comment in one of the files with fails
     // to deserialize since a object with the key // cannot deserialize to a unit
-    (toilets, toilet): Value,
-    (fields, field): MeabyVec<MeabyWeighted<MapGenField>>,
-    (computers, computer):  MeabyVec<MeabyWeighted<MapGenComputer>>,
-    (signs, sign):  MeabyVec<MeabyWeighted<MapGenSign>>,
-    (gaspumps, gaspump):  MeabyVec<MeabyWeighted<MapGenGaspump>>,
-    (traps, traps):  MeabyVec<MeabyWeighted<MapGenTrap>>
+    toilets: Value,
+    fields: MeabyVec<MeabyWeighted<MapGenField>>,
+    computers:  MeabyVec<MeabyWeighted<MapGenComputer>>,
+    signs:  MeabyVec<MeabyWeighted<MapGenSign>>,
+    gaspumps:  MeabyVec<MeabyWeighted<MapGenGaspump>>,
+    traps:  MeabyVec<MeabyWeighted<MapGenTrap>>
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -713,7 +714,7 @@ impl CDDAMapDataIntermediate {
 
         let mut field_map = HashMap::new();
         for (char, field) in self.object.common.fields.clone() {
-            let field_prop = Arc::new(FieldProperty {
+            let field_prop = Arc::new(FieldsProperty {
                 field: field
                     .into_vec()
                     .into_iter()
@@ -737,7 +738,7 @@ impl CDDAMapDataIntermediate {
 
         let mut sign_map = HashMap::new();
         for (char, sign) in self.object.common.signs.clone() {
-            let sign_prop = Arc::new(SignProperty {
+            let sign_prop = Arc::new(SignsProperty {
                 signs: sign
                     .into_vec()
                     .into_iter()
@@ -749,7 +750,7 @@ impl CDDAMapDataIntermediate {
 
         let mut gaspumps_map = HashMap::new();
         for (char, gaspump) in self.object.common.gaspumps.clone() {
-            let gaspump_prop = Arc::new(GaspumpProperty {
+            let gaspump_prop = Arc::new(GaspumpsProperty {
                 gaspumps: gaspump
                     .into_vec()
                     .into_iter()
