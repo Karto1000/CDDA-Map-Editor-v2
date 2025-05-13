@@ -6,7 +6,7 @@ pub(crate) mod place;
 use crate::cdda_data::io::{DeserializedCDDAJsonData, NULL_FURNITURE, NULL_TERRAIN};
 use crate::cdda_data::map_data::{
     MapGenMonster, MapGenMonsterType, NeighborDirection, OmTerrainMatch, OmTerrainMatchType,
-    PlaceOuter,
+    PlaceOuter, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::region_settings::CDDARegionSettings;
@@ -282,9 +282,9 @@ impl Default for MapData {
     fn default() -> Self {
         let mut cells = IndexMap::new();
 
-        for y in 0..24 {
-            for x in 0..24 {
-                cells.insert(UVec2::new(x, y), Cell { character: ' ' });
+        for y in 0..DEFAULT_MAP_HEIGHT {
+            for x in 0..DEFAULT_MAP_WIDTH {
+                cells.insert(UVec2::new(x as u32, y as u32), Cell { character: ' ' });
             }
         }
         let fill = Some(DistributionInner::Normal(CDDAIdentifier::from("t_grass")));
@@ -823,7 +823,13 @@ mod tests {
             om_terrain: "test_fill_ter".into(),
         };
 
-        let map_data = map_loader.load().await.unwrap();
+        let map_data = map_loader
+            .load()
+            .await
+            .unwrap()
+            .maps
+            .remove(&UVec2::ZERO)
+            .unwrap();
 
         for (coords, cell) in map_data.cells.iter() {
             assert_eq!(cell.character, ' ');
@@ -845,7 +851,14 @@ mod tests {
             om_terrain: "test_terrain".into(),
         };
 
-        let mut map_data = map_loader.load().await.unwrap();
+        let mut map_data = map_loader
+            .load()
+            .await
+            .unwrap()
+            .maps
+            .remove(&UVec2::ZERO)
+            .unwrap();
+
         map_data.calculate_parameters(&cdda_data.palettes);
 
         let parameter_identifier = ParameterIdentifier("terrain_type".to_string());
@@ -890,7 +903,14 @@ mod tests {
             om_terrain: "test_terrain".into(),
         };
 
-        let mut map_data = map_loader.load().await.unwrap();
+        let mut map_data = map_loader
+            .load()
+            .await
+            .unwrap()
+            .maps
+            .remove(&UVec2::ZERO)
+            .unwrap();
+
         map_data.calculate_parameters(&cdda_data.palettes);
 
         // Test the terrain mapped to a single sprite

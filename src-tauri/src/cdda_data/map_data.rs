@@ -504,8 +504,12 @@ pub struct PlaceOuter<T> {
     pub inner: T,
 }
 
-pub trait FromPlaceOuter<T> {
-    fn from_place_outer(value: T, map_coordinates: MapCoordinates) -> Self;
+pub trait IntoArcDyn<T> {
+    fn into_arc_dyn_place(
+        value: T,
+        local_x_coords: NumberOrRange<i32>,
+        local_y_coords: NumberOrRange<i32>,
+    ) -> Self;
 }
 
 // TODO: For some reason i cannot implement <T: Into<Arc<dyn Place>> From<PlaceOuter<T>> for PlaceOuter<Arc<dyn Place>>
@@ -515,14 +519,15 @@ macro_rules! impl_from {
     (
         $identifier: ident
     ) => {
-        impl FromPlaceOuter<PlaceOuter<$identifier>> for PlaceOuter<Arc<dyn Place>> {
-            fn from_place_outer(
+        impl IntoArcDyn<PlaceOuter<$identifier>> for PlaceOuter<Arc<dyn Place>> {
+            fn into_arc_dyn_place(
                 value: PlaceOuter<$identifier>,
-                map_coordinates: MapCoordinates,
+                local_x_coords: NumberOrRange<i32>,
+                local_y_coords: NumberOrRange<i32>,
             ) -> Self {
                 PlaceOuter {
-                    x: value.x - (map_coordinates.x * DEFAULT_MAP_WIDTH as u32) as i32,
-                    y: value.y - (map_coordinates.y * DEFAULT_MAP_HEIGHT as u32) as i32,
+                    x: local_x_coords,
+                    y: local_y_coords,
                     repeat: value.repeat,
                     chance: value.chance,
                     inner: value.inner.into(),
@@ -794,6 +799,7 @@ impl CDDAMapDataIntermediate {
         map_coordinates: MapCoordinates,
     ) -> HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> {
         let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
+        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
 
         macro_rules! insert_place {
             (
@@ -804,12 +810,16 @@ impl CDDAMapDataIntermediate {
                     let mut map_vec = vec![];
 
                     for mapping in self.object.common.[<place_ $multi:lower>].iter() {
-                        let remapped_x = mapping.x.clone() - (map_coordinates.x * DEFAULT_MAP_WIDTH as u32) as i32;
-                        let remapped_y = mapping.y.clone() - (map_coordinates.y * DEFAULT_MAP_HEIGHT as u32) as i32;
+                        let remapped_x = mapping.x.clone() - (map_coordinates.x * map_size.x as u32) as i32;
+                        let remapped_y = mapping.y.clone() - (map_coordinates.y * map_size.y as u32) as i32;
 
-                        if remapped_x >= 0 && remapped_x < DEFAULT_MAP_WIDTH as i32 &&
-                           remapped_y >= 0 && remapped_y < DEFAULT_MAP_HEIGHT as i32 {
-                            map_vec.push(PlaceOuter::from_place_outer(mapping.clone(), map_coordinates))
+                        if remapped_x >= 0 && remapped_x < map_size.x as i32 &&
+                           remapped_y >= 0 && remapped_y < map_size.y as i32 {
+                            map_vec.push(PlaceOuter::into_arc_dyn_place(
+                                mapping.clone(),
+                                remapped_x,
+                                remapped_y
+                            ))
                         }
                     }
 
@@ -831,7 +841,11 @@ impl CDDAMapDataIntermediate {
 
                         if remapped_x >= 0 && remapped_x < DEFAULT_MAP_WIDTH as i32 &&
                            remapped_y >= 0 && remapped_y < DEFAULT_MAP_HEIGHT as i32 {
-                            map_vec.push(PlaceOuter::from_place_outer(mapping.clone(), map_coordinates))
+                            map_vec.push(PlaceOuter::into_arc_dyn_place(
+                                mapping.clone(),
+                                remapped_x,
+                                remapped_y
+                            ))
                         }
                     }
 
@@ -860,6 +874,7 @@ impl CDDAMapDataIntermediate {
 
     fn get_set(&self, map_coordinates: MapCoordinates) -> Vec<Arc<dyn Set>> {
         let mut set_vec: Vec<Arc<dyn Set>> = vec![];
+        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
 
         for set in self.object.common.set.clone() {
             if let Some(ty) = set.line {
@@ -893,10 +908,10 @@ impl CDDAMapDataIntermediate {
 
                 if let Some(operation) = operation {
                     let set_line = SetLine {
-                        from_x: x + map_coordinates.x * DEFAULT_MAP_WIDTH as u32,
-                        from_y: y + map_coordinates.y * DEFAULT_MAP_HEIGHT as u32,
-                        to_x: x2 + map_coordinates.x * DEFAULT_MAP_WIDTH as u32,
-                        to_y: y2 + map_coordinates.y * DEFAULT_MAP_HEIGHT as u32,
+                        from_x: x + map_coordinates.x * map_size.x,
+                        from_y: y + map_coordinates.y * map_size.y,
+                        to_x: x2 + map_coordinates.x * map_size.x,
+                        to_y: y2 + map_coordinates.y * map_size.y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((0, 1)),
@@ -941,8 +956,8 @@ impl CDDAMapDataIntermediate {
 
                 if let Some(operation) = operation {
                     let set_point = SetPoint {
-                        x: x + map_coordinates.x * DEFAULT_MAP_WIDTH as u32,
-                        y: y + map_coordinates.y * DEFAULT_MAP_HEIGHT as u32,
+                        x: x + map_coordinates.x * map_size.x,
+                        y: y + map_coordinates.y * map_size.y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),
@@ -980,10 +995,10 @@ impl CDDAMapDataIntermediate {
 
                 if let Some(operation) = operation {
                     let set_square = SetSquare {
-                        top_left_x: x + map_coordinates.x * DEFAULT_MAP_WIDTH as u32,
-                        top_left_y: y + map_coordinates.y * DEFAULT_MAP_HEIGHT as u32,
-                        bottom_right_x: x2 + map_coordinates.x * DEFAULT_MAP_WIDTH as u32,
-                        bottom_right_y: y2 + map_coordinates.y * DEFAULT_MAP_HEIGHT as u32,
+                        top_left_x: x + map_coordinates.x * map_size.x,
+                        top_left_y: y + map_coordinates.y * map_size.y,
+                        bottom_right_x: x2 + map_coordinates.x * map_size.x,
+                        bottom_right_y: y2 + map_coordinates.y * map_size.y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),
@@ -1005,14 +1020,8 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
 
         match &self.om_terrain {
             None => {}
-            Some(om) => match om {
-                OmTerrain::Single(_) | OmTerrain::Duplicate(_) => {
-                    let map_data = self.into();
-                    map_data_collection.maps.insert(UVec2::ZERO, map_data);
-                    map_data_collection.global_map_size = DEFAULT_MAP_DATA_SIZE;
-                    return map_data_collection;
-                }
-                OmTerrain::Nested(n) => {
+            Some(om) => {
+                if let OmTerrain::Nested(n) = om {
                     let num_rows = n.len();
                     let num_cols = n[0].len();
 
@@ -1025,25 +1034,38 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                         for map_column_index in 0..num_cols {
                             let mut nested_cells = IndexMap::new();
 
-                            let map_row_slice = self.object.rows.clone().unwrap();
-                            let new_slice: Vec<String> = map_row_slice[map_row_index
-                                * DEFAULT_MAP_HEIGHT
-                                ..map_row_index * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT]
-                                .into_iter()
-                                .map(|str| {
-                                    str.chars()
-                                        .skip(map_column_index * DEFAULT_MAP_WIDTH)
-                                        .take(DEFAULT_MAP_WIDTH)
-                                        .collect::<String>()
-                                })
-                                .collect();
+                            match self.object.rows.clone() {
+                                None => {
+                                    for row in 0..DEFAULT_MAP_HEIGHT {
+                                        for column in 0..DEFAULT_MAP_WIDTH {
+                                            nested_cells.insert(
+                                                UVec2::new(column as u32, row as u32),
+                                                Cell { character: ' ' },
+                                            );
+                                        }
+                                    }
+                                }
+                                Some(map_row_slice) => {
+                                    let new_slice: Vec<String> = map_row_slice[map_row_index
+                                        * DEFAULT_MAP_HEIGHT
+                                        ..map_row_index * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT]
+                                        .into_iter()
+                                        .map(|str| {
+                                            str.chars()
+                                                .skip(map_column_index * DEFAULT_MAP_WIDTH)
+                                                .take(DEFAULT_MAP_WIDTH)
+                                                .collect::<String>()
+                                        })
+                                        .collect();
 
-                            for (row_index, slice) in new_slice.into_iter().enumerate() {
-                                for (column_index, character) in slice.chars().enumerate() {
-                                    nested_cells.insert(
-                                        UVec2::new(column_index as u32, row_index as u32),
-                                        Cell { character },
-                                    );
+                                    for (row_index, slice) in new_slice.into_iter().enumerate() {
+                                        for (column_index, character) in slice.chars().enumerate() {
+                                            nested_cells.insert(
+                                                UVec2::new(column_index as u32, row_index as u32),
+                                                Cell { character },
+                                            );
+                                        }
+                                    }
                                 }
                             }
 
@@ -1072,63 +1094,51 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                             );
                         }
                     }
+
+                    return map_data_collection;
                 }
-            },
+            }
         };
 
-        map_data_collection
-    }
-}
-
-impl Into<MapData> for CDDAMapDataIntermediate {
-    fn into(self) -> MapData {
-        let mut cells = IndexMap::new();
-        let mut mapgen_size = UVec2::new(DEFAULT_MAP_WIDTH as u32, DEFAULT_MAP_HEIGHT as u32);
-
-        match &self.object.rows {
-            None => {
-                for y in 0..DEFAULT_MAP_HEIGHT {
-                    for x in 0..DEFAULT_MAP_WIDTH {
-                        cells.insert(
-                            UVec2::new(x as u32, y as u32),
-                            Cell {
-                                character: SPECIAL_EMPTY_CHAR,
-                            },
-                        );
-                    }
-                }
-            }
-            Some(rows) => {
-                mapgen_size.x = rows[0].len() as u32;
-                mapgen_size.y = rows.len() as u32;
-
-                for (row_index, row) in rows.into_iter().enumerate() {
-                    for (column_index, character) in row.chars().enumerate() {
-                        cells.insert(
-                            UVec2::new(column_index as u32, row_index as u32),
-                            Cell { character },
-                        );
-                    }
-                }
-            }
-        }
+        let mut collection = MapDataCollection::default();
+        let mut map_data = MapData::default();
 
         let properties = self.get_properties();
         let place = self.get_place(UVec2::ZERO);
-        let set_vec = self.get_set(UVec2::ZERO);
+        let set = self.get_set(UVec2::ZERO);
 
-        let mut map_data = MapData::default();
+        let mut cells = IndexMap::new();
+
+        for row in 0..DEFAULT_MAP_HEIGHT {
+            for column in 0..DEFAULT_MAP_WIDTH {
+                let char = match self.object.rows.as_ref() {
+                    None => ' ',
+                    Some(s) => match s.get(row) {
+                        None => ' ',
+                        Some(row) => row.chars().nth(column).unwrap_or(' '),
+                    },
+                };
+
+                cells.insert(
+                    UVec2::new(column as u32, row as u32),
+                    Cell { character: char },
+                );
+            }
+        }
 
         map_data.cells = cells;
-        map_data.set = set_vec;
+        map_data.set = set;
         map_data.properties = properties;
         map_data.place = place;
-        map_data.parameters = self.object.common.parameters;
-        map_data.palettes = self.object.common.palettes;
-        map_data.fill = self.object.fill_ter;
-        map_data.map_size = self.object.mapgen_size.unwrap_or(mapgen_size);
-        map_data.flags = self.object.common.flags;
+        map_data.parameters = self.object.common.parameters.clone();
+        map_data.palettes = self.object.common.palettes.clone();
+        map_data.fill = self.object.fill_ter.clone();
+        map_data.map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+        map_data.flags = self.object.common.flags.clone();
 
-        map_data
+        collection.maps.insert(UVec2::ZERO, map_data);
+        collection.global_map_size = DEFAULT_MAP_DATA_SIZE;
+
+        collection
     }
 }
