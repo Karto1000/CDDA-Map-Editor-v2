@@ -42,7 +42,7 @@ function App() {
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
     const [tilesheets, spritesheetConfig, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
-    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.MapEditor
+    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.LiveViewer
     const mapEditorCanvasDisplay = isDisplayingMapEditor ? "flex" : "none"
 
     // Thanks to the legend at https://stackoverflow.com/questions/77775315/how-to-create-mulitwindows-in-tauri-rust-react-typescript-html-css

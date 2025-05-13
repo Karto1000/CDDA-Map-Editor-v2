@@ -319,20 +319,6 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
             setCellData(response.data)
         }
 
-        async function getCurrentProjectData() {
-            const response = await invokeTauri<Project, unknown>(MapDataSendCommand.GetCurrentProjectData, {})
-
-            if (response.type === BackendResponseType.Error) {
-                console.error(response.error)
-                return
-            }
-
-            const group = new Group()
-
-            props.sceneRef.current.add(group)
-        }
-
-        getCurrentProjectData()
         getCellData()
 
         if (props.tilesheetsRef.current) props.tilesheetsRef.current.clearAll();
