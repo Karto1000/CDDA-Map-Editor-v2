@@ -1,0 +1,65 @@
+@import "../../theme.scss";
+
+@include themed($themes) {
+  .map-viewer-body {
+    .map-viewer-form {
+      .om-terrain-form-element {
+        .om-terrain-row {
+          .om-terrain-slot {
+            &.selected {
+              background-color: theme-var("selected");
+            }
+
+            &:not(.selected) {
+              background-color: theme-var("darker");
+              border: 1px solid theme-var("dark");
+            }
+
+            &:hover {
+              background-color: theme-var("dark-blue");
+              border-color: theme-var("selected");
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+.map-viewer-body {
+  overflow-y: auto;
+  display: flex;
+  height: 100%;
+  flex-direction: column;
+
+  .map-viewer-form {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 8px;
+
+    .om-terrain-form-element {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      vertical-align: center;
+      margin-left: auto;
+      margin-right: auto;
+      justify-content: center;
+
+      .om-terrain-row {
+        display: flex;
+
+        .om-terrain-slot {
+          width: 32px;
+          height: 32px;
+
+          &:hover {
+            cursor: pointer;
+          }
+        }
+      }
+    }
+  }
+}
