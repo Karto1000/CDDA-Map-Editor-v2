@@ -11,7 +11,7 @@ use crate::editor_data::handlers::{
 };
 use crate::editor_data::tab::handlers::{close_tab, create_tab};
 use crate::editor_data::tab::TabType;
-use crate::editor_data::{EditorData, Project, ProjectType};
+use crate::editor_data::{EditorData, MapDataCollection, Project, ProjectType};
 use crate::map::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
@@ -25,7 +25,7 @@ use crate::util::Load;
 use anyhow::{anyhow, Error};
 use async_once::AsyncOnce;
 use directories::ProjectDirs;
-use glam::IVec3;
+use glam::{IVec3, UVec2};
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
 use map::importing::MapDataImporter;
@@ -91,18 +91,23 @@ async fn frontend_ready(
             TabType::Welcome => {}
             TabType::MapEditor(me) => {}
             TabType::LiveViewer(lvd) => {
+                info!("Opening Live viewer {} at {:?}", lvd.om_terrain, lvd.path);
+
                 let mut map_data_importer = MapDataImporter {
                     path: lvd.path.clone(),
                     om_terrain: lvd.om_terrain.clone(),
                 };
 
-                let map_data = map_data_importer.load().await.unwrap();
+                let map_data_collection = map_data_importer.load().await.unwrap();
                 let mut new_project = Project::new(
                     tab.name.clone(),
-                    map_data.map_size.clone(),
+                    map_data_collection.global_map_size.clone(),
                     ProjectType::Viewer,
                 );
-                new_project.maps.insert(0, map_data);
+
+                let mut maps = HashMap::new();
+                maps.insert(0, map_data_collection);
+                new_project.maps = maps;
 
                 project_container_lock.data.push(new_project);
             }
@@ -111,14 +116,6 @@ async fn frontend_ready(
         app.emit(events::TAB_CREATED, tab)
             .expect("Emit to not fail");
     }
-
-    info!("Sent initial editor data change");
-    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
-        .expect("Emit to not fail");
-
-    info!("Loading tilesheet");
-    let tilesheet = load_tilesheet(&editor_data_lock).await.map_err(|e| {})?;
-    *tilesheet_lock = tilesheet;
 
     match &editor_data_lock.config.cdda_path {
         None => {
@@ -136,6 +133,14 @@ async fn frontend_ready(
             };
         }
     }
+
+    info!("Sent initial editor data change");
+    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
+        .expect("Emit to not fail");
+
+    info!("Loading tilesheet");
+    let tilesheet = load_tilesheet(&editor_data_lock).await.map_err(|e| {})?;
+    *tilesheet_lock = tilesheet;
 
     Ok(())
 }

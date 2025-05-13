@@ -435,7 +435,7 @@ impl Property for ItemsProperty {
                     &json_data
                         .item_groups
                         .get(&i)
-                        .expect("Item group to exist")
+                        .expect(format!("Item group {} to exist", i).as_str())
                         .common
                 }
                 ReferenceOrInPlace::InPlace(ip) => &ip.common,

@@ -22,7 +22,9 @@ use rand::distr::uniform::SampleUniform;
 use rand::{rng, Rng};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
+use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
+use std::ops::{Add, Rem, Sub};
 
 pub fn extract_comments<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
 where
@@ -48,6 +50,65 @@ where
 pub enum NumberOrRange<T: PrimInt + Clone + SampleUniform> {
     Number(T),
     Range((T, T)),
+}
+
+impl<T: PrimInt + SampleUniform> Add<T> for NumberOrRange<T> {
+    type Output = Self;
+
+    fn add(self, rhs: T) -> Self::Output {
+        match self {
+            NumberOrRange::Number(n) => NumberOrRange::Number(n + rhs),
+            NumberOrRange::Range(r) => NumberOrRange::Range((r.0 + rhs, r.1 + rhs)),
+        }
+    }
+}
+
+impl<T: PrimInt + SampleUniform> Sub<T> for NumberOrRange<T> {
+    type Output = Self;
+
+    fn sub(self, rhs: T) -> Self::Output {
+        match self {
+            NumberOrRange::Number(n) => NumberOrRange::Number(n - rhs),
+            NumberOrRange::Range(r) => NumberOrRange::Range((r.0 - rhs, r.1 - rhs)),
+        }
+    }
+}
+
+impl<T: PrimInt + SampleUniform> Rem<T> for NumberOrRange<T> {
+    type Output = Self;
+
+    fn rem(self, rhs: T) -> Self::Output {
+        match self {
+            NumberOrRange::Number(n) => NumberOrRange::Number(n % rhs),
+            NumberOrRange::Range(r) => NumberOrRange::Range((r.0 % rhs, r.1 % rhs)),
+        }
+    }
+}
+
+impl<T: PrimInt + SampleUniform> PartialEq<T> for NumberOrRange<T> {
+    fn eq(&self, other: &T) -> bool {
+        match self {
+            NumberOrRange::Number(n) => n == other,
+            NumberOrRange::Range((min, max)) => other >= min && other <= max,
+        }
+    }
+}
+
+impl<T: PrimInt + SampleUniform> PartialOrd<T> for NumberOrRange<T> {
+    fn partial_cmp(&self, other: &T) -> Option<Ordering> {
+        match self {
+            NumberOrRange::Number(n) => n.partial_cmp(other),
+            NumberOrRange::Range((min, max)) => {
+                if other < min {
+                    Some(Ordering::Greater)
+                } else if other > max {
+                    Some(Ordering::Less)
+                } else {
+                    Some(Ordering::Equal)
+                }
+            }
+        }
+    }
 }
 
 #[derive(Deserialize)]

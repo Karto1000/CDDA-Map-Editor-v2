@@ -388,8 +388,8 @@ pub async fn open_project(
         };
     }
 
-    for (z, map_data) in project.maps.iter() {
-        let local_mapped_cdda_ids = map_data.get_mapped_cdda_ids(json_data, *z);
+    for (z, map_collection) in project.maps.iter() {
+        let local_mapped_cdda_ids = map_collection.get_mapped_cdda_ids(json_data, *z);
 
         for (p, identifier_group) in local_mapped_cdda_ids.iter() {
             let cell_3d_coords = IVec3::new(p.x, p.y, *z);

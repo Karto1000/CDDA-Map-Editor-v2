@@ -34,9 +34,6 @@
       "terrain": {
         ".": "t_grass"
       },
-      "traps": {
-        ".": "tr_nailboard"
-      },
       "place_items": [
         {
           "item": "forest",

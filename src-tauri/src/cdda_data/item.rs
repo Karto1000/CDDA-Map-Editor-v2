@@ -96,33 +96,40 @@ pub enum EntryItemShortcut {
         #[serde(rename = "prob")]
         probability: Option<i32>,
     },
+    Comment {
+        #[serde(rename = "//")]
+        comment: String,
+    },
 }
 
-impl Into<ItemEntry> for EntryItemShortcut {
-    fn into(self) -> ItemEntry {
+impl TryInto<ItemEntry> for EntryItemShortcut {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<ItemEntry, Self::Error> {
         match self {
-            EntryItemShortcut::NotWeighted(nw) => ItemEntry::Item(Item::from(nw)),
+            EntryItemShortcut::NotWeighted(nw) => Ok(ItemEntry::Item(Item::from(nw))),
             EntryItemShortcut::Weighted(w) => {
                 let mut item = Item::from(w.data);
                 item.probability = w.weight;
-                ItemEntry::Item(item)
+                Ok(ItemEntry::Item(item))
             }
-            EntryItemShortcut::Item(i) => ItemEntry::Item(i),
-            EntryItemShortcut::Group(g) => ItemEntry::Group(g),
+            EntryItemShortcut::Item(i) => Ok(ItemEntry::Item(i)),
+            EntryItemShortcut::Group(g) => Ok(ItemEntry::Group(g)),
             EntryItemShortcut::Distribution {
                 distribution,
                 probability,
-            } => ItemEntry::Distribution {
+            } => Ok(ItemEntry::Distribution {
                 distribution: distribution.into_iter().map(|i| i.into()).collect(),
                 probability,
-            },
+            }),
             EntryItemShortcut::Collection {
                 collection,
                 probability,
-            } => ItemEntry::Collection {
+            } => Ok(ItemEntry::Collection {
                 collection: collection.into_iter().map(|i| i.into()).collect(),
                 probability,
-            },
+            }),
+            EntryItemShortcut::Comment { .. } => Err(anyhow::anyhow!("Unused comment")),
         }
     }
 }
@@ -225,10 +232,14 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
         let mut entries = vec![];
 
         // Turn items into entries
-        self.items.into_iter().for_each(|item| {
-            let entry_item: ItemEntry = item.into();
-            entries.push(entry_item);
-        });
+        self.items
+            .into_iter()
+            .for_each(|item| match TryInto::<ItemEntry>::try_into(item) {
+                Ok(item_entry) => {
+                    entries.push(item_entry);
+                }
+                Err(_) => {}
+            });
 
         // Turn groups into entries
         self.groups.into_iter().for_each(|group| {

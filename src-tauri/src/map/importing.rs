@@ -1,5 +1,5 @@
 use crate::cdda_data::map_data::{CDDAMapDataIntermediate, OmTerrain};
-use crate::map::MapData;
+use crate::editor_data::MapDataCollection;
 use crate::util::Load;
 use anyhow::anyhow;
 use serde_json::Value;
@@ -12,8 +12,8 @@ pub struct MapDataImporter {
     pub om_terrain: String,
 }
 
-impl Load<MapData> for MapDataImporter {
-    async fn load(&mut self) -> Result<MapData, anyhow::Error> {
+impl Load<MapDataCollection> for MapDataImporter {
+    async fn load(&mut self) -> Result<MapDataCollection, anyhow::Error> {
         let reader = BufReader::new(File::open(&self.path)?);
         let importing_map_datas: Vec<CDDAMapDataIntermediate> =
             serde_json::from_reader::<BufReader<File>, Vec<Value>>(reader)
@@ -48,14 +48,14 @@ impl Load<MapData> for MapDataImporter {
                         },
                         OmTerrain::Duplicate(duplicate) => {
                             match duplicate.iter().find(|d| *d == &self.om_terrain) {
-                                Some(s) => Some(mdi.into()),
+                                Some(_) => Some(mdi.into()),
                                 None => None,
                             }
                         }
                         OmTerrain::Nested(n) => {
                             match n.iter().flatten().find(|s| *s == &self.om_terrain) {
                                 None => None,
-                                Some(s) => Some(mdi.into()),
+                                Some(_) => Some(mdi.into()),
                             }
                         }
                     };
