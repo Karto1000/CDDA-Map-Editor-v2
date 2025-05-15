@@ -481,7 +481,7 @@ export function useViewer(props: UseEditorProps): UseEditorRet {
 
         const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
-        let placeMultiUnlistenFn = makeCancelable(listen<PlaceSpritesEvent>(MapDataEvent.PlaceSprites, d => {
+        const unlisten = listen<PlaceSpritesEvent>(MapDataEvent.PlaceSprites, d => {
             props.tilesheetsRef.current.clearAll()
 
             const drawStaticSprites: DrawStaticSprite[] = d.payload.static_sprites.map(ds => {
@@ -522,10 +522,10 @@ export function useViewer(props: UseEditorProps): UseEditorRet {
             props.tilesheetsRef.current.drawFallbackSpritesBatched(drawFallbackSprites)
             props.tilesheetsRef.current.drawStaticSpritesBatched(drawStaticSprites)
             props.tilesheetsRef.current.drawAnimatedSpritesBatched(drawAnimatedSprites)
-        }))
+        })
 
         return () => {
-            placeMultiUnlistenFn.cancel()
+            unlisten.then(f => f())
         }
     }, [props.isTilesheetLoaded, props.spritesheetConfig, props.tilesheetsRef]);
 

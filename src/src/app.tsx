@@ -66,26 +66,24 @@ function App() {
         if (openedTab === null) return
         if (tabs.tabs[openedTab].tab_type !== TabTypeKind.LiveViewer) return
 
-        let update_live_viewer_listen = makeCancelable(
-            listen<unknown>(MapDataEvent.UpdateLiveViewer, d => {
-                (async () => {
-                    await invoke(MapDataSendCommand.ReloadProject);
-                    await invokeTauri<unknown, unknown>(MapDataSendCommand.GetSprites, {name: openedTab});
-                })()
-            })
-        );
+        const unlisten = listen<unknown>(MapDataEvent.UpdateLiveViewer, d => {
+            (async () => {
+                await invoke(MapDataSendCommand.ReloadProject);
+                await invokeTauri<unknown, unknown>(MapDataSendCommand.GetSprites, {name: openedTab});
+            })()
+        });
 
         (async () => {
             await invoke(MapDataSendCommand.OpenProject, {name: openedTab});
         })();
 
         return () => {
-            update_live_viewer_listen.cancel()
+            unlisten.then(f => f())
         }
     }, [tabs.openedTab, tabs.tabs]);
 
     useEffect(() => {
-        let unlistenDataChanged = makeCancelable(listen<EditorData>(
+        let unlistenDataChanged = listen<EditorData>(
             EditorDataRecvEvent.EditorDataChanged,
             async (e) => {
                 console.log("Received editor data changed event: ", e.payload, "")
@@ -101,12 +99,12 @@ function App() {
 
                     tabs.setOpenedTab("Welcome to the CDDA Map Editor")
                 }
-            }))
+            })
 
         invoke("frontend_ready", {})
 
         return () => {
-            unlistenDataChanged.cancel()
+            unlistenDataChanged.then(f => f())
         }
 
         // Disable the warning since we do not want to re-run this

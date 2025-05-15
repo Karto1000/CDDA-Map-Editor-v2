@@ -29,25 +29,25 @@ export function useTabs(): UseTabsReturn {
     const [openTab, setOpenTab] = useState<string | null>(null)
 
     useEffect(() => {
-        const unlistenOpened = makeCancelable(listen<Tab>(EditorDataRecvEvent.TabCreated, e => {
+        const unlistenOpened = listen<Tab>(EditorDataRecvEvent.TabCreated, e => {
             setTabs(tabs => {
                 const newTabs = {...tabs}
                 newTabs[e.payload.name] = e.payload
                 return newTabs
             })
-        }))
+        })
 
-        let unlistenClosed = makeCancelable(listen<number>(EditorDataRecvEvent.TabClosed, e => {
+        let unlistenClosed = listen<number>(EditorDataRecvEvent.TabClosed, e => {
             setTabs(tabs => {
                 const newTabs = {...tabs}
                 delete newTabs[e.payload]
                 return newTabs
             })
-        }))
+        })
 
         return () => {
-            unlistenOpened.cancel()
-            unlistenClosed.cancel()
+            unlistenOpened.then(f => f())
+            unlistenClosed.then(f => f())
         }
     }, []);
 

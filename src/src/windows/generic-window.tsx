@@ -19,15 +19,14 @@ export default function GenericWindow(props: GenericWindowProps) {
 
     useEffect(() => {
         // Listen for theme change
-        const unlisten = makeCancelable(
-            listen<{ theme: Theme }>("theme-changed", e => {
+        const unlisten = listen<{ theme: Theme }>("theme-changed", e => {
                 console.log("Received theme change event: ", e.payload)
                 setLocalTheme(e.payload.theme)
-            })
+            }
         )
 
         return () => {
-            unlisten.cancel()
+            unlisten.then(f => f())
         }
     }, [])
 
