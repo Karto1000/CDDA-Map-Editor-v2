@@ -26,6 +26,8 @@ use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
 use tokio::sync::MutexGuard;
+use tokio::task::spawn_blocking;
+use tokio_test::block_on;
 
 #[tauri::command]
 pub async fn get_current_project_data(
@@ -440,26 +442,28 @@ pub async fn open_project(
         ProjectType::LiveViewer(lvd) => {
             app.emit(UPDATE_LIVE_VIEWER, {}).unwrap();
 
-            match &project.ty {
-                ProjectType::MapEditor(_) => {}
-                ProjectType::LiveViewer(lvd) => {
-                    let lvd_clone = lvd.clone();
+            let lvd_clone = lvd.clone();
 
-                    let join_handle = tokio::spawn(async move {
-                        let (tx, rx) = std::sync::mpsc::channel();
-                        let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
+            let join_handle = tokio::spawn(async move {
+                let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+                let mut watcher = RecommendedWatcher::new(
+                    move |res| {
+                        block_on(async { tx.send(res).await.unwrap() });
+                    },
+                    Config::default(),
+                )
+                .unwrap();
 
-                        watcher
-                            .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
-                            .unwrap();
+                watcher
+                    .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
+                    .unwrap();
 
-                        while let Ok(_) = rx.recv() {
-                            app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
-                        }
-                    });
-                    file_watcher_lock.replace(join_handle);
+                while let Some(Ok(e)) = rx.recv().await {
+                    dbg!(e);
+                    app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
                 }
-            }
+            });
+            file_watcher_lock.replace(join_handle);
         }
     }
 
