@@ -107,19 +107,24 @@ impl TryInto<ItemEntry> for EntryItemShortcut {
 
     fn try_into(self) -> Result<ItemEntry, Self::Error> {
         match self {
-            EntryItemShortcut::NotWeighted(nw) => Ok(ItemEntry::Item(Item::from(nw))),
+            EntryItemShortcut::NotWeighted(nw) => {
+                Ok(ItemEntry::Item(Item::from(nw)))
+            },
             EntryItemShortcut::Weighted(w) => {
                 let mut item = Item::from(w.data);
                 item.probability = w.weight;
                 Ok(ItemEntry::Item(item))
-            }
+            },
             EntryItemShortcut::Item(i) => Ok(ItemEntry::Item(i)),
             EntryItemShortcut::Group(g) => Ok(ItemEntry::Group(g)),
             EntryItemShortcut::Distribution {
                 distribution,
                 probability,
             } => Ok(ItemEntry::Distribution {
-                distribution: distribution.into_iter().map(|i| i.into()).collect(),
+                distribution: distribution
+                    .into_iter()
+                    .map(|i| i.into())
+                    .collect(),
                 probability,
             }),
             EntryItemShortcut::Collection {
@@ -129,7 +134,9 @@ impl TryInto<ItemEntry> for EntryItemShortcut {
                 collection: collection.into_iter().map(|i| i.into()).collect(),
                 probability,
             }),
-            EntryItemShortcut::Comment { .. } => Err(anyhow::anyhow!("Unused comment")),
+            EntryItemShortcut::Comment { .. } => {
+                Err(anyhow::anyhow!("Unused comment"))
+            },
         }
     }
 }
@@ -158,19 +165,24 @@ pub enum EntryGroupShortcut {
 impl Into<ItemEntry> for EntryGroupShortcut {
     fn into(self) -> ItemEntry {
         match self {
-            EntryGroupShortcut::NotWeighted(nw) => ItemEntry::Group(Group::from(nw)),
+            EntryGroupShortcut::NotWeighted(nw) => {
+                ItemEntry::Group(Group::from(nw))
+            },
             EntryGroupShortcut::Weighted(w) => {
                 let mut group = Group::from(w.data);
                 group.probability = w.weight;
                 ItemEntry::Group(group)
-            }
+            },
             EntryGroupShortcut::Item(i) => ItemEntry::Item(i),
             EntryGroupShortcut::Group(g) => ItemEntry::Group(g),
             EntryGroupShortcut::Distribution {
                 distribution,
                 probability,
             } => ItemEntry::Distribution {
-                distribution: distribution.into_iter().map(|i| i.into()).collect(),
+                distribution: distribution
+                    .into_iter()
+                    .map(|i| i.into())
+                    .collect(),
                 probability,
             },
             EntryGroupShortcut::Collection {
@@ -232,14 +244,14 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
         let mut entries = vec![];
 
         // Turn items into entries
-        self.items
-            .into_iter()
-            .for_each(|item| match TryInto::<ItemEntry>::try_into(item) {
+        self.items.into_iter().for_each(|item| {
+            match TryInto::<ItemEntry>::try_into(item) {
                 Ok(item_entry) => {
                     entries.push(item_entry);
-                }
-                Err(_) => {}
-            });
+                },
+                Err(_) => {},
+            }
+        });
 
         // Turn groups into entries
         self.groups.into_iter().for_each(|group| {

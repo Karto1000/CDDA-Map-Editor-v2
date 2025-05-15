@@ -6,8 +6,8 @@ use crate::tileset::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, LegacyTileConfig, Spritesheet, Tile,
 };
 use crate::tileset::{
-    ForeBackIds, MeabyWeightedSprite, MultitileSprite, Sprite, SpriteKind, Tilesheet,
-    WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
+    ForeBackIds, MeabyWeightedSprite, MultitileSprite, Sprite, SpriteKind,
+    Tilesheet, WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
 };
 use crate::util::{CDDAIdentifier, Load, MeabyVec};
 use anyhow::{anyhow, Error};
@@ -15,9 +15,8 @@ use log::info;
 use rand::distr::Distribution;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::io::Cursor;
 use tokio::fs::File;
-use tokio::io::{AsyncReadExt, BufReader};
+use tokio::io::AsyncReadExt;
 
 pub(crate) mod tile_config;
 
@@ -105,13 +104,15 @@ impl TryFrom<Vec<SpriteIndex>> for Rotates {
             (Some(auto), None, None, None) => Ok(Rotates::Auto(auto.clone())),
             (Some(first), Some(second), None, None) => {
                 Ok(Rotates::Pre2((first.clone(), second.clone())))
-            }
-            (Some(first), Some(second), Some(third), Some(fourth)) => Ok(Rotates::Pre4((
-                first.clone(),
-                second.clone(),
-                third.clone(),
-                fourth.clone(),
-            ))),
+            },
+            (Some(first), Some(second), Some(third), Some(fourth)) => {
+                Ok(Rotates::Pre4((
+                    first.clone(),
+                    second.clone(),
+                    third.clone(),
+                    fourth.clone(),
+                )))
+            },
             (_, _, _, _) => Err(anyhow!("Invalid vec supplied for rotation")),
         }
     }
@@ -172,14 +173,14 @@ fn to_weighted_vec_additional_exception(
 
             Some(WeightedSprite::new(single, weighted.weight))
         })
-            .into_iter()
-            .filter_map(|v| {
-                if v.is_none() {
-                    return None;
-                }
-                return Some(v.unwrap());
-            })
-            .collect()
+        .into_iter()
+        .filter_map(|v| {
+            if v.is_none() {
+                return None;
+            }
+            return Some(v.unwrap());
+        })
+        .collect()
     })
 }
 
@@ -189,7 +190,8 @@ fn to_weighted_vec_additional(
     indices.map(|fg| {
         fg.map(|mw| {
             let weighted = mw.weighted();
-            let rotation = Rotates::try_from(weighted.sprite.into_vec()).unwrap();
+            let rotation =
+                Rotates::try_from(weighted.sprite.into_vec()).unwrap();
             WeightedSprite::new(rotation, weighted.weight)
         })
     })
@@ -201,26 +203,38 @@ fn get_multitile_sprite_from_additional_tiles(
 ) -> Result<Sprite, Error> {
     let mut additional_tile_ids = HashMap::new();
     // Special cases for open and broken
-    let mut broken: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> = None;
-    let mut open: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> = None;
+    let mut broken: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> =
+        None;
+    let mut open: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> =
+        None;
 
     for additional_tile in additional_tiles {
         match additional_tile.id {
             AdditionalTileId::Broken => {
-                let fg = to_weighted_vec_additional_exception(additional_tile.fg.clone());
-                let bg = to_weighted_vec_additional_exception(additional_tile.bg.clone());
+                let fg = to_weighted_vec_additional_exception(
+                    additional_tile.fg.clone(),
+                );
+                let bg = to_weighted_vec_additional_exception(
+                    additional_tile.bg.clone(),
+                );
 
                 broken = Some((&additional_tile, ForeBackIds::new(fg, bg)))
-            }
+            },
             AdditionalTileId::Open => {
-                let fg = to_weighted_vec_additional_exception(additional_tile.fg.clone());
-                let bg = to_weighted_vec_additional_exception(additional_tile.bg.clone());
+                let fg = to_weighted_vec_additional_exception(
+                    additional_tile.fg.clone(),
+                );
+                let bg = to_weighted_vec_additional_exception(
+                    additional_tile.bg.clone(),
+                );
 
                 open = Some((&additional_tile, ForeBackIds::new(fg, bg)))
-            }
+            },
             _ => {
                 let fg = to_weighted_vec_additional(additional_tile.fg.clone());
-                let bg = to_weighted_vec_additional_exception(additional_tile.bg.clone());
+                let bg = to_weighted_vec_additional_exception(
+                    additional_tile.bg.clone(),
+                );
 
                 additional_tile_ids.insert(
                     additional_tile.id.clone(),
@@ -230,7 +244,7 @@ fn get_multitile_sprite_from_additional_tiles(
                         rotates: additional_tile.rotates.unwrap_or(true),
                     },
                 );
-            }
+            },
         }
     }
 
@@ -238,7 +252,7 @@ fn get_multitile_sprite_from_additional_tiles(
     let bg = to_weighted_vec(tile.bg.clone());
 
     match broken {
-        None => {}
+        None => {},
         Some((tile, ids)) => {
             return Ok(Sprite::Broken {
                 ids: ForeBackIds::new(fg, bg),
@@ -246,11 +260,11 @@ fn get_multitile_sprite_from_additional_tiles(
                 broken: ids,
                 rotates: tile.rotates.unwrap_or(false),
             })
-        }
+        },
     }
 
     match open {
-        None => {}
+        None => {},
         Some((tile, ids)) => {
             return Ok(Sprite::Open {
                 ids: ForeBackIds::new(fg, bg),
@@ -258,7 +272,7 @@ fn get_multitile_sprite_from_additional_tiles(
                 rotates: tile.rotates.unwrap_or(false),
                 open: ids,
             })
-        }
+        },
     }
 
     Ok(Sprite::Multitile {
@@ -268,7 +282,8 @@ fn get_multitile_sprite_from_additional_tiles(
         center: additional_tile_ids.remove(&AdditionalTileId::Center),
         corner: additional_tile_ids.remove(&AdditionalTileId::Corner),
         edge: additional_tile_ids.remove(&AdditionalTileId::Edge),
-        t_connection: additional_tile_ids.remove(&AdditionalTileId::TConnection),
+        t_connection: additional_tile_ids
+            .remove(&AdditionalTileId::TConnection),
         unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
         end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
     })
@@ -280,7 +295,11 @@ pub struct LegacyTilesheet {
 }
 
 impl Tilesheet for LegacyTilesheet {
-    fn get_sprite(&self, id: &CDDAIdentifier, json_data: &DeserializedCDDAJsonData) -> SpriteKind {
+    fn get_sprite(
+        &self,
+        id: &CDDAIdentifier,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> SpriteKind {
         match self.id_map.get(&id) {
             None => {
                 info!(
@@ -288,10 +307,14 @@ impl Tilesheet for LegacyTilesheet {
                     id
                 );
 
-                match self.get_looks_like_sprite(&id, &json_data.terrain, &json_data.furniture) {
+                match self.get_looks_like_sprite(
+                    &id,
+                    &json_data.terrain,
+                    &json_data.furniture,
+                ) {
                     None => {
                         match json_data.terrain.get(id) {
-                            None => {}
+                            None => {},
                             Some(t) => {
                                 return SpriteKind::Fallback(
                                     self.fallback_map
@@ -300,18 +323,25 @@ impl Tilesheet for LegacyTilesheet {
                                             t.symbol.unwrap_or('?'),
                                             t.color
                                                 .clone()
-                                                .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                                                .unwrap_or(MeabyVec::Single(
+                                                    "WHITE".to_string()
+                                                ))
                                                 .into_single()
                                                 .unwrap_or("WHITE".to_string())
                                         ))
-                                        .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
+                                        .unwrap_or(
+                                            &FALLBACK_TILE_MAPPING
+                                                .first()
+                                                .unwrap()
+                                                .1,
+                                        )
                                         .clone(),
                                 )
-                            }
+                            },
                         }
 
                         match json_data.furniture.get(id) {
-                            None => {}
+                            None => {},
                             Some(f) => {
                                 return SpriteKind::Fallback(
                                     self.fallback_map
@@ -320,21 +350,30 @@ impl Tilesheet for LegacyTilesheet {
                                             f.symbol.unwrap_or('?'),
                                             f.color
                                                 .clone()
-                                                .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                                                .unwrap_or(MeabyVec::Single(
+                                                    "WHITE".to_string()
+                                                ))
                                                 .into_single()
                                                 .unwrap_or("WHITE".to_string())
                                         ))
-                                        .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
+                                        .unwrap_or(
+                                            &FALLBACK_TILE_MAPPING
+                                                .first()
+                                                .unwrap()
+                                                .1,
+                                        )
                                         .clone(),
                                 )
-                            }
+                            },
                         };
 
-                        SpriteKind::Fallback(FALLBACK_TILE_MAPPING.first().unwrap().1)
-                    }
+                        SpriteKind::Fallback(
+                            FALLBACK_TILE_MAPPING.first().unwrap().1,
+                        )
+                    },
                     Some(s) => SpriteKind::Exists(s),
                 }
-            }
+            },
             Some(s) => SpriteKind::Exists(s),
         }
     }
@@ -356,19 +395,21 @@ impl LegacyTilesheet {
         // The tiles with this property do not have a corresponding entry in the tilesheet which
         // means that we have to check this here dynamically
         match terrain.get(&id) {
-            None => {}
+            None => {},
             Some(s) => {
                 return match &s.looks_like {
                     None => None,
                     Some(ident) => {
                         // "looks_like entries are implicitly chained"
                         match self.id_map.get(ident) {
-                            None => self.get_looks_like_sprite(ident, terrain, furniture),
+                            None => self.get_looks_like_sprite(
+                                ident, terrain, furniture,
+                            ),
                             Some(s) => Some(s),
                         }
-                    }
+                    },
                 };
-            }
+            },
         };
 
         // Do again with furniture
@@ -377,7 +418,9 @@ impl LegacyTilesheet {
             Some(s) => match &s.looks_like {
                 None => None,
                 Some(ident) => match self.id_map.get(ident) {
-                    None => self.get_looks_like_sprite(ident, terrain, furniture),
+                    None => {
+                        self.get_looks_like_sprite(ident, terrain, furniture)
+                    },
                     Some(s) => Some(s),
                 },
             },
@@ -402,8 +445,8 @@ impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
 
         for spritesheet in normal_spritesheets {
             for tile in spritesheet.tiles.iter() {
-                let is_multitile =
-                    tile.multitile.unwrap_or_else(|| false) && tile.additional_tiles.is_some();
+                let is_multitile = tile.multitile.unwrap_or_else(|| false)
+                    && tile.additional_tiles.is_some();
 
                 if !is_multitile {
                     let fg = to_weighted_vec(tile.fg.clone());
@@ -430,15 +473,19 @@ impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
                     tile.id.for_each(|id| {
                         id_map.insert(
                             id.clone(),
-                            get_multitile_sprite_from_additional_tiles(tile, additional_tiles)
-                                .unwrap(),
+                            get_multitile_sprite_from_additional_tiles(
+                                tile,
+                                additional_tiles,
+                            )
+                            .unwrap(),
                         );
                     });
                 }
             }
         }
 
-        let fallback_spritesheet = fallback_spritesheet.expect("Fallback spritesheet to exist");
+        let fallback_spritesheet =
+            fallback_spritesheet.expect("Fallback spritesheet to exist");
 
         for ascii_group in fallback_spritesheet.ascii.iter() {
             for (character, offset) in FALLBACK_TILE_MAPPING {
@@ -466,6 +513,7 @@ impl Load<LegacyTileConfig> for TilesheetConfigLoader {
             .read_to_end(&mut buffer)
             .await?;
 
-        Ok(serde_json::from_slice::<LegacyTileConfig>(&buffer).map_err(|e| anyhow!("{:?}", e))?)
+        Ok(serde_json::from_slice::<LegacyTileConfig>(&buffer)
+            .map_err(|e| anyhow!("{:?}", e))?)
     }
 }

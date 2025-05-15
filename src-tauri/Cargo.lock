@@ -665,7 +665,6 @@ dependencies = [
  "anyhow",
  "async-walkdir",
  "async_once",
- "blocking",
  "derive_more 2.0.1",
  "directories",
  "dotenv",

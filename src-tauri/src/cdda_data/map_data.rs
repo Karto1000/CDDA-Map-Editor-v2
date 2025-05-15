@@ -1,28 +1,26 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::item::{
-    CDDAItemGroup, CDDAItemGroupInPlace, CDDAItemGroupIntermediate, EntryGroupShortcut,
-    EntryItemShortcut, Item, ItemEntry, ItemGroupSubtype,
-};
+use crate::cdda_data::item::CDDAItemGroupInPlace;
 use crate::cdda_data::palettes::Parameter;
-use crate::cdda_data::CDDAJsonEntry::Furniture;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::editor_data::{MapCoordinates, MapDataCollection};
 use crate::map::map_properties::ComputersProperty;
 use crate::map::map_properties::ToiletsProperty;
 use crate::map::map_properties::TrapsProperty;
 use crate::map::map_properties::{
-    FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty, SignsProperty,
-    TerrainProperty,
+    FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty,
+    SignsProperty, TerrainProperty,
 };
 use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
 use crate::map::{
-    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
-    RemovableSetType, Set, SetLine, SetOperation, SetPoint, SetSquare, SPECIAL_EMPTY_CHAR,
+    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place,
+    PlaceableSetType, Property, RemovableSetType, Set, SetLine, SetOperation,
+    SetPoint, SetSquare,
 };
 use crate::map::{VisibleMappingCommand, DEFAULT_MAP_DATA_SIZE};
 use crate::util::{
-    CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
+    CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted,
+    ParameterIdentifier, Weighted,
 };
 use crate::warn;
 use crate::{skip_err, skip_none};
@@ -169,7 +167,10 @@ impl<'de> Deserialize<'de> for OmTerrainMatch {
         impl<'de> serde::de::Visitor<'de> for OmTerrainMatchVisitor {
             type Value = OmTerrainMatch;
 
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+            fn expecting(
+                &self,
+                formatter: &mut std::fmt::Formatter,
+            ) -> std::fmt::Result {
                 formatter.write_str("string or map")
             }
 
@@ -194,20 +195,22 @@ impl<'de> Deserialize<'de> for OmTerrainMatch {
                     match key.as_str() {
                         "om_terrain" => {
                             om_terrain = Some(map.next_value()?);
-                        }
+                        },
                         "om_terrain_match_type" => {
                             om_terrain_match_type = Some(map.next_value()?);
-                        }
+                        },
                         _ => {
-                            let _ = map.next_value::<serde::de::IgnoredAny>()?;
-                        }
+                            let _ =
+                                map.next_value::<serde::de::IgnoredAny>()?;
+                        },
                     }
                 }
 
-                let om_terrain =
-                    om_terrain.ok_or_else(|| serde::de::Error::missing_field("om_terrain"))?;
-                let om_terrain_match_type =
-                    om_terrain_match_type.unwrap_or(OmTerrainMatchType::Contains);
+                let om_terrain = om_terrain.ok_or_else(|| {
+                    serde::de::Error::missing_field("om_terrain")
+                })?;
+                let om_terrain_match_type = om_terrain_match_type
+                    .unwrap_or(OmTerrainMatchType::Contains);
 
                 Ok(OmTerrainMatch {
                     om_terrain,
@@ -228,30 +231,33 @@ impl OmTerrainMatch {
             OmTerrainMatchType::Type => {
                 // Strip any suffixes like rotation or linear directions
                 let base_type = ident.0.split('_').next().unwrap_or("");
-                let match_type = self.om_terrain.0.split('_').next().unwrap_or("");
+                let match_type =
+                    self.om_terrain.0.split('_').next().unwrap_or("");
                 base_type == match_type
-            }
+            },
             OmTerrainMatchType::Subtype => {
                 // Match base type and linear type suffix
                 let parts: Vec<&str> = ident.0.split('_').collect();
-                let match_parts: Vec<&str> = self.om_terrain.0.split('_').collect();
+                let match_parts: Vec<&str> =
+                    self.om_terrain.0.split('_').collect();
 
                 if parts.len() >= 2 && match_parts.len() >= 2 {
                     parts[0] == match_parts[0] && parts[1] == match_parts[1]
                 } else {
                     false
                 }
-            }
+            },
             OmTerrainMatchType::Prefix => {
                 // Must be complete prefix with underscore delimiter
                 ident.0.starts_with(&self.om_terrain.0)
                     && (ident.0.len() == self.om_terrain.0.len()
-                        || ident.0.chars().nth(self.om_terrain.0.len()) == Some('_'))
-            }
+                        || ident.0.chars().nth(self.om_terrain.0.len())
+                            == Some('_'))
+            },
             OmTerrainMatchType::Contains => {
                 // Simple substring match
                 ident.0.contains(&self.om_terrain.0)
-            }
+            },
         }
     }
 }
@@ -296,7 +302,9 @@ impl Into<MapGenNested> for MapGenNestedIntermediate {
         };
 
         let neighbors = neighbors.map(|neighbors| {
-            HashMap::from_iter(neighbors.into_iter().map(|(p, n)| (p, n.into_vec())))
+            HashMap::from_iter(
+                neighbors.into_iter().map(|(p, n)| (p, n.into_vec())),
+            )
         });
 
         MapGenNested {
@@ -519,7 +527,9 @@ macro_rules! impl_from {
     (
         $identifier: ident
     ) => {
-        impl IntoArcDyn<PlaceOuter<$identifier>> for PlaceOuter<Arc<dyn Place>> {
+        impl IntoArcDyn<PlaceOuter<$identifier>>
+            for PlaceOuter<Arc<dyn Place>>
+        {
             fn into_arc_dyn_place(
                 value: PlaceOuter<$identifier>,
                 local_x_coords: NumberOrRange<i32>,
@@ -646,7 +656,9 @@ pub struct CDDAMapDataIntermediate {
 }
 
 impl CDDAMapDataIntermediate {
-    fn get_properties(&self) -> HashMap<MappingKind, HashMap<char, Arc<dyn Property>>> {
+    fn get_properties(
+        &self,
+    ) -> HashMap<MappingKind, HashMap<char, Arc<dyn Property>>> {
         let mut properties = HashMap::new();
 
         let mut terrain_map = HashMap::new();
@@ -799,7 +811,8 @@ impl CDDAMapDataIntermediate {
         &self,
         map_coordinates: MapCoordinates,
     ) -> HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> {
-        let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
+        let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> =
+            HashMap::new();
         let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
 
         macro_rules! insert_place {
@@ -887,24 +900,29 @@ impl CDDAMapDataIntermediate {
                 let operation = match ty.0.as_str() {
                     "terrain" | "furniture" | "trap" => {
                         let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(ty.0.as_str()));
+                        let ty = skip_err!(PlaceableSetType::from_str(
+                            ty.0.as_str()
+                        ));
 
                         Some(SetOperation::Place { id, ty })
-                    }
-                    "trap_remove" | "item_remove" | "field_remove" | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(ty.0.as_str()));
+                    },
+                    "trap_remove" | "item_remove" | "field_remove"
+                    | "creature_remove" => {
+                        let ty = skip_err!(RemovableSetType::from_str(
+                            ty.0.as_str()
+                        ));
 
                         Some(SetOperation::Remove { ty })
-                    }
+                    },
                     "radiation" => {
                         let amount = skip_none!(set.amount);
 
                         Some(SetOperation::Radiation { amount })
-                    }
+                    },
                     _ => {
                         warn!("Unknown set line type {}; Skipping", ty);
                         None
-                    }
+                    },
                 };
 
                 if let Some(operation) = operation {
@@ -928,31 +946,36 @@ impl CDDAMapDataIntermediate {
                 let operation = match ty.0.as_str() {
                     "terrain" | "furniture" | "trap" => {
                         let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(ty.0.as_str()));
+                        let ty = skip_err!(PlaceableSetType::from_str(
+                            ty.0.as_str()
+                        ));
 
                         Some(SetOperation::Place { id, ty })
-                    }
-                    "trap_remove" | "item_remove" | "field_remove" | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(ty.0.as_str()));
+                    },
+                    "trap_remove" | "item_remove" | "field_remove"
+                    | "creature_remove" => {
+                        let ty = skip_err!(RemovableSetType::from_str(
+                            ty.0.as_str()
+                        ));
 
                         Some(SetOperation::Remove { ty })
-                    }
+                    },
                     "radiation" => {
                         let amount = skip_none!(set.amount);
 
                         Some(SetOperation::Radiation { amount })
-                    }
+                    },
                     "variable" => {
                         let id = skip_none!(set.id.clone());
 
                         Some(SetOperation::Variable { id })
-                    }
+                    },
                     "bash" => Some(SetOperation::Bash {}),
                     "burn" => Some(SetOperation::Burn {}),
                     _ => {
                         warn!("Unknown set point type {}; Skipping", ty);
                         None
-                    }
+                    },
                 };
 
                 if let Some(operation) = operation {
@@ -976,22 +999,27 @@ impl CDDAMapDataIntermediate {
                 let operation = match ty.0.as_str() {
                     "terrain" | "furniture" | "trap" => {
                         let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(ty.0.as_str()));
+                        let ty = skip_err!(PlaceableSetType::from_str(
+                            ty.0.as_str()
+                        ));
 
                         Some(SetOperation::Place { id, ty })
-                    }
-                    "trap_remove" | "item_remove" | "field_remove" | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(ty.0.as_str()));
+                    },
+                    "trap_remove" | "item_remove" | "field_remove"
+                    | "creature_remove" => {
+                        let ty = skip_err!(RemovableSetType::from_str(
+                            ty.0.as_str()
+                        ));
 
                         Some(SetOperation::Remove { ty })
-                    }
+                    },
                     "radiation" => Some(SetOperation::Radiation {
                         amount: set.amount.unwrap_or(NumberOrRange::Number(1)),
                     }),
                     _ => {
                         warn!("Unknown set square type {}; Skipping", ty);
                         None
-                    }
+                    },
                 };
 
                 if let Some(operation) = operation {
@@ -1020,7 +1048,7 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
         let mut map_data_collection = MapDataCollection::default();
 
         match &self.om_terrain {
-            None => {}
+            None => {},
             Some(om) => {
                 if let OmTerrain::Nested(n) = om {
                     let num_rows = n.len();
@@ -1040,38 +1068,55 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                                     for row in 0..DEFAULT_MAP_HEIGHT {
                                         for column in 0..DEFAULT_MAP_WIDTH {
                                             nested_cells.insert(
-                                                UVec2::new(column as u32, row as u32),
+                                                UVec2::new(
+                                                    column as u32,
+                                                    row as u32,
+                                                ),
                                                 Cell { character: ' ' },
                                             );
                                         }
                                     }
-                                }
+                                },
                                 Some(map_row_slice) => {
-                                    let new_slice: Vec<String> = map_row_slice[map_row_index
-                                        * DEFAULT_MAP_HEIGHT
-                                        ..map_row_index * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT]
+                                    let new_slice: Vec<String> = map_row_slice
+                                        [map_row_index * DEFAULT_MAP_HEIGHT
+                                            ..map_row_index
+                                                * DEFAULT_MAP_HEIGHT
+                                                + DEFAULT_MAP_HEIGHT]
                                         .into_iter()
                                         .map(|str| {
                                             str.chars()
-                                                .skip(map_column_index * DEFAULT_MAP_WIDTH)
+                                                .skip(
+                                                    map_column_index
+                                                        * DEFAULT_MAP_WIDTH,
+                                                )
                                                 .take(DEFAULT_MAP_WIDTH)
                                                 .collect::<String>()
                                         })
                                         .collect();
 
-                                    for (row_index, slice) in new_slice.into_iter().enumerate() {
-                                        for (column_index, character) in slice.chars().enumerate() {
+                                    for (row_index, slice) in
+                                        new_slice.into_iter().enumerate()
+                                    {
+                                        for (column_index, character) in
+                                            slice.chars().enumerate()
+                                        {
                                             nested_cells.insert(
-                                                UVec2::new(column_index as u32, row_index as u32),
+                                                UVec2::new(
+                                                    column_index as u32,
+                                                    row_index as u32,
+                                                ),
                                                 Cell { character },
                                             );
                                         }
                                     }
-                                }
+                                },
                             }
 
-                            let map_coordinates =
-                                UVec2::new(map_column_index as u32, map_row_index as u32);
+                            let map_coordinates = UVec2::new(
+                                map_column_index as u32,
+                                map_row_index as u32,
+                            );
                             let mut map_data = MapData::default();
 
                             let properties = self.get_properties();
@@ -1082,15 +1127,22 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                             map_data.set = set;
                             map_data.properties = properties;
                             map_data.place = place;
-                            map_data.parameters = self.object.common.parameters.clone();
-                            map_data.palettes = self.object.common.palettes.clone();
+                            map_data.parameters =
+                                self.object.common.parameters.clone();
+                            map_data.palettes =
+                                self.object.common.palettes.clone();
                             map_data.fill = self.object.fill_ter.clone();
-                            map_data.map_size =
-                                self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+                            map_data.map_size = self
+                                .object
+                                .mapgen_size
+                                .unwrap_or(DEFAULT_MAP_DATA_SIZE);
                             map_data.flags = self.object.common.flags.clone();
 
                             map_data_collection.maps.insert(
-                                UVec2::new(map_column_index as u32, map_row_index as u32),
+                                UVec2::new(
+                                    map_column_index as u32,
+                                    map_row_index as u32,
+                                ),
                                 map_data,
                             );
                         }
@@ -1098,7 +1150,7 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
 
                     return map_data_collection;
                 }
-            }
+            },
         };
 
         let mut collection = MapDataCollection::default();
@@ -1110,13 +1162,18 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
 
         let mut cells = IndexMap::new();
 
-        for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y {
-            for column in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).x {
+        for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y
+        {
+            for column in
+                0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).x
+            {
                 let char = match self.object.rows.as_ref() {
                     None => ' ',
                     Some(s) => match s.get(row as usize) {
                         None => ' ',
-                        Some(row) => row.chars().nth(column as usize).unwrap_or(' '),
+                        Some(row) => {
+                            row.chars().nth(column as usize).unwrap_or(' ')
+                        },
                     },
                 };
 
@@ -1134,7 +1191,8 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
         map_data.parameters = self.object.common.parameters.clone();
         map_data.palettes = self.object.common.palettes.clone();
         map_data.fill = self.object.fill_ter.clone();
-        map_data.map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+        map_data.map_size =
+            self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
         map_data.flags = self.object.common.flags.clone();
 
         collection.maps.insert(UVec2::ZERO, map_data);

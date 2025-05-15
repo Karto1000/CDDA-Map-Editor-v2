@@ -1,11 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::map::map_properties::{
-    FurnitureProperty, NestedProperty,
-    TerrainProperty,
+    FurnitureProperty, NestedProperty, TerrainProperty,
 };
-use crate::map::{
-    MapData, Place, Property, VisibleMappingCommand,
-};
+use crate::map::{MapData, Place, Property, VisibleMappingCommand};
 use glam::IVec2;
 use serde_json::Value;
 

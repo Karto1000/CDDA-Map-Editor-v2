@@ -33,14 +33,18 @@ impl TilesheetConfigLoader {
         Self { tileset_path }
     }
 
-    pub async fn load_serde_value(&mut self) -> Result<serde_json::Value, Error> {
-        let legacy_tilesheet = <TilesheetConfigLoader as Load<LegacyTileConfig>>::load(self).await;
+    pub async fn load_serde_value(
+        &mut self,
+    ) -> Result<serde_json::Value, Error> {
+        let legacy_tilesheet =
+            <TilesheetConfigLoader as Load<LegacyTileConfig>>::load(self).await;
         if let Ok(val) = legacy_tilesheet {
             return Ok(serde_json::to_value(val)?);
         }
 
         let current_tilesheet =
-            <TilesheetConfigLoader as Load<CurrentTileConfig>>::load(self).await;
+            <TilesheetConfigLoader as Load<CurrentTileConfig>>::load(self)
+                .await;
         if let Ok(val) = current_tilesheet {
             return Ok(serde_json::to_value(val)?);
         }

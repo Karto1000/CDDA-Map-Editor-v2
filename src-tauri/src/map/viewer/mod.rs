@@ -1,6 +1,7 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::editor_data::{
-    EditorData, EditorDataSaver, LiveViewerData, OmTerrainType, Project, ProjectType,
+    EditorData, EditorDataSaver, LiveViewerData, OmTerrainType, Project,
+    ProjectType,
 };
 use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
 use crate::map::Serializer;
@@ -8,13 +9,10 @@ use crate::tab::{Tab, TabType};
 use crate::util::{get_json_data, Load};
 use crate::util::{CDDADataError, Save};
 use crate::{events, impl_serialize_for_error};
-use derive_more::Display;
 use glam::UVec2;
-use image::save_buffer;
 use log::info;
 use notify::Watcher;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -91,13 +89,14 @@ pub async fn open_viewer(
 
             editor_data_lock.projects.push(new_project);
             editor_data_lock.opened_project = Some(data.project_name.clone());
-        }
+        },
         OmTerrainType::Nested { om_terrain_ids } => {
             let mut om_terrain_id_hashmap = HashMap::new();
 
             for (y, id_list) in om_terrain_ids.into_iter().enumerate() {
                 for (x, id) in id_list.into_iter().enumerate() {
-                    om_terrain_id_hashmap.insert(id, UVec2::new(x as u32, y as u32));
+                    om_terrain_id_hashmap
+                        .insert(id, UVec2::new(x as u32, y as u32));
                 }
             }
 
@@ -121,7 +120,7 @@ pub async fn open_viewer(
 
             editor_data_lock.projects.push(new_project);
             editor_data_lock.opened_project = Some(data.project_name.clone());
-        }
+        },
     }
 
     app.emit(

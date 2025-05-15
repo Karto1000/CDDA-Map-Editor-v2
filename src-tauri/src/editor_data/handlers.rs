@@ -9,7 +9,9 @@ use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 #[tauri::command]
-pub async fn get_editor_data(editor_data: State<'_, Mutex<EditorData>>) -> Result<EditorData, ()> {
+pub async fn get_editor_data(
+    editor_data: State<'_, Mutex<EditorData>>,
+) -> Result<EditorData, ()> {
     Ok(editor_data.lock().await.clone())
 }
 
@@ -29,13 +31,16 @@ pub async fn cdda_installation_directory_picked(
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), InstallationPickedError> {
     let gfx_dir = fs::read_dir(&path.join("gfx")).map_err(|_| {
-        InstallationPickedError::InvalidCDDADirectory("Missing 'gfx' directory".into())
+        InstallationPickedError::InvalidCDDADirectory(
+            "Missing 'gfx' directory".into(),
+        )
     })?;
 
     let mut available_tilesets = vec![];
 
     for entry in gfx_dir {
-        let entry = entry.map_err(|e| InstallationPickedError::Io(e.to_string()))?;
+        let entry =
+            entry.map_err(|e| InstallationPickedError::Io(e.to_string()))?;
         let file_type = entry
             .file_type()
             .map_err(|e| InstallationPickedError::Io(e.to_string()))?;
@@ -44,7 +49,8 @@ pub async fn cdda_installation_directory_picked(
             continue;
         }
 
-        available_tilesets.push(entry.file_name().to_string_lossy().into_owned());
+        available_tilesets
+            .push(entry.file_name().to_string_lossy().into_owned());
     }
 
     let mut lock = editor_data.lock().await;
@@ -59,13 +65,13 @@ pub async fn cdda_installation_directory_picked(
     {
         Ok(data) => {
             app.manage(Mutex::new(data));
-        }
+        },
         Err(e) => {
             warn!("{}", e);
             return Err(InstallationPickedError::InvalidCDDADirectory(
                 "Failed to load json data".into(),
             ));
-        }
+        },
     }
 
     app.emit("editor_data_changed", lock.clone())
@@ -104,7 +110,7 @@ pub async fn tileset_picked(
 
     match tilesets.iter().find(|t| **t == tileset) {
         None => return Err(TilesetPickedError::NotATileset),
-        Some(_) => {}
+        Some(_) => {},
     }
 
     lock.config.selected_tileset = Some(tileset.clone());

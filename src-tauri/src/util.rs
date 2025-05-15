@@ -19,7 +19,9 @@ use std::ops::Deref;
 use thiserror::Error;
 use tokio::sync::MutexGuard;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display, Default)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display, Default,
+)]
 pub struct CDDAIdentifier(pub String);
 
 impl From<&str> for CDDAIdentifier {
@@ -64,7 +66,9 @@ impl CDDAIdentifier {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display)]
+#[derive(
+    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display,
+)]
 pub struct ParameterIdentifier(pub String);
 
 impl From<&str> for ParameterIdentifier {
@@ -88,14 +92,16 @@ impl GetIdentifier for DistributionInner {
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> CDDAIdentifier {
         match self {
-            DistributionInner::Param { param, fallback } => calculated_parameters
-                .get(param)
-                .map(|p| p.clone())
-                .unwrap_or(fallback.clone()),
+            DistributionInner::Param { param, fallback } => {
+                calculated_parameters
+                    .get(param)
+                    .map(|p| p.clone())
+                    .unwrap_or(fallback.clone())
+            },
             DistributionInner::Normal(n) => n.clone(),
             DistributionInner::Switch { switch, cases } => {
                 panic!()
-            }
+            },
         }
     }
 }
@@ -126,11 +132,15 @@ pub enum DistributionInner {
 impl Into<MapGenValue> for DistributionInner {
     fn into(self) -> MapGenValue {
         match self {
-            DistributionInner::Param { param, fallback } => MapGenValue::Param {
-                param,
-                fallback: Some(fallback),
+            DistributionInner::Param { param, fallback } => {
+                MapGenValue::Param {
+                    param,
+                    fallback: Some(fallback),
+                }
             },
-            DistributionInner::Switch { switch, cases } => MapGenValue::Switch { switch, cases },
+            DistributionInner::Switch { switch, cases } => {
+                MapGenValue::Switch { switch, cases }
+            },
             DistributionInner::Normal(n) => MapGenValue::String(n),
         }
     }
@@ -246,7 +256,9 @@ where
             type Value = Weighted<T>;
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                formatter.write_str("[T, i32] where T is the data and i32 is the weight")
+                formatter.write_str(
+                    "[T, i32] where T is the data and i32 is the weight",
+                )
             }
 
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
@@ -461,7 +473,7 @@ macro_rules! skip_err {
             Err(e) => {
                 warn!("Error for value: {:?}, Err: {:?}; Skipping", $res, e);
                 continue;
-            }
+            },
         }
     };
 }
@@ -474,7 +486,7 @@ macro_rules! skip_none {
             None => {
                 warn!("Missing value for {:?}; Skipping", $res);
                 continue;
-            }
+            },
         }
     };
 }
@@ -526,7 +538,7 @@ pub fn get_current_project<'a>(
             return Err(GetCurrentMapDataError::InvalidProjectName(
                 project_name.clone(),
             ))
-        }
+        },
         Some(d) => d,
     };
 
@@ -550,7 +562,7 @@ pub fn get_current_project_mut<'a>(
             return Err(GetCurrentMapDataError::InvalidProjectName(
                 project_name.clone(),
             ))
-        }
+        },
         Some(d) => d,
     };
 

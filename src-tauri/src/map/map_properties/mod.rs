@@ -1,7 +1,8 @@
 use crate::cdda_data::map_data::{
-    MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonster, MapGenSign, MapGenTrap,
-    PlaceInnerComputers, PlaceInnerFields, PlaceInnerFurniture, PlaceInnerGaspumps,
-    PlaceInnerItems, PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain, PlaceInnerToilets,
+    MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonster,
+    MapGenSign, MapGenTrap, PlaceInnerComputers, PlaceInnerFields,
+    PlaceInnerFurniture, PlaceInnerGaspumps, PlaceInnerItems,
+    PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain, PlaceInnerToilets,
     PlaceInnerTraps,
 };
 use crate::cdda_data::MapGenValue;

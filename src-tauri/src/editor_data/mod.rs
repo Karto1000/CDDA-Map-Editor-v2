@@ -3,15 +3,14 @@ pub(crate) mod handlers;
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
 use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
-use crate::map::{CellRepresentation, MapData, MappingKind, DEFAULT_MAP_DATA_SIZE};
+use crate::map::{CellRepresentation, MapData, DEFAULT_MAP_DATA_SIZE};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::util::{Load, Save, SaveError};
 use glam::{IVec3, UVec2};
 use log::info;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-use std::io::Error;
 use std::path::PathBuf;
 use tauri::Theme;
 use thiserror::Error;
@@ -21,7 +20,9 @@ pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 pub type ZLevel = i32;
 pub type MapCoordinates = UVec2;
 
-pub async fn get_map_data_collection_live_viewer_data(data: &LiveViewerData) -> MapDataCollection {
+pub async fn get_map_data_collection_live_viewer_data(
+    data: &LiveViewerData,
+) -> MapDataCollection {
     info!(
         "Opening Live viewer {:?} at {:?}",
         data.om_terrain, data.path
@@ -35,13 +36,14 @@ pub async fn get_map_data_collection_live_viewer_data(data: &LiveViewerData) -> 
             };
 
             map_data_importer.load().await.unwrap()
-        }
+        },
         OmTerrainType::Nested { om_terrain_ids, .. } => {
             let mut om_terrain_id_hashmap = HashMap::new();
 
             for (y, id_list) in om_terrain_ids.into_iter().enumerate() {
                 for (x, id) in id_list.into_iter().enumerate() {
-                    om_terrain_id_hashmap.insert(id.clone(), UVec2::new(x as u32, y as u32));
+                    om_terrain_id_hashmap
+                        .insert(id.clone(), UVec2::new(x as u32, y as u32));
                 }
             }
 
@@ -51,7 +53,7 @@ pub async fn get_map_data_collection_live_viewer_data(data: &LiveViewerData) -> 
             };
 
             map_data_importer.load().await.unwrap()
-        }
+        },
     };
 
     map_data_collection
@@ -141,8 +143,10 @@ impl MapDataCollection {
         z: ZLevel,
     ) -> IVec3 {
         IVec3::new(
-            (cell_coordinates.x + map_coordinates.x * DEFAULT_MAP_DATA_SIZE.x) as i32,
-            (cell_coordinates.y + map_coordinates.y * DEFAULT_MAP_DATA_SIZE.y) as i32,
+            (cell_coordinates.x + map_coordinates.x * DEFAULT_MAP_DATA_SIZE.x)
+                as i32,
+            (cell_coordinates.y + map_coordinates.y * DEFAULT_MAP_DATA_SIZE.y)
+                as i32,
             z,
         )
     }
@@ -187,9 +191,16 @@ impl MapDataCollection {
             let mut new_repr = HashMap::new();
 
             for (cell_coords, cell_repr) in repr.drain() {
-                let new_cell_coords =
-                    Self::map_to_global_cell_coords(map_coords, &cell_coords, 0).as_uvec3();
-                new_repr.insert(UVec2::new(new_cell_coords.x, new_cell_coords.y), cell_repr);
+                let new_cell_coords = Self::map_to_global_cell_coords(
+                    map_coords,
+                    &cell_coords,
+                    0,
+                )
+                .as_uvec3();
+                new_repr.insert(
+                    UVec2::new(new_cell_coords.x, new_cell_coords.y),
+                    cell_repr,
+                );
             }
 
             cell_repr.extend(new_repr);
@@ -279,7 +290,8 @@ pub struct EditorDataSaver {
 
 impl Save<EditorData> for EditorDataSaver {
     async fn save(&self, data: &EditorData) -> Result<(), SaveError> {
-        let serialized = serde_json::to_string_pretty(data).expect("Serialization to not fail");
+        let serialized = serde_json::to_string_pretty(data)
+            .expect("Serialization to not fail");
         fs::write(self.path.join("config.json"), serialized)?;
         info!("Saved EditorData to {}", self.path.display());
         Ok(())

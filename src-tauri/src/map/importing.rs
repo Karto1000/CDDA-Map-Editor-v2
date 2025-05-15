@@ -21,7 +21,9 @@ impl Load<MapDataCollection> for SingleMapDataImporter {
             serde_json::from_reader::<BufReader<File>, Vec<Value>>(reader)
                 .map_err(|e| anyhow::Error::from(e))?
                 .into_iter()
-                .filter_map(|v: Value| serde_json::from_value::<CDDAMapDataIntermediate>(v).ok())
+                .filter_map(|v: Value| {
+                    serde_json::from_value::<CDDAMapDataIntermediate>(v).ok()
+                })
                 .collect();
 
         // TODO: Handle multiple z-levels
@@ -49,17 +51,24 @@ impl Load<MapDataCollection> for SingleMapDataImporter {
                             false => None,
                         },
                         OmTerrain::Duplicate(duplicate) => {
-                            match duplicate.iter().find(|d| *d == &self.om_terrain) {
+                            match duplicate
+                                .iter()
+                                .find(|d| *d == &self.om_terrain)
+                            {
                                 Some(_) => Some(mdi.into()),
                                 None => None,
                             }
-                        }
+                        },
                         OmTerrain::Nested(n) => {
-                            match n.iter().flatten().find(|s| *s == &self.om_terrain) {
+                            match n
+                                .iter()
+                                .flatten()
+                                .find(|s| *s == &self.om_terrain)
+                            {
                                 None => None,
                                 Some(_) => Some(mdi.into()),
                             }
-                        }
+                        },
                     };
                 };
 
@@ -82,7 +91,9 @@ impl Load<MapDataCollection> for NestedMapDataImporter {
             serde_json::from_reader::<BufReader<File>, Vec<Value>>(reader)
                 .map_err(|e| anyhow::Error::from(e))?
                 .into_iter()
-                .filter_map(|v: Value| serde_json::from_value::<CDDAMapDataIntermediate>(v).ok())
+                .filter_map(|v: Value| {
+                    serde_json::from_value::<CDDAMapDataIntermediate>(v).ok()
+                })
                 .collect();
 
         let mut collection = MapDataCollection::default();
@@ -92,14 +103,15 @@ impl Load<MapDataCollection> for NestedMapDataImporter {
                 return match om_terrain {
                     OmTerrain::Single(s) => match self.om_terrain_ids.get(s) {
                         Some(pos) => {
-                            let mut intermediate: MapDataCollection = mdi.into();
+                            let mut intermediate: MapDataCollection =
+                                mdi.into();
 
                             collection.maps.insert(
                                 pos.clone(),
                                 intermediate.maps.remove(&UVec2::ZERO).unwrap(),
                             );
-                        }
-                        None => {}
+                        },
+                        None => {},
                     },
                     OmTerrain::Duplicate(duplicate) => {
                         match duplicate
@@ -108,16 +120,20 @@ impl Load<MapDataCollection> for NestedMapDataImporter {
                             .next()
                         {
                             Some(pos) => {
-                                let mut intermediate: MapDataCollection = mdi.into();
+                                let mut intermediate: MapDataCollection =
+                                    mdi.into();
 
                                 collection.maps.insert(
                                     pos.clone(),
-                                    intermediate.maps.remove(&UVec2::ZERO).unwrap(),
+                                    intermediate
+                                        .maps
+                                        .remove(&UVec2::ZERO)
+                                        .unwrap(),
                                 );
-                            }
-                            None => {}
+                            },
+                            None => {},
                         }
-                    }
+                    },
                     OmTerrain::Nested(n) => {
                         let mut found_ids = vec![];
 
@@ -129,23 +145,27 @@ impl Load<MapDataCollection> for NestedMapDataImporter {
                                             pos.clone(),
                                             UVec2::new(col as u32, row as u32),
                                         ));
-                                    }
-                                    None => {}
+                                    },
+                                    None => {},
                                 }
                             }
                         }
 
                         if found_ids.len() > 0 {
-                            let mut intermediate: MapDataCollection = mdi.into();
+                            let mut intermediate: MapDataCollection =
+                                mdi.into();
 
                             for (final_pos, found_pos) in found_ids {
                                 collection.maps.insert(
                                     final_pos,
-                                    intermediate.maps.remove(&found_pos).unwrap(),
+                                    intermediate
+                                        .maps
+                                        .remove(&found_pos)
+                                        .unwrap(),
                                 );
                             }
                         }
-                    }
+                    },
                 };
             };
         });

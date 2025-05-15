@@ -1,19 +1,15 @@
 use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
-use crate::cdda_data::map_data::{
-    MapGenField, MapGenGaspumpFuelType, MapGenNestedIntermediate, ReferenceOrInPlace,
-};
+use crate::cdda_data::map_data::{MapGenGaspumpFuelType, ReferenceOrInPlace};
 use crate::map::map_properties::{
-    ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty, ItemsProperty,
-    MonstersProperty, NestedProperty, SignsProperty, TerrainProperty, ToiletsProperty,
-    TrapsProperty,
+    ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty,
+    ItemsProperty, MonstersProperty, NestedProperty, SignsProperty,
+    TerrainProperty, ToiletsProperty, TrapsProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
-use crate::util::{MeabyVec, MeabyWeighted, Weighted};
 use log::error;
 use rand::prelude::IndexedRandom;
-use serde_json::json;
 
 impl Property for TerrainProperty {
     fn get_commands(
@@ -61,25 +57,28 @@ impl Property for MonstersProperty {
             .is_random_hit(100)
         {
             true => match &monster.id {
-                MapGenMonsterType::Monster { monster } => {
-                    Some(monster.get_identifier(&map_data.calculated_parameters))
-                }
+                MapGenMonsterType::Monster { monster } => Some(
+                    monster.get_identifier(&map_data.calculated_parameters),
+                ),
                 MapGenMonsterType::MonsterGroup { group } => {
-                    let id = group.get_identifier(&map_data.calculated_parameters);
+                    let id =
+                        group.get_identifier(&map_data.calculated_parameters);
                     let mon_group = json_data.monstergroups.get(&id)?;
                     mon_group
                         .get_random_monster(
                             &json_data.monstergroups,
                             &map_data.calculated_parameters,
                         )
-                        .map(|id| id.get_identifier(&map_data.calculated_parameters))
-                }
+                        .map(|id| {
+                            id.get_identifier(&map_data.calculated_parameters)
+                        })
+                },
             },
             false => None,
         };
 
         match ident {
-            None => {}
+            None => {},
             Some(ident) => {
                 let command = VisibleMappingCommand {
                     id: ident,
@@ -89,7 +88,7 @@ impl Property for MonstersProperty {
                 };
 
                 return Some(vec![command]);
-            }
+            },
         }
 
         None
@@ -170,28 +169,30 @@ impl Property for NestedProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        let mut rng = rng();
+        let rng = rng();
         let nested_chunk = self.nested.get_random();
 
         let should_place = match &nested_chunk.neighbors {
             None => true,
-            Some(neighbors) => neighbors.iter().all(|(dir, om_terrain_match)| {
-                let simulated_neighbor = map_data
-                    .config
-                    .simulated_neighbors
-                    .get(dir)
-                    .expect("Simulated neighbor must always exist");
+            Some(neighbors) => {
+                neighbors.iter().all(|(dir, om_terrain_match)| {
+                    let simulated_neighbor = map_data
+                        .config
+                        .simulated_neighbors
+                        .get(dir)
+                        .expect("Simulated neighbor must always exist");
 
-                om_terrain_match.iter().all(|om_terrain| {
-                    if simulated_neighbor.is_empty() {
-                        return false;
-                    }
+                    om_terrain_match.iter().all(|om_terrain| {
+                        if simulated_neighbor.is_empty() {
+                            return false;
+                        }
 
-                    simulated_neighbor
-                        .iter()
-                        .all(|id| om_terrain.matches_identifier(id))
+                        simulated_neighbor
+                            .iter()
+                            .all(|id| om_terrain.matches_identifier(id))
+                    })
                 })
-            }),
+            },
         };
 
         if nested_chunk.invert_condition {
@@ -215,7 +216,7 @@ impl Property for NestedProperty {
             None => {
                 error!("Nested Mapgen {} not found", selected_chunk);
                 return None;
-            }
+            },
             Some(v) => v,
         };
 
@@ -274,7 +275,8 @@ impl Property for GaspumpsProperty {
         let id = match &gaspump.fuel {
             None => "t_gas_pump",
             Some(fuel) => match fuel {
-                MapGenGaspumpFuelType::Gasoline | MapGenGaspumpFuelType::Avgas => "t_gas_pump",
+                MapGenGaspumpFuelType::Gasoline
+                | MapGenGaspumpFuelType::Avgas => "t_gas_pump",
                 MapGenGaspumpFuelType::Diesel => "t_diesel_pump",
                 MapGenGaspumpFuelType::Jp8 => "t_jp8_pump",
             },
@@ -317,8 +319,12 @@ impl DisplayItemGroup {
     pub fn probability(&self) -> f32 {
         match self {
             DisplayItemGroup::Single { probability, .. } => probability.clone(),
-            DisplayItemGroup::Collection { probability, .. } => probability.clone(),
-            DisplayItemGroup::Distribution { probability, .. } => probability.clone(),
+            DisplayItemGroup::Collection { probability, .. } => {
+                probability.clone()
+            },
+            DisplayItemGroup::Distribution { probability, .. } => {
+                probability.clone()
+            },
         }
     }
 }
@@ -335,8 +341,12 @@ impl ItemsProperty {
         let weight_sum = entries.iter().fold(0, |acc, v| match v {
             ItemEntry::Item(i) => acc + i.probability,
             ItemEntry::Group(g) => acc + g.probability,
-            ItemEntry::Distribution { probability, .. } => acc + probability.unwrap_or(100),
-            ItemEntry::Collection { probability, .. } => acc + probability.unwrap_or(100),
+            ItemEntry::Distribution { probability, .. } => {
+                acc + probability.unwrap_or(100)
+            },
+            ItemEntry::Collection { probability, .. } => {
+                acc + probability.unwrap_or(100)
+            },
         });
 
         for entry in entries.iter() {
@@ -344,17 +354,20 @@ impl ItemsProperty {
                 ItemEntry::Item(i) => {
                     let display_item = DisplayItemGroup::Single {
                         item: i.item.clone(),
-                        probability: i.probability as f32 / weight_sum as f32 * group_probability,
+                        probability: i.probability as f32 / weight_sum as f32
+                            * group_probability,
                     };
                     display_item_groups.push(display_item);
-                }
+                },
                 ItemEntry::Group(g) => {
-                    let other_group = &json_data
-                        .item_groups
-                        .get(&g.group)
-                        .expect(format!("Item Group {} to exist", &g.group).as_str());
+                    let other_group =
+                        &json_data.item_groups.get(&g.group).expect(
+                            format!("Item Group {} to exist", &g.group)
+                                .as_str(),
+                        );
 
-                    let probability = g.probability as f32 / weight_sum as f32 * group_probability;
+                    let probability = g.probability as f32 / weight_sum as f32
+                        * group_probability;
 
                     let display_items = self.get_display_items_from_entries(
                         &other_group.common.entries,
@@ -364,55 +377,69 @@ impl ItemsProperty {
 
                     match other_group.common.subtype {
                         ItemGroupSubtype::Collection => {
-                            display_item_groups.push(DisplayItemGroup::Collection {
-                                items: display_items,
-                                name: Some(other_group.id.clone().0),
-                                probability,
-                            });
-                        }
+                            display_item_groups.push(
+                                DisplayItemGroup::Collection {
+                                    items: display_items,
+                                    name: Some(other_group.id.clone().0),
+                                    probability,
+                                },
+                            );
+                        },
                         ItemGroupSubtype::Distribution => {
-                            display_item_groups.push(DisplayItemGroup::Distribution {
-                                items: display_items,
-                                name: Some(other_group.id.clone().0),
-                                probability,
-                            });
-                        }
+                            display_item_groups.push(
+                                DisplayItemGroup::Distribution {
+                                    items: display_items,
+                                    name: Some(other_group.id.clone().0),
+                                    probability,
+                                },
+                            );
+                        },
                     }
-                }
+                },
                 ItemEntry::Distribution {
                     distribution,
                     probability,
                 } => {
                     let probability = probability
-                        .map(|p| p as f32 / weight_sum as f32 * group_probability)
+                        .map(|p| {
+                            p as f32 / weight_sum as f32 * group_probability
+                        })
                         .unwrap_or(group_probability / weight_sum as f32);
 
-                    let display_items =
-                        self.get_display_items_from_entries(distribution, json_data, probability);
+                    let display_items = self.get_display_items_from_entries(
+                        distribution,
+                        json_data,
+                        probability,
+                    );
 
                     display_item_groups.push(DisplayItemGroup::Distribution {
                         name: Some("In-Place".to_string()),
                         items: display_items,
                         probability,
                     });
-                }
+                },
                 ItemEntry::Collection {
                     collection,
                     probability,
                 } => {
                     let probability = probability
-                        .map(|p| p as f32 / weight_sum as f32 * group_probability)
+                        .map(|p| {
+                            p as f32 / weight_sum as f32 * group_probability
+                        })
                         .unwrap_or(group_probability / weight_sum as f32);
 
-                    let display_items =
-                        self.get_display_items_from_entries(collection, json_data, probability);
+                    let display_items = self.get_display_items_from_entries(
+                        collection,
+                        json_data,
+                        probability,
+                    );
 
                     display_item_groups.push(DisplayItemGroup::Distribution {
                         name: Some("In-Place".to_string()),
                         items: display_items,
                         probability,
                     });
-                }
+                },
             }
         }
 
@@ -438,7 +465,7 @@ impl Property for ItemsProperty {
                         .get(&i)
                         .expect(format!("Item group {} to exist", i).as_str())
                         .common
-                }
+                },
                 ReferenceOrInPlace::InPlace(ip) => &ip.common,
             };
 
@@ -460,18 +487,30 @@ impl Property for ItemsProperty {
             match &item_group_entries.subtype {
                 ItemGroupSubtype::Collection => {
                     display_item_groups.push(DisplayItemGroup::Collection {
-                        name: Some(mapgen_item.data.item.ref_or("Unnamed Collection").0),
+                        name: Some(
+                            mapgen_item
+                                .data
+                                .item
+                                .ref_or("Unnamed Collection")
+                                .0,
+                        ),
                         probability,
                         items,
                     });
-                }
+                },
                 ItemGroupSubtype::Distribution => {
                     display_item_groups.push(DisplayItemGroup::Distribution {
-                        name: Some(mapgen_item.data.item.ref_or("Unnamed Distribution").0),
+                        name: Some(
+                            mapgen_item
+                                .data
+                                .item
+                                .ref_or("Unnamed Distribution")
+                                .0,
+                        ),
                         probability,
                         items,
                     });
-                }
+                },
             }
         }
 
@@ -563,7 +602,8 @@ mod tests {
     use crate::cdda_data::{CDDADistributionInner, MapGenValue};
     use crate::map::map_properties::TerrainProperty;
     use crate::map::{
-        MapData, MappingKind, Property, VisibleMappingCommand, VisibleMappingCommandKind,
+        MapData, MappingKind, Property, VisibleMappingCommand,
+        VisibleMappingCommandKind,
     };
     use crate::util::{MeabyVec, MeabyWeighted};
     use crate::TEST_CDDA_DATA;
@@ -600,10 +640,11 @@ mod tests {
 
         // Test it with a distribution
         {
-            let distribution: MeabyVec<MeabyWeighted<CDDADistributionInner>> = MeabyVec::Vec(vec![
-                MeabyWeighted::NotWeighted("t_grass".into()),
-                MeabyWeighted::NotWeighted("t_dirt".into()),
-            ]);
+            let distribution: MeabyVec<MeabyWeighted<CDDADistributionInner>> =
+                MeabyVec::Vec(vec![
+                    MeabyWeighted::NotWeighted("t_grass".into()),
+                    MeabyWeighted::NotWeighted("t_dirt".into()),
+                ]);
 
             let terrain_property = TerrainProperty {
                 mapgen_value: MapGenValue::Distribution(distribution),
@@ -615,7 +656,9 @@ mod tests {
 
             let first = commands.pop().unwrap();
 
-            assert!(first.id == "t_grass".into() || first.id == "t_dirt".into());
+            assert!(
+                first.id == "t_grass".into() || first.id == "t_dirt".into()
+            );
         }
     }
 }

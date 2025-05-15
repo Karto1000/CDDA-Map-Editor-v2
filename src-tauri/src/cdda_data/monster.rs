@@ -47,14 +47,16 @@ impl CDDAMonsterGroup {
         let chosen_monster = &self.monsters[chosen_index];
 
         let id = match &chosen_monster.id {
-            MapGenMonsterType::Monster { monster } => monster.get_identifier(calculated_parameters),
+            MapGenMonsterType::Monster { monster } => {
+                monster.get_identifier(calculated_parameters)
+            },
             MapGenMonsterType::MonsterGroup { group } => {
                 let id = group.get_identifier(calculated_parameters);
                 let group = monstergroups.get(&id)?;
                 group
                     .get_random_monster(monstergroups, calculated_parameters)?
                     .clone()
-            }
+            },
         };
 
         Some(id)

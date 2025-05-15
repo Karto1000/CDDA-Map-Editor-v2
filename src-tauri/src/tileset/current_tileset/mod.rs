@@ -11,7 +11,11 @@ pub struct CurrentTileConfig;
 pub struct CurrentTilesheet {}
 
 impl Tilesheet for CurrentTilesheet {
-    fn get_sprite(&self, id: &CDDAIdentifier, json_data: &DeserializedCDDAJsonData) -> SpriteKind {
+    fn get_sprite(
+        &self,
+        id: &CDDAIdentifier,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> SpriteKind {
         todo!()
     }
 }

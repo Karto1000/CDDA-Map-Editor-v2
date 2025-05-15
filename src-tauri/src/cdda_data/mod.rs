@@ -14,7 +14,9 @@ use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
-use crate::util::{CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier};
+use crate::util::{
+    CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier,
+};
 use derive_more::Display;
 use indexmap::IndexMap;
 use num_traits::PrimInt;
@@ -26,7 +28,9 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::{Add, Rem, Sub};
 
-pub fn extract_comments<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+pub fn extract_comments<'de, D>(
+    deserializer: D,
+) -> Result<Vec<String>, D::Error>
 where
     D: Deserializer<'de>,
 {
@@ -58,7 +62,9 @@ impl<T: PrimInt + SampleUniform> Add<T> for NumberOrRange<T> {
     fn add(self, rhs: T) -> Self::Output {
         match self {
             NumberOrRange::Number(n) => NumberOrRange::Number(n + rhs),
-            NumberOrRange::Range(r) => NumberOrRange::Range((r.0 + rhs, r.1 + rhs)),
+            NumberOrRange::Range(r) => {
+                NumberOrRange::Range((r.0 + rhs, r.1 + rhs))
+            },
         }
     }
 }
@@ -69,7 +75,9 @@ impl<T: PrimInt + SampleUniform> Sub<T> for NumberOrRange<T> {
     fn sub(self, rhs: T) -> Self::Output {
         match self {
             NumberOrRange::Number(n) => NumberOrRange::Number(n - rhs),
-            NumberOrRange::Range(r) => NumberOrRange::Range((r.0 - rhs, r.1 - rhs)),
+            NumberOrRange::Range(r) => {
+                NumberOrRange::Range((r.0 - rhs, r.1 - rhs))
+            },
         }
     }
 }
@@ -80,7 +88,9 @@ impl<T: PrimInt + SampleUniform> Rem<T> for NumberOrRange<T> {
     fn rem(self, rhs: T) -> Self::Output {
         match self {
             NumberOrRange::Number(n) => NumberOrRange::Number(n % rhs),
-            NumberOrRange::Range(r) => NumberOrRange::Range((r.0 % rhs, r.1 % rhs)),
+            NumberOrRange::Range(r) => {
+                NumberOrRange::Range((r.0 % rhs, r.1 % rhs))
+            },
         }
     }
 }
@@ -106,7 +116,7 @@ impl<T: PrimInt + SampleUniform> PartialOrd<T> for NumberOrRange<T> {
                 } else {
                     Some(Ordering::Equal)
                 }
-            }
+            },
         }
     }
 }
@@ -118,8 +128,8 @@ enum NumberOrArray<T: PrimInt + Clone + SampleUniform> {
     Array(Vec<T>),
 }
 
-impl<'de, T: PrimInt + Clone + SampleUniform + Deserialize<'de>> Deserialize<'de>
-    for NumberOrRange<T>
+impl<'de, T: PrimInt + Clone + SampleUniform + Deserialize<'de>>
+    Deserialize<'de> for NumberOrRange<T>
 {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -148,7 +158,7 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
                 //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
                 num
-            }
+            },
         }
     }
 
@@ -165,14 +175,14 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
                 let num = rng.random_range(n..default_upper_bound);
 
                 num == n
-            }
+            },
             NumberOrRange::Range((from, to)) => {
                 let mut rng = rng();
                 //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
 
                 num == from
-            }
+            },
         }
     }
 
@@ -480,11 +490,17 @@ impl GetIdentifier for CDDADistributionInner {
     ) -> CDDAIdentifier {
         match self {
             CDDADistributionInner::String(s) => s.clone(),
-            CDDADistributionInner::Distribution(d) => d.distribution.get(calculated_parameters),
-            CDDADistributionInner::Param { param, fallback } => calculated_parameters
-                .get(param)
-                .map(|p| p.clone())
-                .unwrap_or_else(|| fallback.clone().expect("Fallback to exist")),
+            CDDADistributionInner::Distribution(d) => {
+                d.distribution.get(calculated_parameters)
+            },
+            CDDADistributionInner::Param { param, fallback } => {
+                calculated_parameters
+                    .get(param)
+                    .map(|p| p.clone())
+                    .unwrap_or_else(|| {
+                        fallback.clone().expect("Fallback to exist")
+                    })
+            },
             CDDADistributionInner::Switch { switch, cases } => {
                 let id = calculated_parameters
                     .get(&switch.param)
@@ -492,7 +508,7 @@ impl GetIdentifier for CDDADistributionInner {
                     .unwrap_or_else(|| switch.fallback.clone());
 
                 cases.get(&id).expect("MapTo to exist").clone()
-            }
+            },
         }
     }
 }
@@ -528,7 +544,9 @@ impl GetIdentifier for MapGenValue {
             MapGenValue::Param { param, fallback } => calculated_parameters
                 .get(param)
                 .map(|p| p.clone())
-                .unwrap_or_else(|| fallback.clone().expect("Fallback to exist")),
+                .unwrap_or_else(|| {
+                    fallback.clone().expect("Fallback to exist")
+                }),
             MapGenValue::Switch { switch, cases } => {
                 let id = calculated_parameters
                     .get(&switch.param)
@@ -536,7 +554,7 @@ impl GetIdentifier for MapGenValue {
                     .unwrap_or_else(|| switch.fallback.clone());
 
                 cases.get(&id).expect("case MapTo to exist").clone()
-            }
+            },
         }
     }
 }

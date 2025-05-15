@@ -2,10 +2,13 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
 use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
 use crate::map::map_properties::ItemsProperty;
-use crate::map::map_properties::{FurnitureProperty, MonstersProperty, TerrainProperty};
+use crate::map::map_properties::{
+    FurnitureProperty, MonstersProperty, TerrainProperty,
+};
 use crate::map::{MapData, MappingKind, Property, VisibleMappingCommand};
 use crate::util::{
-    CDDAIdentifier, Comment, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier,
+    CDDAIdentifier, Comment, GetIdentifier, MeabyVec, MeabyWeighted,
+    ParameterIdentifier,
 };
 use futures_lite::StreamExt;
 use glam::IVec2;
@@ -204,8 +207,10 @@ impl CDDAPalette {
         &self,
         all_palettes: &Palettes,
     ) -> IndexMap<ParameterIdentifier, CDDAIdentifier> {
-        let mut calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier> =
-            IndexMap::new();
+        let mut calculated_parameters: IndexMap<
+            ParameterIdentifier,
+            CDDAIdentifier,
+        > = IndexMap::new();
 
         for (id, parameter) in self.parameters.iter() {
             calculated_parameters.insert(
@@ -245,7 +250,8 @@ impl CDDAPalette {
         }
 
         for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(&map_data.calculated_parameters);
+            let palette_id =
+                mapgen_value.get_identifier(&map_data.calculated_parameters);
             let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_visible_mapping(
@@ -272,7 +278,7 @@ impl CDDAPalette {
         let mapping = self.properties.get(mapping_kind.borrow())?;
 
         match mapping.get(character.borrow()) {
-            None => {}
+            None => {},
             Some(s) => return Some(s.representation(json_data)),
         }
 
