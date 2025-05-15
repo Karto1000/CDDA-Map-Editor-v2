@@ -3,9 +3,8 @@ import React from "react";
 export type CDDAIdentifier = string;
 
 export enum MapDataEvent {
-    OpenedMap = "opened_map",
     PlaceSprites = "place_sprites",
-    ItemData = "item_data"
+    UpdateLiveViewer = "update_live_viewer",
 }
 
 export type DisplayItemGroup = {
@@ -74,5 +73,7 @@ export enum MapDataSendCommand {
     CloseProject = "close_project",
     GetCurrentProjectData = "get_current_project_data",
     SaveCurrentProject = "save_current_project",
-    GetProjectCellData = "get_project_cell_data"
+    GetProjectCellData = "get_project_cell_data",
+    GetSprites = "get_sprites",
+    ReloadProject = "reload_project"
 }

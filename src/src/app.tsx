@@ -4,12 +4,12 @@ import {Theme, useTheme} from "./hooks/useTheme.ts";
 import {invoke} from "@tauri-apps/api/core";
 import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
 import {listen} from "@tauri-apps/api/event";
-import {makeCancelable} from "./lib/index.ts";
+import {invokeTauri, makeCancelable} from "./lib/index.ts";
 import {Scene} from "three";
-import {useEditor} from "./hooks/useEditor.tsx";
+import {useViewer} from "./hooks/useViewer.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
 import {EditorData, EditorDataRecvEvent, ProjectTypeKind} from "./lib/editor_data.ts";
-import {MapDataSendCommand} from "./lib/map_data.ts";
+import {MapDataEvent, MapDataSendCommand} from "./lib/map_data.ts";
 import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
 import "./app.scss"
@@ -48,7 +48,7 @@ function App() {
     const openMapWindowRef = useRef<Webview>()
     const settingsWindowRef = useRef<Webview>()
 
-    const {resize, displayInLeftPanel} = useEditor({
+    const {resize, displayInLeftPanel} = useViewer({
         canvasRef: mapEditorCanvasRef,
         sceneRef: mapEditorSceneRef,
         canvasContainerRef: mapEditorCanvasContainerRef,
@@ -59,6 +59,30 @@ function App() {
         theme,
         spritesheetConfig,
     })
+
+    useEffect(() => {
+        const openedTab = tabs.openedTab
+
+        if (openedTab === null) return
+        if (tabs.tabs[openedTab].tab_type !== TabTypeKind.LiveViewer) return
+
+        let update_live_viewer_listen = makeCancelable(
+            listen<unknown>(MapDataEvent.UpdateLiveViewer, d => {
+                (async () => {
+                    await invoke(MapDataSendCommand.ReloadProject);
+                    await invokeTauri<unknown, unknown>(MapDataSendCommand.GetSprites, {name: openedTab});
+                })()
+            })
+        );
+
+        (async () => {
+            await invoke(MapDataSendCommand.OpenProject, {name: openedTab});
+        })();
+
+        return () => {
+            update_live_viewer_listen.cancel()
+        }
+    }, [tabs.openedTab, tabs.tabs]);
 
     useEffect(() => {
         let unlistenDataChanged = makeCancelable(listen<EditorData>(

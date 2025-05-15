@@ -8,10 +8,12 @@ import {open} from "@tauri-apps/plugin-shell";
 import {TabContext, ThemeContext} from "../app.tsx";
 import {invoke} from "@tauri-apps/api/core";
 
-import {MapDataSendCommand} from "../lib/map_data.ts";
+import {MapDataEvent, MapDataSendCommand} from "../lib/map_data.ts";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "../hooks/useTheme.js";
 import {openWindow, WindowLabel} from "../windows/lib.js";
+import {invokeTauri, makeCancelable} from "../lib/index.js";
+import {listen} from "@tauri-apps/api/event";
 
 type Props = {
     openMapWindowRef: MutableRefObject<WebviewWindow>
@@ -42,7 +44,6 @@ export function Header(props: Props) {
             tabs.setOpenedTab(null)
         } else {
             tabs.setOpenedTab(name)
-            await invoke(MapDataSendCommand.OpenProject, {name})
         }
     }
 

@@ -164,7 +164,7 @@ export function ItemPanel(props: ItemPanelProps) {
     )
 }
 
-export function useEditor(props: UseEditorProps): UseEditorRet {
+export function useViewer(props: UseEditorProps): UseEditorRet {
     const rendererRef = useRef<WebGLRenderer>()
     const cameraRef = useRef<OrthographicCamera>()
     const controlsRef = useRef<ArcballControls>()
