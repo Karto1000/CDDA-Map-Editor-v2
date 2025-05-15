@@ -67,7 +67,6 @@ export function useTheme(): [Theme, React.Dispatch<React.SetStateAction<Theme>>]
 
     useEffect(() => {
         localStorage.setItem("theme", theme.toString());
-        console.log(theme, theme.toString())
         emitTo("setting", "theme-changed", {theme: theme.toString()});
     }, [theme]);
 

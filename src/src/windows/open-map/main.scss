@@ -3,21 +3,31 @@
 @include themed($themes) {
   .map-viewer-body {
     .map-viewer-form {
-      .om-terrain-form-element {
-        .om-terrain-row {
-          .om-terrain-slot {
-            &.selected {
-              background-color: theme-var("selected");
-            }
+      .om-terrain-form-element-grid {
+        .delete-row-button, .delete-col-button {
+          background-color: theme-var("light-delete");
 
-            &:not(.selected) {
-              background-color: theme-var("darker");
-              border: 1px solid theme-var("dark");
-            }
+          &:hover {
+            background-color: theme-var("delete");
+          }
+        }
 
-            &:hover {
-              background-color: theme-var("dark-blue");
-              border-color: theme-var("selected");
+        .om-terrain-form-element {
+          .om-terrain-row {
+            .om-terrain-slot {
+              &.selected {
+                background-color: theme-var("selected");
+              }
+
+              &:not(.selected) {
+                background-color: theme-var("darker");
+                border: 1px solid theme-var("dark");
+              }
+
+              &:hover {
+                background-color: theme-var("dark-blue");
+                border-color: theme-var("selected");
+              }
             }
           }
         }
@@ -38,25 +48,64 @@
     flex: 1;
     gap: 8px;
 
-    .om-terrain-form-element {
+    .grid-vertical-center {
       flex: 1;
       display: flex;
-      flex-direction: column;
       align-items: center;
-      vertical-align: center;
-      margin-left: auto;
-      margin-right: auto;
       justify-content: center;
 
-      .om-terrain-row {
-        display: flex;
+      .om-terrain-form-element-grid {
+        display: grid;
+        grid-template-areas:
+              "ids col"
+              "row .";
+        position: relative;
 
-        .om-terrain-slot {
+        .delete-row-button, .delete-col-button {
+          position: absolute;
           width: 32px;
           height: 32px;
+        }
 
-          &:hover {
-            cursor: pointer;
+        .delete-row-button {
+          left: -32px;
+        }
+
+        .delete-col-button {
+          top: -32px;
+        }
+
+        .add-row-button {
+          width: 100%;
+          grid-area: row;
+          margin-top: 8px ;
+        }
+
+        .add-col-button {
+          height: 100%;
+          grid-area: col;
+          margin-left: 8px;
+        }
+
+        .om-terrain-form-element {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          grid-area: ids;
+
+          .om-terrain-row {
+            display: flex;
+            position: relative;
+
+            .om-terrain-slot {
+              width: 128px;
+              height: 32px;
+
+              &:hover {
+                cursor: pointer;
+              }
+            }
           }
         }
       }

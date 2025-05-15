@@ -15,7 +15,9 @@ export function openWindow(label: WindowLabel, theme: Theme): WebviewWindow {
         decorations: false,
         center: true,
         alwaysOnTop: true,
-        title: label.toString()
+        title: label.toString(),
+        parent: "main",
+        skipTaskbar: true,
     })
 
 }
