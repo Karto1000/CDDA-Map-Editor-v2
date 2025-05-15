@@ -1,5 +1,3 @@
-import {Tab} from "../hooks/useTabs.js";
-
 export enum EditorDataRecvEvent {
     EditorDataChanged = "editor_data_changed",
     TabCreated = "tab_created",

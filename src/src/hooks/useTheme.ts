@@ -1,6 +1,6 @@
 import React, {useEffect, useState} from "react";
 import {Vector3} from "three";
-import {emit, emitTo} from "@tauri-apps/api/event";
+import {emitTo} from "@tauri-apps/api/event";
 
 export const darkColors = {
     light: "#282828",

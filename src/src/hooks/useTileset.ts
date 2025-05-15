@@ -1,6 +1,6 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
 import {BackendResponse, BackendResponseType, invokeTauri} from "../lib/index.ts";
-import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, TextureLoader, Vector2} from "three";
+import {LinearMipMapNearestFilter, NearestFilter, Scene, SRGBColorSpace, TextureLoader} from "three";
 import {Tilesheet} from "../rendering/tilesheet.ts";
 import {Tilesheets} from "../rendering/tilesheets.ts";
 import {EditorData} from "../lib/editor_data.ts";

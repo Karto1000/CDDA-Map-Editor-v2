@@ -1,4 +1,4 @@
-import React, {forwardRef, Ref, RefObject, useImperativeHandle, useRef, useState} from "react";
+import React, {RefObject, useImperativeHandle, useRef, useState} from "react";
 import "./dropdown.scss"
 import {useOutsideAlerter} from "../hooks/useOuterClick.ts";
 import Icon, {IconName} from "./icon.tsx";

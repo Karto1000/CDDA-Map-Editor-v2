@@ -13,17 +13,17 @@ $themes: (
                 disabled: #868585
         ),
         light: (
-                light: #797979,        // Background (light greyish white)
-                dark: #ffffff,         // Text (dark grey, good contrast on light background)
-                darker: #ffffff,       // Heading or emphasis text
-                light-blue: #8bb6cc,   // Soft light blue (for highlights or accents)
-                dark-blue: #EAEAEA,    // Slightly darker blue (for links or primary buttons)
+                light: #797979, // Background (light greyish white)
+                dark: #ffffff, // Text (dark grey, good contrast on light background)
+                darker: #ffffff, // Heading or emphasis text
+                light-blue: #8bb6cc, // Soft light blue (for highlights or accents)
+                dark-blue: #EAEAEA, // Slightly darker blue (for links or primary buttons)
                 darkest-blue: #2680EB, // Deep navy blue (for strong accents or footer)
-                selected: #4e8de7,     // Bright blue (for selected items or active elements)
-                delete: #E74C3C,       // Red (for errors or delete buttons)
+                selected: #4e8de7, // Bright blue (for selected items or active elements)
+                delete: #E74C3C, // Red (for errors or delete buttons)
                 light-delete: #F28D8D, // Lighter red (for hover effects on delete)
-                lightest: #000000,     // Background (pure white)
-                disabled: #B3B3B3,     // Disabled elements (greyed out)
+                lightest: #000000, // Background (pure white)
+                disabled: #B3B3B3, // Disabled elements (greyed out)
         )
 );
 

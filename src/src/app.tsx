@@ -4,21 +4,17 @@ import {Theme, useTheme} from "./hooks/useTheme.ts";
 import {invoke} from "@tauri-apps/api/core";
 import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
 import {listen} from "@tauri-apps/api/event";
-import {invokeTauri, makeCancelable} from "./lib/index.ts";
+import {invokeTauri} from "./lib/index.ts";
 import {Scene} from "three";
 import {useViewer} from "./hooks/useViewer.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
-import {EditorData, EditorDataRecvEvent, ProjectTypeKind} from "./lib/editor_data.ts";
+import {EditorData, EditorDataRecvEvent} from "./lib/editor_data.ts";
 import {MapDataEvent, MapDataSendCommand} from "./lib/map_data.ts";
 import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
 import "./app.scss"
 import MultiMenu from "./components/multimenu.tsx";
-import {Fieldset} from "./components/fieldset.tsx";
-import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Webview} from "@tauri-apps/api/webview";
-import {getCurrentWindow} from "@tauri-apps/api/window";
-import settingsWindow from "./windows/settings/main.js";
 import {NoTabScreen} from "./components/mainScreens/noTabScreen.js";
 import {WelcomeScreen} from "./components/mainScreens/welcomeScreen.js";
 

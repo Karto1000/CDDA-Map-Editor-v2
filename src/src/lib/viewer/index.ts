@@ -15,7 +15,7 @@ export type OmTerrain = {
     omTerrainIds: string[][]
 }
 
-export type OpenViewerData =  {
+export type OpenViewerData = {
     filePath: string,
     projectName: string
     omTerrain: OmTerrain

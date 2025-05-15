@@ -1,6 +1,5 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import GenericWindow from "../generic-window.js";
 import Main from "./main.js";
 
 document.getElementById("window-root").style.height = "100%";

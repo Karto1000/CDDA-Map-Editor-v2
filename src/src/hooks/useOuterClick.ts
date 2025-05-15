@@ -1,4 +1,4 @@
-import React, {useRef, useEffect, Ref} from "react";
+import React, {useEffect} from "react";
 
 /**
  * @see https://stackoverflow.com/a/42234988

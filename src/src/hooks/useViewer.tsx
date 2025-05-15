@@ -1,7 +1,6 @@
 import {
     AmbientLight,
     GridHelper,
-    Group,
     Mesh,
     MeshBasicMaterial,
     OrthographicCamera,
@@ -19,7 +18,7 @@ import {degToRad} from "three/src/math/MathUtils.js";
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../rendering/tilesheets.ts";
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {useMousePosition} from "./useMousePosition.ts";
-import {BackendResponseType, invokeTauri, makeCancelable, serializedVec2ToVector2} from "../lib/index.ts";
+import {BackendResponseType, invokeTauri, serializedVec2ToVector2} from "../lib/index.ts";
 import {listen} from "@tauri-apps/api/event";
 import {
     CellData,
@@ -29,7 +28,6 @@ import {
     MapDataSendCommand,
     PlaceSpritesEvent
 } from "../lib/map_data.ts";
-import {Project} from "../lib/project.js";
 import {SpritesheetConfig} from "../lib/tileset/legacy.js";
 import {Fieldset} from "../components/fieldset.tsx";
 
