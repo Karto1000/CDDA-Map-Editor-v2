@@ -446,6 +446,8 @@ pub async fn open_project(
 
             let join_handle = tokio::spawn(async move {
                 let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+
+                // Thx -> https://github.com/notify-rs/notify/blob/d7e22791faffb7bd9bd10f031c260ae019d7f474/examples/async_monitor.rs
                 let mut watcher = RecommendedWatcher::new(
                     move |res| {
                         block_on(async { tx.send(res).await.unwrap() });
@@ -458,8 +460,7 @@ pub async fn open_project(
                     .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
                     .unwrap();
 
-                while let Some(Ok(e)) = rx.recv().await {
-                    dbg!(e);
+                while let Some(Ok(_)) = rx.recv().await {
                     app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
                 }
             });
