@@ -1110,13 +1110,13 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
 
         let mut cells = IndexMap::new();
 
-        for row in 0..DEFAULT_MAP_HEIGHT {
-            for column in 0..DEFAULT_MAP_WIDTH {
+        for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y {
+            for column in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).x {
                 let char = match self.object.rows.as_ref() {
                     None => ' ',
-                    Some(s) => match s.get(row) {
+                    Some(s) => match s.get(row as usize) {
                         None => ' ',
-                        Some(row) => row.chars().nth(column).unwrap_or(' '),
+                        Some(row) => row.chars().nth(column as usize).unwrap_or(' '),
                     },
                 };
 

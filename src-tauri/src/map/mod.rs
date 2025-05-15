@@ -2,6 +2,7 @@ pub(crate) mod handlers;
 pub(crate) mod importing;
 pub(crate) mod map_properties;
 pub(crate) mod place;
+pub(crate) mod viewer;
 
 use crate::cdda_data::io::{DeserializedCDDAJsonData, NULL_FURNITURE, NULL_TERRAIN};
 use crate::cdda_data::map_data::{
@@ -801,7 +802,7 @@ pub struct ProjectContainer {
 #[cfg(test)]
 mod tests {
     use crate::cdda_data::{CDDADistributionInner, Distribution, MapGenValue, Switch};
-    use crate::map::importing::MapDataImporter;
+    use crate::map::importing::SingleMapDataImporter;
     use crate::map::map_properties::TerrainProperty;
     use crate::map::MappingKind;
     use crate::util::{
@@ -818,7 +819,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_fill_ter() {
-        let mut map_loader = MapDataImporter {
+        let mut map_loader = SingleMapDataImporter {
             path: PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json"),
             om_terrain: "test_fill_ter".into(),
         };
@@ -846,7 +847,7 @@ mod tests {
     async fn test_parameters() {
         let cdda_data = TEST_CDDA_DATA.get().await;
 
-        let mut map_loader = MapDataImporter {
+        let mut map_loader = SingleMapDataImporter {
             path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
             om_terrain: "test_terrain".into(),
         };
@@ -898,7 +899,7 @@ mod tests {
 
         let cdda_data = TEST_CDDA_DATA.get().await;
 
-        let mut map_loader = MapDataImporter {
+        let mut map_loader = SingleMapDataImporter {
             path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
             om_terrain: "test_terrain".into(),
         };

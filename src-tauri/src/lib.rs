@@ -16,6 +16,8 @@ use crate::map::handlers::{
     close_project, create_project, get_current_project_data, save_current_project,
 };
 use crate::map::handlers::{get_project_cell_data, open_project};
+use crate::map::importing::SingleMapDataImporter;
+use crate::map::viewer::open_viewer;
 use crate::map::ProjectContainer;
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
@@ -84,53 +86,64 @@ async fn frontend_ready(
     let mut json_data_lock = json_data.lock().await;
     let mut tilesheet_lock = tilesheet.lock().await;
 
-    for tab in &editor_data_lock.tabs {
-        info!("Opened Tab {}", &tab.name);
-
-        match &tab.tab_type {
-            TabType::Welcome => {}
-            TabType::MapEditor(me) => {}
-            TabType::LiveViewer(lvd) => {
-                info!("Opening Live viewer {} at {:?}", lvd.om_terrain, lvd.path);
-
-                let mut map_data_importer = MapDataImporter {
-                    path: lvd.path.clone(),
-                    om_terrain: lvd.om_terrain.clone(),
-                };
-
-                let map_data_collection = map_data_importer.load().await.unwrap();
-                let mut new_project = Project::new(
-                    tab.name.clone(),
-                    map_data_collection.global_map_size.clone(),
-                    ProjectType::Viewer,
-                );
-
-                let mut maps = HashMap::new();
-                maps.insert(0, map_data_collection);
-                new_project.maps = maps;
-
-                project_container_lock.data.push(new_project);
+    match json_data_lock.deref() {
+        None => match &editor_data_lock.config.cdda_path {
+            None => {
+                info!("No CDDA path set, skipping loading CDDA Json Data");
             }
-        }
+            Some(cdda_path) => {
+                info!("trying to load CDDA Json Data");
+                match load_cdda_json_data(cdda_path, &editor_data_lock.config.json_data_path).await
+                {
+                    Ok(cdda_json_data) => {
+                        json_data_lock.replace(cdda_json_data);
+                    }
+                    Err(e) => {
+                        warn!("Failed to load editor data {}", e);
+                    }
+                };
+            }
+        },
+        _ => {}
+    };
 
-        app.emit(events::TAB_CREATED, tab)
-            .expect("Emit to not fail");
-    }
+    match json_data_lock.deref() {
+        None => {}
+        Some(json_data) => {
+            for tab in &editor_data_lock.tabs {
+                info!("Opened Tab {}", &tab.name);
 
-    match &editor_data_lock.config.cdda_path {
-        None => {
-            info!("No CDDA path set, skipping loading CDDA Json Data");
-        }
-        Some(cdda_path) => {
-            info!("trying to load CDDA Json Data");
-            match load_cdda_json_data(cdda_path, &editor_data_lock.config.json_data_path).await {
-                Ok(cdda_json_data) => {
-                    json_data_lock.replace(cdda_json_data);
+                match &tab.tab_type {
+                    TabType::Welcome => {}
+                    TabType::MapEditor(me) => {}
+                    TabType::LiveViewer(lvd) => {
+                        info!("Opening Live viewer {} at {:?}", lvd.om_terrain, lvd.path);
+
+                        let mut map_data_importer = SingleMapDataImporter {
+                            path: lvd.path.clone(),
+                            om_terrain: lvd.om_terrain.clone(),
+                        };
+
+                        let mut map_data_collection = map_data_importer.load().await.unwrap();
+                        map_data_collection.calculate_parameters(&json_data.palettes);
+
+                        let mut new_project = Project::new(
+                            tab.name.clone(),
+                            map_data_collection.global_map_size.clone(),
+                            ProjectType::Viewer,
+                        );
+
+                        let mut maps = HashMap::new();
+                        maps.insert(0, map_data_collection);
+                        new_project.maps = maps;
+
+                        project_container_lock.data.push(new_project);
+                    }
                 }
-                Err(e) => {
-                    warn!("Failed to load editor data {}", e);
-                }
-            };
+
+                app.emit(events::TAB_CREATED, tab)
+                    .expect("Emit to not fail");
+            }
         }
     }
 
@@ -330,7 +343,8 @@ pub fn run() -> () {
             create_project,
             open_project,
             close_project,
-            save_current_project
+            save_current_project,
+            open_viewer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
