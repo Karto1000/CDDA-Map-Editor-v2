@@ -1,7 +1,9 @@
 use crate::cdda_data::furniture::CDDAFurniture;
+use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::{MapGenValue, Switch};
+use crate::editor_data::{EditorData, Project};
 use crate::tileset::GetRandom;
 use derive_more::with_trait::Display;
 use glam::{IVec3, UVec2};
@@ -13,6 +15,9 @@ use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt;
+use std::ops::Deref;
+use thiserror::Error;
+use tokio::sync::MutexGuard;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display, Default)]
 pub struct CDDAIdentifier(pub String);
@@ -381,8 +386,14 @@ impl<'de> Deserialize<'de> for IVec3JsonKey {
     }
 }
 
+#[derive(Debug, Display, Error)]
+pub enum SaveError {
+    IoError(#[from] std::io::Error),
+    JsonError(#[from] serde_json::Error),
+}
+
 pub trait Save<T> {
-    fn save(&self, data: &T) -> Result<(), std::io::Error>;
+    async fn save(&self, data: &T) -> Result<(), SaveError>;
 }
 
 pub trait Load<T> {
@@ -466,4 +477,91 @@ macro_rules! skip_none {
             }
         }
     };
+}
+
+#[macro_export]
+macro_rules! impl_serialize_for_error {
+    (
+        $ident: ident
+    ) => {
+        impl Serialize for $ident {
+            fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+            where
+                S: Serializer,
+            {
+                serializer.serialize_str(&self.to_string())
+            }
+        }
+    };
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum GetCurrentMapDataError {
+    #[error("No map has been opened")]
+    NoMapOpened,
+    #[error("Invalid project name {0}")]
+    InvalidProjectName(String),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum CDDADataError {
+    #[error("No CDDA Data was loaded")]
+    NotLoaded,
+}
+
+pub fn get_current_project<'a>(
+    editor_data: &'a MutexGuard<EditorData>,
+) -> Result<&'a Project, GetCurrentMapDataError> {
+    let project_name = match &editor_data.opened_project {
+        None => return Err(GetCurrentMapDataError::NoMapOpened),
+        Some(i) => i,
+    };
+
+    let data = match editor_data
+        .projects
+        .iter()
+        .find(|p| *p.name == *project_name)
+    {
+        None => {
+            return Err(GetCurrentMapDataError::InvalidProjectName(
+                project_name.clone(),
+            ))
+        }
+        Some(d) => d,
+    };
+
+    Ok(data)
+}
+
+pub fn get_current_project_mut<'a>(
+    editor_data: &'a mut MutexGuard<EditorData>,
+) -> Result<&'a mut Project, GetCurrentMapDataError> {
+    let project_name = match editor_data.opened_project.clone() {
+        None => return Err(GetCurrentMapDataError::NoMapOpened),
+        Some(i) => i,
+    };
+
+    let data = match editor_data
+        .projects
+        .iter_mut()
+        .find(|p| p.name == *project_name)
+    {
+        None => {
+            return Err(GetCurrentMapDataError::InvalidProjectName(
+                project_name.clone(),
+            ))
+        }
+        Some(d) => d,
+    };
+
+    Ok(data)
+}
+
+pub fn get_json_data<'a>(
+    lock: &'a MutexGuard<Option<DeserializedCDDAJsonData>>,
+) -> Result<&'a DeserializedCDDAJsonData, CDDADataError> {
+    match lock.deref() {
+        None => Err(CDDADataError::NotLoaded),
+        Some(d) => Ok(d),
+    }
 }

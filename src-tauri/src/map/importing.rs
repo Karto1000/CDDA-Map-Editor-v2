@@ -9,8 +9,6 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 
-pub trait MapDataImporter: Load<MapDataCollection> {}
-
 pub struct SingleMapDataImporter {
     pub path: PathBuf,
     pub om_terrain: String,
@@ -72,8 +70,6 @@ impl Load<MapDataCollection> for SingleMapDataImporter {
         Ok(map_data)
     }
 }
-impl MapDataImporter for SingleMapDataImporter {}
-
 pub struct NestedMapDataImporter {
     pub path: PathBuf,
     pub om_terrain_ids: HashMap<String, UVec2>,
@@ -157,5 +153,3 @@ impl Load<MapDataCollection> for NestedMapDataImporter {
         Ok(collection)
     }
 }
-
-impl MapDataImporter for NestedMapDataImporter {}

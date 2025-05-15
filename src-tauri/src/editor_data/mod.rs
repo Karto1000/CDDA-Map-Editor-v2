@@ -1,15 +1,14 @@
 pub(crate) mod handlers;
-pub(crate) mod tab;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
-use crate::editor_data::tab::Tab;
+use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
 use crate::map::{CellRepresentation, MapData, MappingKind, DEFAULT_MAP_DATA_SIZE};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
-use crate::util::Save;
+use crate::util::{Load, Save, SaveError};
 use glam::{IVec3, UVec2};
 use log::info;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fs;
 use std::io::Error;
@@ -22,15 +21,77 @@ pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 pub type ZLevel = i32;
 pub type MapCoordinates = UVec2;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ProjectType {
-    Editor,
-    Viewer,
+pub async fn get_map_data_collection_live_viewer_data(data: &LiveViewerData) -> MapDataCollection {
+    info!(
+        "Opening Live viewer {:?} at {:?}",
+        data.om_terrain, data.path
+    );
+
+    let map_data_collection = match &data.om_terrain {
+        OmTerrainType::Single { om_terrain_id } => {
+            let mut map_data_importer = SingleMapDataImporter {
+                path: data.path.clone(),
+                om_terrain: om_terrain_id.clone(),
+            };
+
+            map_data_importer.load().await.unwrap()
+        }
+        OmTerrainType::Nested { om_terrain_ids, .. } => {
+            let mut om_terrain_id_hashmap = HashMap::new();
+
+            for (y, id_list) in om_terrain_ids.into_iter().enumerate() {
+                for (x, id) in id_list.into_iter().enumerate() {
+                    om_terrain_id_hashmap.insert(id.clone(), UVec2::new(x as u32, y as u32));
+                }
+            }
+
+            let mut map_data_importer = NestedMapDataImporter {
+                path: data.path.clone(),
+                om_terrain_ids: om_terrain_id_hashmap,
+            };
+
+            map_data_importer.load().await.unwrap()
+        }
+    };
+
+    map_data_collection
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all_fields = "camelCase")]
+pub enum OmTerrainType {
+    Single { om_terrain_id: String },
+    Nested { om_terrain_ids: Vec<Vec<String>> },
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum ProjectType {
+    MapEditor(ProjectSaveState),
+    LiveViewer(LiveViewerData),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LiveViewerData {
+    pub path: PathBuf,
+    pub om_terrain: OmTerrainType,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(tag = "state")]
+pub enum ProjectSaveState {
+    #[default]
+    Unsaved,
+    Saved {
+        path: PathBuf,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Project {
     pub name: String,
+
+    #[serde(skip)]
     pub maps: HashMap<ZLevel, MapDataCollection>,
     pub size: UVec2,
     pub ty: ProjectType,
@@ -61,7 +122,7 @@ impl Default for Project {
             name: "Unnamed".to_string(),
             maps,
             size: DEFAULT_MAP_DATA_SIZE,
-            ty: ProjectType::Editor,
+            ty: ProjectType::MapEditor(ProjectSaveState::Unsaved),
         }
     }
 }
@@ -203,12 +264,11 @@ impl Default for EditorConfig {
     }
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EditorData {
     pub config: EditorConfig,
-
-    pub tabs: Vec<Tab>,
-
+    pub projects: Vec<Project>,
+    pub opened_project: Option<String>,
     pub available_tilesets: Option<Vec<String>>,
 }
 
@@ -217,7 +277,7 @@ pub struct EditorDataSaver {
 }
 
 impl Save<EditorData> for EditorDataSaver {
-    fn save(&self, data: &EditorData) -> Result<(), Error> {
+    async fn save(&self, data: &EditorData) -> Result<(), SaveError> {
         let serialized = serde_json::to_string_pretty(data).expect("Serialization to not fail");
         fs::write(self.path.join("config.json"), serialized)?;
         info!("Saved EditorData to {}", self.path.display());

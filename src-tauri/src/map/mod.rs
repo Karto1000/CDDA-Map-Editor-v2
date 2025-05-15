@@ -793,12 +793,6 @@ impl Set for SetSquare {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct ProjectContainer {
-    pub data: Vec<Project>,
-    pub current_project: Option<usize>,
-}
-
 #[cfg(test)]
 mod tests {
     use crate::cdda_data::{CDDADistributionInner, Distribution, MapGenValue, Switch};
