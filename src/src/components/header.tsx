@@ -1,5 +1,5 @@
-import React, {Dispatch, MutableRefObject, SetStateAction, useContext} from "react";
-import {getCurrentWindow} from "@tauri-apps/api/window";
+import React, {MutableRefObject, useContext} from "react";
+import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
 import {Dropdown} from "./dropdown.tsx";
@@ -8,10 +8,12 @@ import {open} from "@tauri-apps/plugin-shell";
 import {TabContext, ThemeContext} from "../app.tsx";
 import {invoke} from "@tauri-apps/api/core";
 
-import {MapDataSendCommand} from "../lib/map_data.ts";
+import {MapDataEvent, MapDataSendCommand} from "../lib/map_data.ts";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "../hooks/useTheme.js";
-import {emitTo} from "@tauri-apps/api/event";
+import {openWindow, WindowLabel} from "../windows/lib.js";
+import {invokeTauri, makeCancelable} from "../lib/index.js";
+import {listen} from "@tauri-apps/api/event";
 
 type Props = {
     openMapWindowRef: MutableRefObject<WebviewWindow>
@@ -23,24 +25,40 @@ export function Header(props: Props) {
     const tabs = useContext(TabContext)
     const {theme, setTheme} = useContext(ThemeContext)
 
-    function onTabClose(e: React.MouseEvent<HTMLDivElement>, index: number) {
+    async function onTabClose(e: React.MouseEvent<HTMLDivElement>, name: string) {
+        console.log(`Closed tab ${name}`)
+
         e.preventDefault()
         e.stopPropagation()
 
-        tabs.removeTab(index)
+        tabs.removeLocalTab(name)
+        tabs.setOpenedTab(null)
     }
 
     function onTabCreate() {
+        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
     }
 
-    async function onTabOpen(index: number) {
-        if (tabs.openedTab === index) {
+    async function onTabOpen(name: string) {
+        if (tabs.openedTab === name) {
             tabs.setOpenedTab(null)
-            await invoke(MapDataSendCommand.CloseProject, {})
         } else {
-            tabs.setOpenedTab(index)
-            await invoke(MapDataSendCommand.OpenProject, {index})
+            tabs.setOpenedTab(name)
         }
+    }
+
+    async function onWindowClose() {
+        const windows = await getAllWindows()
+        // We only want to close the other windows.
+        // If we close the main window, sometimes the other windows will not
+        // close since the code that closes the window is inside the main window
+        windows.filter(w => w.label !== "main")
+
+        for (const w of windows) {
+            await w.close();
+        }
+
+        await tauriWindow.close();
     }
 
     return (
@@ -60,15 +78,18 @@ export function Header(props: Props) {
 
                         <div className={"tab-container"}>
                             {
-                                tabs.tabs.map((t, i) => (
-                                    <div className={`tab ${tabs.openedTab === i ? "opened-tab" : ""}`} key={i}
-                                         onClick={() => onTabOpen(i)}>
+                                Object.keys(tabs.tabs).map((tabName, i) => {
+                                    const t = tabs.tabs[tabName]
+
+                                    return <div className={`tab ${tabs.openedTab === tabName ? "opened-tab" : ""}`}
+                                                key={i}
+                                                onClick={() => onTabOpen(t.name)}>
                                         <p>{t.name}</p>
-                                        <div onClick={e => onTabClose(e, i)}>
+                                        <div onClick={e => onTabClose(e, t.name)}>
                                             <Icon name={IconName.CloseSmall} width={12} height={12}/>
                                         </div>
                                     </div>
-                                ))
+                                })
                             }
                             <button id={"add-new-tab-button"} onClick={onTabCreate}>
                                 <Icon name={IconName.AddSmall} width={16} height={16}/>
@@ -87,7 +108,7 @@ export function Header(props: Props) {
                         }}>
                             <Icon name={IconName.WindowedSmall} width={14} height={14}/>
                         </div>
-                        <div className="native-window-control" id="close" onClick={() => tauriWindow.close()}>
+                        <div className="native-window-control" id="close" onClick={onWindowClose}>
                             <Icon name={IconName.CloseSmall} width={14} height={14}/>
                         </div>
 
@@ -164,18 +185,13 @@ export function Header(props: Props) {
                                     name: "Settings",
                                     shortcut: "Ctrl+Alt+s",
                                     onClick: (ref) => {
-                                        props.settingsWindowRef.current = new WebviewWindow('settings', {
-                                            url: `src/windows/settings/window.html?theme=${theme.toString()}`,
-                                            width: 200,
-                                            height: 200,
-                                            decorations: false,
-                                            center: true
-                                        });
+                                        const window = openWindow(WindowLabel.Settings, theme)
 
-                                        props.settingsWindowRef.current.listen("change-theme", () => {
+                                        window.listen("change-theme", () => {
                                             setTheme((theme) => theme === Theme.Dark ? Theme.Light : Theme.Dark)
                                         })
 
+                                        props.settingsWindowRef.current = window
                                         ref.current.closeMenu()
                                     }
                                 },

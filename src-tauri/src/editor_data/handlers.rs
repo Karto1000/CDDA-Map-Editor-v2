@@ -131,7 +131,7 @@ pub async fn save_editor_data(
         path: lock.config.config_path.clone(),
     };
 
-    saver.save(&lock).map_err(|e| {
+    saver.save(&lock).await.map_err(|e| {
         error!("Failed to save editor data, `{0}`", e);
         SaveEditorDataError::SaveFailed(e.to_string())
     })?;

@@ -4,8 +4,9 @@ use crate::cdda_data::map_data::{
     MapGenField, MapGenGaspumpFuelType, MapGenNestedIntermediate, ReferenceOrInPlace,
 };
 use crate::map::map_properties::{
-    ComputerProperty, FieldProperty, FurnitureProperty, GaspumpProperty, ItemsProperty,
-    MonstersProperty, NestedProperty, SignProperty, TerrainProperty, ToiletProperty, TrapsProperty,
+    ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty, ItemsProperty,
+    MonstersProperty, NestedProperty, SignsProperty, TerrainProperty, ToiletsProperty,
+    TrapsProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
@@ -135,7 +136,7 @@ struct SignRepresentation {
     pub snipped: String,
 }
 
-impl Property for SignProperty {
+impl Property for SignsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
@@ -233,7 +234,7 @@ impl Property for NestedProperty {
     }
 }
 
-impl Property for FieldProperty {
+impl Property for FieldsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
@@ -261,7 +262,7 @@ impl Property for FieldProperty {
     }
 }
 
-impl Property for GaspumpProperty {
+impl Property for GaspumpsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
@@ -435,7 +436,7 @@ impl Property for ItemsProperty {
                     &json_data
                         .item_groups
                         .get(&i)
-                        .expect("Item group to exist")
+                        .expect(format!("Item group {} to exist", i).as_str())
                         .common
                 }
                 ReferenceOrInPlace::InPlace(ip) => &ip.common,
@@ -484,7 +485,7 @@ impl Property for ItemsProperty {
     }
 }
 
-impl Property for ComputerProperty {
+impl Property for ComputersProperty {
     fn get_commands(
         &self,
         position: &IVec2,
@@ -506,7 +507,7 @@ impl Property for ComputerProperty {
     }
 }
 
-impl Property for ToiletProperty {
+impl Property for ToiletsProperty {
     fn get_commands(
         &self,
         position: &IVec2,

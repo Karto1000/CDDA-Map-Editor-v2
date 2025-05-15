@@ -23,6 +23,14 @@
             background-color: theme-var("delete");
           }
         }
+
+        #add-new-tab-button {
+          background-color: theme-var("dark");
+
+          &:hover {
+            background-color: theme-var("selected");
+          }
+        }
       }
 
       .native-window-control {

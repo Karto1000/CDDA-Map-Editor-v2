@@ -2,11 +2,12 @@ pub(crate) mod handlers;
 pub(crate) mod importing;
 pub(crate) mod map_properties;
 pub(crate) mod place;
+pub(crate) mod viewer;
 
 use crate::cdda_data::io::{DeserializedCDDAJsonData, NULL_FURNITURE, NULL_TERRAIN};
 use crate::cdda_data::map_data::{
     MapGenMonster, MapGenMonsterType, NeighborDirection, OmTerrainMatch, OmTerrainMatchType,
-    PlaceOuter,
+    PlaceOuter, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::region_settings::CDDARegionSettings;
@@ -282,9 +283,9 @@ impl Default for MapData {
     fn default() -> Self {
         let mut cells = IndexMap::new();
 
-        for y in 0..24 {
-            for x in 0..24 {
-                cells.insert(UVec2::new(x, y), Cell { character: ' ' });
+        for y in 0..DEFAULT_MAP_HEIGHT {
+            for x in 0..DEFAULT_MAP_WIDTH {
+                cells.insert(UVec2::new(x as u32, y as u32), Cell { character: ' ' });
             }
         }
         let fill = Some(DistributionInner::Normal(CDDAIdentifier::from("t_grass")));
@@ -792,16 +793,10 @@ impl Set for SetSquare {
     }
 }
 
-#[derive(Debug, Default, Serialize, Deserialize, Clone)]
-pub struct ProjectContainer {
-    pub data: Vec<Project>,
-    pub current_project: Option<usize>,
-}
-
 #[cfg(test)]
 mod tests {
     use crate::cdda_data::{CDDADistributionInner, Distribution, MapGenValue, Switch};
-    use crate::map::importing::MapDataImporter;
+    use crate::map::importing::SingleMapDataImporter;
     use crate::map::map_properties::TerrainProperty;
     use crate::map::MappingKind;
     use crate::util::{
@@ -818,12 +813,18 @@ mod tests {
 
     #[tokio::test]
     async fn test_fill_ter() {
-        let mut map_loader = MapDataImporter {
+        let mut map_loader = SingleMapDataImporter {
             path: PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json"),
             om_terrain: "test_fill_ter".into(),
         };
 
-        let map_data = map_loader.load().await.unwrap();
+        let map_data = map_loader
+            .load()
+            .await
+            .unwrap()
+            .maps
+            .remove(&UVec2::ZERO)
+            .unwrap();
 
         for (coords, cell) in map_data.cells.iter() {
             assert_eq!(cell.character, ' ');
@@ -840,12 +841,19 @@ mod tests {
     async fn test_parameters() {
         let cdda_data = TEST_CDDA_DATA.get().await;
 
-        let mut map_loader = MapDataImporter {
+        let mut map_loader = SingleMapDataImporter {
             path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
             om_terrain: "test_terrain".into(),
         };
 
-        let mut map_data = map_loader.load().await.unwrap();
+        let mut map_data = map_loader
+            .load()
+            .await
+            .unwrap()
+            .maps
+            .remove(&UVec2::ZERO)
+            .unwrap();
+
         map_data.calculate_parameters(&cdda_data.palettes);
 
         let parameter_identifier = ParameterIdentifier("terrain_type".to_string());
@@ -885,12 +893,19 @@ mod tests {
 
         let cdda_data = TEST_CDDA_DATA.get().await;
 
-        let mut map_loader = MapDataImporter {
+        let mut map_loader = SingleMapDataImporter {
             path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
             om_terrain: "test_terrain".into(),
         };
 
-        let mut map_data = map_loader.load().await.unwrap();
+        let mut map_data = map_loader
+            .load()
+            .await
+            .unwrap()
+            .maps
+            .remove(&UVec2::ZERO)
+            .unwrap();
+
         map_data.calculate_parameters(&cdda_data.palettes);
 
         // Test the terrain mapped to a single sprite

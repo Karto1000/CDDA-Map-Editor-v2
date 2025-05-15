@@ -13,23 +13,45 @@
     border-color: theme-var("darker");
   }
 
-  button, select, input {
-    background-color: theme-var("dark");
+  input, button, select {
+    background-color: theme-var("darkest-blue");
+    outline: none;
     color: theme-var("lightest");
 
+    &::placeholder {
+      color: theme-var("lightest")
+    }
+
     &:hover {
-      background-color: theme-var("selected")
+      background-color: theme-var("light-blue");
+    }
+  }
+
+  .file-input {
+    background-color: theme-var("darkest-blue");
+
+    &:hover {
+      background-color: theme-var("dark-blue");
+    }
+
+    &:has(input[type="file"]:focus) {
+      background-color: theme-var("selected");
     }
   }
 
   input {
-    &:focus, &:hover {
+    &:focus {
       background-color: theme-var("selected");
-      outline: none;
 
       &::placeholder {
         color: theme-var("lightest")
       }
+    }
+  }
+
+  button {
+    &:active {
+      background-color: theme-var("selected");
     }
   }
 }
@@ -39,17 +61,17 @@
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
 }
 
+p {
+  margin: 4px 0;
+}
+
 * {
   font-smooth: never;
-  -webkit-font-smoothing : none;
+  -webkit-font-smoothing: none;
 }
 
 :root, button, input, select, option, label {
   font-family: 'Unifont', sans-serif;
-}
-
-p {
-  margin: 0;
 }
 
 button, select {
@@ -57,14 +79,51 @@ button, select {
   border: none;
 }
 
-input {
-  user-select: initial;
-  -webkit-user-select: initial;
-  cursor: initial;
-  border: none;
+.file-input {
+  padding: 4px 8px;
+  cursor: pointer;
+  height: 25px;
+  box-sizing: border-box;
+
+  button {
+    display: none;
+  }
 }
 
-h1, h2, h3, h4, h5, h6  {
+input, button {
+  user-select: initial;
+  -webkit-user-select: initial;
+  border: none;
+  padding: 4px 8px;
+  height: 25px;
+  box-sizing: border-box;
+  font-size: 1rem;
+}
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-element {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+
+  input, .file-input {
+    flex: 1;
+  }
+
+  label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+h1, h2, h3, h4, h5, h6 {
   font-weight: 400;
 }
 

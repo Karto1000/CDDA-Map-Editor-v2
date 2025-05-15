@@ -1,6 +1,8 @@
 mod cdda_data;
 mod editor_data;
+mod events;
 mod map;
+mod tab;
 mod tileset;
 mod util;
 
@@ -9,14 +11,16 @@ use crate::cdda_data::map_data::NeighborDirection;
 use crate::editor_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data, tileset_picked,
 };
-use crate::editor_data::tab::handlers::{close_tab, create_tab};
-use crate::editor_data::tab::TabType;
-use crate::editor_data::{EditorData, Project, ProjectType};
-use crate::map::handlers::{
-    close_project, create_project, get_current_project_data, save_current_project,
+use crate::editor_data::{
+    get_map_data_collection_live_viewer_data, EditorData, MapDataCollection, Project, ProjectType,
 };
-use crate::map::handlers::{get_project_cell_data, open_project};
-use crate::map::ProjectContainer;
+use crate::map::handlers::{
+    close_project, get_current_project_data, get_project_cell_data, get_sprites, open_project,
+    reload_project,
+};
+use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
+use crate::map::viewer::open_viewer;
+use crate::tab::{Tab, TabType};
 use crate::tileset::handlers::{download_spritesheet, get_info_of_current_tileset};
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
@@ -25,10 +29,9 @@ use crate::util::Load;
 use anyhow::{anyhow, Error};
 use async_once::AsyncOnce;
 use directories::ProjectDirs;
-use glam::IVec3;
+use glam::{IVec3, UVec2};
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
-use map::importing::MapDataImporter;
 use rand::prelude::StdRng;
 use rand::SeedableRng;
 use std::collections::HashMap;
@@ -40,12 +43,7 @@ use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
-
-mod events {
-    pub const EDITOR_DATA_CHANGED: &'static str = "editor_data_changed";
-    pub const CDDA_DATA: &'static str = "cdda_data";
-    pub const TAB_CREATED: &'static str = "tab_created";
-}
+use tokio::task::JoinHandle;
 
 pub static RANDOM_SEED: u64 = 1;
 
@@ -75,41 +73,65 @@ lazy_static! {
 async fn frontend_ready(
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
-    project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
 ) -> Result<(), ()> {
-    let editor_data_lock = editor_data.lock().await;
-    let mut project_container_lock = project_container.lock().await;
+    let mut editor_data_lock = editor_data.lock().await;
     let mut json_data_lock = json_data.lock().await;
     let mut tilesheet_lock = tilesheet.lock().await;
 
-    for tab in &editor_data_lock.tabs {
-        info!("Opened Tab {}", &tab.name);
-
-        match &tab.tab_type {
-            TabType::Welcome => {}
-            TabType::MapEditor(me) => {}
-            TabType::LiveViewer(lvd) => {
-                let mut map_data_importer = MapDataImporter {
-                    path: lvd.path.clone(),
-                    om_terrain: lvd.om_terrain.clone(),
+    match json_data_lock.deref() {
+        None => match &editor_data_lock.config.cdda_path {
+            None => {
+                info!("No CDDA path set, skipping loading CDDA Json Data");
+            }
+            Some(cdda_path) => {
+                info!("trying to load CDDA Json Data");
+                match load_cdda_json_data(cdda_path, &editor_data_lock.config.json_data_path).await
+                {
+                    Ok(cdda_json_data) => {
+                        json_data_lock.replace(cdda_json_data);
+                    }
+                    Err(e) => {
+                        warn!("Failed to load editor data {}", e);
+                    }
                 };
+            }
+        },
+        _ => {}
+    };
 
-                let map_data = map_data_importer.load().await.unwrap();
-                let mut new_project = Project::new(
-                    tab.name.clone(),
-                    map_data.map_size.clone(),
-                    ProjectType::Viewer,
-                );
-                new_project.maps.insert(0, map_data);
+    match json_data_lock.deref() {
+        None => {}
+        Some(json_data) => {
+            for project in editor_data_lock.projects.iter_mut() {
+                info!("Loading Project {}", &project.name);
 
-                project_container_lock.data.push(new_project);
+                match &project.ty {
+                    ProjectType::MapEditor(me) => unimplemented!(),
+                    ProjectType::LiveViewer(lvd) => {
+                        info!("Opening Live viewer {:?} at {:?}", lvd.om_terrain, lvd.path);
+
+                        let mut map_data_collection =
+                            get_map_data_collection_live_viewer_data(lvd).await;
+                        map_data_collection.calculate_parameters(&json_data.palettes);
+
+                        let mut maps = HashMap::new();
+                        maps.insert(0, map_data_collection);
+                        project.maps = maps;
+
+                        app.emit(
+                            events::TAB_CREATED,
+                            Tab {
+                                name: project.name.clone(),
+                                tab_type: TabType::LiveViewer,
+                            },
+                        )
+                        .unwrap()
+                    }
+                }
             }
         }
-
-        app.emit(events::TAB_CREATED, tab)
-            .expect("Emit to not fail");
     }
 
     info!("Sent initial editor data change");
@@ -119,23 +141,6 @@ async fn frontend_ready(
     info!("Loading tilesheet");
     let tilesheet = load_tilesheet(&editor_data_lock).await.map_err(|e| {})?;
     *tilesheet_lock = tilesheet;
-
-    match &editor_data_lock.config.cdda_path {
-        None => {
-            info!("No CDDA path set, skipping loading CDDA Json Data");
-        }
-        Some(cdda_path) => {
-            info!("trying to load CDDA Json Data");
-            match load_cdda_json_data(cdda_path, &editor_data_lock.config.json_data_path).await {
-                Ok(cdda_json_data) => {
-                    json_data_lock.replace(cdda_json_data);
-                }
-                Err(e) => {
-                    warn!("Failed to load editor data {}", e);
-                }
-            };
-        }
-    }
 
     Ok(())
 }
@@ -221,30 +226,6 @@ fn get_saved_editor_data() -> Result<EditorData, Error> {
     Ok(config)
 }
 
-fn get_map_data(editor_data: &EditorData) -> Result<ProjectContainer, anyhow::Error> {
-    let map_data = ProjectContainer::default();
-
-    // map_data.data.push(loaded);
-
-    // for tab in editor_data.tabs.iter() {
-    //     match &tab.tab_type {
-    //         TabType::MapEditor(state) => match state {
-    //             MapDataState::Saved { path } => {
-    //                 let loader = MapDataLoader { path: path.clone() };
-    //
-    //                 info!("Loading map data from {:?}", path);
-    //                 map_data.data.push(loader.load()?)
-    //             }
-    //             _ => {}
-    //         },
-    //         TabType::LiveViewer => todo!(),
-    //         _ => {}
-    //     }
-    // }
-
-    Ok(map_data)
-}
-
 async fn load_tilesheet(editor_data: &EditorData) -> Result<Option<TilesheetKind>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
@@ -299,14 +280,11 @@ pub fn run() -> () {
             info!("Loading Editor data config");
             let editor_data = get_saved_editor_data()?;
 
-            info!("Loading map data");
-            let map_data = get_map_data(&editor_data)?;
-
             app.manage(Mutex::new(editor_data));
-            app.manage(Mutex::new(map_data));
             app.manage::<Mutex<HashMap<IVec3, MappedCDDAIds>>>(Mutex::new(HashMap::new()));
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(None));
             app.manage::<Mutex<Option<TilesheetKind>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<JoinHandle<()>>>>(Mutex::new(None));
 
             Ok(())
         })
@@ -319,13 +297,12 @@ pub fn run() -> () {
             cdda_installation_directory_picked,
             tileset_picked,
             save_editor_data,
-            create_tab,
-            close_tab,
             frontend_ready,
-            create_project,
             open_project,
             close_project,
-            save_current_project
+            open_viewer,
+            get_sprites,
+            reload_project
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

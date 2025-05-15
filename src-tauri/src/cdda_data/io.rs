@@ -8,11 +8,13 @@ use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::{CDDAJsonEntry, TileLayer};
+use crate::editor_data::MapDataCollection;
 use crate::map::MapData;
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::Error;
 use async_walkdir::WalkDir;
 use futures_lite::stream::StreamExt;
+use glam::UVec2;
 use log::kv::Source;
 use log::{debug, error, info, warn};
 use serde::Serialize;
@@ -261,13 +263,17 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
             for des_entry in des {
                 match des_entry {
                     CDDAJsonEntry::Mapgen(mapgen) => {
-                        if let Some(om_terrain) = &mapgen.om_terrain {
-                            match &om_terrain {
+                        if let Some(om_terrain) = mapgen.om_terrain.clone() {
+                            match om_terrain {
                                 OmTerrain::Single(id) => {
                                     debug!("Found Single Mapgen '{}' in {:?}", id, entry.path());
-                                    cdda_data
-                                        .map_data
-                                        .insert(CDDAIdentifier(id.clone()), mapgen.into());
+
+                                    let mut map_data_collection: MapDataCollection = mapgen.into();
+
+                                    cdda_data.map_data.insert(
+                                        CDDAIdentifier(id.clone()),
+                                        map_data_collection.maps.remove(&UVec2::ZERO).unwrap(),
+                                    );
                                 }
                                 OmTerrain::Duplicate(duplicate) => {
                                     debug!(
@@ -275,10 +281,17 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                         duplicate,
                                         entry.path()
                                     );
+
+                                    let mut map_data_collection: MapDataCollection = mapgen.into();
+
                                     for id in duplicate.iter() {
                                         cdda_data.map_data.insert(
                                             CDDAIdentifier(id.clone()),
-                                            mapgen.clone().into(),
+                                            map_data_collection
+                                                .maps
+                                                .get(&UVec2::ZERO)
+                                                .unwrap()
+                                                .clone(),
                                         );
                                     }
                                 }
@@ -289,73 +302,48 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                         entry.path()
                                     );
 
-                                    for (row, vec) in nested.iter().enumerate() {
-                                        for (column, om_terrain) in vec.iter().enumerate() {
-                                            let sliced_rows = match &mapgen.object.rows {
-                                                None => Some(Vec::from_iter(
-                                                    DEFAULT_MAP_ROWS
-                                                        .into_iter()
-                                                        .map(|s| s.to_string()),
-                                                )),
-                                                Some(rows) => {
-                                                    Some(
-                                                        rows.clone()
-                                                            // Get correct range of rows for this om_terrain from row..row + DEFAULT_MAP_HEIGHT
-                                                            .get(
-                                                                row * DEFAULT_MAP_HEIGHT
-                                                                    ..row * DEFAULT_MAP_HEIGHT
-                                                                        + DEFAULT_MAP_HEIGHT,
-                                                            )
-                                                            .expect("Row to not be out of bounds")
-                                                            .iter()
-                                                            .map(|colstring| {
-                                                                colstring
-                                                                    .chars()
-                                                                    .skip(
-                                                                        column * DEFAULT_MAP_WIDTH,
-                                                                    )
-                                                                    .take(
-                                                                        column * DEFAULT_MAP_WIDTH
-                                                                            + DEFAULT_MAP_WIDTH,
-                                                                    )
-                                                                    .collect()
-                                                            })
-                                                            .collect(),
-                                                    )
-                                                }
-                                            };
+                                    let map_data_collection: MapDataCollection = mapgen.into();
 
-                                            let mut new_mapgen = mapgen.clone();
-                                            new_mapgen.object.rows = sliced_rows;
+                                    for (coords, map_data) in map_data_collection.maps {
+                                        let om_terrain = nested
+                                            .get(coords.y as usize)
+                                            .unwrap()
+                                            .get(coords.x as usize)
+                                            .unwrap()
+                                            .clone();
 
-                                            cdda_data.map_data.insert(
-                                                CDDAIdentifier(om_terrain.clone()),
-                                                new_mapgen.into(),
-                                            );
-                                        }
+                                        cdda_data
+                                            .map_data
+                                            .insert(CDDAIdentifier(om_terrain), map_data);
                                     }
                                 }
                             }
-                        } else if let Some(nested_mapgen) = &mapgen.nested_mapgen_id {
+                        } else if let Some(nested_mapgen) = mapgen.nested_mapgen_id.clone() {
                             debug!(
                                 "Found Nested Mapgen Object '{}' in {:?}",
                                 nested_mapgen,
                                 entry.path()
                             );
 
-                            cdda_data
-                                .map_data
-                                .insert(nested_mapgen.clone(), mapgen.into());
-                        } else if let Some(update_mapgen) = &mapgen.update_mapgen_id {
+                            let mut map_data_collection: MapDataCollection = mapgen.into();
+
+                            cdda_data.map_data.insert(
+                                nested_mapgen.clone(),
+                                map_data_collection.maps.remove(&UVec2::ZERO).unwrap(),
+                            );
+                        } else if let Some(update_mapgen) = mapgen.update_mapgen_id.clone() {
                             debug!(
                                 "Found Update Mapgen Object '{:?}' in {:?}",
                                 update_mapgen,
                                 entry.path()
                             );
 
-                            cdda_data
-                                .map_data
-                                .insert(update_mapgen.clone(), mapgen.into());
+                            let mut map_data_collection: MapDataCollection = mapgen.into();
+
+                            cdda_data.map_data.insert(
+                                update_mapgen.clone(),
+                                map_data_collection.maps.remove(&UVec2::ZERO).unwrap(),
+                            );
                         }
                     }
                     CDDAJsonEntry::RegionSettings(rs) => {

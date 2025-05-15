@@ -1,19 +1,24 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
-use crate::editor_data::tab::handlers::create_tab;
-use crate::editor_data::tab::{ProjectSaveState, TabType};
-use crate::editor_data::{EditorData, Project, ProjectType};
-use crate::map::{
-    CellRepresentation, MappingKind, ProjectContainer, VisibleMappingCommand,
-    VisibleMappingCommandKind,
+use crate::editor_data::{
+    get_map_data_collection_live_viewer_data, EditorData, Project, ProjectType,
 };
-use crate::tileset;
+use crate::events::UPDATE_LIVE_VIEWER;
+use crate::map::{
+    CellRepresentation, MappingKind, VisibleMappingCommand, VisibleMappingCommandKind,
+};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind};
-use crate::util::{CDDAIdentifier, GetIdentifier, IVec3JsonKey, UVec2JsonKey};
+use crate::util::{
+    CDDADataError, CDDAIdentifier, GetCurrentMapDataError, GetIdentifier, IVec3JsonKey,
+    UVec2JsonKey,
+};
+use crate::{events, tileset, util};
 use glam::{IVec3, UVec2};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
+use notify::{Config, RecommendedWatcher, Watcher};
 use serde::{Deserialize, Serialize};
+use std::ascii::escape_default;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
@@ -21,75 +26,15 @@ use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
 use tokio::sync::MutexGuard;
-
-mod events {
-    pub const OPENED_MAP: &'static str = "opened_map";
-    pub const PLACE_SPRITES: &'static str = "place_sprites";
-    pub const ITEM_DATA: &'static str = "item_data";
-}
-
-#[derive(Debug, Error, Serialize)]
-pub enum GetCurrentMapDataError {
-    #[error("No map has been opened")]
-    NoMapOpened,
-    #[error("Invalid map index")]
-    InvalidMapIndex(usize),
-}
-
-#[derive(Debug, Error, Serialize)]
-pub enum CDDADataError {
-    #[error("No CDDA Data was loaded")]
-    NotLoaded,
-}
-
-fn get_current_project<'a>(
-    project_container: &'a MutexGuard<ProjectContainer>,
-) -> Result<&'a Project, GetCurrentMapDataError> {
-    let map_index = match project_container.current_project {
-        None => return Err(GetCurrentMapDataError::NoMapOpened),
-        Some(i) => i,
-    };
-
-    let data = match project_container.data.get(map_index) {
-        None => return Err(GetCurrentMapDataError::InvalidMapIndex(map_index)),
-        Some(d) => d,
-    };
-
-    Ok(data)
-}
-
-fn get_current_project_mut<'a>(
-    project_container: &'a mut MutexGuard<ProjectContainer>,
-) -> Result<&'a mut Project, GetCurrentMapDataError> {
-    let map_index = match project_container.current_project {
-        None => return Err(GetCurrentMapDataError::NoMapOpened),
-        Some(i) => i,
-    };
-
-    let data = match project_container.data.get_mut(map_index) {
-        None => return Err(GetCurrentMapDataError::InvalidMapIndex(map_index)),
-        Some(d) => d,
-    };
-
-    Ok(data)
-}
-
-fn get_json_data<'a>(
-    lock: &'a MutexGuard<Option<DeserializedCDDAJsonData>>,
-) -> Result<&'a DeserializedCDDAJsonData, CDDADataError> {
-    match lock.deref() {
-        None => Err(CDDADataError::NotLoaded),
-        Some(d) => Ok(d),
-    }
-}
+use tokio::task::spawn_blocking;
+use tokio_test::block_on;
 
 #[tauri::command]
 pub async fn get_current_project_data(
-    map_data: State<'_, Mutex<ProjectContainer>>,
+    editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<Project, GetCurrentMapDataError> {
-    let lock = map_data.lock().await;
-    let data = get_current_project(&lock)?;
-
+    let editor_data_lock = editor_data.lock().await;
+    let data = util::get_current_project(&editor_data_lock)?;
     Ok(data.clone())
 }
 
@@ -100,7 +45,7 @@ pub struct PlaceCommand {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MapChangEvent {
+pub struct MapChangeEvent {
     kind: MapChangeEventKind,
 }
 
@@ -128,42 +73,6 @@ pub struct CreateMapData {
     name: String,
     size: UVec2JsonKey,
     ty: ProjectType,
-}
-
-#[tauri::command]
-pub async fn create_project(
-    app: AppHandle,
-    data: CreateMapData,
-    project_container: State<'_, Mutex<ProjectContainer>>,
-    editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<(), ()> {
-    let mut lock = project_container.lock().await;
-
-    let project_name = lock.data.iter().fold(data.name, |name, project| {
-        if project.name == name {
-            let (name, num) = name.rsplit_once("_").unwrap_or((name.as_str(), "0"));
-            let number: u32 = num.parse().unwrap_or(0) + 1;
-            let new_name = format!("{}_{}", name, number);
-
-            return new_name;
-        }
-
-        name
-    });
-
-    let project = Project::new(project_name, data.size.0, data.ty);
-    lock.data.push(project.clone());
-
-    create_tab(
-        project.name,
-        TabType::MapEditor(ProjectSaveState::Unsaved),
-        app,
-        editor_data,
-    )
-    .await
-    .expect("Function to not fail");
-
-    Ok(())
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -328,27 +237,25 @@ pub fn get_sprite_type_from_sprite(
 }
 
 #[tauri::command]
-pub async fn open_project(
-    index: usize,
+pub async fn get_sprites(
+    name: String,
     app: AppHandle,
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
-    project_container: State<'_, Mutex<ProjectContainer>>,
+    editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    mapped_cdda_ids: State<'_, Mutex<HashMap<IVec3, MappedCDDAIds>>>,
 ) -> Result<(), ()> {
-    let mut lock = project_container.lock().await;
+    let json_data_lock = json_data.lock().await;
 
-    let guard = json_data.lock().await;
-    let json_data = match guard.deref() {
+    let json_data = match json_data_lock.deref() {
         None => return Err(()),
         Some(d) => d,
     };
 
-    lock.current_project = Some(index);
+    let mut editor_data_lock = editor_data.lock().await;
 
-    let project = match lock.data.get(index) {
+    let project = match editor_data_lock.projects.iter().find(|p| p.name == name) {
         None => {
-            warn!("Could not find map at index {}", index);
+            warn!("Could not find project with name {}", name);
             return Err(());
         }
         Some(d) => d,
@@ -364,9 +271,6 @@ pub async fn open_project(
         None => return Err(()),
         Some(t) => t,
     };
-
-    app.emit(events::OPENED_MAP, index)
-        .expect("Function to not fail");
 
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
@@ -388,8 +292,8 @@ pub async fn open_project(
         };
     }
 
-    for (z, map_data) in project.maps.iter() {
-        let local_mapped_cdda_ids = map_data.get_mapped_cdda_ids(json_data, *z);
+    for (z, map_collection) in project.maps.iter() {
+        let local_mapped_cdda_ids = map_collection.get_mapped_cdda_ids(json_data, *z);
 
         for (p, identifier_group) in local_mapped_cdda_ids.iter() {
             let cell_3d_coords = IVec3::new(p.x, p.y, *z);
@@ -460,6 +364,113 @@ pub async fn open_project(
     Ok(())
 }
 
+#[tauri::command]
+pub async fn reload_project(
+    editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<(), ()> {
+    let json_data_lock = json_data.lock().await;
+    let json_data = match json_data_lock.deref() {
+        None => return Err(()),
+        Some(d) => d,
+    };
+
+    let mut editor_data_lock = editor_data.lock().await;
+
+    let opened_project = match &editor_data_lock.opened_project {
+        None => return Err(()),
+        Some(p) => p.clone(),
+    };
+
+    let project = match editor_data_lock
+        .projects
+        .iter_mut()
+        .find(|p| p.name == opened_project)
+    {
+        None => {
+            warn!("Could not find project with name {}", opened_project);
+            return Err(());
+        }
+        Some(d) => d,
+    };
+
+    match &project.ty {
+        ProjectType::MapEditor(_) => unimplemented!(),
+        ProjectType::LiveViewer(lvd) => {
+            let mut map_data_collection = get_map_data_collection_live_viewer_data(lvd).await;
+            map_data_collection.calculate_parameters(&json_data.palettes);
+
+            let mut maps = HashMap::new();
+            maps.insert(0, map_data_collection);
+            project.maps = maps;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_project(
+    name: String,
+    app: AppHandle,
+    editor_data: State<'_, Mutex<EditorData>>,
+    file_watcher: State<'_, Mutex<Option<tokio::task::JoinHandle<()>>>>,
+) -> Result<(), ()> {
+    let mut file_watcher_lock = file_watcher.lock().await;
+    match file_watcher_lock.deref() {
+        None => {}
+        Some(s) => s.abort(),
+    }
+
+    let mut editor_data_lock = editor_data.lock().await;
+    editor_data_lock.opened_project = Some(name.clone());
+
+    let project = match editor_data_lock
+        .projects
+        .iter_mut()
+        .find(|p| p.name == name)
+    {
+        None => {
+            warn!("Could not find project with name {}", name);
+            return Err(());
+        }
+        Some(d) => d,
+    };
+
+    match &project.ty {
+        ProjectType::MapEditor(_) => {}
+        ProjectType::LiveViewer(lvd) => {
+            app.emit(UPDATE_LIVE_VIEWER, {}).unwrap();
+
+            let lvd_clone = lvd.clone();
+
+            let join_handle = tokio::spawn(async move {
+                let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+
+                // Thx -> https://github.com/notify-rs/notify/blob/d7e22791faffb7bd9bd10f031c260ae019d7f474/examples/async_monitor.rs
+                let mut watcher = RecommendedWatcher::new(
+                    move |res| {
+                        block_on(async { tx.send(res).await.unwrap() });
+                    },
+                    Config::default(),
+                )
+                .unwrap();
+
+                watcher
+                    .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
+                    .unwrap();
+
+                while let Some(Ok(_)) = rx.recv().await {
+                    app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
+                }
+            });
+            file_watcher_lock.replace(join_handle);
+        }
+    }
+
+    Ok(())
+}
+
 #[derive(Debug, Error, Serialize)]
 pub enum GetProjectCellDataError {
     #[error(transparent)]
@@ -471,14 +482,14 @@ pub enum GetProjectCellDataError {
 
 #[tauri::command]
 pub async fn get_project_cell_data(
-    project_container: State<'_, Mutex<ProjectContainer>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<HashMap<IVec3JsonKey, CellRepresentation>, GetProjectCellDataError> {
-    let project_lock = project_container.lock().await;
-    let project = get_current_project(&project_lock)?;
-
     let json_data_lock = json_data.lock().await;
-    let json_data = get_json_data(&json_data_lock)?;
+    let json_data = util::get_json_data(&json_data_lock)?;
+
+    let editor_data_lock = editor_data.lock().await;
+    let project = util::get_current_project(&editor_data_lock)?;
 
     let mut item_data: HashMap<IVec3JsonKey, CellRepresentation> = HashMap::new();
 
@@ -504,50 +515,20 @@ pub async fn get_project_cell_data(
 
 #[tauri::command]
 pub async fn close_project(
-    project_container: State<'_, Mutex<ProjectContainer>>,
+    app: AppHandle,
     mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedCDDAIds>>>,
+    editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), ()> {
-    let mut lock = project_container.lock().await;
-    lock.current_project = None;
+    let mut editor_data_lock = editor_data.lock().await;
+
+    match &editor_data_lock.opened_project {
+        None => {}
+        Some(index) => {
+            app.emit(events::TAB_CLOSED, index).unwrap();
+        }
+    }
+
+    editor_data_lock.opened_project = None;
     mapped_sprites.lock().await.clear();
     Ok(())
-}
-
-#[derive(Debug, Error, Serialize)]
-pub enum SaveError {
-    #[error(transparent)]
-    MapError(#[from] GetCurrentMapDataError),
-
-    #[error("Failed to save map data")]
-    SaveError,
-}
-
-#[tauri::command]
-pub async fn save_current_project(
-    project_container: State<'_, Mutex<ProjectContainer>>,
-    editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<(), SaveError> {
-    unimplemented!()
-    // let lock = project_container.lock().await;
-    // let map_data = get_current_project(&lock)?;
-    //
-    // let mut editor_data = editor_data.lock().await;
-    // let new_tab_type = TabType::MapEditor(Saved {
-    //     path: PathBuf::from(save_path).join(&map_data.name),
-    // });
-    // editor_data
-    //     .tabs
-    //     .get_mut(lock.current_project.unwrap())
-    //     .unwrap()
-    //     .tab_type = new_tab_type;
-    //
-    // let editor_data_saver = EditorDataSaver {
-    //     path: editor_data.config.config_path.clone(),
-    // };
-    //
-    // editor_data_saver
-    //     .save(&editor_data)
-    //     .expect("Saving to not fail");
-    //
-    // Ok(())
 }

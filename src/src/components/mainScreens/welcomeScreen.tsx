@@ -1,10 +1,10 @@
 import React, {Dispatch, SetStateAction, useContext, useEffect, useRef, useState} from "react";
 import "./welcomeScreen.scss"
-import Icon, {IconName} from "../components/icon.tsx";
 import {open} from "@tauri-apps/plugin-dialog";
 import {invoke} from "@tauri-apps/api/core";
-import {EditorDataContext, TabContext} from "../app.tsx";
-import {EditorData, EditorDataSendCommand} from "../lib/editor_data.ts";
+import {EditorData, EditorDataSendCommand} from "../../lib/editor_data.js";
+import {TabContext} from "../../app.js";
+import Icon, {IconName} from "../icon.js";
 
 export function WelcomeScreen() {
     const [cddaInstallDirectory, setCDDAInstallDirectory] = useState<string>()
@@ -49,7 +49,7 @@ export function WelcomeScreen() {
         await invoke(EditorDataSendCommand.SaveEditorData, {})
 
         tabs.setOpenedTab(null)
-        tabs.removeTab(0)
+        tabs.removeLocalTab("Welcome to the CDDA Map Editor")
     }
 
     return (

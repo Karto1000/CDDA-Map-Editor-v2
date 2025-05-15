@@ -4,21 +4,23 @@ use crate::cdda_data::item::{
     EntryItemShortcut, Item, ItemEntry, ItemGroupSubtype,
 };
 use crate::cdda_data::palettes::Parameter;
+use crate::cdda_data::CDDAJsonEntry::Furniture;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
-use crate::map::map_properties::ComputerProperty;
-use crate::map::map_properties::ToiletProperty;
+use crate::editor_data::{MapCoordinates, MapDataCollection};
+use crate::map::map_properties::ComputersProperty;
+use crate::map::map_properties::ToiletsProperty;
 use crate::map::map_properties::TrapsProperty;
 use crate::map::map_properties::{
-    FieldProperty, FurnitureProperty, MonstersProperty, NestedProperty, SignProperty,
+    FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty, SignsProperty,
     TerrainProperty,
 };
-use crate::map::map_properties::{GaspumpProperty, ItemsProperty};
+use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
-use crate::map::VisibleMappingCommand;
 use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, PlaceableSetType, Property,
     RemovableSetType, Set, SetLine, SetOperation, SetPoint, SetSquare, SPECIAL_EMPTY_CHAR,
 };
+use crate::map::{VisibleMappingCommand, DEFAULT_MAP_DATA_SIZE};
 use crate::util::{
     CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted, ParameterIdentifier, Weighted,
 };
@@ -465,17 +467,17 @@ impl Into<Arc<dyn Place>> for PlaceInnerNested {
 
 create_place_inner!(Items, MapGenItem);
 
-create_place_inner!(Field, MapGenField);
+create_place_inner!(Fields, MapGenField);
 
-create_place_inner!(Computer, MapGenComputer);
+create_place_inner!(Computers, MapGenComputer);
 
-create_place_inner!(Sign, MapGenSign);
+create_place_inner!(Signs, MapGenSign);
 
-create_place_inner!(Gaspump, MapGenGaspump);
+create_place_inner!(Gaspumps, MapGenGaspump);
 
 create_place_inner!(Monsters, MapGenMonster);
 
-create_place_inner!(Toilet, ());
+create_place_inner!(Toilets, ());
 
 create_place_inner!(Traps, MapGenTrap);
 
@@ -502,6 +504,14 @@ pub struct PlaceOuter<T> {
     pub inner: T,
 }
 
+pub trait IntoArcDyn<T> {
+    fn into_arc_dyn_place(
+        value: T,
+        local_x_coords: NumberOrRange<i32>,
+        local_y_coords: NumberOrRange<i32>,
+    ) -> Self;
+}
+
 // TODO: For some reason i cannot implement <T: Into<Arc<dyn Place>> From<PlaceOuter<T>> for PlaceOuter<Arc<dyn Place>>
 // Since it conflicts with inbuilt implementations?
 
@@ -509,11 +519,15 @@ macro_rules! impl_from {
     (
         $identifier: ident
     ) => {
-        impl From<PlaceOuter<$identifier>> for PlaceOuter<Arc<dyn Place>> {
-            fn from(value: PlaceOuter<$identifier>) -> Self {
+        impl IntoArcDyn<PlaceOuter<$identifier>> for PlaceOuter<Arc<dyn Place>> {
+            fn into_arc_dyn_place(
+                value: PlaceOuter<$identifier>,
+                local_x_coords: NumberOrRange<i32>,
+                local_y_coords: NumberOrRange<i32>,
+            ) -> Self {
                 PlaceOuter {
-                    x: value.x,
-                    y: value.y,
+                    x: local_x_coords,
+                    y: local_y_coords,
                     repeat: value.repeat,
                     chance: value.chance,
                     inner: value.inner.into(),
@@ -528,11 +542,11 @@ impl_from!(PlaceInnerTerrain);
 impl_from!(PlaceInnerItems);
 impl_from!(PlaceInnerMonsters);
 impl_from!(PlaceInnerNested);
-impl_from!(PlaceInnerToilet);
-impl_from!(PlaceInnerField);
-impl_from!(PlaceInnerComputer);
-impl_from!(PlaceInnerSign);
-impl_from!(PlaceInnerGaspump);
+impl_from!(PlaceInnerToilets);
+impl_from!(PlaceInnerFields);
+impl_from!(PlaceInnerComputers);
+impl_from!(PlaceInnerSigns);
+impl_from!(PlaceInnerGaspumps);
 impl_from!(PlaceInnerTraps);
 
 impl<T> PlaceOuter<T> {
@@ -547,7 +561,7 @@ macro_rules! map_data_object {
         [REGULAR_FIELDS]
         $($r_field: ident: $r_ty: ty),*
         [FIELDS_WITH_PLACE]
-        $(($place_field: ident, $place_field_singular: ident): $place_ty: ty),*
+        $($place_field: ident: $place_ty: ty),*
     ) => {
         paste! {
             #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -562,7 +576,7 @@ macro_rules! map_data_object {
                     pub $place_field: HashMap<char, $place_ty>,
 
                     #[serde(default)]
-                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field_singular: camel>]>>,
+                    pub [<place_ $place_field>]: Vec<PlaceOuter<[<PlaceInner$place_field: camel>]>>,
                 )*
             }
         }
@@ -576,23 +590,24 @@ map_data_object!(
     palettes: Vec<MapGenValue>,
     parameters: IndexMap<ParameterIdentifier, Parameter>,
     set: Vec<SetIntermediate>,
-    flags: HashSet<MapDataFlag>
+    flags: HashSet<MapDataFlag>,
+    predecessor_mapgen: CDDAIdentifier
 
     [FIELDS_WITH_PLACE]
-    (terrain, terrain): MapGenValue,
-    (furniture, furniture): MapGenValue,
-    (items, items): MeabyVec<MeabyWeighted<MapGenItem>>,
-    (monsters, monsters): MeabyVec<MeabyWeighted<MapGenMonster>>,
-    (nested, nested): MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
+    terrain: MapGenValue,
+    furniture: MapGenValue,
+    items: MeabyVec<MeabyWeighted<MapGenItem>>,
+    monsters: MeabyVec<MeabyWeighted<MapGenMonster>>,
+    nested: MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
     // Toilets do not have any data
     // TODO: we have to use Value here since there is a comment in one of the files with fails
     // to deserialize since a object with the key // cannot deserialize to a unit
-    (toilets, toilet): Value,
-    (fields, field): MeabyVec<MeabyWeighted<MapGenField>>,
-    (computers, computer):  MeabyVec<MeabyWeighted<MapGenComputer>>,
-    (signs, sign):  MeabyVec<MeabyWeighted<MapGenSign>>,
-    (gaspumps, gaspump):  MeabyVec<MeabyWeighted<MapGenGaspump>>,
-    (traps, traps):  MeabyVec<MeabyWeighted<MapGenTrap>>
+    toilets: Value,
+    fields: MeabyVec<MeabyWeighted<MapGenField>>,
+    computers:  MeabyVec<MeabyWeighted<MapGenComputer>>,
+    signs:  MeabyVec<MeabyWeighted<MapGenSign>>,
+    gaspumps:  MeabyVec<MeabyWeighted<MapGenGaspump>>,
+    traps:  MeabyVec<MeabyWeighted<MapGenTrap>>
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -630,42 +645,239 @@ pub struct CDDAMapDataIntermediate {
     pub object: CDDAMapDataObjectIntermediate,
 }
 
-impl Into<MapData> for CDDAMapDataIntermediate {
-    fn into(self) -> MapData {
-        let mut cells = IndexMap::new();
-        let mut mapgen_size = UVec2::new(DEFAULT_MAP_WIDTH as u32, DEFAULT_MAP_HEIGHT as u32);
+impl CDDAMapDataIntermediate {
+    fn get_properties(&self) -> HashMap<MappingKind, HashMap<char, Arc<dyn Property>>> {
+        let mut properties = HashMap::new();
 
-        match &self.object.rows {
-            None => {
-                for y in 0..DEFAULT_MAP_HEIGHT {
-                    for x in 0..DEFAULT_MAP_WIDTH {
-                        cells.insert(
-                            UVec2::new(x as u32, y as u32),
-                            Cell {
-                                character: SPECIAL_EMPTY_CHAR,
-                            },
-                        );
-                    }
-                }
-            }
-            Some(rows) => {
-                mapgen_size.x = rows[0].len() as u32;
-                mapgen_size.y = rows.len() as u32;
+        let mut terrain_map = HashMap::new();
+        for (char, terrain) in self.object.common.terrain.clone() {
+            let ter_prop = Arc::new(TerrainProperty {
+                mapgen_value: terrain,
+            });
 
-                for (row_index, row) in rows.into_iter().enumerate() {
-                    for (column_index, character) in row.chars().enumerate() {
-                        cells.insert(
-                            UVec2::new(column_index as u32, row_index as u32),
-                            Cell { character },
-                        );
-                    }
-                }
-            }
+            terrain_map.insert(char, ter_prop as Arc<dyn Property>);
         }
 
-        let mut set_vec: Vec<Arc<dyn Set>> = vec![];
+        let mut furniture_map = HashMap::new();
+        for (char, furniture) in self.object.common.furniture.clone() {
+            let fur_prop = Arc::new(FurnitureProperty {
+                mapgen_value: furniture,
+            });
 
-        for set in self.object.common.set {
+            furniture_map.insert(char, fur_prop as Arc<dyn Property>);
+        }
+
+        let mut toilet_map = HashMap::new();
+        for (char, _) in self.object.common.toilets.clone() {
+            let toilet_prop = Arc::new(FurnitureProperty {
+                mapgen_value: MapGenValue::String("f_toilet".into()),
+            });
+
+            toilet_map.insert(char, toilet_prop as Arc<dyn Property>);
+        }
+
+        let mut computer_map = HashMap::new();
+        for (char, _) in self.object.common.computers.clone() {
+            let ter_prop = Arc::new(FurnitureProperty {
+                mapgen_value: MapGenValue::String("f_console".into()),
+            });
+
+            computer_map.insert(char, ter_prop as Arc<dyn Property>);
+        }
+
+        let mut monster_map = HashMap::new();
+        for (char, monster) in self.object.common.monsters.clone() {
+            let monster_prop = Arc::new(MonstersProperty {
+                monster: monster
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+
+            monster_map.insert(char, monster_prop as Arc<dyn Property>);
+        }
+
+        let mut nested_map = HashMap::new();
+        for (char, nested) in self.object.common.nested.clone() {
+            let nested_terrain_prop = Arc::new(NestedProperty {
+                nested: nested
+                    .clone()
+                    .into_vec()
+                    .into_iter()
+                    .map(|mw| mw.to_weighted())
+                    .map(|w| Weighted::<MapGenNested>::new(w.data, w.weight))
+                    .collect(),
+            });
+            nested_map.insert(char, nested_terrain_prop as Arc<dyn Property>);
+        }
+
+        let mut field_map = HashMap::new();
+        for (char, field) in self.object.common.fields.clone() {
+            let field_prop = Arc::new(FieldsProperty {
+                field: field
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            field_map.insert(char, field_prop as Arc<dyn Property>);
+        }
+
+        let mut item_map = HashMap::new();
+        for (char, items) in self.object.common.items.clone() {
+            let item_prop = Arc::new(ItemsProperty {
+                items: items
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            item_map.insert(char, item_prop as Arc<dyn Property>);
+        }
+
+        let mut sign_map = HashMap::new();
+        for (char, sign) in self.object.common.signs.clone() {
+            let sign_prop = Arc::new(SignsProperty {
+                signs: sign
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            sign_map.insert(char, sign_prop as Arc<dyn Property>);
+        }
+
+        let mut gaspumps_map = HashMap::new();
+        for (char, gaspump) in self.object.common.gaspumps.clone() {
+            let gaspump_prop = Arc::new(GaspumpsProperty {
+                gaspumps: gaspump
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            gaspumps_map.insert(char, gaspump_prop as Arc<dyn Property>);
+        }
+
+        let mut trap_map = HashMap::new();
+        for (char, trap) in self.object.common.traps.clone() {
+            let trap_prop = Arc::new(TrapsProperty {
+                trap: trap
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .map(|v| {
+                        let id = match v.data {
+                            MapGenTrap::TrapRef { trap } => trap,
+                            MapGenTrap::MapGenValue(v) => v,
+                        };
+
+                        Weighted::new(id, v.weight)
+                    })
+                    .collect(),
+            });
+            trap_map.insert(char, trap_prop as Arc<dyn Property>);
+        }
+
+        properties.insert(MappingKind::Terrain, terrain_map);
+        properties.insert(MappingKind::Furniture, furniture_map);
+        properties.insert(MappingKind::Monster, monster_map);
+        properties.insert(MappingKind::Nested, nested_map);
+        properties.insert(MappingKind::Field, field_map);
+        properties.insert(MappingKind::ItemGroups, item_map);
+        properties.insert(MappingKind::Computer, computer_map);
+        properties.insert(MappingKind::Toilet, toilet_map);
+        properties.insert(MappingKind::Sign, sign_map);
+        properties.insert(MappingKind::Gaspump, gaspumps_map);
+        properties.insert(MappingKind::Trap, trap_map);
+
+        properties
+    }
+
+    fn get_place(
+        &self,
+        map_coordinates: MapCoordinates,
+    ) -> HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> {
+        let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
+        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+
+        macro_rules! insert_place {
+            (
+                $name: path,
+                $multi: expr
+            ) => {
+                paste! {
+                    let mut map_vec = vec![];
+
+                    for mapping in self.object.common.[<place_ $multi:lower>].iter() {
+                        let remapped_x = mapping.x.clone() - (map_coordinates.x * map_size.x as u32) as i32;
+                        let remapped_y = mapping.y.clone() - (map_coordinates.y * map_size.y as u32) as i32;
+
+                        if remapped_x >= 0 && remapped_x < map_size.x as i32 &&
+                           remapped_y >= 0 && remapped_y < map_size.y as i32 {
+                            map_vec.push(PlaceOuter::into_arc_dyn_place(
+                                mapping.clone(),
+                                remapped_x,
+                                remapped_y
+                            ))
+                        }
+                    }
+
+                    place.insert(
+                        MappingKind::$name,
+                        map_vec
+                    );
+                }
+            };
+            (
+                $name: path
+            ) => {
+                paste! {
+                    let mut map_vec = vec![];
+
+                    for mapping in self.object.common.[<place_ $name:lower>].iter() {
+                        let remapped_x = mapping.x.clone() - (map_coordinates.x * DEFAULT_MAP_WIDTH as u32) as i32;
+                        let remapped_y = mapping.y.clone() - (map_coordinates.y * DEFAULT_MAP_HEIGHT as u32) as i32;
+
+                        if remapped_x >= 0 && remapped_x < DEFAULT_MAP_WIDTH as i32 &&
+                           remapped_y >= 0 && remapped_y < DEFAULT_MAP_HEIGHT as i32 {
+                            map_vec.push(PlaceOuter::into_arc_dyn_place(
+                                mapping.clone(),
+                                remapped_x,
+                                remapped_y
+                            ))
+                        }
+                    }
+
+                    place.insert(
+                        MappingKind::$name,
+                        map_vec
+                    );
+                }
+            };
+        }
+
+        insert_place!(Furniture);
+        insert_place!(Toilet, toilets);
+        insert_place!(Terrain);
+        insert_place!(Computer, computers);
+        insert_place!(Sign, signs);
+        insert_place!(Trap, traps);
+        insert_place!(Gaspump, gaspumps);
+        insert_place!(Monster, monsters);
+        insert_place!(Nested);
+        insert_place!(Field, fields);
+        insert_place!(ItemGroups, items);
+
+        place
+    }
+
+    fn get_set(&self, map_coordinates: MapCoordinates) -> Vec<Arc<dyn Set>> {
+        let mut set_vec: Vec<Arc<dyn Set>> = vec![];
+        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+
+        for set in self.object.common.set.clone() {
             if let Some(ty) = set.line {
                 let x = skip_none!(set.x);
                 let y = skip_none!(set.y);
@@ -697,10 +909,10 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
                 if let Some(operation) = operation {
                     let set_line = SetLine {
-                        from_x: x,
-                        from_y: y,
-                        to_x: x2,
-                        to_y: y2,
+                        from_x: x + map_coordinates.x * map_size.x,
+                        from_y: y + map_coordinates.y * map_size.y,
+                        to_x: x2 + map_coordinates.x * map_size.x,
+                        to_y: y2 + map_coordinates.y * map_size.y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((0, 1)),
@@ -745,8 +957,8 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
                 if let Some(operation) = operation {
                     let set_point = SetPoint {
-                        x,
-                        y,
+                        x: x + map_coordinates.x * map_size.x,
+                        y: y + map_coordinates.y * map_size.y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),
@@ -784,10 +996,10 @@ impl Into<MapData> for CDDAMapDataIntermediate {
 
                 if let Some(operation) = operation {
                     let set_square = SetSquare {
-                        top_left_x: x,
-                        top_left_y: y,
-                        bottom_right_x: x2,
-                        bottom_right_y: y2,
+                        top_left_x: x + map_coordinates.x * map_size.x,
+                        top_left_y: y + map_coordinates.y * map_size.y,
+                        bottom_right_x: x2 + map_coordinates.x * map_size.x,
+                        bottom_right_y: y2 + map_coordinates.y * map_size.y,
                         z: set.z.unwrap_or(0),
                         chance: set.chance.unwrap_or(1),
                         repeat: set.repeat.unwrap_or((1, 1)),
@@ -799,275 +1011,135 @@ impl Into<MapData> for CDDAMapDataIntermediate {
             }
         }
 
-        let mut properties = HashMap::new();
+        set_vec
+    }
+}
 
-        let mut terrain_map = HashMap::new();
-        for (char, terrain) in self.object.common.terrain {
-            let ter_prop = Arc::new(TerrainProperty {
-                mapgen_value: terrain,
-            });
+impl Into<MapDataCollection> for CDDAMapDataIntermediate {
+    fn into(self) -> MapDataCollection {
+        let mut map_data_collection = MapDataCollection::default();
 
-            terrain_map.insert(char, ter_prop as Arc<dyn Property>);
-        }
+        match &self.om_terrain {
+            None => {}
+            Some(om) => {
+                if let OmTerrain::Nested(n) = om {
+                    let num_rows = n.len();
+                    let num_cols = n[0].len();
 
-        let mut furniture_map = HashMap::new();
-        for (char, furniture) in self.object.common.furniture {
-            let fur_prop = Arc::new(FurnitureProperty {
-                mapgen_value: furniture,
-            });
+                    map_data_collection.global_map_size = UVec2::new(
+                        (num_cols * DEFAULT_MAP_WIDTH) as u32,
+                        (num_rows * DEFAULT_MAP_HEIGHT) as u32,
+                    );
 
-            furniture_map.insert(char, fur_prop as Arc<dyn Property>);
-        }
+                    for map_row_index in 0..num_rows {
+                        for map_column_index in 0..num_cols {
+                            let mut nested_cells = IndexMap::new();
 
-        let mut toilet_map = HashMap::new();
-        for (char, _) in self.object.common.toilets {
-            let toilet_prop = Arc::new(FurnitureProperty {
-                mapgen_value: MapGenValue::String("f_toilet".into()),
-            });
+                            match self.object.rows.clone() {
+                                None => {
+                                    for row in 0..DEFAULT_MAP_HEIGHT {
+                                        for column in 0..DEFAULT_MAP_WIDTH {
+                                            nested_cells.insert(
+                                                UVec2::new(column as u32, row as u32),
+                                                Cell { character: ' ' },
+                                            );
+                                        }
+                                    }
+                                }
+                                Some(map_row_slice) => {
+                                    let new_slice: Vec<String> = map_row_slice[map_row_index
+                                        * DEFAULT_MAP_HEIGHT
+                                        ..map_row_index * DEFAULT_MAP_HEIGHT + DEFAULT_MAP_HEIGHT]
+                                        .into_iter()
+                                        .map(|str| {
+                                            str.chars()
+                                                .skip(map_column_index * DEFAULT_MAP_WIDTH)
+                                                .take(DEFAULT_MAP_WIDTH)
+                                                .collect::<String>()
+                                        })
+                                        .collect();
 
-            toilet_map.insert(char, toilet_prop as Arc<dyn Property>);
-        }
+                                    for (row_index, slice) in new_slice.into_iter().enumerate() {
+                                        for (column_index, character) in slice.chars().enumerate() {
+                                            nested_cells.insert(
+                                                UVec2::new(column_index as u32, row_index as u32),
+                                                Cell { character },
+                                            );
+                                        }
+                                    }
+                                }
+                            }
 
-        let mut computer_map = HashMap::new();
-        for (char, _) in self.object.common.computers {
-            let ter_prop = Arc::new(FurnitureProperty {
-                mapgen_value: MapGenValue::String("f_console".into()),
-            });
+                            let map_coordinates =
+                                UVec2::new(map_column_index as u32, map_row_index as u32);
+                            let mut map_data = MapData::default();
 
-            computer_map.insert(char, ter_prop as Arc<dyn Property>);
-        }
+                            let properties = self.get_properties();
+                            let place = self.get_place(map_coordinates);
+                            let set = self.get_set(map_coordinates);
 
-        let mut monster_map = HashMap::new();
-        for (char, monster) in self.object.common.monsters {
-            let monster_prop = Arc::new(MonstersProperty {
-                monster: monster
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
+                            map_data.cells = nested_cells;
+                            map_data.set = set;
+                            map_data.properties = properties;
+                            map_data.place = place;
+                            map_data.parameters = self.object.common.parameters.clone();
+                            map_data.palettes = self.object.common.palettes.clone();
+                            map_data.fill = self.object.fill_ter.clone();
+                            map_data.map_size =
+                                self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+                            map_data.flags = self.object.common.flags.clone();
 
-            monster_map.insert(char, monster_prop as Arc<dyn Property>);
-        }
+                            map_data_collection.maps.insert(
+                                UVec2::new(map_column_index as u32, map_row_index as u32),
+                                map_data,
+                            );
+                        }
+                    }
 
-        let mut nested_map = HashMap::new();
-        for (char, nested) in self.object.common.nested {
-            let nested_terrain_prop = Arc::new(NestedProperty {
-                nested: nested
-                    .clone()
-                    .into_vec()
-                    .into_iter()
-                    .map(|mw| mw.to_weighted())
-                    .map(|w| Weighted::<MapGenNested>::new(w.data, w.weight))
-                    .collect(),
-            });
-            nested_map.insert(char, nested_terrain_prop as Arc<dyn Property>);
-        }
+                    return map_data_collection;
+                }
+            }
+        };
 
-        let mut field_map = HashMap::new();
-        for (char, field) in self.object.common.fields {
-            let field_prop = Arc::new(FieldProperty {
-                field: field
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
-            field_map.insert(char, field_prop as Arc<dyn Property>);
-        }
-
-        let mut item_map = HashMap::new();
-        for (char, items) in self.object.common.items {
-            let item_prop = Arc::new(ItemsProperty {
-                items: items
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
-            item_map.insert(char, item_prop as Arc<dyn Property>);
-        }
-
-        let mut sign_map = HashMap::new();
-        for (char, sign) in self.object.common.signs {
-            let sign_prop = Arc::new(SignProperty {
-                signs: sign
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
-            sign_map.insert(char, sign_prop as Arc<dyn Property>);
-        }
-
-        let mut gaspumps_map = HashMap::new();
-        for (char, gaspump) in self.object.common.gaspumps {
-            let gaspump_prop = Arc::new(GaspumpProperty {
-                gaspumps: gaspump
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
-            gaspumps_map.insert(char, gaspump_prop as Arc<dyn Property>);
-        }
-
-        let mut trap_map = HashMap::new();
-        for (char, trap) in self.object.common.traps {
-            let trap_prop = Arc::new(TrapsProperty {
-                trap: trap
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .map(|v| {
-                        let id = match v.data {
-                            MapGenTrap::TrapRef { trap } => trap,
-                            MapGenTrap::MapGenValue(v) => v,
-                        };
-
-                        Weighted::new(id, v.weight)
-                    })
-                    .collect(),
-            });
-            trap_map.insert(char, trap_prop as Arc<dyn Property>);
-        }
-
-        properties.insert(MappingKind::Terrain, terrain_map);
-        properties.insert(MappingKind::Furniture, furniture_map);
-        properties.insert(MappingKind::Monster, monster_map);
-        properties.insert(MappingKind::Nested, nested_map);
-        properties.insert(MappingKind::Field, field_map);
-        properties.insert(MappingKind::ItemGroups, item_map);
-        properties.insert(MappingKind::Computer, computer_map);
-        properties.insert(MappingKind::Toilet, toilet_map);
-        properties.insert(MappingKind::Sign, sign_map);
-        properties.insert(MappingKind::Gaspump, gaspumps_map);
-        properties.insert(MappingKind::Trap, trap_map);
-
-        let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> = HashMap::new();
-
-        place.insert(
-            MappingKind::Furniture,
-            self.object
-                .common
-                .place_furniture
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Toilet,
-            self.object
-                .common
-                .place_toilets
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Terrain,
-            self.object
-                .common
-                .place_terrain
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Computer,
-            self.object
-                .common
-                .place_computers
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Sign,
-            self.object
-                .common
-                .place_signs
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Trap,
-            self.object
-                .common
-                .place_traps
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Gaspump,
-            self.object
-                .common
-                .place_gaspumps
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Monster,
-            self.object
-                .common
-                .place_monsters
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Nested,
-            self.object
-                .common
-                .place_nested
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::Field,
-            self.object
-                .common
-                .place_fields
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
-        place.insert(
-            MappingKind::ItemGroups,
-            self.object
-                .common
-                .place_items
-                .into_iter()
-                .map(Into::into)
-                .collect(),
-        );
-
+        let mut collection = MapDataCollection::default();
         let mut map_data = MapData::default();
 
+        let properties = self.get_properties();
+        let place = self.get_place(UVec2::ZERO);
+        let set = self.get_set(UVec2::ZERO);
+
+        let mut cells = IndexMap::new();
+
+        for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y {
+            for column in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).x {
+                let char = match self.object.rows.as_ref() {
+                    None => ' ',
+                    Some(s) => match s.get(row as usize) {
+                        None => ' ',
+                        Some(row) => row.chars().nth(column as usize).unwrap_or(' '),
+                    },
+                };
+
+                cells.insert(
+                    UVec2::new(column as u32, row as u32),
+                    Cell { character: char },
+                );
+            }
+        }
+
         map_data.cells = cells;
-        map_data.set = set_vec;
+        map_data.set = set;
         map_data.properties = properties;
         map_data.place = place;
-        map_data.parameters = self.object.common.parameters;
-        map_data.palettes = self.object.common.palettes;
-        map_data.fill = self.object.fill_ter;
-        map_data.map_size = self.object.mapgen_size.unwrap_or(mapgen_size);
-        map_data.flags = self.object.common.flags;
+        map_data.parameters = self.object.common.parameters.clone();
+        map_data.palettes = self.object.common.palettes.clone();
+        map_data.fill = self.object.fill_ter.clone();
+        map_data.map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+        map_data.flags = self.object.common.flags.clone();
 
-        map_data
+        collection.maps.insert(UVec2::ZERO, map_data);
+        collection.global_map_size = DEFAULT_MAP_DATA_SIZE;
+
+        collection
     }
 }
