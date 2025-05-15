@@ -49,7 +49,7 @@ export function WelcomeScreen() {
         await invoke(EditorDataSendCommand.SaveEditorData, {})
 
         tabs.setOpenedTab(null)
-        tabs.removeTab(0)
+        tabs.removeLocalTab("Welcome to the CDDA Map Editor")
     }
 
     return (

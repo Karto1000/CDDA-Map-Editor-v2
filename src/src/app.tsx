@@ -8,7 +8,7 @@ import {makeCancelable} from "./lib/index.ts";
 import {Scene} from "three";
 import {useEditor} from "./hooks/useEditor.tsx";
 import {useTileset} from "./hooks/useTileset.ts";
-import {EditorData, EditorDataRecvEvent} from "./lib/editor_data.ts";
+import {EditorData, EditorDataRecvEvent, ProjectTypeKind} from "./lib/editor_data.ts";
 import {MapDataSendCommand} from "./lib/map_data.ts";
 import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
@@ -34,7 +34,6 @@ export const EditorDataContext = createContext<EditorData>(null)
 function App() {
     const [theme, setTheme] = useTheme();
     const [editorData, setEditorData] = useState<EditorData>()
-    const [creatingMapName, setCreatingMapName] = useState<string>("")
     const tabs = useTabs()
 
     const mapEditorCanvasContainerRef = useRef<HTMLDivElement>()
@@ -42,7 +41,7 @@ function App() {
     const mapEditorSceneRef = useRef<Scene>(new Scene())
 
     const [tilesheets, spritesheetConfig, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
-    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type.type === TabTypeKind.LiveViewer
+    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabTypeKind.LiveViewer
     const mapEditorCanvasDisplay = isDisplayingMapEditor ? "flex" : "none"
 
     // Thanks to the legend at https://stackoverflow.com/questions/77775315/how-to-create-mulitwindows-in-tauri-rust-react-typescript-html-css
@@ -68,21 +67,15 @@ function App() {
                 console.log("Received editor data changed event: ", e.payload, "")
                 setEditorData(e.payload)
 
-                const welcomeTab = e.payload.tabs.find(t => t.tab_type.type === TabTypeKind.Welcome)
-
-                if (welcomeTab) tabs.setOpenedTab(e.payload.tabs.indexOf(welcomeTab))
-
-                if (!e.payload.config.cdda_path && !welcomeTab) {
-                    await tabs.addTab(
+                if (!e.payload.config.cdda_path) {
+                    tabs.addLocalTab(
                         {
                             name: "Welcome to the CDDA Map Editor",
-                            tab_type: {
-                                type: TabTypeKind.Welcome,
-                            }
+                            tab_type: TabTypeKind.Welcome,
                         }
                     )
 
-                    tabs.setOpenedTab(0)
+                    tabs.setOpenedTab("Welcome to the CDDA Map Editor")
                 }
             }))
 
@@ -98,20 +91,16 @@ function App() {
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
-            if (tabs.tabs[tabs.openedTab].tab_type.type === TabTypeKind.Welcome)
+            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.Welcome)
                 return <WelcomeScreen/>
 
-            if (tabs.tabs[tabs.openedTab].tab_type.type === TabTypeKind.MapEditor)
+            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor ||
+                tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
                 return <></>
         }
 
         return <NoTabScreen setIsCreatingMapWindowOpen={() => {
         }}/>
-    }
-
-    async function createMap() {
-        await invoke(MapDataSendCommand.CreateProject, {data: {name: creatingMapName, size: "24,24"}})
-
     }
 
     return (

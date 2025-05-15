@@ -1,7 +1,7 @@
 import {MutableRefObject, useEffect, useRef, useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
-import {makeCancelable} from "../lib/index.ts";
+import {invokeTauri, makeCancelable} from "../lib/index.ts";
 import {EditorDataRecvEvent, EditorDataSendCommand} from "../lib/editor_data.ts";
 
 export enum TabTypeKind {
@@ -10,55 +10,37 @@ export enum TabTypeKind {
     LiveViewer = "LiveViewer"
 }
 
-export enum SaveStateKind {
-    Saved,
-    Unsaved
-}
-
-export type SaveState = {
-    type: SaveStateKind.Saved,
-    path: string
-} | {
-    type: SaveStateKind.Unsaved
-}
-
-export type TabType = {
-    type: TabTypeKind.MapEditor,
-    state: SaveState
-} | {
-    type: TabTypeKind.Welcome
-} | {
-    type: TabTypeKind.LiveViewer
-}
-
 export type Tab = {
     name: string,
-    tab_type: TabType
+    tab_type: TabTypeKind,
 }
 
 export type UseTabsReturn = {
-    tabs: Tab[],
-    openedTab: number,
-    addTab: (tab: Tab) => Promise<void>,
-    removeTab: (index: number) => void,
-    setOpenedTab: (index: number) => void,
+    tabs: { [name: string]: Tab },
+    addLocalTab: (tab: Tab) => void,
+    removeLocalTab: (name: string) => void,
+    openedTab: string,
+    setOpenedTab: (name: string) => void,
 }
 
 
 export function useTabs(): UseTabsReturn {
-    const [tabs, setTabs] = useState<Tab[]>([])
-    const [openTab, setOpenTab] = useState<number | null>(null)
+    const [tabs, setTabs] = useState<{ [name: string]: Tab }>({})
+    const [openTab, setOpenTab] = useState<string | null>(null)
 
     useEffect(() => {
         const unlistenOpened = makeCancelable(listen<Tab>(EditorDataRecvEvent.TabCreated, e => {
-            setTabs(tabs => [...tabs, e.payload])
+            setTabs(tabs => {
+                const newTabs = {...tabs}
+                newTabs[e.payload.name] = e.payload
+                return newTabs
+            })
         }))
 
         let unlistenClosed = makeCancelable(listen<number>(EditorDataRecvEvent.TabClosed, e => {
             setTabs(tabs => {
-                const newTabs = [...tabs]
-                newTabs.splice(e.payload, 1)
-
+                const newTabs = {...tabs}
+                delete newTabs[e.payload]
                 return newTabs
             })
         }))
@@ -69,23 +51,26 @@ export function useTabs(): UseTabsReturn {
         }
     }, []);
 
-    async function addTab(tab: Tab) {
-        await invoke(EditorDataSendCommand.CreateTab, {name: tab.name, tabType: tab.tab_type})
+    function addLocalTab(tab: Tab) {
+        const newTabs = {...tabs}
+        newTabs[tab.name] = tab
+        setTabs(newTabs)
     }
 
-    async function removeTab(index: number) {
-        if (index === openTab) setOpenTab(null)
-        await invoke(EditorDataSendCommand.CloseTab, {index})
+    function removeLocalTab(name: string) {
+        const newTabs = {...tabs}
+        delete newTabs[name]
+        setTabs(newTabs)
     }
 
-    function setOpenedTab(index: number) {
-        setOpenTab(index)
+    function setOpenedTab(name: string) {
+        setOpenTab(name)
     }
 
     return {
         tabs,
-        addTab,
-        removeTab,
+        addLocalTab,
+        removeLocalTab,
         openedTab: openTab,
         setOpenedTab,
     }

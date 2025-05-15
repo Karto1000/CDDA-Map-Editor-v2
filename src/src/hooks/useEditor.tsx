@@ -43,7 +43,7 @@ type UseEditorProps = {
     tilesheetsRef: MutableRefObject<Tilesheets>
     spritesheetConfig: MutableRefObject<SpritesheetConfig>
 
-    openedTab: number
+    openedTab: string
     theme: Theme
     isDisplaying: boolean
     isTilesheetLoaded: boolean
@@ -95,7 +95,7 @@ export function ItemPanel(props: ItemPanelProps) {
 
                 innerGroup.push(
                     <div
-                        key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {probability < 0.009 ? "0.00<" : probability.toFixed(2)}%
+                        key={`${index}-${level}-${itemGroup.item}-${itemGroup.probability}`}>{itemGroup.item}, {probability < 0.009 ? "0.00%<" : `${probability.toFixed(2)}%`}
                     </div>
                 )
             } else if (itemGroup.type === DisplayItemGroupType.Distribution || itemGroup.type === DisplayItemGroupType.Collection) {
@@ -109,7 +109,7 @@ export function ItemPanel(props: ItemPanelProps) {
 
                 innerGroup.push(
                     <Fieldset
-                        legend={`${itemGroup.name} ${itemGroup.type} ${probability < 0.009 ? "0.00<" : probability.toFixed(2)}%`}
+                        legend={`${itemGroup.name} ${itemGroup.type} ${probability < 0.009 ? "0.00%<" : `${probability.toFixed(2)}%`}`}
                         key={`${index}-${level}-${itemGroup.type}-${itemGroup.probability}`}
                         style={{marginLeft: level * 2}}
                         className={"item-container"}>
@@ -343,8 +343,7 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         return () => {
             cancelAnimationFrame(handler)
-            props.sceneRef.current.remove(selectedCellMeshRef.current)
-            props.sceneRef.current.remove(hoveredCellMeshRef.current)
+            selectedCellMeshRef.current.visible = false
         }
     }, [
         props.tilesheetsRef,
@@ -383,6 +382,9 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
 
         const selectedMesh = new Mesh(selected, selectedMaterial)
         selectedMesh.visible = false
+
+        props.sceneRef.current.remove(selectedCellMeshRef.current)
+        props.sceneRef.current.remove(hoveredCellMeshRef.current)
 
         selectedCellMeshRef.current = selectedMesh
         props.sceneRef.current.add(selectedMesh)
@@ -480,6 +482,8 @@ export function useEditor(props: UseEditorProps): UseEditorRet {
         const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
         let placeMultiUnlistenFn = makeCancelable(listen<PlaceSpritesEvent>(MapDataEvent.PlaceSprites, d => {
+            props.tilesheetsRef.current.clearAll()
+
             const drawStaticSprites: DrawStaticSprite[] = d.payload.static_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
                 vec2.x *= tileInfo.width;

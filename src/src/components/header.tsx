@@ -23,24 +23,26 @@ export function Header(props: Props) {
     const tabs = useContext(TabContext)
     const {theme, setTheme} = useContext(ThemeContext)
 
-    function onTabClose(e: React.MouseEvent<HTMLDivElement>, index: number) {
+    async function onTabClose(e: React.MouseEvent<HTMLDivElement>, name: string) {
+        console.log(`Closed tab ${name}`)
+
         e.preventDefault()
         e.stopPropagation()
 
-        tabs.removeTab(index)
+        tabs.removeLocalTab(name)
+        tabs.setOpenedTab(null)
     }
 
     function onTabCreate() {
         props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
     }
 
-    async function onTabOpen(index: number) {
-        if (tabs.openedTab === index) {
+    async function onTabOpen(name: string) {
+        if (tabs.openedTab === name) {
             tabs.setOpenedTab(null)
-            await invoke(MapDataSendCommand.CloseProject, {})
         } else {
-            tabs.setOpenedTab(index)
-            await invoke(MapDataSendCommand.OpenProject, {index})
+            tabs.setOpenedTab(name)
+            await invoke(MapDataSendCommand.OpenProject, {name})
         }
     }
 
@@ -75,15 +77,18 @@ export function Header(props: Props) {
 
                         <div className={"tab-container"}>
                             {
-                                tabs.tabs.map((t, i) => (
-                                    <div className={`tab ${tabs.openedTab === i ? "opened-tab" : ""}`} key={i}
-                                         onClick={() => onTabOpen(i)}>
+                                Object.keys(tabs.tabs).map((tabName, i) => {
+                                    const t = tabs.tabs[tabName]
+
+                                    return <div className={`tab ${tabs.openedTab === tabName ? "opened-tab" : ""}`}
+                                                key={i}
+                                                onClick={() => onTabOpen(t.name)}>
                                         <p>{t.name}</p>
-                                        <div onClick={e => onTabClose(e, i)}>
+                                        <div onClick={e => onTabClose(e, t.name)}>
                                             <Icon name={IconName.CloseSmall} width={12} height={12}/>
                                         </div>
                                     </div>
-                                ))
+                                })
                             }
                             <button id={"add-new-tab-button"} onClick={onTabCreate}>
                                 <Icon name={IconName.AddSmall} width={16} height={16}/>

@@ -10,6 +10,7 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 
 function MapViewer() {
     const [mapFilePath, setMapFilePath] = useState<string>("")
+    const [projectName, setProjectName] = useState<string>("")
     const [omIds, setOmIds] = useState<string[][]>([[""]])
     const [deleteShownForColumn, setDeleteShownForColumn] = useState<number>(null)
     const [deleteShownForRow, setDeleteShownForRow] = useState<number>(null)
@@ -23,6 +24,7 @@ function MapViewer() {
         if (isSingle) {
             data = {
                 filePath: mapFilePath,
+                projectName: projectName || omIds[0][0],
                 omTerrain: {
                     type: OmTerrainType.Single,
                     omTerrainId: omIds[0][0]
@@ -31,6 +33,7 @@ function MapViewer() {
         } else {
             data = {
                 filePath: mapFilePath,
+                projectName,
                 omTerrain: {
                     type: OmTerrainType.Nested,
                     omTerrainIds: omIds
@@ -47,6 +50,10 @@ function MapViewer() {
 
         const window = getCurrentWindow()
         await window.close()
+    }
+
+    function onProjectNameChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setProjectName(e.target.value)
     }
 
     async function onFileInputChange(e: React.MouseEvent<HTMLButtonElement>) {
@@ -85,12 +92,27 @@ function MapViewer() {
                         The path to the map file
                     </label>
                 </div>
-                <div className={"grid-vertical-center"}>
+                <div className={"form-element"}>
+                    <input onChange={onProjectNameChange} placeholder={"Define a name for the project"}/>
+                    <label>
+                        The name of the project, a name must be selected if you are opening a nested map. If you
+                        are opening a single map, the om_terrain is used as the name if no name is selected.
+                    </label>
+                </div>
+                <div className={"grid-vertical-center"} onPaste={e => {
+                    const pastedText = e.clipboardData.getData("text/plain")
+                    const parsed = JSON.parse(pastedText)
+
+                    if (!parsed[0] || !parsed[0][0]) return
+
+                    setOmIds(parsed)
+                }}>
                     <div className={"om-terrain-form-element-grid"}>
                         {
                             deleteShownForRow !== null &&
                             <button className={"delete-row-button"}
                                     style={{top: deleteShownForRow * 32}}
+                                    type={"button"}
                                     onClick={() => {
                                         const newIds = omIds.filter((_, i) => i !== deleteShownForRow)
                                         setOmIds(newIds)
@@ -105,6 +127,7 @@ function MapViewer() {
                             deleteShownForColumn !== null &&
                             <button className={"delete-col-button"}
                                     style={{left: deleteShownForColumn * 128}}
+                                    type={"button"}
                                     onClick={() => {
                                         const newIds = omIds.map(r => {
                                             const newRow = [...r]

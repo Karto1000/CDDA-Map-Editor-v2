@@ -13,7 +13,7 @@
     border-color: theme-var("darker");
   }
 
-  input, button {
+  input, button, select {
     background-color: theme-var("darkest-blue");
     outline: none;
     color: theme-var("lightest");
@@ -23,7 +23,7 @@
     }
 
     &:hover {
-      background-color: theme-var("dark-blue");
+      background-color: theme-var("light-blue");
     }
   }
 
