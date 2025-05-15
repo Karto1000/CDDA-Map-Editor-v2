@@ -93,6 +93,7 @@ pub struct Project {
 
     #[serde(skip)]
     pub maps: HashMap<ZLevel, MapDataCollection>,
+
     pub size: UVec2,
     pub ty: ProjectType,
 }

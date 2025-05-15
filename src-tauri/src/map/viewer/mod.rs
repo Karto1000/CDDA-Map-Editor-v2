@@ -12,6 +12,7 @@ use derive_more::Display;
 use glam::UVec2;
 use image::save_buffer;
 use log::info;
+use notify::Watcher;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;

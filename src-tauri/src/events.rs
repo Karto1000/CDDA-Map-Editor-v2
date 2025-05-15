@@ -5,3 +5,4 @@ pub const PLACE_SPRITES: &'static str = "place_sprites";
 pub const ITEM_DATA: &'static str = "item_data";
 pub const TAB_CREATED: &str = "tab_created";
 pub const TAB_CLOSED: &str = "tab_closed";
+pub const UPDATE_LIVE_VIEWER: &str = "update_live_viewer";

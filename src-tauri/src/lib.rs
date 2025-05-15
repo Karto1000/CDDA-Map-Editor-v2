@@ -15,7 +15,8 @@ use crate::editor_data::{
     get_map_data_collection_live_viewer_data, EditorData, MapDataCollection, Project, ProjectType,
 };
 use crate::map::handlers::{
-    close_project, get_current_project_data, get_project_cell_data, open_project,
+    close_project, get_current_project_data, get_project_cell_data, get_sprites, open_project,
+    reload_project,
 };
 use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
 use crate::map::viewer::open_viewer;
@@ -42,6 +43,7 @@ use tauri::async_runtime::Mutex;
 use tauri::{App, AppHandle, Emitter, Manager, State, WebviewWindowBuilder};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_log::{Target, TargetKind};
+use tokio::task::JoinHandle;
 
 pub static RANDOM_SEED: u64 = 1;
 
@@ -282,6 +284,7 @@ pub fn run() -> () {
             app.manage::<Mutex<HashMap<IVec3, MappedCDDAIds>>>(Mutex::new(HashMap::new()));
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(None));
             app.manage::<Mutex<Option<TilesheetKind>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<JoinHandle<()>>>>(Mutex::new(None));
 
             Ok(())
         })
@@ -298,6 +301,8 @@ pub fn run() -> () {
             open_project,
             close_project,
             open_viewer,
+            get_sprites,
+            reload_project
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

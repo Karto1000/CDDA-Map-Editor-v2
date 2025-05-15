@@ -1,6 +1,9 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
-use crate::editor_data::{EditorData, Project, ProjectType};
+use crate::editor_data::{
+    get_map_data_collection_live_viewer_data, EditorData, Project, ProjectType,
+};
+use crate::events::UPDATE_LIVE_VIEWER;
 use crate::map::{
     CellRepresentation, MappingKind, VisibleMappingCommand, VisibleMappingCommandKind,
 };
@@ -12,7 +15,8 @@ use crate::util::{
 };
 use crate::{events, tileset, util};
 use glam::{IVec3, UVec2};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
+use notify::{Config, RecommendedWatcher, Watcher};
 use serde::{Deserialize, Serialize};
 use std::ascii::escape_default;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -231,7 +235,7 @@ pub fn get_sprite_type_from_sprite(
 }
 
 #[tauri::command]
-pub async fn open_project(
+pub async fn get_sprites(
     name: String,
     app: AppHandle,
     tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
@@ -246,7 +250,6 @@ pub async fn open_project(
     };
 
     let mut editor_data_lock = editor_data.lock().await;
-    editor_data_lock.opened_project = Some(name.clone());
 
     let project = match editor_data_lock.projects.iter().find(|p| p.name == name) {
         None => {
@@ -266,8 +269,6 @@ pub async fn open_project(
         None => return Err(()),
         Some(t) => t,
     };
-
-    app.emit(events::OPENED_MAP, name.clone()).unwrap();
 
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
@@ -358,7 +359,109 @@ pub async fn open_project(
     )
     .unwrap();
 
-    dbg!("5", &name);
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn reload_project(
+    editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<(), ()> {
+    let json_data_lock = json_data.lock().await;
+    let json_data = match json_data_lock.deref() {
+        None => return Err(()),
+        Some(d) => d,
+    };
+
+    let mut editor_data_lock = editor_data.lock().await;
+
+    let opened_project = match &editor_data_lock.opened_project {
+        None => return Err(()),
+        Some(p) => p.clone(),
+    };
+
+    let project = match editor_data_lock
+        .projects
+        .iter_mut()
+        .find(|p| p.name == opened_project)
+    {
+        None => {
+            warn!("Could not find project with name {}", opened_project);
+            return Err(());
+        }
+        Some(d) => d,
+    };
+
+    match &project.ty {
+        ProjectType::MapEditor(_) => unimplemented!(),
+        ProjectType::LiveViewer(lvd) => {
+            let mut map_data_collection = get_map_data_collection_live_viewer_data(lvd).await;
+            map_data_collection.calculate_parameters(&json_data.palettes);
+
+            let mut maps = HashMap::new();
+            maps.insert(0, map_data_collection);
+            project.maps = maps;
+        }
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn open_project(
+    name: String,
+    app: AppHandle,
+    editor_data: State<'_, Mutex<EditorData>>,
+    file_watcher: State<'_, Mutex<Option<tokio::task::JoinHandle<()>>>>,
+) -> Result<(), ()> {
+    let mut file_watcher_lock = file_watcher.lock().await;
+    match file_watcher_lock.deref() {
+        None => {}
+        Some(s) => s.abort(),
+    }
+
+    let mut editor_data_lock = editor_data.lock().await;
+    editor_data_lock.opened_project = Some(name.clone());
+
+    let project = match editor_data_lock
+        .projects
+        .iter_mut()
+        .find(|p| p.name == name)
+    {
+        None => {
+            warn!("Could not find project with name {}", name);
+            return Err(());
+        }
+        Some(d) => d,
+    };
+
+    match &project.ty {
+        ProjectType::MapEditor(_) => {}
+        ProjectType::LiveViewer(lvd) => {
+            app.emit(UPDATE_LIVE_VIEWER, {}).unwrap();
+
+            match &project.ty {
+                ProjectType::MapEditor(_) => {}
+                ProjectType::LiveViewer(lvd) => {
+                    let lvd_clone = lvd.clone();
+
+                    let join_handle = tokio::spawn(async move {
+                        let (tx, rx) = std::sync::mpsc::channel();
+                        let mut watcher = RecommendedWatcher::new(tx, Config::default()).unwrap();
+
+                        watcher
+                            .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
+                            .unwrap();
+
+                        while let Ok(_) = rx.recv() {
+                            app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
+                        }
+                    });
+                    file_watcher_lock.replace(join_handle);
+                }
+            }
+        }
+    }
 
     Ok(())
 }
