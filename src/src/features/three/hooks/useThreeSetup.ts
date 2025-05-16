@@ -6,6 +6,7 @@ import {ThreeConfig} from "../types/three.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
+export const SHOW_STATS: boolean = false;
 
 export type UseThreeSetupRet = {
     threeConfigRef: MutableRefObject<ThreeConfig>
@@ -51,12 +52,15 @@ export function useThreeSetup(
     useEffect(() => {
         threeConfigRef.current.scene = new Scene()
 
-        const stats = new Stats()
-        stats.showPanel(0)
-        stats.dom.style.top = "64px"
-        stats.dom.style.left = "unset"
-        stats.dom.style.right = "2px"
-        canvasContainerRef.current.appendChild(stats.dom)
+        if (SHOW_STATS) {
+            const stats = new Stats()
+            stats.showPanel(0)
+            stats.dom.style.top = "64px"
+            stats.dom.style.left = "unset"
+            stats.dom.style.right = "2px"
+            canvasContainerRef.current.appendChild(stats.dom)
+            threeConfigRef.current.stats = stats
+        }
 
         const canvasWidth = canvasContainerRef.current.clientWidth
         const canvasHeight = canvasContainerRef.current.clientHeight
@@ -84,7 +88,6 @@ export function useThreeSetup(
 
         threeConfigRef.current.scene.add(ambientLight)
         threeConfigRef.current.raycaster = new Raycaster()
-        threeConfigRef.current.stats = stats
         threeConfigRef.current.camera = camera
         threeConfigRef.current.renderer = renderer
         threeConfigRef.current.controls = controls

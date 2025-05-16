@@ -17,6 +17,7 @@ import {serializedVec2ToVector2, TauriCommand, TauriEvent} from "../../../tauri/
 import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {useWorldMousePosition} from "../../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../../three/hooks/useMouseCells.js";
+import {SHOW_STATS} from "../../three/hooks/useThreeSetup.js";
 
 export type MapViewerProps = {
     threeConfig: MutableRefObject<ThreeConfig>
@@ -206,7 +207,7 @@ export function MapViewer(props: MapViewerProps) {
         let handler: number;
 
         function loop() {
-            props.threeConfig.current.stats.begin()
+            if (SHOW_STATS) props.threeConfig.current.stats.begin()
 
             props.threeConfig.current.camera.updateProjectionMatrix()
             if (props.tilesheets.current) props.tilesheets.current.updateAnimatedSprites()
@@ -214,7 +215,7 @@ export function MapViewer(props: MapViewerProps) {
             props.threeConfig.current.controls.update()
             props.threeConfig.current.renderer.render(props.threeConfig.current.scene, props.threeConfig.current.camera)
 
-            props.threeConfig.current.stats.end()
+            if (SHOW_STATS) props.threeConfig.current.stats.end()
 
             handler = requestAnimationFrame(loop)
         }
