@@ -27,6 +27,7 @@ use serde_json::Value;
 use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
 use std::ops::{Add, Rem, Sub};
+use strum_macros::EnumIter;
 
 pub fn extract_comments<'de, D>(
     deserializer: D,
@@ -204,7 +205,9 @@ pub struct CDDADeleteOp {
     pub flags: Option<Vec<String>>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(
+    Debug, Clone, Hash, Eq, PartialEq, EnumIter, Deserialize, Serialize,
+)]
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,

@@ -5,7 +5,7 @@
   "identifier": "com.cdda-map-editor-2.app",
   "build": {
     "beforeDevCommand": "vite dev --port 3000",
-    "beforeBuildCommand": "vite build",
+    "beforeBuildCommand": "npm run build",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../src/dist"
   },
@@ -26,7 +26,7 @@
     "active": true,
     "targets": "all",
     "icon": [
-      "icons/32x32.png"
+      "icons/icon.ico"
     ]
   }
 }

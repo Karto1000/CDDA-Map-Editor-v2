@@ -4,6 +4,7 @@ use image::{ImageFormat, ImageReader};
 use log::info;
 use serde::Serialize;
 use serde_json::Value;
+use std::ascii::escape_default;
 use std::io::Cursor;
 use std::path::PathBuf;
 use tauri::ipc::Response;
@@ -40,11 +41,8 @@ pub enum DownloadSpritesheetError {
     #[error("No Spritesheet has been selected")]
     NoSpritesheetSelected,
 
-    #[error("Failed to decode image")]
-    DecodeError,
-
-    #[error("Failed to Encode image")]
-    EncodeError,
+    #[error("Failed to read image")]
+    ReadError,
 }
 
 #[tauri::command(rename_all = "snake_case")]
@@ -60,20 +58,18 @@ pub async fn download_spritesheet(
         Some(s) => s.clone(),
     };
 
-    let mut path = PathBuf::new();
-    path.push(selected_tileset);
-    path.push(name);
+    let path = lock
+        .config
+        .cdda_path
+        .clone()
+        .ok_or(DownloadSpritesheetError::NoSpritesheetSelected)?
+        .join("gfx")
+        .join(selected_tileset)
+        .join(name);
 
-    let image = ImageReader::open(path)
-        .map_err(|_| DownloadSpritesheetError::NoSpritesheetSelected)?
-        .decode()
-        .map_err(|_| DownloadSpritesheetError::DecodeError)?;
+    let image_bytes = tokio::fs::read(&path)
+        .await
+        .map_err(|_| DownloadSpritesheetError::ReadError)?;
 
-    let mut image_data: Vec<u8> = Vec::new();
-
-    image
-        .write_to(&mut Cursor::new(&mut image_data), ImageFormat::Png)
-        .map_err(|_| DownloadSpritesheetError::EncodeError)?;
-
-    Ok(Response::new(image_data))
+    Ok(Response::new(image_bytes))
 }

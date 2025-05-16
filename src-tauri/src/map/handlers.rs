@@ -17,13 +17,17 @@ use crate::{events, tileset, util};
 use glam::{IVec3, UVec2};
 use log::{error, warn};
 use notify::{Config, RecommendedWatcher, Watcher};
+use rayon::iter::IntoParallelRefIterator;
+use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use strum::IntoEnumIterator;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
+use tokio::time::Instant;
 use tokio_test::block_on;
 
 #[tauri::command]
@@ -310,64 +314,88 @@ pub async fn get_sprites(
         let local_mapped_cdda_ids =
             map_collection.get_mapped_cdda_ids(json_data, *z);
 
-        for (p, identifier_group) in local_mapped_cdda_ids.iter() {
-            let cell_3d_coords = IVec3::new(p.x, p.y, *z);
+        let tile_map: Vec<
+            HashMap<TileLayer, (Option<SpriteType>, Option<SpriteType>)>,
+        > = local_mapped_cdda_ids
+            .par_iter()
+            .map(|(p, identifier_group)| {
+                let cell_3d_coords = IVec3::new(p.x, p.y, *z);
 
-            if identifier_group.terrain.is_none()
-                && identifier_group.furniture.is_none()
-            {
-                warn!(
-                    "No sprites found for identifier_group {:?}",
-                    identifier_group
-                );
-                continue;
-            }
+                if identifier_group.terrain.is_none()
+                    && identifier_group.furniture.is_none()
+                {
+                    warn!(
+                        "No sprites found for identifier_group {:?}",
+                        identifier_group
+                    );
 
-            // Layer here is done so furniture is above terrain
-            for (layer, o_id) in [
-                (TileLayer::Terrain, &identifier_group.terrain),
-                (TileLayer::Furniture, &identifier_group.furniture),
-                (TileLayer::Monster, &identifier_group.monster),
-                (TileLayer::Field, &identifier_group.field),
-            ] {
-                let id = match o_id {
-                    None => continue,
-                    Some(id) => id.as_final_id(
-                        region_settings,
-                        &json_data.terrain,
-                        &json_data.furniture,
-                    ),
-                };
-
-                let sprite_kind = match tilesheet {
-                    TilesheetKind::Legacy(l) => l.get_sprite(&id, &json_data),
-                    TilesheetKind::Current(c) => c.get_sprite(&id, &json_data),
-                };
-
-                let adjacent_sprites = tileset::get_adjacent_sprites(
-                    &local_mapped_cdda_ids,
-                    cell_3d_coords.clone(),
-                    &layer,
-                );
-
-                let (fg, bg) = get_sprite_type_from_sprite(
-                    &id,
-                    cell_3d_coords.clone(),
-                    &adjacent_sprites,
-                    layer.clone(),
-                    &sprite_kind,
-                    json_data,
-                );
-
-                if let Some(fg) = fg {
-                    insert_sprite_type!(fg)
+                    return HashMap::new();
                 }
 
-                if let Some(bg) = bg {
-                    insert_sprite_type!(bg)
+                let mut layer_map = HashMap::new();
+
+                // Layer here is done so furniture is above terrain
+                for (layer, o_id) in [
+                    (TileLayer::Terrain, &identifier_group.terrain),
+                    (TileLayer::Furniture, &identifier_group.furniture),
+                    (TileLayer::Monster, &identifier_group.monster),
+                    (TileLayer::Field, &identifier_group.field),
+                ] {
+                    let id = match o_id {
+                        None => continue,
+                        Some(id) => id.as_final_id(
+                            region_settings,
+                            &json_data.terrain,
+                            &json_data.furniture,
+                        ),
+                    };
+
+                    let sprite_kind = match tilesheet {
+                        TilesheetKind::Legacy(l) => {
+                            l.get_sprite(&id, &json_data)
+                        },
+                        TilesheetKind::Current(c) => {
+                            c.get_sprite(&id, &json_data)
+                        },
+                    };
+
+                    let adjacent_sprites = tileset::get_adjacent_sprites(
+                        &local_mapped_cdda_ids,
+                        cell_3d_coords.clone(),
+                        &layer,
+                    );
+
+                    let (fg, bg) = get_sprite_type_from_sprite(
+                        &id,
+                        cell_3d_coords.clone(),
+                        &adjacent_sprites,
+                        layer.clone(),
+                        &sprite_kind,
+                        json_data,
+                    );
+
+                    layer_map.insert(layer.clone(), (fg, bg));
+                }
+
+                layer_map
+            })
+            .collect();
+
+        tile_map.into_iter().for_each(|mut layer_map| {
+            for tile_layer in TileLayer::iter() {
+                match layer_map.remove(&tile_layer) {
+                    None => {},
+                    Some((fg, bg)) => {
+                        if let Some(fg) = fg {
+                            insert_sprite_type!(fg);
+                        }
+                        if let Some(bg) = bg {
+                            insert_sprite_type!(bg);
+                        }
+                    },
                 }
             }
-        }
+        });
     }
 
     app.emit(
@@ -545,8 +573,8 @@ pub async fn close_project(
 
     match &editor_data_lock.opened_project {
         None => {},
-        Some(index) => {
-            app.emit(events::TAB_CLOSED, index).unwrap();
+        Some(name) => {
+            app.emit(events::TAB_CLOSED, name).unwrap();
         },
     }
 
