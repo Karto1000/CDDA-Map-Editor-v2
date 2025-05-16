@@ -1,6 +1,7 @@
 import {useEffect, useState} from "react";
 import {listen} from "@tauri-apps/api/event";
-import {EditorDataRecvEvent} from "../lib/editor_data.ts";
+import {EditorDataRecvEvent, EditorDataSendCommand} from "../lib/editor_data.ts";
+import {invokeTauri} from "../lib/index.js";
 
 export enum TabTypeKind {
     Welcome = "Welcome",

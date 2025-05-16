@@ -23,7 +23,8 @@ export default defineConfig(async () => ({
         rollupOptions: {
             input: {
                 main: resolve( __dirname, 'index.html'),
-                windows: resolve( __dirname , "src/windows/open/window.html"),
+                open_map: resolve( __dirname , "src/windows/open-map/window.html"),
+                settings: resolve( __dirname , "src/windows/settings/window.html"),
             }
         }
     }

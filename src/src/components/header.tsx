@@ -9,6 +9,9 @@ import {TabContext, ThemeContext} from "../app.tsx";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "../hooks/useTheme.js";
 import {openWindow, WindowLabel} from "../windows/lib.js";
+import {invokeTauri} from "../lib/index.js";
+import {EditorDataSendCommand} from "../lib/editor_data.js";
+import {MapDataSendCommand} from "../lib/map_data.js";
 
 type Props = {
     openMapWindowRef: MutableRefObject<WebviewWindow>
@@ -26,8 +29,8 @@ export function Header(props: Props) {
         e.preventDefault()
         e.stopPropagation()
 
-        tabs.removeLocalTab(name)
         tabs.setOpenedTab(null)
+        await invokeTauri<unknown, unknown>(MapDataSendCommand.CloseProject, {})
     }
 
     function onTabCreate() {

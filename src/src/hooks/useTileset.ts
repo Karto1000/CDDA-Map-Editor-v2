@@ -35,7 +35,8 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
 
             const loadFromBackend = async (): Promise<{
                 atlases: { [key: string]: Tilesheet },
-                fallback: Tilesheet
+                fallback: Tilesheet,
+                tileInfo: TileInfo
             }> => {
                 const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
 
@@ -51,7 +52,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
 
                 const arrayBuffs = await Promise.all(downloadPromises)
                 const atlases = {}
-                let fallback;
+                let fallback: Tilesheet;
 
                 for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
                     const response = arrayBuffs[i]
@@ -67,7 +68,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     const url = URL.createObjectURL(blob)
 
                     if (spritesheetInfo.file === "fallback.png") {
-                        fallback = Tilesheet.fromURL(url, infoResponse.data.tile_info[0], spritesheetInfo)
+                        fallback = await Tilesheet.fromURL(url, infoResponse.data.tile_info[0], spritesheetInfo)
                         continue
                     }
 
@@ -78,7 +79,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
                     )
                 }
 
-                return {atlases, fallback}
+                return {atlases, fallback, tileInfo: infoResponse.data.tile_info[0]}
             }
 
             const loadFromPublic = async (): Promise<{
@@ -119,7 +120,7 @@ export function useTileset(editorData: EditorData, sceneRef: MutableRefObject<Sc
             }
 
             console.log("Loading Tilesheet Sprites")
-            const atlases = await loadFromPublic();
+            const atlases = await loadFromBackend();
 
             sceneRef.current.add(atlases.fallback.mesh)
             for (let atlasKey of Object.keys(atlases.atlases)) {
