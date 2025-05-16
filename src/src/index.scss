@@ -68,6 +68,7 @@ p {
 * {
   font-smooth: never;
   -webkit-font-smoothing: none;
+  cursor: url(../public/icons/cursor-small.png), auto;
 }
 
 :root, button, input, select, option, label {

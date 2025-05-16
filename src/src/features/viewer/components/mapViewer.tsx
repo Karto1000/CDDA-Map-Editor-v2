@@ -1,6 +1,11 @@
 import {Canvas, ThreeConfig} from "../../three/types/three.js";
 import React, {MutableRefObject, useContext, useEffect, useState} from "react";
-import {ChangedThemeEvent, LocalEvent, OpenLocalTabEvent, TilesetLoadedEvent} from "../../../shared/utils/localEvent.js";
+import {
+    ChangedThemeEvent,
+    LocalEvent,
+    OpenLocalTabEvent,
+    TilesetLoadedEvent
+} from "../../../shared/utils/localEvent.js";
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
 import {GridHelper, Vector3} from "three";
 import {degToRad} from "three/src/math/MathUtils.js";
@@ -178,7 +183,7 @@ export function MapViewer(props: MapViewerProps) {
                 changeThemeHandler
             )
         }
-    }, [props.eventBus]);
+    }, [props.eventBus, setupSceneData]);
 
     useEffect(() => {
         if (!props.isOpen) return
@@ -232,10 +237,7 @@ export function MapViewer(props: MapViewerProps) {
         const onMouseDown = (e: MouseEvent) => {
             if (e.button === 0) {
                 if (selectedCellPosition?.x === worldMousePosition.current.x && selectedCellPosition?.y === worldMousePosition.current.y) {
-                    if (!selectedCellPosition) {
-                        selectedCellMeshRef.current.visible = false
-                        return
-                    }
+                    selectedCellMeshRef.current.visible = false
                     setSelectedCellPosition(null)
                 } else {
                     selectedCellMeshRef.current.position.set(
