@@ -574,7 +574,7 @@ pub async fn close_project(
     match &editor_data_lock.opened_project {
         None => {},
         Some(name) => {
-            app.emit(events::TAB_CLOSED, name).unwrap();
+            app.emit(events::TAB_REMOVED, name).unwrap();
         },
     }
 
