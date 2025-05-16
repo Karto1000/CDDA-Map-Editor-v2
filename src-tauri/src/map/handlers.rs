@@ -1,7 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
 use crate::editor_data::{
-    get_map_data_collection_live_viewer_data, EditorData, Project, ProjectType,
+    get_map_data_collection_live_viewer_data, EditorData, EditorDataSaver,
+    Project, ProjectType,
 };
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::map::CellRepresentation;
@@ -10,7 +11,7 @@ use crate::tileset::{
     AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
 use crate::util::{
-    CDDADataError, CDDAIdentifier, GetCurrentMapDataError, IVec3JsonKey,
+    CDDADataError, CDDAIdentifier, GetCurrentMapDataError, IVec3JsonKey, Save,
     UVec2JsonKey,
 };
 use crate::{events, tileset, util};
@@ -566,12 +567,13 @@ pub async fn get_project_cell_data(
 #[tauri::command]
 pub async fn close_project(
     app: AppHandle,
+    name: String,
     mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedCDDAIds>>>,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;
 
-    match &editor_data_lock.opened_project {
+    match editor_data_lock.opened_project.clone() {
         None => {},
         Some(name) => {
             app.emit(events::TAB_REMOVED, name).unwrap();
@@ -579,6 +581,21 @@ pub async fn close_project(
     }
 
     editor_data_lock.opened_project = None;
+
+    let project_index = editor_data_lock
+        .projects
+        .iter()
+        .position(|p| p.name == name)
+        .unwrap();
+
+    editor_data_lock.projects.remove(project_index);
+
+    let saver = EditorDataSaver {
+        path: editor_data_lock.config.config_path.clone(),
+    };
+
+    saver.save(&editor_data_lock).await.unwrap();
+
     mapped_sprites.lock().await.clear();
     Ok(())
 }

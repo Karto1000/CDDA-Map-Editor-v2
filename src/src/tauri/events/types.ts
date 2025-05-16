@@ -69,7 +69,9 @@ export interface TauriCommandMap {
     [TauriCommand.OPEN_PROJECT]: {
         name: string
     };
-    [TauriCommand.CLOSE_PROJECT]: {};
+    [TauriCommand.CLOSE_PROJECT]: {
+        name: string
+    };
     [TauriCommand.GET_PROJECT_CELL_DATA]: {};
     [TauriCommand.OPEN_VIEWER]: {
         data: {

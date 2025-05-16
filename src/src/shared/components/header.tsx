@@ -60,7 +60,7 @@ export function Header(props: Props) {
 
         await tauriBridge.invoke(
             TauriCommand.CLOSE_PROJECT,
-            {}
+            {name}
         )
     }
 
