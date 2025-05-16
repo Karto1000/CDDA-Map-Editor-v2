@@ -1,12 +1,13 @@
 import React, {useState} from "react";
 import GenericWindow from "../generic-window.js";
-import MultiMenu from "../../components/multimenu.js";
 import {open} from "@tauri-apps/plugin-dialog";
 import "./main.scss"
-import Icon, {IconName} from "../../components/icon.js";
-import {OmTerrainType, OpenViewerData, ViewerSendCommand} from "../../lib/viewer/index.js";
-import {invokeTauri} from "../../lib/index.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
+import Icon, {IconName} from "../../shared/components/icon.js";
+import MultiMenu from "../../shared/components/multimenu.js";
+import {tauriBridge} from "../../tauri/events/tauriBridge.js";
+import {TauriCommand} from "../../tauri/events/types.js";
+import {OmTerrainType, OpenViewerData} from "../../tauri/types/viewer.js";
 
 function MapViewer() {
     const [mapFilePath, setMapFilePath] = useState<string>("")
@@ -41,8 +42,8 @@ function MapViewer() {
             }
         }
 
-        await invokeTauri<null, null>(
-            ViewerSendCommand.OpenViewer,
+        await tauriBridge.invoke(
+            TauriCommand.OPEN_VIEWER,
             {
                 data
             }

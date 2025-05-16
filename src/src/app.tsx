@@ -1,116 +1,55 @@
-import React, {createContext, SetStateAction, useEffect, useRef, useState} from 'react';
-import {Header} from "./components/header.tsx";
-import {Theme, useTheme} from "./hooks/useTheme.ts";
-import {invoke} from "@tauri-apps/api/core";
-import {TabTypeKind, useTabs, UseTabsReturn} from "./hooks/useTabs.ts";
-import {listen} from "@tauri-apps/api/event";
-import {invokeTauri} from "./lib/index.ts";
-import {Scene} from "three";
-import {useViewer} from "./hooks/useViewer.tsx";
-import {useTileset} from "./hooks/useTileset.ts";
-import {EditorData, EditorDataRecvEvent} from "./lib/editor_data.ts";
-import {MapDataEvent, MapDataSendCommand} from "./lib/map_data.ts";
+import React, {createContext, useEffect, useRef} from 'react';
 import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
 import "./app.scss"
-import MultiMenu from "./components/multimenu.tsx";
-import {Webview} from "@tauri-apps/api/webview";
-import {NoTabScreen} from "./components/mainScreens/noTabScreen.js";
-import {WelcomeScreen} from "./components/mainScreens/welcomeScreen.js";
+import {TauriCommand} from "./tauri/events/types.js";
+import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
+import {WelcomeScreen} from "./shared/components/mainScreens/welcomeScreen.js";
+import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
+import {Header} from "./shared/components/header.js";
+import MultiMenu from "./shared/components/multimenu.js";
+import {Theme, useTheme} from "./shared/hooks/useTheme.js";
+import {EditorData} from "./tauri/types/editor.js";
+import {useEditorData} from "./shared/hooks/useEditorData.js";
+import {MainCanvas} from "./shared/components/mainCanvas.js";
+import {useWindows} from "./shared/hooks/useWindows.js";
+import {tauriBridge} from "./tauri/events/tauriBridge.js";
+import {useThreeSetup} from "./features/three/hooks/useThreeSetup.js";
+import {MapViewer} from "./features/viewer/components/mapViewer.js";
+import {useTileset} from "./features/sprites/hooks/useTileset.js";
 
-export const ThemeContext = createContext<{ theme: Theme, setTheme: React.Dispatch<SetStateAction<Theme>> }>({
+export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
-    setTheme: () => {
-    }
 });
 
 export const TabContext = createContext<UseTabsReturn>(null)
 export const EditorDataContext = createContext<EditorData>(null)
 
 function App() {
-    const [theme, setTheme] = useTheme();
-    const [editorData, setEditorData] = useState<EditorData>()
-    const tabs = useTabs()
+    const eventBus = useRef<EventTarget>(new EventTarget())
+    const canvasContainerRef = useRef<HTMLDivElement>()
+    const canvasRef = useRef<HTMLCanvasElement>();
+    const {threeConfigRef, onResize} = useThreeSetup(
+        canvasRef,
+        canvasContainerRef
+    )
 
-    const mapEditorCanvasContainerRef = useRef<HTMLDivElement>()
-    const mapEditorCanvasRef = useRef<HTMLCanvasElement>();
-    const mapEditorSceneRef = useRef<Scene>(new Scene())
-
-    const [tilesheets, spritesheetConfig, isTilesheetLoaded] = useTileset(editorData, mapEditorSceneRef)
-    const isDisplayingMapEditor = tabs.tabs[tabs.openedTab]?.tab_type === TabTypeKind.LiveViewer
-    const mapEditorCanvasDisplay = isDisplayingMapEditor ? "flex" : "none"
-
-    // Thanks to the legend at https://stackoverflow.com/questions/77775315/how-to-create-mulitwindows-in-tauri-rust-react-typescript-html-css
-    const openMapWindowRef = useRef<Webview>()
-    const settingsWindowRef = useRef<Webview>()
-
-    const {resize, displayInLeftPanel} = useViewer({
-        canvasRef: mapEditorCanvasRef,
-        sceneRef: mapEditorSceneRef,
-        canvasContainerRef: mapEditorCanvasContainerRef,
-        isDisplaying: isDisplayingMapEditor,
-        tilesheetsRef: tilesheets,
-        openedTab: tabs.openedTab,
-        isTilesheetLoaded,
-        theme,
-        spritesheetConfig,
-    })
+    const [theme] = useTheme(eventBus);
+    const editorData = useEditorData(eventBus)
+    const tabs = useTabs(eventBus)
+    const {spritesheetConfig, tilesheets} = useTileset(eventBus)
+    const {openMapWindowRef, settingsWindowRef} = useWindows()
 
     useEffect(() => {
-        const openedTab = tabs.openedTab
-
-        if (openedTab === null) return
-        if (tabs.tabs[openedTab].tab_type !== TabTypeKind.LiveViewer) return
-
-        const unlisten = listen<unknown>(MapDataEvent.UpdateLiveViewer, d => {
-            (async () => {
-                await invoke(MapDataSendCommand.ReloadProject);
-                await invokeTauri<unknown, unknown>(MapDataSendCommand.GetSprites, {name: openedTab});
-            })()
-        });
-
         (async () => {
-            await invoke(MapDataSendCommand.OpenProject, {name: openedTab});
-        })();
-
-        return () => {
-            unlisten.then(f => f())
-        }
-    }, [tabs.openedTab, tabs.tabs]);
-
-    useEffect(() => {
-        let unlistenDataChanged = listen<EditorData>(
-            EditorDataRecvEvent.EditorDataChanged,
-            async (e) => {
-                console.log("Received editor data changed event: ", e.payload, "")
-                setEditorData(e.payload)
-
-                if (!e.payload.config.cdda_path) {
-                    tabs.addLocalTab(
-                        {
-                            name: "Welcome to the CDDA Map Editor",
-                            tab_type: TabTypeKind.Welcome,
-                        }
-                    )
-
-                    tabs.setOpenedTab("Welcome to the CDDA Map Editor")
-                }
-            })
-
-        invoke("frontend_ready", {})
-
-        return () => {
-            unlistenDataChanged.then(f => f())
-        }
-
-        // Disable the warning since we do not want to re-run this
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+            await tauriBridge.invoke(TauriCommand.FRONTEND_READY, {})
+        })()
     }, []);
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.Welcome)
-                return <WelcomeScreen/>
+                return <WelcomeScreen eventBus={eventBus}/>
 
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor ||
                 tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
@@ -124,16 +63,18 @@ function App() {
     return (
         <div className={`app ${theme}-theme`}>
             <EditorDataContext.Provider value={editorData}>
-                <ThemeContext.Provider value={{theme, setTheme}}>
+                <ThemeContext.Provider value={{theme}}>
                     <TabContext.Provider value={tabs}>
-                        <Header openMapWindowRef={openMapWindowRef} settingsWindowRef={settingsWindowRef}/>
+                        <Header openMapWindowRef={openMapWindowRef} settingsWindowRef={settingsWindowRef}
+                                eventBus={eventBus}/>
 
                         <PanelGroup direction={'horizontal'}>
-                            <Panel collapsible={true} minSize={10} defaultSize={20} maxSize={50} onResize={resize}>
+                            <Panel collapsible={true} minSize={10} defaultSize={20} maxSize={50}
+                                   onResize={onResize}>
                                 <div className={"side-panel"}>
                                     <div className={"side-panel-left"}>
                                         {
-                                            isDisplayingMapEditor ?
+                                            tabs.shouldDisplayCanvas() ?
                                                 <MultiMenu tabs={
                                                     [
                                                         {
@@ -146,15 +87,15 @@ function App() {
                                                         },
                                                         {
                                                             name: "Items",
-                                                            content: displayInLeftPanel.items
+                                                            content: <></>,
                                                         },
                                                         {
                                                             name: "Monsters",
-                                                            content: displayInLeftPanel.monsters
+                                                            content: <></>,
                                                         },
                                                         {
                                                             name: "Signs",
-                                                            content: displayInLeftPanel.signs
+                                                            content: <></>,
                                                         },
                                                         {
                                                             name: "Computers",
@@ -184,12 +125,24 @@ function App() {
                                 </div>
                             </Panel>
                             <PanelResizeHandle hitAreaMargins={{coarse: 30, fine: 10}}/>
-                            <Panel onResize={resize}>
-                                <div ref={mapEditorCanvasContainerRef}
-                                     style={{width: "100%", height: "100%", display: mapEditorCanvasDisplay}}>
-                                    {/* This should always be in the dom because then we only have to load the sprites once */}
-                                    <canvas ref={mapEditorCanvasRef} tabIndex={0}/>
-                                </div>
+                            <Panel>
+                                <MapViewer
+                                    threeConfig={threeConfigRef}
+                                    eventBus={eventBus}
+                                    spritesheetConfig={spritesheetConfig}
+                                    tileInfo={spritesheetConfig.current?.tile_info[0]}
+                                    isOpen={tabs.getCurrentTab()?.tab_type === TabTypeKind.LiveViewer}
+                                    tilesheets={tilesheets}
+                                    canvas={{
+                                        canvasRef: canvasRef,
+                                        canvasContainerRef: canvasContainerRef
+                                    }}
+                                />
+                                <MainCanvas
+                                    canvasRef={canvasRef}
+                                    canvasContainerRef={canvasContainerRef}
+                                    displayState={tabs.shouldDisplayCanvas() ? "flex" : "none"}
+                                />
                                 {getMainBasedOnTab()}
                             </Panel>
                         </PanelGroup>

@@ -1,0 +1,51 @@
+@import "../../theme.scss";
+
+@include themed($themes) {
+  .fieldset {
+    &:after {
+      color: theme-var("darker");
+      background-color: theme-var("lightest");
+    }
+
+    .collapser {
+
+    }
+  }
+}
+
+.fieldset {
+  position: relative;
+
+  &:after {
+    position: absolute;
+    width: 14px;
+    aspect-ratio: 1/1;
+    right: -1px;
+    top: -9px;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  &:not(.collapsed):after {
+    content: "+";
+  }
+
+  &.collapsed {
+    .collapsable {
+      display: none;
+    }
+
+    &:after {
+      content: "-";
+    }
+  }
+
+  .collapser {
+    position: relative;
+    cursor: pointer;
+  }
+
+  .collapsable {
+
+  }
+}

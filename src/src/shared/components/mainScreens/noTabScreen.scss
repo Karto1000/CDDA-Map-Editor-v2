@@ -1,0 +1,33 @@
+@import "../../../theme";
+
+@include themed($themes) {
+  #startupMain {
+    background-color: theme-var("dark");
+
+    #centerOptions {
+      div {
+        color: theme-var("lightest")
+      }
+    }
+  }
+}
+
+#startupMain {
+  display: flex;
+  vertical-align: center;
+  align-items: center;
+
+  #centerOptions {
+    margin: auto;
+    display: flex;
+    flex-direction: column;
+    width: min-content;
+    gap: 16px;
+
+    div {
+      width: max-content;
+      word-wrap: normal;
+      font-size: 16px;
+    }
+  }
+}

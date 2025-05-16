@@ -1,10 +1,10 @@
 import React, {useEffect, useState} from "react";
 import "./generic-window.scss"
 import "../index.scss"
-import {Theme} from "../hooks/useTheme.js";
-import Icon, {IconName} from "../components/icon.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {listen} from "@tauri-apps/api/event";
+import {Theme} from "../shared/hooks/useTheme.js";
+import Icon, {IconName} from "../shared/components/icon.js";
 
 export type GenericWindowProps = {
     title: string,
