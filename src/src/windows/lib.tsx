@@ -1,5 +1,5 @@
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {Theme} from "../hooks/useTheme.js";
+import {Theme} from "@tauri-apps/api/window";
 
 export enum WindowLabel {
     Main = "main",

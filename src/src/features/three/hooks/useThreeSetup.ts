@@ -3,6 +3,7 @@ import Stats from "stats.js";
 import {AmbientLight, OrthographicCamera, Raycaster, Scene, WebGLRenderer} from "three";
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {ThreeConfig} from "../types/three.js";
+import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -78,11 +79,14 @@ export function useThreeSetup(
         const renderer = new WebGLRenderer({canvas: canvasRef.current, alpha: true})
         renderer.setSize(canvasWidth, canvasHeight)
 
-        const controls = new ArcballControls(camera, canvasRef.current)
+        const controls = new OrbitControls(camera, canvasRef.current)
         controls.maxZoom = MIN_ZOOM
         controls.minZoom = MAX_ZOOM
         controls.enableRotate = false
-        controls.cursorZoom = true
+        controls.enablePan = true
+        controls.zoomToCursor = true
+        controls.enableDamping = true
+        controls.dampingFactor = 0.07
 
         const ambientLight = new AmbientLight("#FFFFFF", 5)
 

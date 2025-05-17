@@ -27,6 +27,16 @@
     height: 100%;
   }
 
+  .main-canvas {
+    &:hover {
+      cursor: grab;
+    }
+
+    &:active {
+      cursor: grabbing;
+    }
+  }
+
   .side-panel {
     width: 100%;
     height: 100%;
