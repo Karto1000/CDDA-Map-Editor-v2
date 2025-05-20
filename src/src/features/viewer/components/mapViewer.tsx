@@ -18,6 +18,8 @@ import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {useWorldMousePosition} from "../../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../../three/hooks/useMouseCells.js";
 import {SHOW_STATS} from "../../three/hooks/useThreeSetup.js";
+import "./mapViewer.scss"
+import {clsx} from "clsx";
 
 export type MapViewerProps = {
     threeConfig: MutableRefObject<ThreeConfig>
@@ -33,6 +35,7 @@ export function MapViewer(props: MapViewerProps) {
     const theme = useContext(ThemeContext)
     const {hoveredCellMeshRef, selectedCellMeshRef, regenerate} = useMouseCells(props.threeConfig, props.tileInfo)
     const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
     const worldMousePosition = useWorldMousePosition({
         threeConfig: props.threeConfig,
         canvas: props.canvas,
@@ -128,9 +131,13 @@ export function MapViewer(props: MapViewerProps) {
         TauriEvent.UPDATE_LIVE_VIEWER,
         async () => {
             console.log("Updating live viewer")
+            setIsLoading(true)
+
             props.tilesheets.current.clearAll()
             await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
             await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+            setIsLoading(false)
         },
         [tabs.openedTab, props.tilesheets]
     )
@@ -261,5 +268,10 @@ export function MapViewer(props: MapViewerProps) {
         }
     }, [props.eventBus, props.tileInfo, selectedCellPosition, worldMousePosition]);
 
-    return <></>
+    return <>
+        <div className={clsx("loader-container", isLoading && "visible")}>
+            <div className={"loader"}/>
+            <span>Loading Map Data</span>
+        </div>
+    </>
 }

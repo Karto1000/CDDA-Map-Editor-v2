@@ -1,7 +1,7 @@
 @import "theme";
 
 @include themed($themes) {
-  h1, h2, h3, h4, h5, h6, p, label {
+  h1, h2, h3, h4, h5, h6, p, label, span, div {
     color: theme-var("lightest")
   }
 
