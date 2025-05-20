@@ -15,11 +15,19 @@
         .tab {
           background-color: theme-var("dark-blue");
 
-          &.opened-tab {
+          &:hover {
             background-color: theme-var("selected");
           }
 
-          &:has(.icon:hover) {
+          &.opened-tab {
+            background-color: theme-var("selected");
+
+            &:hover {
+              background-color: theme-var("dark-blue");
+            }
+          }
+
+          &:has(.close-tab-button .icon:hover) {
             background-color: theme-var("delete");
           }
         }
@@ -104,10 +112,20 @@
           height: min-content;
           text-align: center;
           vertical-align: center;
+          margin: 0;
+          pointer-events: none;
         }
 
-        .icon {
-          cursor: pointer;
+        .tab-type-indicator {
+          pointer-events: none;
+          width: 16px;
+          height: 16px;
+        }
+
+        .close-tab-button {
+          .icon {
+            cursor: pointer;
+          }
         }
       }
 

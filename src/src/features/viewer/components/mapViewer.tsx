@@ -2,8 +2,8 @@ import {Canvas, ThreeConfig} from "../../three/types/three.js";
 import React, {MutableRefObject, useContext, useEffect, useState} from "react";
 import {
     ChangedThemeEvent,
+    CloseLocalTabEvent,
     LocalEvent,
-    OpenLocalTabEvent,
     TilesetLoadedEvent
 } from "../../../shared/utils/localEvent.js";
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
@@ -127,16 +127,17 @@ export function MapViewer(props: MapViewerProps) {
     useTauriEvent(
         TauriEvent.UPDATE_LIVE_VIEWER,
         async () => {
+            console.log("Updating live viewer")
+            props.tilesheets.current.clearAll()
             await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
             await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
         },
-        [tabs.openedTab]
+        [tabs.openedTab, props.tilesheets]
     )
 
     useEffect(() => {
-        const openLocalTabHandler = async (t: OpenLocalTabEvent) => {
-            await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
-            await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: t.detail.name});
+        const closeLocalTabHandler = async (t: CloseLocalTabEvent) => {
+            props.tilesheets.current.clearAll()
         }
 
         const tilesetLoadedHandler = (e: TilesetLoadedEvent) => {
@@ -155,8 +156,8 @@ export function MapViewer(props: MapViewerProps) {
         }
 
         props.eventBus.current.addEventListener(
-            LocalEvent.OPEN_LOCAL_TAB,
-            openLocalTabHandler
+            LocalEvent.CLOSE_LOCAL_TAB,
+            closeLocalTabHandler
         )
 
         props.eventBus.current.addEventListener(
@@ -171,8 +172,8 @@ export function MapViewer(props: MapViewerProps) {
 
         return () => {
             props.eventBus.current.removeEventListener(
-                LocalEvent.OPEN_LOCAL_TAB,
-                openLocalTabHandler
+                LocalEvent.CLOSE_LOCAL_TAB,
+                closeLocalTabHandler
             )
 
             props.eventBus.current.removeEventListener(
@@ -185,7 +186,7 @@ export function MapViewer(props: MapViewerProps) {
                 changeThemeHandler
             )
         }
-    }, [props.eventBus, setupSceneData]);
+    }, [props.eventBus, props.tilesheets, setupSceneData]);
 
     useEffect(() => {
         if (!props.isOpen) return
