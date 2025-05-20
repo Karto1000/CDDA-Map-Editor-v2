@@ -2,7 +2,9 @@ use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::item::CDDAItemGroup;
 use crate::cdda_data::map_data::OmTerrain;
 use crate::cdda_data::monster::CDDAMonsterGroup;
-use crate::cdda_data::overmap::{CDDAOvermapLocation, CDDAOvermapTerrain};
+use crate::cdda_data::overmap::{
+    CDDAOvermapLocation, CDDAOvermapSpecial, CDDAOvermapTerrain,
+};
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
@@ -40,6 +42,7 @@ pub struct DeserializedCDDAJsonData {
     pub monstergroups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
     pub overmap_locations: HashMap<CDDAIdentifier, CDDAOvermapLocation>,
     pub overmap_terrains: HashMap<CDDAIdentifier, CDDAOvermapTerrain>,
+    pub overmap_specials: HashMap<CDDAIdentifier, CDDAOvermapSpecial>,
 }
 
 impl DeserializedCDDAJsonData {
@@ -553,6 +556,19 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                 .overmap_terrains
                                 .insert(terrain.id.clone(), terrain);
                         }
+                    },
+                    CDDAJsonEntry::OvermapSpecial(s) => {
+                        let special: CDDAOvermapSpecial = s.into();
+
+                        debug!(
+                            "Found OvermapSpecial entry {} in {:?}",
+                            special.id,
+                            entry.path()
+                        );
+
+                        cdda_data
+                            .overmap_specials
+                            .insert(special.id.clone(), special);
                     },
                     _ => {
                         info!("Unused JSON entry in {:?}", entry.path());

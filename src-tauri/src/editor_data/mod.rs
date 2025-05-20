@@ -2,16 +2,17 @@ pub(crate) mod handlers;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
-use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
+use crate::map::importing::{OvermapSpecialImporter, SingleMapDataImporter};
 use crate::map::{CellRepresentation, MapData, DEFAULT_MAP_DATA_SIZE};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
-use crate::util::{Load, Save, SaveError};
+use crate::util::{CDDAIdentifier, Load, Save, SaveError};
 use glam::{IVec3, UVec2};
 use log::info;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
+use std::time::Instant;
 use tauri::Theme;
 use thiserror::Error;
 
@@ -22,48 +23,42 @@ pub type MapCoordinates = UVec2;
 
 pub async fn get_map_data_collection_live_viewer_data(
     data: &LiveViewerData,
-) -> MapDataCollection {
-    info!(
-        "Opening Live viewer {:?} at {:?}",
-        data.om_terrain, data.path
-    );
+) -> HashMap<ZLevel, MapDataCollection> {
+    info!("Opening Live viewer");
 
-    let map_data_collection = match &data.om_terrain {
-        OmTerrainType::Single { om_terrain_id } => {
-            let mut map_data_importer = SingleMapDataImporter {
-                path: data.path.clone(),
-                om_terrain: om_terrain_id.clone(),
+    let map_data_collection = match &data {
+        LiveViewerData::Terrain {
+            om_id,
+            mapgen_file_paths,
+            ..
+        } => {
+            let mut overmap_terrain_importer = SingleMapDataImporter {
+                om_terrain: om_id.clone(),
+                paths: mapgen_file_paths.clone(),
             };
 
-            map_data_importer.load().await.unwrap()
+            let collection = overmap_terrain_importer.load().await.unwrap();
+            let mut map_data_collection = HashMap::new();
+            map_data_collection.insert(0, collection);
+            map_data_collection
         },
-        OmTerrainType::Nested { om_terrain_ids, .. } => {
-            let mut om_terrain_id_hashmap = HashMap::new();
-
-            for (y, id_list) in om_terrain_ids.into_iter().enumerate() {
-                for (x, id) in id_list.into_iter().enumerate() {
-                    om_terrain_id_hashmap
-                        .insert(id.clone(), UVec2::new(x as u32, y as u32));
-                }
-            }
-
-            let mut map_data_importer = NestedMapDataImporter {
-                path: data.path.clone(),
-                om_terrain_ids: om_terrain_id_hashmap,
+        LiveViewerData::Special {
+            om_id,
+            om_file_paths,
+            mapgen_file_paths,
+            ..
+        } => {
+            let mut om_special_importer = OvermapSpecialImporter {
+                om_special_id: om_id.clone(),
+                overmap_special_paths: om_file_paths.clone(),
+                mapgen_entry_paths: mapgen_file_paths.clone(),
             };
 
-            map_data_importer.load().await.unwrap()
+            om_special_importer.load().await.unwrap()
         },
     };
 
     map_data_collection
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type", rename_all_fields = "camelCase")]
-pub enum OmTerrainType {
-    Single { om_terrain_id: String },
-    Nested { om_terrain_ids: Vec<Vec<String>> },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,9 +69,18 @@ pub enum ProjectType {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LiveViewerData {
-    pub path: PathBuf,
-    pub om_terrain: OmTerrainType,
+pub enum LiveViewerData {
+    Terrain {
+        mapgen_file_paths: Vec<PathBuf>,
+        project_name: String,
+        om_id: CDDAIdentifier,
+    },
+    Special {
+        mapgen_file_paths: Vec<PathBuf>,
+        om_file_paths: Vec<PathBuf>,
+        project_name: String,
+        om_id: CDDAIdentifier,
+    },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -133,7 +137,6 @@ impl Default for Project {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapDataCollection {
     pub maps: HashMap<MapCoordinates, MapData>,
-    pub global_map_size: UVec2,
 }
 
 impl MapDataCollection {
@@ -220,10 +223,7 @@ impl Default for MapDataCollection {
     fn default() -> Self {
         let mut maps = HashMap::new();
         maps.insert(MapCoordinates::ZERO, MapData::default());
-        Self {
-            maps,
-            global_map_size: DEFAULT_MAP_DATA_SIZE,
-        }
+        Self { maps }
     }
 }
 

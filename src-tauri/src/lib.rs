@@ -117,19 +117,14 @@ async fn frontend_ready(
                 match &project.ty {
                     ProjectType::MapEditor(me) => unimplemented!(),
                     ProjectType::LiveViewer(lvd) => {
-                        info!(
-                            "Opening Live viewer {:?} at {:?}",
-                            lvd.om_terrain, lvd.path
-                        );
+                        info!("Opening Live viewer",);
 
                         let mut map_data_collection =
                             get_map_data_collection_live_viewer_data(lvd).await;
-                        map_data_collection
-                            .calculate_parameters(&json_data.palettes);
-
-                        let mut maps = HashMap::new();
-                        maps.insert(0, map_data_collection);
-                        project.maps = maps;
+                        map_data_collection.iter_mut().for_each(|(_, m)| {
+                            m.calculate_parameters(&json_data.palettes)
+                        });
+                        project.maps = map_data_collection;
 
                         app.emit(
                             events::TAB_CREATED,

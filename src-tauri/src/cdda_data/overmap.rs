@@ -1,6 +1,9 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::{CDDADeleteOp, CDDAExtendOp, CDDAString, IdOrAbstract};
 use crate::impl_merge_with_precedence;
 use crate::util::{CDDAIdentifier, MeabyVec};
+use glam::IVec3;
+use log::warn;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -103,5 +106,112 @@ impl Into<Vec<CDDAOvermapTerrain>> for CDDAOvermapTerrainIntermediate {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OvermapSpecialOvermap {
+    pub point: IVec3,
+    pub overmap: Option<CDDAIdentifier>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", untagged)]
+pub enum OvermapSpecialSubType {
+    Fixed {
+        overmaps: Vec<OvermapSpecialOvermap>,
+    },
+    Mutable {
+        subtype: String,
+    },
+}
+
 #[derive(Debug, Clone, Deserialize)]
-pub struct CDDAOvermapSpecialIntermediate {}
+pub struct CDDAOvermapSpecialIntermediate {
+    #[serde(flatten)]
+    pub identifier: IdOrAbstract<CDDAIdentifier>,
+    #[serde(rename = "copy-from")]
+    pub copy_from: Option<CDDAIdentifier>,
+    pub flags: Option<Vec<String>>,
+    pub extend: Option<CDDAExtendOp>,
+    pub delete: Option<CDDADeleteOp>,
+
+    #[serde(flatten)]
+    pub ty: OvermapSpecialSubType,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CDDAOvermapSpecial {
+    pub id: CDDAIdentifier,
+
+    #[serde(flatten)]
+    pub ty: OvermapSpecialSubType,
+
+    #[serde(rename = "copy-from")]
+    pub is_abstract: bool,
+    pub copy_from: Option<CDDAIdentifier>,
+    pub flags: Option<Vec<String>>,
+    pub extend: Option<CDDAExtendOp>,
+    pub delete: Option<CDDADeleteOp>,
+}
+
+impl CDDAOvermapSpecial {
+    pub fn calculate_copy(
+        &self,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> CDDAOvermapSpecial {
+        match &self.copy_from {
+            None => self.clone(),
+            Some(copy_from_id) => {
+                let mut copy_from_special =
+                    match cdda_data.overmap_specials.get(copy_from_id) {
+                        None => {
+                            warn!(
+                            "Could not copy {} for {} due to it not existing",
+                            copy_from_id, self.id
+                        );
+                            return self.clone();
+                        },
+                        Some(t) => t.clone(),
+                    };
+
+                if copy_from_special.copy_from.is_some() {
+                    copy_from_special = self.calculate_copy(cdda_data);
+                }
+
+                CDDAOvermapSpecial::merge_with_precedence(
+                    &copy_from_special,
+                    self,
+                )
+            },
+        }
+    }
+}
+
+impl_merge_with_precedence!(
+    CDDAOvermapSpecial,
+    id,
+    is_abstract,
+    ty
+    ;
+    copy_from,
+    flags,
+    extend,
+    delete
+);
+
+impl Into<CDDAOvermapSpecial> for CDDAOvermapSpecialIntermediate {
+    fn into(self) -> CDDAOvermapSpecial {
+        let (id, is_abstract) = match self.identifier {
+            IdOrAbstract::Id(id) => (id, false),
+            IdOrAbstract::Abstract(abs) => (abs, true),
+        };
+
+        CDDAOvermapSpecial {
+            id,
+            copy_from: self.copy_from,
+            is_abstract,
+            ty: self.ty,
+            flags: self.flags,
+            extend: self.extend,
+            delete: self.delete,
+        }
+    }
+}

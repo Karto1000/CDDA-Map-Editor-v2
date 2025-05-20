@@ -3,7 +3,8 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::{MapGenValue, Switch};
-use crate::editor_data::{EditorData, Project};
+use crate::editor_data::{EditorData, MapDataCollection, Project, ZLevel};
+use crate::map::DEFAULT_MAP_DATA_SIZE;
 use crate::tileset::GetRandom;
 use derive_more::with_trait::Display;
 use glam::{IVec3, UVec2};
@@ -519,6 +520,25 @@ pub enum GetCurrentMapDataError {
 pub enum CDDADataError {
     #[error("No CDDA Data was loaded")]
     NotLoaded,
+}
+
+pub fn get_size(maps: &HashMap<ZLevel, MapDataCollection>) -> UVec2 {
+    let mut max_x = 0u32;
+    let mut max_y = 0u32;
+
+    // Find the maximum x and y coordinates across all maps
+    for map_data in maps.values() {
+        for pos in map_data.maps.keys() {
+            max_x = max_x.max(pos.x);
+            max_y = max_y.max(pos.y);
+        }
+    }
+
+    // Add 1 since coordinates are 0-based
+    UVec2::new(
+        (max_x + 1) * DEFAULT_MAP_DATA_SIZE.x,
+        (max_y + 1) * DEFAULT_MAP_DATA_SIZE.y,
+    )
 }
 
 pub fn get_current_project<'a>(
