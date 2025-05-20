@@ -1,18 +1,17 @@
-export enum OmTerrainType {
-    Single = "Single",
-    Nested = "Nested"
-}
-
-export type OmTerrain = {
-    type: OmTerrainType.Single,
-    omTerrainId: string
-} | {
-    type: OmTerrainType.Nested,
-    omTerrainIds: string[][]
+export enum OpenViewerDataType {
+    Terrain = "terrain",
+    Special = "special"
 }
 
 export type OpenViewerData = {
-    filePath: string,
+    type: OpenViewerDataType.Special,
+    mapgenFilePaths: string[],
+    omFilePaths: string[]
     projectName: string
-    omTerrain: OmTerrain
+    omId: string
+} | {
+    type: OpenViewerDataType.Terrain,
+    mapgenFilePaths: string[],
+    projectName: string
+    omId: string
 }

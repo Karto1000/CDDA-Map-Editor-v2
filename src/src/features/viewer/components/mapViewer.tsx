@@ -79,6 +79,7 @@ export function MapViewer(props: MapViewerProps) {
     useTauriEvent(
         TauriEvent.PLACE_SPRITES,
         (d) => {
+            console.log("Placing sprites")
             props.tilesheets.current.clearAll()
 
             const drawStaticSprites: DrawStaticSprite[] = d.static_sprites.map(ds => {
