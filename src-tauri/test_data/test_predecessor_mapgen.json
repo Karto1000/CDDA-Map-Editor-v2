@@ -4,11 +4,14 @@
     "method": "json",
     "om_terrain": "test_predecessor_mapgen",
     "object": {
-      "predecessor_mapgen": "field",
+      "predecessor_mapgen": "forest_thick",
       "place_terrain": [
         {
           "ter": "t_rock_wall",
-          "x": [0, 10],
+          "x": [
+            0,
+            10
+          ],
           "y": 0
         }
       ],

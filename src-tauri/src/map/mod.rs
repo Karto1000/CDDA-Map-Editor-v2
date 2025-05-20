@@ -11,6 +11,7 @@ use crate::cdda_data::map_data::{
     MapGenMonsterType, NeighborDirection, OmTerrainMatch, PlaceOuter,
     DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
+use crate::cdda_data::overmap::OvermapTerrainMapgen;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::ZLevel;
@@ -23,6 +24,7 @@ use crate::util::{
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
+use futures_lite::StreamExt;
 use glam::{IVec2, IVec3, UVec2};
 use indexmap::IndexMap;
 use log::warn;
@@ -393,12 +395,47 @@ impl MapData {
         // we need to calculate the predecessor_mapgen here before so we can replace it later
         match &self.predecessor {
             None => {},
-            Some(predecessor) => {
-                let predecessor_map_data =
-                    json_data.map_data.get(predecessor).expect(
-                        format!("Predecessor {} to exist", predecessor)
-                            .as_str(),
-                    );
+            Some(predecessor_id) => {
+                let predecessor_map_data = match json_data
+                    .map_data
+                    .get(predecessor_id)
+                {
+                    None => {
+                        let predecessor =
+                                json_data.overmap_terrains.get(predecessor_id)
+                                    .expect(format!("Overmap terrain for Predecessor {} to exist", predecessor_id).as_str());
+
+                        match &predecessor
+                            .mapgen
+                            .clone()
+                            .unwrap_or_default()
+                            .first()
+                        {
+                            None => {
+                                // This terrain is defined in a json file, so we can just search for it
+                                json_data.map_data.get(predecessor_id).expect(
+                                    format!(
+                                        "Mapdata for Predecessor {} to exist",
+                                        predecessor_id
+                                    )
+                                    .as_str(),
+                                );
+                            },
+                            Some(omtm) => {
+                                json_data.map_data.get(&omtm.name).expect(
+                                    format!(
+                                        "Hardcoded Map data for predecessor {} to exist",
+                                        omtm.name
+                                    )
+                                    .as_str(),
+                                );
+                            },
+                        }
+
+                        panic!();
+                    },
+                    Some(s) => s,
+                };
 
                 local_mapped_cdda_ids =
                     predecessor_map_data.get_mapped_cdda_ids(json_data, z);
