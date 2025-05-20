@@ -1,14 +1,14 @@
 use crate::cdda_data::map_data::{CDDAMapDataIntermediate, OmTerrain};
 use crate::cdda_data::overmap::{
-    CDDAOvermapSpecial, CDDAOvermapSpecialIntermediate
-    , OvermapSpecialSubType,
+    CDDAOvermapSpecial, CDDAOvermapSpecialIntermediate, OvermapSpecialOvermap,
+    OvermapSpecialSubType,
 };
 use crate::cdda_data::IdOrAbstract;
 use crate::editor_data::{MapDataCollection, ZLevel};
-use crate::map::MapData;
+use crate::map::{MapData, MapDataRotation};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::{anyhow, Error};
-use glam::{IVec3, UVec2};
+use glam::UVec2;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -202,6 +202,35 @@ impl Load<MapDataCollection> for SingleMapDataImporter {
     }
 }
 
+fn remove_orientation_suffix_and_get_rotation(
+    om_id: CDDAIdentifier,
+) -> (CDDAIdentifier, MapDataRotation) {
+    let mut rotation = MapDataRotation::Deg0;
+    let mut final_overmap_id = om_id;
+
+    if let Some(final_id) = final_overmap_id.0.strip_suffix("_north") {
+        final_overmap_id = final_id.into();
+        rotation = MapDataRotation::Deg0;
+    }
+
+    if let Some(final_id) = final_overmap_id.0.strip_suffix("_east") {
+        final_overmap_id = final_id.into();
+        rotation = MapDataRotation::Deg90;
+    }
+
+    if let Some(final_id) = final_overmap_id.0.strip_suffix("_south") {
+        final_overmap_id = final_id.into();
+        rotation = MapDataRotation::Deg180;
+    }
+
+    if let Some(final_id) = final_overmap_id.0.strip_suffix("_west") {
+        final_overmap_id = final_id.into();
+        rotation = MapDataRotation::Deg270;
+    }
+
+    (final_overmap_id, rotation)
+}
+
 pub struct OvermapSpecialImporter {
     pub om_special_id: CDDAIdentifier,
     pub overmap_special_paths: Vec<PathBuf>,
@@ -245,49 +274,9 @@ impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
 
             let overmap_special: CDDAOvermapSpecial = overmap_special.into();
 
-            let om_specials: Vec<(IVec3, CDDAIdentifier)> =
+            let om_specials: Vec<OvermapSpecialOvermap> =
                 match overmap_special.ty {
-                    OvermapSpecialSubType::Fixed { overmaps, .. } => overmaps
-                        .into_iter()
-                        .map(|om| {
-                            let mut new_om_id =
-                                om.overmap.unwrap_or("null".into());
-
-                            if new_om_id.0.ends_with("_north") {
-                                new_om_id = new_om_id
-                                    .0
-                                    .strip_suffix("_north")
-                                    .unwrap()
-                                    .into();
-                            }
-
-                            if new_om_id.0.ends_with("_east") {
-                                new_om_id = new_om_id
-                                    .0
-                                    .strip_suffix("_east")
-                                    .unwrap()
-                                    .into();
-                            }
-
-                            if new_om_id.0.ends_with("_south") {
-                                new_om_id = new_om_id
-                                    .0
-                                    .strip_suffix("_south")
-                                    .unwrap()
-                                    .into();
-                            }
-
-                            if new_om_id.0.ends_with("_west") {
-                                new_om_id = new_om_id
-                                    .0
-                                    .strip_suffix("_west")
-                                    .unwrap()
-                                    .into();
-                            }
-
-                            (om.point, new_om_id)
-                        })
-                        .collect(),
+                    OvermapSpecialSubType::Fixed { overmaps, .. } => overmaps,
                     OvermapSpecialSubType::Mutable { .. } => {
                         return Err(anyhow!(
                             "Mutable special overmap not supported"
@@ -297,32 +286,63 @@ impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
 
             let mut importer = MapDataImporter {
                 paths: self.mapgen_entry_paths.clone(),
-                om_ids: om_specials.iter().map(|s| s.1.clone()).collect(),
+                om_ids: om_specials
+                    .clone()
+                    .into_iter()
+                    .map(|s| {
+                        remove_orientation_suffix_and_get_rotation(
+                            s.overmap.unwrap_or("null".into()),
+                        )
+                        .0
+                    })
+                    .collect(),
             };
 
             let mut data = importer.load().await?;
 
-            for (point, id) in om_specials {
-                let map_data = match data.remove(&id) {
-                    None => continue,
-                    Some(md) => md,
-                };
+            for om_special in om_specials {
+                let (final_id, rotation) =
+                    remove_orientation_suffix_and_get_rotation(
+                        om_special.overmap.unwrap_or("null".into()),
+                    );
 
-                match aggregated_map_data.get_mut(&point.z) {
+                if om_special.point.x == 2
+                    && om_special.point.y == 2
+                    && om_special.point.z == 0
+                {
+                    dbg!(&final_id, &rotation);
+                }
+
+                let mut map_data = match data.get(&final_id) {
+                    None => continue,
+                    Some(md) => md.clone(),
+                };
+                map_data.rotation = rotation;
+
+                match aggregated_map_data.get_mut(&om_special.point.z) {
                     None => {
-                        aggregated_map_data
-                            .insert(point.z, MapDataCollection::default());
-                        let map_data_collection =
-                            aggregated_map_data.get_mut(&point.z).unwrap();
+                        aggregated_map_data.insert(
+                            om_special.point.z,
+                            MapDataCollection::default(),
+                        );
+                        let map_data_collection = aggregated_map_data
+                            .get_mut(&om_special.point.z)
+                            .unwrap();
 
                         map_data_collection.maps.insert(
-                            UVec2::new(point.x as u32, point.y as u32),
+                            UVec2::new(
+                                om_special.point.x as u32,
+                                om_special.point.y as u32,
+                            ),
                             map_data,
                         );
                     },
                     Some(s) => {
                         s.maps.insert(
-                            UVec2::new(point.x as u32, point.y as u32),
+                            UVec2::new(
+                                om_special.point.x as u32,
+                                om_special.point.y as u32,
+                            ),
                             map_data,
                         );
                     },

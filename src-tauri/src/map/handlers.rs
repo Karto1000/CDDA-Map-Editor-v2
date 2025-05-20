@@ -16,7 +16,7 @@ use crate::util::{
 };
 use crate::{events, tileset, util};
 use glam::{IVec3, UVec2};
-use log::{debug, error, warn};
+use log::{debug, error, info, warn};
 use notify::{PollWatcher, RecommendedWatcher, Watcher};
 use notify_debouncer_full::{new_debouncer, new_debouncer_opt, Debouncer};
 use rayon::iter::IntoParallelRefIterator;
@@ -495,7 +495,7 @@ pub async fn open_project(
             let lvd_clone = lvd.clone();
 
             let join_handle = tokio::spawn(async move {
-                dbg!("Spawning File Watcher for Live Viewer");
+                info!("Spawning File Watcher for Live Viewer");
 
                 let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
@@ -526,7 +526,7 @@ pub async fn open_project(
                 }
 
                 while let Some(Ok(_)) = rx.recv().await {
-                    dbg!("Reloading Project");
+                    info!("Reloading Project");
                     app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
                 }
             });
