@@ -601,7 +601,7 @@ map_data_object!(
     parameters: IndexMap<ParameterIdentifier, Parameter>,
     set: Vec<SetIntermediate>,
     flags: HashSet<MapDataFlag>,
-    predecessor_mapgen: CDDAIdentifier
+    predecessor_mapgen: Option<CDDAIdentifier>
 
     [FIELDS_WITH_PLACE]
     terrain: MapGenValue,
@@ -1137,6 +1137,8 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                                 .mapgen_size
                                 .unwrap_or(DEFAULT_MAP_DATA_SIZE);
                             map_data.flags = self.object.common.flags.clone();
+                            map_data.predecessor =
+                                self.object.common.predecessor_mapgen.clone();
 
                             map_data_collection.maps.insert(
                                 UVec2::new(
@@ -1177,10 +1179,7 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                     },
                 };
 
-                cells.insert(
-                    UVec2::new(column as u32, row as u32),
-                    Cell { character: char },
-                );
+                cells.insert(UVec2::new(column, row), Cell { character: char });
             }
         }
 
@@ -1194,6 +1193,7 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
         map_data.map_size =
             self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
         map_data.flags = self.object.common.flags.clone();
+        map_data.predecessor = self.object.common.predecessor_mapgen.clone();
 
         collection.maps.insert(UVec2::ZERO, map_data);
         collection.global_map_size = DEFAULT_MAP_DATA_SIZE;

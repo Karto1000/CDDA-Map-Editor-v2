@@ -17,13 +17,15 @@ use crate::util::{
 use crate::{events, tileset, util};
 use glam::{IVec3, UVec2};
 use log::{error, warn};
-use notify::{Config, RecommendedWatcher, Watcher};
+use notify::{PollWatcher, RecommendedWatcher, Watcher};
+use notify_debouncer_full::{new_debouncer, new_debouncer_opt, Debouncer};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::time::Duration;
 use strum::IntoEnumIterator;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
@@ -494,22 +496,27 @@ pub async fn open_project(
             let lvd_clone = lvd.clone();
 
             let join_handle = tokio::spawn(async move {
+                dbg!("Spawning File Watcher for Live Viewer");
+
                 let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
                 // Thx -> https://github.com/notify-rs/notify/blob/d7e22791faffb7bd9bd10f031c260ae019d7f474/examples/async_monitor.rs
-                let mut watcher = RecommendedWatcher::new(
+                // And -> https://docs.rs/notify-debouncer-full/latest/notify_debouncer_full/
+                let mut debouncer = new_debouncer(
+                    Duration::from_millis(100),
+                    None,
                     move |res| {
                         block_on(async { tx.send(res).await.unwrap() });
                     },
-                    Config::default(),
                 )
                 .unwrap();
 
-                watcher
+                debouncer
                     .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
                     .unwrap();
 
                 while let Some(Ok(_)) = rx.recv().await {
+                    dbg!("Reloading Project");
                     app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
                 }
             });

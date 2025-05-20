@@ -285,6 +285,7 @@ pub struct MapData {
     pub cells: IndexMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
     pub map_size: UVec2,
+    pub predecessor: Option<CDDAIdentifier>,
 
     pub config: MapDataConfig,
 
@@ -322,6 +323,7 @@ impl Default for MapData {
             cells,
             fill,
             map_size: DEFAULT_MAP_DATA_SIZE,
+            predecessor: None,
             config: Default::default(),
             calculated_parameters: Default::default(),
             parameters: Default::default(),
@@ -388,12 +390,41 @@ impl MapData {
             },
         };
 
-        self.cells.iter().for_each(|(p, _)| {
-            let mut mapped_ids = MappedCDDAIds::default();
-            mapped_ids.terrain = fill_terrain_sprite.clone();
+        // we need to calculate the predecessor_mapgen here before so we can replace it later
+        match &self.predecessor {
+            None => {},
+            Some(predecessor) => {
+                let predecessor_map_data =
+                    json_data.map_data.get(predecessor).expect(
+                        format!("Predecessor {} to exist", predecessor)
+                            .as_str(),
+                    );
 
-            local_mapped_cdda_ids
-                .insert(IVec3::new(p.x as i32, p.y as i32, z), mapped_ids);
+                local_mapped_cdda_ids =
+                    predecessor_map_data.get_mapped_cdda_ids(json_data, z);
+            },
+        }
+
+        self.cells.iter().for_each(|(p, _)| {
+            let coords = IVec3::new(p.x as i32, p.y as i32, z);
+            // If there was no id added from the predecessor mapgen, we will add the fill sprite here
+            match local_mapped_cdda_ids.get_mut(&coords) {
+                None => {
+                    let mut mapped_ids = MappedCDDAIds::default();
+
+                    mapped_ids.terrain = fill_terrain_sprite.clone();
+
+                    local_mapped_cdda_ids.insert(
+                        IVec3::new(p.x as i32, p.y as i32, z),
+                        mapped_ids,
+                    );
+                },
+                Some(mapped_ids) => {
+                    if mapped_ids.terrain.is_none() {
+                        mapped_ids.terrain = fill_terrain_sprite.clone();
+                    }
+                },
+            };
         });
 
         let all_commands = self.get_commands(&json_data);

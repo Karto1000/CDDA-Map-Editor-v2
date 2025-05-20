@@ -1,0 +1,26 @@
+[
+  {
+    "type": "mapgen",
+    "method": "json",
+    "om_terrain": "test_predecessor_mapgen",
+    "object": {
+      "predecessor_mapgen": "field",
+      "place_terrain": [
+        {
+          "ter": "t_rock_wall",
+          "x": [0, 10],
+          "y": 0
+        }
+      ],
+      "place_nested": [
+        {
+          "chunks": [
+            "shed_6x6_woodworker"
+          ],
+          "x": 2,
+          "y": 1
+        }
+      ]
+    }
+  }
+]
