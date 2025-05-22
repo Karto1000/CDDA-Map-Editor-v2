@@ -58,6 +58,10 @@
       div {
         color: theme-var('lightest')
       }
+
+      .world-position-indicator {
+        background-color: theme-var('dark-blue');
+      }
     }
   }
 }
@@ -166,9 +170,25 @@
     width: 100%;
     display: flex;
     gap: 8px;
+    justify-content: space-between;
+    align-items: center;
 
     div {
       display: flex;
+    }
+
+    .indicator-container {
+      display: flex;
+      gap: 2px;
+
+      .world-position-indicator {
+        height: 24px;
+        padding: 0 8px;
+
+        span {
+          margin: auto;
+        }
+      }
     }
   }
 }

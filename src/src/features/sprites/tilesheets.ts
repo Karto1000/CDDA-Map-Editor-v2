@@ -27,12 +27,11 @@ type SavedAnimatedSprite = DrawAnimatedSprite & {
     currentFrame: number
 }
 
-type StaticBatches = { [zLevel: number]: { [key: string]: DrawLocalSprite[] } }
+type StaticBatches = { [zLevel: number]: { [tilesheetName: string]: DrawLocalSprite[] } }
 type AnimatedBatches = {
     [zLevel: number]: {
-        [key: string]: {
+        [tilesheetName: string]: {
             draw: DrawLocalSprite[],
-            remove: { positions: Vector2[], layers: number[] }
         }
     }
 }
@@ -42,7 +41,6 @@ export class Tilesheets {
     public tilesheets: { [name: string]: Tilesheet }
     public fallback: Tilesheet
 
-    private zLevel: number = 0
     private animatedSprites: SavedAnimatedSprite[] = []
 
     private cachedStaticBatches: StaticBatches = {}
@@ -55,7 +53,7 @@ export class Tilesheets {
         this.tileInfo = tileInfo
     }
 
-    public updateAnimatedSprites() {
+    public updateAnimatedSprites(zLevel: number) {
         if (this.animatedSprites.length === 0) return
 
         const batches: AnimatedBatches = {}
@@ -84,12 +82,9 @@ export class Tilesheets {
                 if (!batches[animatedSprite.z]) batches[animatedSprite.z] = {}
                 if (!batches[animatedSprite.z][k]) batches[animatedSprite.z][k] = {
                     draw: [],
-                    remove: {positions: [], layers: []}
                 }
 
                 batches[animatedSprite.z][k].draw.push(drawLocalSprite)
-                batches[animatedSprite.z][k].remove.positions.push(animatedSprite.position)
-                batches[animatedSprite.z][k].remove.layers.push(animatedSprite.layer)
 
                 break
             }
@@ -98,13 +93,12 @@ export class Tilesheets {
             animatedSprite.currentFrame = nextFrame
         }
 
-        if (!batches[this.zLevel]) return;
+        if (!batches[zLevel]) return;
 
-        for (let k of Object.keys(batches[this.zLevel])) {
-            const batch = batches[this.zLevel][k]
+        for (let k of Object.keys(batches[zLevel])) {
+            const batch = batches[zLevel][k]
 
             if (batch.draw.length === 0) continue
-            if (batch.remove.positions.length === 0) continue
 
             this.tilesheets[k].drawSpriteLocalIndexBatched(batch.draw)
         }
@@ -118,13 +112,20 @@ export class Tilesheets {
     }
 
     public switchZLevel(zLevel: number) {
-        this.clearAll()
+        for (let k of Object.keys(this.tilesheets)) {
+            const tilesheet = this.tilesheets[k]
+            tilesheet.clear()
+        }
 
-        this.zLevel = zLevel
+        // Reset the animations here so that the animated sprites update immediately upon switching layers
+        for (const animatedSprite of this.animatedSprites) {
+            animatedSprite.framesSinceLastDraw = ANIMATION_FRAME_DURATION
+            animatedSprite.currentFrame = 0
+        }
 
-        if (!this.cachedStaticBatches[this.zLevel] && !this.cachedFallbackBatches[this.zLevel]) return
+        if (!this.cachedStaticBatches[zLevel] && !this.cachedFallbackBatches[zLevel]) return
 
-        const staticBatch = this.cachedStaticBatches[this.zLevel]
+        const staticBatch = this.cachedStaticBatches[zLevel]
         if (staticBatch) {
             for (let k of Object.keys(staticBatch)) {
                 const batch = staticBatch[k]
@@ -132,11 +133,13 @@ export class Tilesheets {
             }
         }
 
-        const fallbackBatch = this.cachedFallbackBatches[this.zLevel]
+        const fallbackBatch = this.cachedFallbackBatches[zLevel]
         if (fallbackBatch) this.fallback.drawSpriteLocalIndexBatched(fallbackBatch)
+
+        this.updateAnimatedSprites(zLevel)
     }
 
-    public drawStaticSpritesBatched(staticSprites: DrawStaticSprite[]) {
+    public drawStaticSpritesBatched(staticSprites: DrawStaticSprite[], zLevel: number) {
         if (staticSprites.length === 0) return
 
         const batches: StaticBatches = {}
@@ -166,14 +169,14 @@ export class Tilesheets {
 
         this.cachedStaticBatches = batches
 
-        const currentBatch = batches[this.zLevel]
+        const currentBatch = batches[zLevel]
         for (let k of Object.keys(currentBatch)) {
             const batch = currentBatch[k]
             this.tilesheets[k].drawSpriteLocalIndexBatched(batch)
         }
     }
 
-    public drawFallbackSpritesBatched(staticSprites: DrawStaticSprite[]) {
+    public drawFallbackSpritesBatched(staticSprites: DrawStaticSprite[], zLevel: number) {
         if (staticSprites.length === 0) return
 
         const batches: FallbackBatches = {}
@@ -203,7 +206,7 @@ export class Tilesheets {
         }
 
         this.cachedFallbackBatches = batches
-        this.fallback.drawSpriteLocalIndexBatched(batches[this.zLevel])
+        this.fallback.drawSpriteLocalIndexBatched(batches[zLevel])
     }
 
     public clearAll() {
@@ -212,6 +215,8 @@ export class Tilesheets {
             tilesheet.clear()
         }
 
+        this.cachedStaticBatches = {}
+        this.cachedFallbackBatches = {}
         this.animatedSprites = []
     }
 

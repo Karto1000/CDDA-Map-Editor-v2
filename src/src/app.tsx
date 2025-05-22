@@ -65,8 +65,11 @@ function App() {
             <EditorDataContext.Provider value={editorData}>
                 <ThemeContext.Provider value={{theme}}>
                     <TabContext.Provider value={tabs}>
-                        <Header openMapWindowRef={openMapWindowRef} settingsWindowRef={settingsWindowRef}
-                                eventBus={eventBus}/>
+                        <Header
+                            openMapWindowRef={openMapWindowRef}
+                            settingsWindowRef={settingsWindowRef}
+                            eventBus={eventBus}
+                        />
 
                         <PanelGroup direction={'horizontal'}>
                             <Panel collapsible={true} minSize={10} defaultSize={20} maxSize={50}

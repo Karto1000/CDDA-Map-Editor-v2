@@ -10,6 +10,8 @@ export enum LocalEvent {
     OPEN_LOCAL_TAB = "open-local-tab",
     CLOSE_LOCAL_TAB = "close-local-tab",
     TILESET_LOADED = "tileset-loaded",
+    CHANGE_Z_LEVEL = "change-z-level",
+    CHANGE_WORLD_MOUSE_POSITION = "change-world-mouse-position",
 }
 
 export interface LocalEventsMap {
@@ -20,6 +22,8 @@ export interface LocalEventsMap {
     [LocalEvent.CLOSE_LOCAL_TAB]: { name: string }
     [LocalEvent.TILESET_LOADED]: Tilesheets
     [LocalEvent.CHANGE_THEME_REQUEST]: { theme: Theme }
+    [LocalEvent.CHANGE_Z_LEVEL]: { zLevel: number }
+    [LocalEvent.CHANGE_WORLD_MOUSE_POSITION]: { position: {x: number, y: number}}
 }
 
 export class ChangedThemeEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGED_THEME]> {}
@@ -29,3 +33,5 @@ export class OpenLocalTabEvent extends CustomEvent<LocalEventsMap[LocalEvent.OPE
 export class CloseLocalTabEvent extends CustomEvent<LocalEventsMap[LocalEvent.CLOSE_LOCAL_TAB]> {}
 export class TilesetLoadedEvent extends CustomEvent<LocalEventsMap[LocalEvent.TILESET_LOADED]> {}
 export class ChangeThemeRequestEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_THEME_REQUEST]> {}
+export class ChangeZLevelEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_Z_LEVEL]> {}
+export class ChangeWorldMousePositionEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_WORLD_MOUSE_POSITION]> {}

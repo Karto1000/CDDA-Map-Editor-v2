@@ -7,7 +7,13 @@ import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {TabContext, ThemeContext} from "../../app.js";
-import {ChangedThemeEvent, CloseLocalTabEvent, LocalEvent, OpenLocalTabEvent} from "../utils/localEvent.js";
+import {
+    ChangedThemeEvent, ChangeWorldMousePositionEvent,
+    ChangeZLevelEvent,
+    CloseLocalTabEvent,
+    LocalEvent,
+    OpenLocalTabEvent
+} from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {TauriCommand} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
@@ -27,6 +33,9 @@ export function Header(props: Props) {
     const tabs = useContext(TabContext)
     const [settingsWindow, setSettingsWindow] = React.useState<WebviewWindow | null>(null)
 
+    const [zLevelIndicator, setZLevelIndicator] = React.useState<number | null>(null)
+    const [mousePositionIndicator, setMousePositionIndicator] = React.useState<{ x: number, y: number } | null>(null)
+
     useEffect(() => {
         props.settingsWindowRef.current = settingsWindow
 
@@ -45,6 +54,53 @@ export function Header(props: Props) {
             unlisten.then(f => f())
         }
     }, [settingsWindow, theme]);
+
+    useEffect(() => {
+        const handleChangeZLevel = (e: ChangeZLevelEvent) => {
+            setZLevelIndicator(() => e.detail.zLevel)
+        }
+
+        const handleCloseLocalTab = () => {
+            setZLevelIndicator(() => null)
+            setMousePositionIndicator(() => null)
+        }
+
+        const handleChangeWorldMousePosition = (e: ChangeWorldMousePositionEvent) => {
+            setMousePositionIndicator(() => e.detail.position)
+        }
+
+        props.eventBus.current.addEventListener(
+            LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
+            handleChangeWorldMousePosition
+        )
+
+        props.eventBus.current.addEventListener(
+            LocalEvent.CLOSE_LOCAL_TAB,
+            handleCloseLocalTab
+        )
+
+        props.eventBus.current.addEventListener(
+            LocalEvent.CHANGE_Z_LEVEL,
+            handleChangeZLevel
+        )
+
+        return () => {
+            props.eventBus.current.removeEventListener(
+                LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
+                handleChangeWorldMousePosition
+            )
+
+            props.eventBus.current.removeEventListener(
+                LocalEvent.CLOSE_LOCAL_TAB,
+                handleCloseLocalTab
+            )
+
+            props.eventBus.current.removeEventListener(
+                LocalEvent.CHANGE_Z_LEVEL,
+                handleChangeZLevel
+            )
+        }
+    }, []);
 
     async function onTabClose(e: React.MouseEvent<HTMLDivElement>, name: string) {
         console.log(`Closed tab ${name}`)
@@ -410,6 +466,14 @@ export function Header(props: Props) {
                             ]
                         ]}/>
                     </DropdownGroup>
+                    <div className={"indicator-container"}>
+                        {
+                            zLevelIndicator !== null && mousePositionIndicator !== null &&
+                            <div className={"world-position-indicator"}>
+                                <span>{mousePositionIndicator.x}, {mousePositionIndicator.y}, {zLevelIndicator}</span>
+                            </div>
+                        }
+                    </div>
                 </div>
             </div>
         </header>

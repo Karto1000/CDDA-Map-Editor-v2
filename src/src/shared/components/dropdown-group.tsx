@@ -15,7 +15,7 @@ export function DropdownGroup(props: Props) {
     const refs = props.children.map(_ => useRef<DropdownRef>(null))
 
     return (
-        <>
+        <div>
             {
                 props.children.map((child, i) => {
                     return <Dropdown
@@ -49,6 +49,6 @@ export function DropdownGroup(props: Props) {
                     />
                 })
             }
-        </>
+        </div>
     )
 }

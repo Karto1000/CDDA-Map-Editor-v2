@@ -1,7 +1,8 @@
 import {Canvas, ThreeConfig} from "../../three/types/three.js";
-import React, {MutableRefObject, useContext, useEffect, useState} from "react";
+import React, {MutableRefObject, useContext, useEffect, useRef, useState} from "react";
 import {
-    ChangedThemeEvent,
+    ChangedThemeEvent, ChangeWorldMousePositionEvent,
+    ChangeZLevelEvent,
     CloseLocalTabEvent,
     LocalEvent,
     TilesetLoadedEvent
@@ -36,11 +37,20 @@ export function MapViewer(props: MapViewerProps) {
     const {hoveredCellMeshRef, selectedCellMeshRef, regenerate} = useMouseCells(props.threeConfig, props.tileInfo)
     const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
     const [isLoading, setIsLoading] = useState<boolean>(false)
+    const zLevel = useRef<number>(0)
     const worldMousePosition = useWorldMousePosition({
         threeConfig: props.threeConfig,
         canvas: props.canvas,
         tileWidth: props.tileInfo?.width,
         tileHeight: props.tileInfo?.height,
+        onWorldMousePositionChange: (newPos) => {
+            props.eventBus.current.dispatchEvent(
+                new ChangeWorldMousePositionEvent(
+                    LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
+                    {detail: {position: {x: newPos.x, y: newPos.y}}}
+                )
+            )
+        },
         onMouseMove: (mousePosition) => {
             hoveredCellMeshRef.current.position.set(
                 mousePosition.x * props.tileInfo.width,
@@ -120,8 +130,8 @@ export function MapViewer(props: MapViewerProps) {
                 }
             })
 
-            props.tilesheets.current.drawFallbackSpritesBatched(drawFallbackSprites)
-            props.tilesheets.current.drawStaticSpritesBatched(drawStaticSprites)
+            props.tilesheets.current.drawFallbackSpritesBatched(drawFallbackSprites, zLevel.current)
+            props.tilesheets.current.drawStaticSpritesBatched(drawStaticSprites, zLevel.current)
             props.tilesheets.current.drawAnimatedSpritesBatched(drawAnimatedSprites)
         },
         [props.tilesheets, props.tileInfo],
@@ -162,6 +172,30 @@ export function MapViewer(props: MapViewerProps) {
             setupSceneData(e.detail.theme)
         }
 
+        const keydownHandler = (e: KeyboardEvent) => {
+            if (e.key === "PageUp") {
+                zLevel.current += 1
+                props.tilesheets.current.switchZLevel(zLevel.current)
+                props.eventBus.current.dispatchEvent(
+                    new ChangeZLevelEvent(
+                        LocalEvent.CHANGE_Z_LEVEL,
+                        {detail: {zLevel: zLevel.current}}
+                    )
+                )
+            } else if (e.key === "PageDown") {
+                zLevel.current -= 1
+                props.tilesheets.current.switchZLevel(zLevel.current)
+                props.eventBus.current.dispatchEvent(
+                    new ChangeZLevelEvent(
+                        LocalEvent.CHANGE_Z_LEVEL,
+                        {detail: {zLevel: zLevel.current}}
+                    )
+                )
+            }
+        }
+
+        props.canvas.canvasRef.current.addEventListener("keydown", keydownHandler)
+
         props.eventBus.current.addEventListener(
             LocalEvent.CLOSE_LOCAL_TAB,
             closeLocalTabHandler
@@ -178,6 +212,8 @@ export function MapViewer(props: MapViewerProps) {
         )
 
         return () => {
+            props.canvas.canvasRef.current.removeEventListener("keydown", keydownHandler)
+
             props.eventBus.current.removeEventListener(
                 LocalEvent.CLOSE_LOCAL_TAB,
                 closeLocalTabHandler
@@ -215,11 +251,18 @@ export function MapViewer(props: MapViewerProps) {
 
         let handler: number;
 
+        props.eventBus.current.dispatchEvent(
+            new ChangeZLevelEvent(
+                LocalEvent.CHANGE_Z_LEVEL,
+                {detail: {zLevel: zLevel.current}}
+            )
+        )
+
         function loop() {
             if (SHOW_STATS) props.threeConfig.current.stats.begin()
 
             props.threeConfig.current.camera.updateProjectionMatrix()
-            if (props.tilesheets.current) props.tilesheets.current.updateAnimatedSprites()
+            if (props.tilesheets.current) props.tilesheets.current.updateAnimatedSprites(zLevel.current)
 
             props.threeConfig.current.controls.update()
             props.threeConfig.current.renderer.render(props.threeConfig.current.scene, props.threeConfig.current.camera)
