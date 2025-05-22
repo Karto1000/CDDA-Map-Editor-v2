@@ -24,6 +24,7 @@ use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
 use std::string::ToString;
+use thiserror::Error;
 
 pub const NULL_TERRAIN: &'static str = "t_null";
 pub const NULL_FURNITURE: &'static str = "f_null";
@@ -45,117 +46,153 @@ pub struct DeserializedCDDAJsonData {
     pub overmap_specials: HashMap<CDDAIdentifier, CDDAOvermapSpecial>,
 }
 
+#[derive(Debug, Error)]
+pub enum GetConnectGroupsError {
+    #[error("Terrain for {0} does not exist")]
+    NoTerrain(CDDAIdentifier),
+
+    #[error("Furniture for {0} does not exist")]
+    NoFurniture(CDDAIdentifier),
+
+    #[error("CDDA entry with id {0} does not have any connect groups")]
+    NoConnectGroups(CDDAIdentifier),
+}
+
+#[derive(Debug, Error)]
+pub enum GetFlagsError {
+    #[error("Terrain for {0} does not exist")]
+    NoTerrain(CDDAIdentifier),
+
+    #[error("Furniture for {0} does not exist")]
+    NoFurniture(CDDAIdentifier),
+
+    #[error("CDDA entry with id {0} does not have any flags")]
+    NoFlags(CDDAIdentifier),
+}
+
+#[derive(Debug, Error)]
+pub enum GetConnectsToError {
+    #[error("Terrain for {0} does not exist")]
+    NoTerrain(CDDAIdentifier),
+
+    #[error("Furniture for {0} does not exist")]
+    NoFurniture(CDDAIdentifier),
+
+    #[error("CDDA entry with id {0} does not have any connect to mappings")]
+    NoConnectsTo(CDDAIdentifier),
+}
+
 impl DeserializedCDDAJsonData {
     pub fn get_connect_groups(
         &self,
-        id: Option<CDDAIdentifier>,
+        id: CDDAIdentifier,
         layer: &TileLayer,
-    ) -> HashSet<CDDAIdentifier> {
-        id.map(|id| {
-            match layer {
-                TileLayer::Terrain => {
-                    // TODO: Figure out what to do when terrain does not exist
-                    if id == CDDAIdentifier(NULL_TERRAIN.to_string()) {
-                        return HashSet::new();
-                    };
+    ) -> Result<HashSet<CDDAIdentifier>, GetConnectGroupsError> {
+        match layer {
+            TileLayer::Terrain => {
+                // TODO: Figure out what to do when terrain does not exist
+                if id == CDDAIdentifier(NULL_TERRAIN.to_string()) {
+                    return Ok(HashSet::new());
+                };
 
-                    let id = self.terrain.get(&id).expect(
-                        format!("Terrain for {} to exist", id).as_str(),
-                    );
-                    id.connect_groups
-                        .clone()
-                        .map(|cg| HashSet::from_iter(cg.into_vec()))
-                        .unwrap_or_default()
-                },
-                TileLayer::Furniture => {
-                    if id == CDDAIdentifier(NULL_FURNITURE.to_string()) {
-                        return HashSet::new();
-                    };
+                let id = self
+                    .terrain
+                    .get(&id)
+                    .ok_or(GetConnectGroupsError::NoTerrain(id.clone()))?;
 
-                    let id = self.furniture.get(&id).expect(
-                        format!("Furniture for {} to exist", id).as_str(),
-                    );
-                    id.connect_groups
-                        .clone()
-                        .map(|cg| HashSet::from_iter(cg.into_vec()))
-                        .unwrap_or_default()
-                },
-                // TODO: I don't know if traps have connect groups, have to check later
-                TileLayer::Monster => HashSet::new(),
-                TileLayer::Field => HashSet::new(),
-            }
-        })
-        .unwrap_or_default()
+                Ok(id
+                    .connect_groups
+                    .clone()
+                    .map(|cg| HashSet::from_iter(cg.into_vec()))
+                    .unwrap_or_default())
+            },
+            TileLayer::Furniture => {
+                if id == CDDAIdentifier(NULL_FURNITURE.to_string()) {
+                    return Ok(HashSet::new());
+                };
+
+                let id = self
+                    .furniture
+                    .get(&id)
+                    .ok_or(GetConnectGroupsError::NoFurniture(id.clone()))?;
+
+                Ok(id
+                    .connect_groups
+                    .clone()
+                    .map(|cg| HashSet::from_iter(cg.into_vec()))
+                    .unwrap_or_default())
+            },
+            _ => Err(GetConnectGroupsError::NoConnectGroups(id.clone())),
+        }
     }
 
     pub fn get_flags(
         &self,
-        id: Option<CDDAIdentifier>,
+        id: CDDAIdentifier,
         layer: &TileLayer,
-    ) -> Vec<String> {
-        id.map(|id| match layer {
+    ) -> Result<Vec<String>, GetFlagsError> {
+        match layer {
             TileLayer::Terrain => {
                 if id == CDDAIdentifier(NULL_TERRAIN.to_string()) {
-                    return vec![];
+                    return Ok(vec![]);
                 };
 
                 let terrain = self
                     .terrain
                     .get(&id)
-                    .expect(format!("Terrain for {} to exist", id).as_str());
-                terrain.flags.clone().unwrap_or_default()
+                    .ok_or(GetFlagsError::NoTerrain(id.clone()))?;
+
+                Ok(terrain.flags.clone().unwrap_or_default())
             },
             TileLayer::Furniture => {
                 if id == CDDAIdentifier(NULL_FURNITURE.to_string()) {
-                    return vec![];
+                    return Ok(vec![]);
                 };
 
                 let furniture = self
                     .furniture
                     .get(&id)
-                    .expect(format!("Terrain for {} to exist", id).as_str());
-                furniture.flags.clone().unwrap_or_default()
+                    .ok_or(GetFlagsError::NoFurniture(id.clone()))?;
+
+                Ok(furniture.flags.clone().unwrap_or_default())
             },
-            // TODO: Again, not sure if they have flags
-            TileLayer::Monster => vec![],
-            TileLayer::Field => vec![],
-        })
-        .unwrap_or_default()
+            _ => Err(GetFlagsError::NoFlags(id.clone())),
+        }
     }
 
     pub fn get_connects_to(
         &self,
-        id: Option<CDDAIdentifier>,
+        id: CDDAIdentifier,
         layer: &TileLayer,
-    ) -> HashSet<CDDAIdentifier> {
-        id.map(|id| {
-            match layer {
-                TileLayer::Terrain => {
-                    // TODO: Figure out what to do when terrain does not exist
-                    // TODO: Handle Season specific ids
-                    let id = self.terrain.get(&id).expect(
-                        format!("Terrain for {} to exist", id).as_str(),
-                    );
-                    id.connects_to
-                        .clone()
-                        .map(|cg| HashSet::from_iter(cg.into_vec()))
-                        .unwrap_or_default()
-                },
-                TileLayer::Furniture => {
-                    let id = self.furniture.get(&id).expect(
-                        format!("Furniture for {} to exist", id).as_str(),
-                    );
-                    id.connects_to
-                        .clone()
-                        .map(|cg| HashSet::from_iter(cg.into_vec()))
-                        .unwrap_or_default()
-                },
-                // TODO: See comments up top
-                TileLayer::Monster => HashSet::new(),
-                TileLayer::Field => HashSet::new(),
-            }
-        })
-        .unwrap_or_default()
+    ) -> Result<HashSet<CDDAIdentifier>, GetConnectsToError> {
+        match layer {
+            TileLayer::Terrain => {
+                // TODO: Figure out what to do when terrain does not exist
+                // TODO: Handle Season specific ids
+                let id = self
+                    .terrain
+                    .get(&id)
+                    .ok_or(GetConnectsToError::NoTerrain(id.clone()))?;
+
+                Ok(id
+                    .connects_to
+                    .clone()
+                    .map(|cg| HashSet::from_iter(cg.into_vec()))
+                    .unwrap_or_default())
+            },
+            TileLayer::Furniture => {
+                let id = self
+                    .furniture
+                    .get(&id)
+                    .ok_or(GetConnectsToError::NoFurniture(id.clone()))?;
+                Ok(id
+                    .connects_to
+                    .clone()
+                    .map(|cg| HashSet::from_iter(cg.into_vec()))
+                    .unwrap_or_default())
+            },
+            _ => Err(GetConnectsToError::NoConnectsTo(id.clone())),
+        }
     }
 
     fn calculate_copy_property_of_overmap_terrain(
@@ -451,7 +488,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                         entry.path()
                                     );
 
-                                    let mut map_data_collection: MapDataCollection = mapgen.into();
+                                    let mut map_data_collection: MapDataCollection = mapgen.try_into()?;
 
                                     cdda_data.map_data.insert(
                                         CDDAIdentifier(id.clone()),
@@ -469,7 +506,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                     );
 
                                     let map_data_collection: MapDataCollection =
-                                        mapgen.into();
+                                        mapgen.try_into()?;
 
                                     for id in duplicate.iter() {
                                         cdda_data.map_data.insert(
@@ -490,7 +527,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                     );
 
                                     let map_data_collection: MapDataCollection =
-                                        mapgen.into();
+                                        mapgen.try_into()?;
 
                                     for (coords, map_data) in
                                         map_data_collection.maps
@@ -519,7 +556,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             );
 
                             let mut map_data_collection: MapDataCollection =
-                                mapgen.into();
+                                mapgen.try_into()?;
 
                             cdda_data.map_data.insert(
                                 nested_mapgen.clone(),
@@ -538,7 +575,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             );
 
                             let mut map_data_collection: MapDataCollection =
-                                mapgen.into();
+                                mapgen.try_into()?;
 
                             cdda_data.map_data.insert(
                                 update_mapgen.clone(),

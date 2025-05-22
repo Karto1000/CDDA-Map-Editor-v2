@@ -20,7 +20,7 @@ use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::{
     bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier,
-    ParameterIdentifier, Weighted,
+    GetIdentifierError, GetRandomError, ParameterIdentifier, Weighted,
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
@@ -37,6 +37,7 @@ use std::fmt::Debug;
 use std::sync::{Arc, Mutex};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
+use thiserror::Error;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
@@ -349,50 +350,82 @@ impl Default for MapData {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum CalculateParametersError {
+    #[error("Missing Palette {0} in Loaded CDDA Palettes")]
+    MissingPalette(String),
+
+    #[error(transparent)]
+    GetRandomError(#[from] GetRandomError),
+
+    #[error(transparent)]
+    GetIdentifierError(#[from] GetIdentifierError),
+}
+
+#[derive(Debug, Error)]
+pub enum GetMappedCDDAIdsError {
+    #[error("Missing default Region Settings in Loaded CDDA Data")]
+    MissingRegionSettings,
+
+    #[error("Missing Overmap Terrain in loaded CDDA Data for predecessor {0}")]
+    MissingOvermapTerrainForPredecessor(String),
+
+    #[error("Missing Mapgen Entry for Predecessor {0}")]
+    MissingMapgenEntryForPredecessor(String),
+}
+
 impl MapData {
     pub fn calculate_parameters(
         &mut self,
         all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) {
+    ) -> Result<(), CalculateParametersError> {
         let mut calculated_parameters = IndexMap::new();
 
         for (id, parameter) in self.parameters.iter() {
-            calculated_parameters.insert(
-                id.clone(),
-                parameter.default.distribution.get(&calculated_parameters),
-            );
+            let calculated_value = parameter
+                .default
+                .distribution
+                .get_random(&calculated_parameters)?;
+
+            calculated_parameters.insert(id.clone(), calculated_value);
         }
 
         for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value.get_identifier(&calculated_parameters);
-            let palette = all_palettes.get(&id).unwrap();
+            let id = mapgen_value.get_identifier(&calculated_parameters)?;
+            let palette = all_palettes.get(&id).ok_or(
+                CalculateParametersError::MissingPalette(id.to_string()),
+            )?;
 
             palette
-                .calculate_parameters(all_palettes)
+                .calculate_parameters(all_palettes)?
                 .into_iter()
                 .for_each(|(palette_id, ident)| {
                     calculated_parameters.insert(palette_id, ident);
                 });
         }
 
-        self.calculated_parameters = calculated_parameters
+        self.calculated_parameters = calculated_parameters;
+
+        Ok(())
     }
 
     pub fn get_mapped_cdda_ids(
         &self,
         json_data: &DeserializedCDDAJsonData,
         z: ZLevel,
-    ) -> HashMap<IVec3, MappedCDDAIds> {
+    ) -> Result<HashMap<IVec3, MappedCDDAIds>, GetMappedCDDAIdsError> {
         let mut local_mapped_cdda_ids = HashMap::new();
 
         let region_settings = json_data
             .region_settings
             .get(&CDDAIdentifier("default".into()))
-            .expect("Region settings to exist");
+            .ok_or(GetMappedCDDAIdsError::MissingRegionSettings)?;
 
         let fill_terrain_sprite = match &self.fill {
             None => None,
-            Some(id) => Some(id.get_identifier(&self.calculated_parameters)),
+            Some(id) => {
+                Some(id.get_identifier(&self.calculated_parameters).unwrap())
+            },
         };
 
         // we need to calculate the predecessor_mapgen here before so we can replace it later
@@ -400,13 +433,8 @@ impl MapData {
             None => {},
             Some(predecessor_id) => {
                 let predecessor =
-                    json_data.overmap_terrains.get(predecessor_id).expect(
-                        format!(
-                            "Overmap terrain for Predecessor {} to exist",
-                            predecessor_id
-                        )
-                        .as_str(),
-                    );
+                    json_data.overmap_terrains.get(predecessor_id)
+                        .ok_or(GetMappedCDDAIdsError::MissingOvermapTerrainForPredecessor(predecessor_id.0.clone()))?;
 
                 let predecessor_map_data = match &predecessor
                     .mapgen
@@ -416,13 +444,7 @@ impl MapData {
                 {
                     None => {
                         // This terrain is defined in a json file, so we can just search for it
-                        json_data.map_data.get(predecessor_id).expect(
-                            format!(
-                                "Mapdata for Predecessor {} to exist",
-                                predecessor_id
-                            )
-                            .as_str(),
-                        )
+                        json_data.map_data.get(predecessor_id).ok_or(GetMappedCDDAIdsError::MissingMapgenEntryForPredecessor(predecessor_id.0.clone()))?
                     },
                     Some(omtm) => json_data.map_data.get(&omtm.name).expect(
                         format!(
@@ -434,7 +456,7 @@ impl MapData {
                 };
 
                 local_mapped_cdda_ids =
-                    predecessor_map_data.get_mapped_cdda_ids(json_data, z);
+                    predecessor_map_data.get_mapped_cdda_ids(json_data, z)?;
             },
         }
 
@@ -497,6 +519,7 @@ impl MapData {
                             );
                             local_mapped_cdda_ids
                                 .get_mut(&command_3d_coords)
+                                // Safe
                                 .unwrap()
                         },
                         Some(i) => i,
@@ -552,7 +575,7 @@ impl MapData {
                 });
         }
 
-        local_mapped_cdda_ids
+        Ok(local_mapped_cdda_ids)
     }
 
     fn transform_coordinates(&self, position: &IVec2) -> IVec2 {
@@ -651,9 +674,16 @@ impl MapData {
                     let transformed_position =
                         self.transform_coordinates(&position);
 
-                    let cell_data = cell_data
+                    let cell_data = match cell_data
                         .get_mut(&transformed_position.as_uvec2())
-                        .unwrap();
+                    {
+                        None => {
+                            warn!("No cell data found for position {} in place {:?}", transformed_position, kind);
+                            continue;
+                        },
+                        Some(s) => s,
+                    };
+
                     let repr = place.inner.representation(json_data);
 
                     match kind {
@@ -693,8 +723,10 @@ impl MapData {
 
         // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
-            let palette_id =
-                mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette_id = mapgen_value
+                .get_identifier(&self.calculated_parameters)
+                .ok()?;
+
             let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_visible_mapping(
@@ -725,8 +757,9 @@ impl MapData {
         }
 
         for mapgen_value in self.palettes.iter() {
-            let palette_id =
-                mapgen_value.get_identifier(&self.calculated_parameters);
+            let palette_id = mapgen_value
+                .get_identifier(&self.calculated_parameters)
+                .ok()?;
             let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_representative_mapping(

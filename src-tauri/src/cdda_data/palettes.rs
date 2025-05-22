@@ -5,7 +5,10 @@ use crate::map::map_properties::ItemsProperty;
 use crate::map::map_properties::{
     FurnitureProperty, MonstersProperty, TerrainProperty,
 };
-use crate::map::{MapData, MappingKind, Property, VisibleMappingCommand};
+use crate::map::{
+    CalculateParametersError, MapData, MappingKind, Property,
+    VisibleMappingCommand,
+};
 use crate::util::{
     CDDAIdentifier, Comment, GetIdentifier, MeabyVec, MeabyWeighted,
     ParameterIdentifier,
@@ -206,7 +209,10 @@ impl CDDAPalette {
     pub fn calculate_parameters(
         &self,
         all_palettes: &Palettes,
-    ) -> IndexMap<ParameterIdentifier, CDDAIdentifier> {
+    ) -> Result<
+        IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        CalculateParametersError,
+    > {
         let mut calculated_parameters: IndexMap<
             ParameterIdentifier,
             CDDAIdentifier,
@@ -215,24 +221,27 @@ impl CDDAPalette {
         for (id, parameter) in self.parameters.iter() {
             calculated_parameters.insert(
                 id.clone(),
-                parameter.default.distribution.get(&calculated_parameters),
+                parameter
+                    .default
+                    .distribution
+                    .get_random(&calculated_parameters)?,
             );
         }
 
         for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value.get_identifier(&calculated_parameters);
+            let id = mapgen_value.get_identifier(&calculated_parameters)?;
 
             all_palettes
                 .get(&id)
-                .expect("Palette to exist")
-                .calculate_parameters(all_palettes)
+                .ok_or(CalculateParametersError::MissingPalette(id.0))?
+                .calculate_parameters(all_palettes)?
                 .into_iter()
                 .for_each(|(child_id, child_param)| {
                     calculated_parameters.insert(child_id, child_param);
                 })
         }
 
-        calculated_parameters
+        Ok(calculated_parameters)
     }
 
     pub fn get_visible_mapping(
@@ -250,8 +259,9 @@ impl CDDAPalette {
         }
 
         for mapgen_value in self.palettes.iter() {
-            let palette_id =
-                mapgen_value.get_identifier(&map_data.calculated_parameters);
+            let palette_id = mapgen_value
+                .get_identifier(&map_data.calculated_parameters)
+                .ok()?;
             let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_visible_mapping(
@@ -283,7 +293,8 @@ impl CDDAPalette {
         }
 
         for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value.get_identifier(calculated_parameters);
+            let palette_id =
+                mapgen_value.get_identifier(calculated_parameters).ok()?;
             let palette = json_data.palettes.get(&palette_id)?;
 
             if let Some(id) = palette.get_representative_mapping(

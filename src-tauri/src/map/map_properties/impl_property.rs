@@ -20,7 +20,8 @@ impl Property for TerrainProperty {
     ) -> Option<Vec<VisibleMappingCommand>> {
         let ident = self
             .mapgen_value
-            .get_identifier(&map_data.calculated_parameters);
+            .get_identifier(&map_data.calculated_parameters)
+            .ok()?;
 
         if ident == CDDAIdentifier::from(NULL_TERRAIN) {
             return None;
@@ -57,21 +58,25 @@ impl Property for MonstersProperty {
             .is_random_hit(100)
         {
             true => match &monster.id {
-                MapGenMonsterType::Monster { monster } => Some(
-                    monster.get_identifier(&map_data.calculated_parameters),
-                ),
+                MapGenMonsterType::Monster { monster } => {
+                    monster.get_identifier(&map_data.calculated_parameters).ok()
+                },
                 MapGenMonsterType::MonsterGroup { group } => {
-                    let id =
-                        group.get_identifier(&map_data.calculated_parameters);
+                    let id = group
+                        .get_identifier(&map_data.calculated_parameters)
+                        .ok()?;
                     let mon_group = json_data.monstergroups.get(&id)?;
-                    mon_group
+
+                    let rand_monster = mon_group
                         .get_random_monster(
                             &json_data.monstergroups,
                             &map_data.calculated_parameters,
                         )
-                        .map(|id| {
-                            id.get_identifier(&map_data.calculated_parameters)
-                        })
+                        .ok();
+
+                    rand_monster?
+                        .get_identifier(&map_data.calculated_parameters)
+                        .ok()
                 },
             },
             false => None,
@@ -108,7 +113,8 @@ impl Property for FurnitureProperty {
     ) -> Option<Vec<VisibleMappingCommand>> {
         let ident = self
             .mapgen_value
-            .get_identifier(&map_data.calculated_parameters);
+            .get_identifier(&map_data.calculated_parameters)
+            .ok()?;
 
         if ident == CDDAIdentifier::from(NULL_FURNITURE) {
             return None;
@@ -206,7 +212,8 @@ impl Property for NestedProperty {
         let selected_chunk = nested_chunk
             .chunks
             .get_random()
-            .get_identifier(&map_data.calculated_parameters);
+            .get_identifier(&map_data.calculated_parameters)
+            .ok()?;
 
         if selected_chunk == CDDAIdentifier::from(NULL_NESTED) {
             return None;
@@ -576,7 +583,8 @@ impl Property for TrapsProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let trap = self.trap.get_random();
-        let ident = trap.get_identifier(&map_data.calculated_parameters);
+        let ident =
+            trap.get_identifier(&map_data.calculated_parameters).ok()?;
 
         if ident == CDDAIdentifier::from(NULL_TRAP) {
             return None;

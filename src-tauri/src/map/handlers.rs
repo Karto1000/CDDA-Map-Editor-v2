@@ -2,19 +2,21 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
 use crate::editor_data::{
     get_map_data_collection_live_viewer_data, EditorData, EditorDataSaver,
-    LiveViewerData, Project, ProjectType,
+    GetLiveViewerDataError, LiveViewerData, Project, ProjectType,
 };
 use crate::events::UPDATE_LIVE_VIEWER;
-use crate::map::CellRepresentation;
+use crate::map::Serializer;
+use crate::map::{CalculateParametersError, CellRepresentation};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{
     AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
 use crate::util::{
-    CDDADataError, CDDAIdentifier, GetCurrentMapDataError, IVec3JsonKey, Save,
-    UVec2JsonKey,
+    get_current_project_mut, get_json_data, CDDADataError, CDDAIdentifier,
+    GetCurrentProjectError, IVec3JsonKey, Save, UVec2JsonKey,
 };
-use crate::{events, tileset, util};
+use crate::{events, impl_serialize_for_error, tileset, util};
+use derive_more::Display;
 use glam::{IVec3, UVec2};
 use log::{debug, error, info, warn};
 use notify::{PollWatcher, RecommendedWatcher, Watcher};
@@ -36,7 +38,7 @@ use tokio_test::block_on;
 #[tauri::command]
 pub async fn get_current_project_data(
     editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<Project, GetCurrentMapDataError> {
+) -> Result<Project, GetCurrentProjectError> {
     let editor_data_lock = editor_data.lock().await;
     let data = util::get_current_project(&editor_data_lock)?;
     Ok(data.clone())
@@ -324,7 +326,7 @@ pub async fn get_sprites(
 
     for (z, map_collection) in project.maps.iter() {
         let local_mapped_cdda_ids =
-            map_collection.get_mapped_cdda_ids(json_data, *z);
+            map_collection.get_mapped_cdda_ids(json_data, *z).unwrap();
 
         let tile_map: Vec<
             HashMap<TileLayer, (Option<SpriteType>, Option<SpriteType>)>,
@@ -423,44 +425,43 @@ pub async fn get_sprites(
     Ok(())
 }
 
+#[derive(Debug, Error)]
+pub enum ReloadProjectError {
+    #[error(transparent)]
+    CDDADataError(#[from] CDDADataError),
+
+    #[error(transparent)]
+    ProjectError(#[from] GetCurrentProjectError),
+
+    #[error(transparent)]
+    GetLiveViewerError(#[from] GetLiveViewerDataError),
+
+    #[error(transparent)]
+    CalculateParametersError(#[from] CalculateParametersError),
+}
+
+impl_serialize_for_error!(ReloadProjectError);
+
 #[tauri::command]
 pub async fn reload_project(
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-) -> Result<(), ()> {
+) -> Result<(), ReloadProjectError> {
     let json_data_lock = json_data.lock().await;
-    let json_data = match json_data_lock.deref() {
-        None => return Err(()),
-        Some(d) => d,
-    };
-
+    let json_data = get_json_data(&json_data_lock)?;
     let mut editor_data_lock = editor_data.lock().await;
-
-    let opened_project = match &editor_data_lock.opened_project {
-        None => return Err(()),
-        Some(p) => p.clone(),
-    };
-
-    let project = match editor_data_lock
-        .projects
-        .iter_mut()
-        .find(|p| p.name == opened_project)
-    {
-        None => {
-            warn!("Could not find project with name {}", opened_project);
-            return Err(());
-        },
-        Some(d) => d,
-    };
+    let project = get_current_project_mut(&mut editor_data_lock)?;
 
     match &project.ty {
         ProjectType::MapEditor(_) => unimplemented!(),
         ProjectType::LiveViewer(lvd) => {
             let mut map_data_collection =
-                get_map_data_collection_live_viewer_data(lvd).await;
-            map_data_collection
-                .iter_mut()
-                .for_each(|(_, m)| m.calculate_parameters(&json_data.palettes));
+                get_map_data_collection_live_viewer_data(lvd).await?;
+
+            for (_, map_data) in map_data_collection.iter_mut() {
+                map_data.calculate_parameters(&json_data.palettes)?
+            }
+
             project.maps = map_data_collection;
         },
     }
@@ -549,7 +550,7 @@ pub async fn open_project(
 #[derive(Debug, Error, Serialize)]
 pub enum GetProjectCellDataError {
     #[error(transparent)]
-    MapError(#[from] GetCurrentMapDataError),
+    MapError(#[from] GetCurrentProjectError),
 
     #[error(transparent)]
     CDDADataError(#[from] CDDADataError),

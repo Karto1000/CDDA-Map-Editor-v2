@@ -1,5 +1,6 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::item::CDDAItemGroupInPlace;
+use crate::cdda_data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
 use crate::cdda_data::palettes::Parameter;
 use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::editor_data::{MapCoordinates, MapDataCollection};
@@ -32,6 +33,7 @@ use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
+use thiserror::Error;
 
 pub const DEFAULT_MAP_WIDTH: usize = 24;
 pub const DEFAULT_MAP_HEIGHT: usize = 24;
@@ -644,6 +646,13 @@ pub enum Weight {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct IdCollection {
+    pub update_mapgen_id: Option<CDDAIdentifier>,
+    pub om_terrain: Option<OmTerrain>,
+    pub nested_mapgen_id: Option<CDDAIdentifier>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapDataIntermediate {
     pub method: String,
 
@@ -1043,8 +1052,16 @@ impl CDDAMapDataIntermediate {
     }
 }
 
-impl Into<MapDataCollection> for CDDAMapDataIntermediate {
-    fn into(self) -> MapDataCollection {
+#[derive(Debug, Error)]
+pub enum IntoMapDataCollectionError {
+    #[error("Nested om Terrain is missing identifier")]
+    MissingNestedOmTerrain,
+}
+
+impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
+    type Error = IntoMapDataCollectionError;
+
+    fn try_into(self) -> Result<MapDataCollection, Self::Error> {
         let mut map_data_collection = MapDataCollection::default();
 
         match &self.om_terrain {
@@ -1052,7 +1069,8 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
             Some(om) => {
                 if let OmTerrain::Nested(n) = om {
                     let num_rows = n.len();
-                    let num_cols = n[0].len();
+                    let num_cols =
+                        n.get(0).ok_or(MissingNestedOmTerrain)?.len();
 
                     for map_row_index in 0..num_rows {
                         for map_column_index in 0..num_cols {
@@ -1145,7 +1163,7 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                         }
                     }
 
-                    return map_data_collection;
+                    return Ok(map_data_collection);
                 }
             },
         };
@@ -1192,6 +1210,6 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
 
         collection.maps.insert(UVec2::ZERO, map_data);
 
-        collection
+        Ok(collection)
     }
 }

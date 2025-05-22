@@ -5,7 +5,7 @@ use crate::editor_data::{
     ProjectType,
 };
 use crate::map::importing::{OvermapSpecialImporter, SingleMapDataImporter};
-use crate::map::{Serializer, DEFAULT_MAP_DATA_SIZE};
+use crate::map::{CalculateParametersError, Serializer, DEFAULT_MAP_DATA_SIZE};
 use crate::tab::{Tab, TabType};
 use crate::util::{get_json_data, get_size, CDDAIdentifier, Load};
 use crate::util::{CDDADataError, Save};
@@ -53,6 +53,9 @@ pub enum OpenViewerError {
 
     #[error("Another project with the same name already exists")]
     ProjectAlreadyExists,
+
+    #[error(transparent)]
+    CalculateParametersError(#[from] CalculateParametersError),
 }
 
 impl_serialize_for_error!(OpenViewerError);
@@ -138,8 +141,9 @@ pub async fn open_viewer(
 
             let mut maps = overmap_special_importer.load().await.unwrap();
 
-            maps.iter_mut()
-                .for_each(|(_, m)| m.calculate_parameters(&json_data.palettes));
+            for (_, m) in maps.iter_mut() {
+                m.calculate_parameters(&json_data.palettes)?
+            }
 
             let mut new_project = Project::new(
                 project_name.clone(),

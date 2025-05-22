@@ -15,6 +15,7 @@ use rand::rng;
 use serde::de::Visitor;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fmt;
 use std::ops::Deref;
 use thiserror::Error;
@@ -80,39 +81,55 @@ impl From<&str> for ParameterIdentifier {
 
 pub type Comment = Option<String>;
 
+#[derive(Debug, Error)]
+pub enum GetIdentifierError {
+    #[error(transparent)]
+    GetRandomError(#[from] GetRandomError),
+
+    #[error("Missing fallback for non existing parameter {0}")]
+    MissingFallback(String),
+
+    #[error("Missing value in case {0} for switch {1}")]
+    MissingSwitchCaseValue(String, String),
+}
+
 pub trait GetIdentifier {
+    type Error;
+
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier;
+    ) -> Result<CDDAIdentifier, Self::Error>;
 }
 
 impl GetIdentifier for DistributionInner {
+    type Error = Infallible;
+
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier {
+    ) -> Result<CDDAIdentifier, Infallible> {
         match self {
             DistributionInner::Param { param, fallback } => {
-                calculated_parameters
+                Ok(calculated_parameters
                     .get(param)
                     .map(|p| p.clone())
-                    .unwrap_or(fallback.clone())
+                    .unwrap_or(fallback.clone()))
             },
-            DistributionInner::Normal(n) => n.clone(),
-            DistributionInner::Switch { switch, cases } => {
-                panic!()
-            },
+            DistributionInner::Normal(n) => Ok(n.clone()),
+            _ => todo!(),
         }
     }
 }
 
 impl GetIdentifier for CDDAIdentifier {
+    type Error = Infallible;
+
     fn get_identifier(
         &self,
         _calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier {
-        self.clone()
+    ) -> Result<CDDAIdentifier, Infallible> {
+        Ok(self.clone())
     }
 }
 
@@ -200,17 +217,33 @@ impl<T: Clone> MeabyVec<T> {
     }
 }
 
+#[derive(Debug, Error, Serialize)]
+pub enum WeightedIndexError {
+    #[error("Invalid weights for weighted index {0:?}")]
+    InvalidWeights(Vec<i32>),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum GetRandomError {
+    #[error(transparent)]
+    WeightedIndexError(#[from] WeightedIndexError),
+
+    #[error("Failed to get the identifier for the chosen item at index {0}")]
+    GetIdentifierError(usize),
+}
+
 impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
-    pub fn get(
+    pub fn get_random(
         &self,
         parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier {
+    ) -> Result<CDDAIdentifier, GetRandomError> {
         let mut weights = vec![];
         let mut self_vec = self.clone().into_vec();
 
         self.for_each(|v| weights.push(v.weight_or_one()));
 
-        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+        let weighted_index = WeightedIndex::new(weights.clone())
+            .map_err(|_| WeightedIndexError::InvalidWeights(weights.clone()))?;
 
         // let mut rng = RANDOM.write().unwrap();
         let mut rng = rng();
@@ -218,7 +251,9 @@ impl<T: GetIdentifier + Clone> MeabyVec<MeabyWeighted<T>> {
         let chosen_index = weighted_index.sample(&mut rng);
         let item = self_vec.remove(chosen_index);
 
-        item.data().get_identifier(parameters)
+        item.data()
+            .get_identifier(parameters)
+            .map_err(|_| GetRandomError::GetIdentifierError(chosen_index))
     }
 }
 
@@ -409,8 +444,8 @@ pub trait Save<T> {
     async fn save(&self, data: &T) -> Result<(), SaveError>;
 }
 
-pub trait Load<T> {
-    async fn load(&mut self) -> Result<T, anyhow::Error>;
+pub trait Load<T, E = anyhow::Error> {
+    async fn load(&mut self) -> Result<T, E>;
 }
 
 pub fn bresenham_line(x0: i32, y0: i32, x1: i32, y1: i32) -> Vec<(i32, i32)> {
@@ -509,9 +544,9 @@ macro_rules! impl_serialize_for_error {
 }
 
 #[derive(Debug, Error, Serialize)]
-pub enum GetCurrentMapDataError {
-    #[error("No map has been opened")]
-    NoMapOpened,
+pub enum GetCurrentProjectError {
+    #[error("No project has been opened")]
+    NoProjectOpen,
     #[error("Invalid project name {0}")]
     InvalidProjectName(String),
 }
@@ -543,9 +578,9 @@ pub fn get_size(maps: &HashMap<ZLevel, MapDataCollection>) -> UVec2 {
 
 pub fn get_current_project<'a>(
     editor_data: &'a MutexGuard<EditorData>,
-) -> Result<&'a Project, GetCurrentMapDataError> {
+) -> Result<&'a Project, GetCurrentProjectError> {
     let project_name = match &editor_data.opened_project {
-        None => return Err(GetCurrentMapDataError::NoMapOpened),
+        None => return Err(GetCurrentProjectError::NoProjectOpen),
         Some(i) => i,
     };
 
@@ -555,7 +590,7 @@ pub fn get_current_project<'a>(
         .find(|p| *p.name == *project_name)
     {
         None => {
-            return Err(GetCurrentMapDataError::InvalidProjectName(
+            return Err(GetCurrentProjectError::InvalidProjectName(
                 project_name.clone(),
             ))
         },
@@ -567,9 +602,9 @@ pub fn get_current_project<'a>(
 
 pub fn get_current_project_mut<'a>(
     editor_data: &'a mut MutexGuard<EditorData>,
-) -> Result<&'a mut Project, GetCurrentMapDataError> {
+) -> Result<&'a mut Project, GetCurrentProjectError> {
     let project_name = match editor_data.opened_project.clone() {
-        None => return Err(GetCurrentMapDataError::NoMapOpened),
+        None => return Err(GetCurrentProjectError::NoProjectOpen),
         Some(i) => i,
     };
 
@@ -579,7 +614,7 @@ pub fn get_current_project_mut<'a>(
         .find(|p| p.name == *project_name)
     {
         None => {
-            return Err(GetCurrentMapDataError::InvalidProjectName(
+            return Err(GetCurrentProjectError::InvalidProjectName(
                 project_name.clone(),
             ))
         },
