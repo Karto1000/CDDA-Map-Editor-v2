@@ -306,13 +306,6 @@ impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
                         om_special.overmap.unwrap_or("null".into()),
                     );
 
-                if om_special.point.x == 2
-                    && om_special.point.y == 2
-                    && om_special.point.z == 0
-                {
-                    dbg!(&final_id, &rotation);
-                }
-
                 let mut map_data = match data.get(&final_id) {
                     None => continue,
                     Some(md) => md.clone(),
