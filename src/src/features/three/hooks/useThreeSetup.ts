@@ -76,7 +76,7 @@ export function useThreeSetup(
         )
         camera.position.z = 999999
 
-        const renderer = new WebGLRenderer({canvas: canvasRef.current, alpha: true})
+        const renderer = new WebGLRenderer({canvas: canvasRef.current, alpha: true })
         renderer.setSize(canvasWidth, canvasHeight)
 
         const controls = new OrbitControls(camera, canvasRef.current)

@@ -1,14 +1,16 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
+use crate::cdda_data::overmap::OvermapSpecialOvermap;
 use crate::editor_data::{
-    EditorData, EditorDataSaver, LiveViewerData, OmTerrainType, Project,
+    EditorData, EditorDataSaver, LiveViewerData, MapDataCollection, Project,
     ProjectType,
 };
-use crate::map::importing::{NestedMapDataImporter, SingleMapDataImporter};
-use crate::map::Serializer;
+use crate::map::importing::{OvermapSpecialImporter, SingleMapDataImporter};
+use crate::map::{Serializer, DEFAULT_MAP_DATA_SIZE};
 use crate::tab::{Tab, TabType};
-use crate::util::{get_json_data, Load};
+use crate::util::{get_json_data, get_size, CDDAIdentifier, Load};
 use crate::util::{CDDADataError, Save};
 use crate::{events, impl_serialize_for_error};
+use anyhow::Error;
 use glam::UVec2;
 use log::info;
 use notify::Watcher;
@@ -16,16 +18,29 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct OpenViewerData {
-    pub file_path: PathBuf,
-    pub project_name: String,
-    pub om_terrain: OmTerrainType,
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum OpenViewerData {
+    Terrain {
+        mapgen_file_paths: Vec<PathBuf>,
+        project_name: String,
+        om_id: CDDAIdentifier,
+    },
+    Special {
+        mapgen_file_paths: Vec<PathBuf>,
+        om_file_paths: Vec<PathBuf>,
+        project_name: String,
+        om_id: CDDAIdentifier,
+    },
 }
 
 #[derive(Debug, Error)]
@@ -49,87 +64,107 @@ pub async fn open_viewer(
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), OpenViewerError> {
-    info!(
-        "Opening Live viewer for om terrain ids {:?} at {:?}",
-        &data.om_terrain, &data.file_path
-    );
+    info!("Opening Live viewer");
 
     let mut editor_data_lock = editor_data.lock().await;
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
-    if editor_data_lock
-        .projects
-        .iter()
-        .find(|p| p.name == data.project_name)
-        .is_some()
-    {
-        return Err(OpenViewerError::ProjectAlreadyExists);
-    }
-
-    match data.om_terrain.clone() {
-        OmTerrainType::Single { om_terrain_id } => {
-            let mut map_data_importer = SingleMapDataImporter {
-                path: data.file_path.clone(),
-                om_terrain: om_terrain_id.clone(),
-            };
-
-            let mut collection = map_data_importer.load().await.unwrap();
-            collection.calculate_parameters(&json_data.palettes);
-
-            let mut new_project = Project::new(
-                data.project_name.clone(),
-                collection.global_map_size.clone(),
-                ProjectType::LiveViewer(LiveViewerData {
-                    path: data.file_path,
-                    om_terrain: data.om_terrain,
-                }),
-            );
-            new_project.maps.insert(0, collection);
-
-            editor_data_lock.projects.push(new_project);
-            editor_data_lock.opened_project = Some(data.project_name.clone());
-        },
-        OmTerrainType::Nested { om_terrain_ids } => {
-            let mut om_terrain_id_hashmap = HashMap::new();
-
-            for (y, id_list) in om_terrain_ids.into_iter().enumerate() {
-                for (x, id) in id_list.into_iter().enumerate() {
-                    om_terrain_id_hashmap
-                        .insert(id, UVec2::new(x as u32, y as u32));
-                }
+    match data {
+        OpenViewerData::Terrain {
+            project_name,
+            mapgen_file_paths,
+            om_id,
+        } => {
+            if editor_data_lock
+                .projects
+                .iter()
+                .find(|p| p.name == project_name)
+                .is_some()
+            {
+                return Err(OpenViewerError::ProjectAlreadyExists);
             }
 
-            let mut nested_importer = NestedMapDataImporter {
-                path: data.file_path.clone(),
-                om_terrain_ids: om_terrain_id_hashmap,
+            let mut overmap_terrain_importer = SingleMapDataImporter {
+                om_terrain: om_id.clone(),
+                paths: mapgen_file_paths.clone(),
             };
 
-            let mut collection = nested_importer.load().await.unwrap();
+            let mut collection = overmap_terrain_importer.load().await.unwrap();
             collection.calculate_parameters(&json_data.palettes);
 
             let mut new_project = Project::new(
-                data.project_name.clone(),
-                collection.global_map_size.clone(),
-                ProjectType::LiveViewer(LiveViewerData {
-                    path: data.file_path,
-                    om_terrain: data.om_terrain,
+                project_name.clone(),
+                DEFAULT_MAP_DATA_SIZE,
+                ProjectType::LiveViewer(LiveViewerData::Terrain {
+                    mapgen_file_paths,
+                    project_name: project_name.clone(),
+                    om_id,
                 }),
             );
-            new_project.maps.insert(0, collection);
 
+            new_project.maps.insert(0, collection);
             editor_data_lock.projects.push(new_project);
-            editor_data_lock.opened_project = Some(data.project_name.clone());
+
+            editor_data_lock.opened_project = Some(project_name.clone());
+            app.emit(
+                events::TAB_CREATED,
+                Tab {
+                    name: project_name.clone(),
+                    tab_type: TabType::LiveViewer,
+                },
+            )?;
+        },
+        OpenViewerData::Special {
+            project_name,
+            mapgen_file_paths,
+            om_file_paths,
+            om_id,
+        } => {
+            if editor_data_lock
+                .projects
+                .iter()
+                .find(|p| p.name == project_name)
+                .is_some()
+            {
+                return Err(OpenViewerError::ProjectAlreadyExists);
+            }
+
+            let mut overmap_special_importer = OvermapSpecialImporter {
+                om_special_id: om_id.clone(),
+                overmap_special_paths: om_file_paths.clone(),
+                mapgen_entry_paths: mapgen_file_paths.clone(),
+            };
+
+            let mut maps = overmap_special_importer.load().await.unwrap();
+
+            maps.iter_mut()
+                .for_each(|(_, m)| m.calculate_parameters(&json_data.palettes));
+
+            let mut new_project = Project::new(
+                project_name.clone(),
+                get_size(&maps),
+                ProjectType::LiveViewer(LiveViewerData::Special {
+                    mapgen_file_paths,
+                    om_file_paths,
+                    project_name: project_name.clone(),
+                    om_id,
+                }),
+            );
+
+            new_project.maps = maps;
+            editor_data_lock.projects.push(new_project);
+
+            editor_data_lock.opened_project = Some(project_name.clone());
+            app.emit(
+                events::TAB_CREATED,
+                Tab {
+                    name: project_name.clone(),
+                    tab_type: TabType::LiveViewer,
+                },
+            )?;
         },
     }
-
-    app.emit(
-        events::TAB_CREATED,
-        Tab {
-            name: data.project_name.clone(),
-            tab_type: TabType::LiveViewer,
-        },
-    )?;
 
     let saver = EditorDataSaver {
         path: editor_data_lock.config.config_path.clone(),

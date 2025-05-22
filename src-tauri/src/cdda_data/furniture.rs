@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Deserialize)]
 pub struct CDDAFurnitureIntermediate {
     #[serde(flatten)]
-    pub identifier: IdOrAbstract,
+    pub identifier: IdOrAbstract<CDDAIdentifier>,
     #[serde(rename = "copy-from")]
     pub copy_from: Option<CDDAIdentifier>,
     pub name: Option<CDDAString>,

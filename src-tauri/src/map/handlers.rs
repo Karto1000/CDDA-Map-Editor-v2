@@ -2,7 +2,7 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
 use crate::editor_data::{
     get_map_data_collection_live_viewer_data, EditorData, EditorDataSaver,
-    Project, ProjectType,
+    LiveViewerData, Project, ProjectType,
 };
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::map::CellRepresentation;
@@ -16,7 +16,7 @@ use crate::util::{
 };
 use crate::{events, tileset, util};
 use glam::{IVec3, UVec2};
-use log::{error, warn};
+use log::{debug, error, info, warn};
 use notify::{PollWatcher, RecommendedWatcher, Watcher};
 use notify_debouncer_full::{new_debouncer, new_debouncer_opt, Debouncer};
 use rayon::iter::IntoParallelRefIterator;
@@ -449,11 +449,10 @@ pub async fn reload_project(
         ProjectType::LiveViewer(lvd) => {
             let mut map_data_collection =
                 get_map_data_collection_live_viewer_data(lvd).await;
-            map_data_collection.calculate_parameters(&json_data.palettes);
-
-            let mut maps = HashMap::new();
-            maps.insert(0, map_data_collection);
-            project.maps = maps;
+            map_data_collection
+                .iter_mut()
+                .for_each(|(_, m)| m.calculate_parameters(&json_data.palettes));
+            project.maps = map_data_collection;
         },
     }
 
@@ -496,7 +495,7 @@ pub async fn open_project(
             let lvd_clone = lvd.clone();
 
             let join_handle = tokio::spawn(async move {
-                dbg!("Spawning File Watcher for Live Viewer");
+                info!("Spawning File Watcher for Live Viewer");
 
                 let (tx, mut rx) = tokio::sync::mpsc::channel(1);
 
@@ -511,12 +510,23 @@ pub async fn open_project(
                 )
                 .unwrap();
 
-                debouncer
-                    .watch(&lvd_clone.path, notify::RecursiveMode::NonRecursive)
-                    .unwrap();
+                let mapgen_paths = match lvd_clone {
+                    LiveViewerData::Terrain {
+                        mapgen_file_paths, ..
+                    } => mapgen_file_paths,
+                    LiveViewerData::Special {
+                        mapgen_file_paths, ..
+                    } => mapgen_file_paths,
+                };
+
+                for path in mapgen_paths.iter() {
+                    debouncer
+                        .watch(path, notify::RecursiveMode::NonRecursive)
+                        .unwrap();
+                }
 
                 while let Some(Ok(_)) = rx.recv().await {
-                    dbg!("Reloading Project");
+                    info!("Reloading Project");
                     app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
                 }
             });

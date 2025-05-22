@@ -1054,11 +1054,6 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
                     let num_rows = n.len();
                     let num_cols = n[0].len();
 
-                    map_data_collection.global_map_size = UVec2::new(
-                        (num_cols * DEFAULT_MAP_WIDTH) as u32,
-                        (num_rows * DEFAULT_MAP_HEIGHT) as u32,
-                    );
-
                     for map_row_index in 0..num_rows {
                         for map_column_index in 0..num_cols {
                             let mut nested_cells = IndexMap::new();
@@ -1196,7 +1191,6 @@ impl Into<MapDataCollection> for CDDAMapDataIntermediate {
         map_data.predecessor = self.object.common.predecessor_mapgen.clone();
 
         collection.maps.insert(UVec2::ZERO, map_data);
-        collection.global_map_size = DEFAULT_MAP_DATA_SIZE;
 
         collection
     }

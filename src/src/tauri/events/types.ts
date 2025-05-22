@@ -2,6 +2,7 @@ import {AnimatedSprite, FallbackSprite, StaticSprite} from "../types/map_data.js
 import {EditorData} from "../types/editor.js";
 import {TabTypeKind} from "../../shared/hooks/useTabs.js";
 import {Vector2, Vector3} from "three";
+import {OpenViewerData} from "../types/viewer.js";
 
 export function serializedVec2ToVector2(serializedVec2: string): Vector2 {
     const parts = serializedVec2.split(",")
@@ -74,17 +75,7 @@ export interface TauriCommandMap {
     };
     [TauriCommand.GET_PROJECT_CELL_DATA]: {};
     [TauriCommand.OPEN_VIEWER]: {
-        data: {
-            filePath: string,
-            projectName: string,
-            omTerrain: {
-                type: "Single",
-                omTerrainId: string
-            } | {
-                type: "Nested",
-                omTerrainIds: string[][]
-            }
-        }
+        data: OpenViewerData
     };
     [TauriCommand.GET_INFO_OF_CURRENT_TILESET]: {};
     [TauriCommand.DOWNLOAD_SPRITESHEET]: {

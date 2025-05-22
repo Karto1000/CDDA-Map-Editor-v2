@@ -11,6 +11,7 @@ use crate::cdda_data::map_data::{
     MapGenMonsterType, NeighborDirection, OmTerrainMatch, PlaceOuter,
     DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
+use crate::cdda_data::overmap::OvermapTerrainMapgen;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
 use crate::editor_data::ZLevel;
@@ -23,6 +24,7 @@ use crate::util::{
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
+use futures_lite::StreamExt;
 use glam::{IVec2, IVec3, UVec2};
 use indexmap::IndexMap;
 use log::warn;
@@ -280,6 +282,15 @@ impl Default for MapDataConfig {
     }
 }
 
+#[derive(Debug, Default, Clone, Deserialize)]
+pub enum MapDataRotation {
+    #[default]
+    Deg0,
+    Deg90,
+    Deg180,
+    Deg270,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct MapData {
     pub cells: IndexMap<UVec2, Cell>,
@@ -288,6 +299,7 @@ pub struct MapData {
     pub predecessor: Option<CDDAIdentifier>,
 
     pub config: MapDataConfig,
+    pub rotation: MapDataRotation,
 
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
@@ -325,6 +337,7 @@ impl Default for MapData {
             map_size: DEFAULT_MAP_DATA_SIZE,
             predecessor: None,
             config: Default::default(),
+            rotation: Default::default(),
             calculated_parameters: Default::default(),
             parameters: Default::default(),
             properties: Default::default(),
@@ -393,12 +406,47 @@ impl MapData {
         // we need to calculate the predecessor_mapgen here before so we can replace it later
         match &self.predecessor {
             None => {},
-            Some(predecessor) => {
-                let predecessor_map_data =
-                    json_data.map_data.get(predecessor).expect(
-                        format!("Predecessor {} to exist", predecessor)
-                            .as_str(),
-                    );
+            Some(predecessor_id) => {
+                let predecessor_map_data = match json_data
+                    .map_data
+                    .get(predecessor_id)
+                {
+                    None => {
+                        let predecessor =
+                                json_data.overmap_terrains.get(predecessor_id)
+                                    .expect(format!("Overmap terrain for Predecessor {} to exist", predecessor_id).as_str());
+
+                        match &predecessor
+                            .mapgen
+                            .clone()
+                            .unwrap_or_default()
+                            .first()
+                        {
+                            None => {
+                                // This terrain is defined in a json file, so we can just search for it
+                                json_data.map_data.get(predecessor_id).expect(
+                                    format!(
+                                        "Mapdata for Predecessor {} to exist",
+                                        predecessor_id
+                                    )
+                                    .as_str(),
+                                );
+                            },
+                            Some(omtm) => {
+                                json_data.map_data.get(&omtm.name).expect(
+                                    format!(
+                                        "Hardcoded Map data for predecessor {} to exist",
+                                        omtm.name
+                                    )
+                                    .as_str(),
+                                );
+                            },
+                        }
+
+                        panic!();
+                    },
+                    Some(s) => s,
+                };
 
                 local_mapped_cdda_ids =
                     predecessor_map_data.get_mapped_cdda_ids(json_data, z);
@@ -406,7 +454,10 @@ impl MapData {
         }
 
         self.cells.iter().for_each(|(p, _)| {
-            let coords = IVec3::new(p.x as i32, p.y as i32, z);
+            let transformed_position =
+                self.transform_coordinates(&p.as_ivec2());
+            let coords =
+                IVec3::new(transformed_position.x, transformed_position.y, z);
             // If there was no id added from the predecessor mapgen, we will add the fill sprite here
             match local_mapped_cdda_ids.get_mut(&coords) {
                 None => {
@@ -414,10 +465,7 @@ impl MapData {
 
                     mapped_ids.terrain = fill_terrain_sprite.clone();
 
-                    local_mapped_cdda_ids.insert(
-                        IVec3::new(p.x as i32, p.y as i32, z),
-                        mapped_ids,
-                    );
+                    local_mapped_cdda_ids.insert(coords, mapped_ids);
                 },
                 Some(mapped_ids) => {
                     if mapped_ids.terrain.is_none() {
@@ -509,6 +557,24 @@ impl MapData {
         local_mapped_cdda_ids
     }
 
+    fn transform_coordinates(&self, position: &IVec2) -> IVec2 {
+        let (map_width, map_height) = (self.map_size.x, self.map_size.y);
+
+        match self.rotation {
+            MapDataRotation::Deg0 => position.clone(),
+            MapDataRotation::Deg90 => {
+                IVec2::new(map_height as i32 - 1 - position.y, position.x)
+            },
+            MapDataRotation::Deg180 => IVec2::new(
+                map_width as i32 - 1 - position.x,
+                map_height as i32 - 1 - position.y,
+            ),
+            MapDataRotation::Deg270 => {
+                IVec2::new(position.y, map_width as i32 - 1 - position.x)
+            },
+        }
+    }
+
     pub fn get_commands(
         &self,
         json_data: &DeserializedCDDAJsonData,
@@ -520,9 +586,13 @@ impl MapData {
         // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
         // the function relies on the mapped sprite of this sprite to already exist
         self.cells.iter().for_each(|(p, cell)| {
+            // Transform the coordinate `p` based on the map rotation
+            let transformed_position =
+                self.transform_coordinates(&p.as_ivec2());
+
             let ident_commands = self.get_identifier_change_commands(
                 &cell.character,
-                &p.as_ivec2(),
+                &transformed_position,
                 &json_data,
             );
 
@@ -535,6 +605,8 @@ impl MapData {
 
                 for _ in 0..upper_bound {
                     let position = place.coordinates();
+                    let transformed_position =
+                        self.transform_coordinates(&position);
 
                     // We only want to place one in place.chance times
                     let rand_chance_num = rng().random_range(0..=100);
@@ -542,7 +614,11 @@ impl MapData {
                         continue;
                     }
 
-                    match place.inner.get_commands(&position, self, json_data) {
+                    match place.inner.get_commands(
+                        &transformed_position,
+                        self,
+                        json_data,
+                    ) {
                         None => {},
                         Some(commands) => {
                             all_commands.extend(commands);
@@ -564,20 +640,22 @@ impl MapData {
 
         for (cell_coordinates, cell) in self.cells.iter() {
             let cell_repr = self.get_cell_data(&cell.character, &json_data);
+            let transformed_position =
+                self.transform_coordinates(&cell_coordinates.as_ivec2());
 
-            cell_data.insert(
-                UVec2::new(cell_coordinates.x, cell_coordinates.y),
-                cell_repr,
-            );
+            cell_data.insert(transformed_position.as_uvec2(), cell_repr);
         }
 
         for (kind, place_vec) in self.place.iter() {
             for place in place_vec {
                 for _ in 0..place.repeat.get_from_to().1 {
                     let position = place.coordinates();
+                    let transformed_position =
+                        self.transform_coordinates(&position);
 
-                    let cell_data =
-                        cell_data.get_mut(&position.as_uvec2()).unwrap();
+                    let cell_data = cell_data
+                        .get_mut(&transformed_position.as_uvec2())
+                        .unwrap();
                     let repr = place.inner.representation(json_data);
 
                     match kind {
@@ -931,7 +1009,9 @@ mod tests {
     #[tokio::test]
     async fn test_fill_ter() {
         let mut map_loader = SingleMapDataImporter {
-            path: PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json"),
+            paths: vec![
+                PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json")
+            ],
             om_terrain: "test_fill_ter".into(),
         };
 
@@ -959,7 +1039,7 @@ mod tests {
         let cdda_data = TEST_CDDA_DATA.get().await;
 
         let mut map_loader = SingleMapDataImporter {
-            path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
+            paths: vec![PathBuf::from(TEST_DATA_PATH).join("test_terrain.json")],
             om_terrain: "test_terrain".into(),
         };
 
@@ -1012,7 +1092,7 @@ mod tests {
         let cdda_data = TEST_CDDA_DATA.get().await;
 
         let mut map_loader = SingleMapDataImporter {
-            path: PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
+            paths: vec![PathBuf::from(TEST_DATA_PATH).join("test_terrain.json")],
             om_terrain: "test_terrain".into(),
         };
 

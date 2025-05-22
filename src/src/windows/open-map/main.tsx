@@ -3,42 +3,36 @@ import GenericWindow from "../generic-window.js";
 import {open} from "@tauri-apps/plugin-dialog";
 import "./main.scss"
 import {getCurrentWindow} from "@tauri-apps/api/window";
-import Icon, {IconName} from "../../shared/components/icon.js";
 import MultiMenu from "../../shared/components/multimenu.js";
+import {OpenViewerData, OpenViewerDataType} from "../../tauri/types/viewer.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {TauriCommand} from "../../tauri/events/types.js";
-import {OmTerrainType, OpenViewerData} from "../../tauri/types/viewer.js";
 
 function MapViewer() {
-    const [mapFilePath, setMapFilePath] = useState<string>("")
+    const [omFilePaths, setOmFilePaths] = useState<string[]>([])
+    const [mapgenFilePaths, setMapgenFilePaths] = useState<string[]>([])
     const [projectName, setProjectName] = useState<string>("")
-    const [omIds, setOmIds] = useState<string[][]>([[""]])
-    const [deleteShownForColumn, setDeleteShownForColumn] = useState<number>(null)
-    const [deleteShownForRow, setDeleteShownForRow] = useState<number>(null)
+    const [omSpecialOrTerrainId, setOmSpecialOrTerrainId] = useState<string>("")
+    const [creatingType, setCreatingType] = useState<OpenViewerDataType>(OpenViewerDataType.Terrain)
 
     async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
 
-        const isSingle = omIds.length === 1 && omIds[0].length === 1
-
         let data: OpenViewerData;
-        if (isSingle) {
+        if (creatingType === OpenViewerDataType.Terrain) {
             data = {
-                filePath: mapFilePath,
-                projectName: projectName || omIds[0][0],
-                omTerrain: {
-                    type: OmTerrainType.Single,
-                    omTerrainId: omIds[0][0]
-                }
+                type: OpenViewerDataType.Terrain,
+                mapgenFilePaths: mapgenFilePaths,
+                projectName: projectName,
+                omId: omSpecialOrTerrainId,
             }
-        } else {
+        } else if (creatingType === OpenViewerDataType.Special) {
             data = {
-                filePath: mapFilePath,
-                projectName,
-                omTerrain: {
-                    type: OmTerrainType.Nested,
-                    omTerrainIds: omIds
-                }
+                type: OpenViewerDataType.Special,
+                mapgenFilePaths: mapgenFilePaths,
+                omFilePaths: omFilePaths,
+                projectName: projectName,
+                omId: omSpecialOrTerrainId,
             }
         }
 
@@ -57,12 +51,16 @@ function MapViewer() {
         setProjectName(e.target.value)
     }
 
-    async function onFileInputChange(e: React.MouseEvent<HTMLButtonElement>) {
+    function onOmTerrainIdChange(e: React.ChangeEvent<HTMLInputElement>) {
+        setOmSpecialOrTerrainId(e.target.value)
+    }
+
+    async function onOmFileInputChange(e: React.MouseEvent<HTMLButtonElement>) {
         e.preventDefault()
 
         const selected = await open(
             {
-                multiple: false,
+                multiple: true,
                 filters: [
                     {
                         name: "Json",
@@ -72,7 +70,29 @@ function MapViewer() {
             }
         )
 
-        setMapFilePath(selected)
+        if (!selected) return;
+
+        setOmFilePaths(selected)
+    }
+
+    async function onMapFileInputChange(e: React.MouseEvent<HTMLButtonElement>) {
+        e.preventDefault()
+
+        const selected = await open(
+            {
+                multiple: true,
+                filters: [
+                    {
+                        name: "Json",
+                        extensions: ["json"]
+                    }
+                ]
+            }
+        )
+
+        if (!selected) return;
+
+        setMapgenFilePaths(selected)
     }
 
     return (
@@ -83,113 +103,88 @@ function MapViewer() {
                 The map will be automatically reloaded once it detects a change to the map file which is
                 currently open.
             </p>
-            <form onSubmit={onSubmit} className={"map-viewer-form"}>
-                <div className={"form-element"}>
-                    <label className={"file-input"}>
-                        {mapFilePath ? mapFilePath : "Select a Map File Path"}
-                        <button onClick={onFileInputChange}/>
-                    </label>
-                    <label>
-                        The path to the map file
-                    </label>
-                </div>
-                <div className={"form-element"}>
-                    <input onChange={onProjectNameChange} placeholder={"Define a name for the project"}/>
-                    <label>
-                        The name of the project, a name must be selected if you are opening a nested map. If you
-                        are opening a single map, the om_terrain is used as the name if no name is selected.
-                    </label>
-                </div>
-                <div className={"grid-vertical-center"} onPaste={e => {
-                    const pastedText = e.clipboardData.getData("text/plain")
-                    const parsed = JSON.parse(pastedText)
-
-                    if (!parsed[0] || !parsed[0][0]) return
-
-                    setOmIds(parsed)
-                }}>
-                    <div className={"om-terrain-form-element-grid"}>
+            <MultiMenu
+                onTabSelected={t => {
+                    setCreatingType(t.name === "Overmap Terrain" ? OpenViewerDataType.Terrain : OpenViewerDataType.Special)
+                }}
+                tabs={
+                    [
                         {
-                            deleteShownForRow !== null &&
-                            <button className={"delete-row-button"}
-                                    style={{top: deleteShownForRow * 32}}
-                                    type={"button"}
-                                    onClick={() => {
-                                        const newIds = omIds.filter((_, i) => i !== deleteShownForRow)
-                                        setOmIds(newIds)
-
-                                        setDeleteShownForRow(null)
-                                        setDeleteShownForColumn(null)
-                                    }}>
-                                <Icon name={IconName.DeleteSmall}/>
-                            </button>
-                        }
+                            name: "Overmap Terrain",
+                            content: <form onSubmit={onSubmit} className={"map-viewer-form"}>
+                                <div className={"map-viewer-form-terrain"}>
+                                    <div className={"form-element"}>
+                                        <label className={"file-input"}>
+                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select a mapgen File Path"}
+                                            <button onClick={onMapFileInputChange}/>
+                                        </label>
+                                        <label>
+                                            The path to the files where the mapgen entries are stored
+                                        </label>
+                                    </div>
+                                    <div className={"form-element"}>
+                                        <input onChange={onOmTerrainIdChange} placeholder={"Enter the overmap id"}/>
+                                        <label>
+                                            The overmap id which is defined in the mapgen file as "om_terrain".
+                                        </label>
+                                    </div>
+                                    <div className={"form-element"}>
+                                        <input onChange={onProjectNameChange}
+                                               placeholder={"Define a name for the project"}/>
+                                        <label>
+                                            The name of the project
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type={"submit"}>Open</button>
+                            </form>
+                        },
                         {
-                            deleteShownForColumn !== null &&
-                            <button className={"delete-col-button"}
-                                    style={{left: deleteShownForColumn * 128}}
-                                    type={"button"}
-                                    onClick={() => {
-                                        const newIds = omIds.map(r => {
-                                            const newRow = [...r]
-                                            newRow.splice(deleteShownForColumn, 1)
-                                            return newRow
-                                        })
-
-                                        setOmIds(newIds)
-
-                                        setDeleteShownForColumn(null)
-                                        setDeleteShownForRow(null)
-                                    }}>
-                                <Icon name={IconName.DeleteSmall}/>
-                            </button>
+                            name: "Overmap Special",
+                            content: <form onSubmit={onSubmit} className={"map-viewer-form"}>
+                                <div className={"map-viewer-form-special"}>
+                                    <div className={"form-element"}>
+                                        <label className={"file-input"}>
+                                            {omFilePaths.length > 0 ? omFilePaths : "Select a Overmap special File Path"}
+                                            <button onClick={onOmFileInputChange}/>
+                                        </label>
+                                        <label>
+                                            The path to one or more overmap special files to search for the overmap id
+                                        </label>
+                                    </div>
+                                    <div className={"form-element"}>
+                                        <label className={"file-input"}>
+                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select a mapgen File Path"}
+                                            <button onClick={onMapFileInputChange}/>
+                                        </label>
+                                        <label>
+                                            The path to the files where the map data which is referenced in the overmap
+                                            special
+                                            files is stored.
+                                        </label>
+                                    </div>
+                                    <div className={"form-element"}>
+                                        <input onChange={onOmTerrainIdChange}
+                                               placeholder={"Enter the overmap special id"}/>
+                                        <label>
+                                            The overmap special id. The overmap special entry is used to combine
+                                            multiple mapgen
+                                            entries into one.
+                                        </label>
+                                    </div>
+                                    <div className={"form-element"}>
+                                        <input onChange={onProjectNameChange}
+                                               placeholder={"Define a name for the project"}/>
+                                        <label>
+                                            The name of the project
+                                        </label>
+                                    </div>
+                                </div>
+                                <button type={"submit"}>Open</button>
+                            </form>
                         }
-
-                        <div className={"om-terrain-form-element"}>
-                            {
-                                omIds.map((rowIds, row) => {
-                                    return (
-                                        <div className={"om-terrain-row"} key={row}
-                                             onMouseEnter={() => setDeleteShownForRow(row)}
-                                        >
-                                            {
-                                                rowIds.map((id, col) => {
-                                                    return (
-                                                        <input className={"om-terrain-slot"}
-                                                               key={`${row}-${col}`}
-                                                               onMouseEnter={() => setDeleteShownForColumn(col)}
-                                                               value={id}
-                                                               onChange={e => {
-                                                                   const newIds = [...omIds]
-                                                                   newIds[row][col] = e.target.value
-                                                                   setOmIds(newIds)
-                                                               }}
-                                                        />
-                                                    )
-                                                })
-                                            }
-                                        </div>
-                                    )
-                                })
-                            }
-                        </div>
-                        <button className={"add-row-button"} onClick={() => {
-                            const colLen = omIds[0].length || 1
-                            const newIds = [...omIds, new Array(colLen).fill("")]
-
-                            setOmIds(newIds)
-                        }}><Icon
-                            name={IconName.AddSmall}/></button>
-                        <button className={"add-col-button"} onClick={() => {
-                            const newIds = omIds.map(r => [...r, ""])
-                            setOmIds(newIds)
-                        }}><Icon
-                            name={IconName.AddSmall}/></button>
-                    </div>
-                </div>
-
-                <button type={"submit"}>Open</button>
-            </form>
+                    ]
+                }/>
         </div>
     )
 }

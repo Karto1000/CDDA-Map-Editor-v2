@@ -23,8 +23,8 @@ export class AtlasMaterial {
             transparent: true,
             depthWrite: true,
             depthTest: true,
-            alphaTest: 0.1,
-            blending: NormalBlending
+            alphaTest: 0.01,
+            blending: NormalBlending,
         })
         this.geometry = new PlaneGeometry(config.tileWidth, config.tileHeight)
         this.maxInstances = config.maxInstances

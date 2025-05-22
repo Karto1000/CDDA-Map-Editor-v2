@@ -2,8 +2,8 @@ import {Canvas, ThreeConfig} from "../../three/types/three.js";
 import React, {MutableRefObject, useContext, useEffect, useState} from "react";
 import {
     ChangedThemeEvent,
+    CloseLocalTabEvent,
     LocalEvent,
-    OpenLocalTabEvent,
     TilesetLoadedEvent
 } from "../../../shared/utils/localEvent.js";
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
@@ -18,6 +18,8 @@ import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {useWorldMousePosition} from "../../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../../three/hooks/useMouseCells.js";
 import {SHOW_STATS} from "../../three/hooks/useThreeSetup.js";
+import "./mapViewer.scss"
+import {clsx} from "clsx";
 
 export type MapViewerProps = {
     threeConfig: MutableRefObject<ThreeConfig>
@@ -33,6 +35,7 @@ export function MapViewer(props: MapViewerProps) {
     const theme = useContext(ThemeContext)
     const {hoveredCellMeshRef, selectedCellMeshRef, regenerate} = useMouseCells(props.threeConfig, props.tileInfo)
     const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
     const worldMousePosition = useWorldMousePosition({
         threeConfig: props.threeConfig,
         canvas: props.canvas,
@@ -79,6 +82,7 @@ export function MapViewer(props: MapViewerProps) {
     useTauriEvent(
         TauriEvent.PLACE_SPRITES,
         (d) => {
+            console.log("Placing sprites")
             props.tilesheets.current.clearAll()
 
             const drawStaticSprites: DrawStaticSprite[] = d.static_sprites.map(ds => {
@@ -126,16 +130,21 @@ export function MapViewer(props: MapViewerProps) {
     useTauriEvent(
         TauriEvent.UPDATE_LIVE_VIEWER,
         async () => {
+            console.log("Updating live viewer")
+            setIsLoading(true)
+
+            props.tilesheets.current.clearAll()
             await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
             await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+            setIsLoading(false)
         },
-        [tabs.openedTab]
+        [tabs.openedTab, props.tilesheets]
     )
 
     useEffect(() => {
-        const openLocalTabHandler = async (t: OpenLocalTabEvent) => {
-            await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
-            await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: t.detail.name});
+        const closeLocalTabHandler = async (t: CloseLocalTabEvent) => {
+            props.tilesheets.current.clearAll()
         }
 
         const tilesetLoadedHandler = (e: TilesetLoadedEvent) => {
@@ -154,8 +163,8 @@ export function MapViewer(props: MapViewerProps) {
         }
 
         props.eventBus.current.addEventListener(
-            LocalEvent.OPEN_LOCAL_TAB,
-            openLocalTabHandler
+            LocalEvent.CLOSE_LOCAL_TAB,
+            closeLocalTabHandler
         )
 
         props.eventBus.current.addEventListener(
@@ -170,8 +179,8 @@ export function MapViewer(props: MapViewerProps) {
 
         return () => {
             props.eventBus.current.removeEventListener(
-                LocalEvent.OPEN_LOCAL_TAB,
-                openLocalTabHandler
+                LocalEvent.CLOSE_LOCAL_TAB,
+                closeLocalTabHandler
             )
 
             props.eventBus.current.removeEventListener(
@@ -184,7 +193,7 @@ export function MapViewer(props: MapViewerProps) {
                 changeThemeHandler
             )
         }
-    }, [props.eventBus, setupSceneData]);
+    }, [props.eventBus, props.tilesheets, setupSceneData]);
 
     useEffect(() => {
         if (!props.isOpen) return
@@ -259,5 +268,10 @@ export function MapViewer(props: MapViewerProps) {
         }
     }, [props.eventBus, props.tileInfo, selectedCellPosition, worldMousePosition]);
 
-    return <></>
+    return <>
+        <div className={clsx("loader-container", isLoading && "visible")}>
+            <div className={"loader"}/>
+            <span>Loading Map Data</span>
+        </div>
+    </>
 }

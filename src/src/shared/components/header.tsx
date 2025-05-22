@@ -12,6 +12,7 @@ import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {TauriCommand} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {Theme} from "../hooks/useTheme.js";
+import {TabTypeKind} from "../hooks/useTabs.js";
 
 type Props = {
     eventBus: MutableRefObject<EventTarget>
@@ -77,18 +78,18 @@ export function Header(props: Props) {
                 )
             )
         } else {
-            await tauriBridge.invoke(
-                TauriCommand.OPEN_PROJECT,
-                {
-                    name: name
-                }
-            )
-
             props.eventBus.current.dispatchEvent(
                 new OpenLocalTabEvent(
                     LocalEvent.OPEN_LOCAL_TAB,
                     {detail: {name: name}}
                 )
+            )
+
+            await tauriBridge.invoke(
+                TauriCommand.OPEN_PROJECT,
+                {
+                    name: name
+                }
             )
         }
     }
@@ -130,8 +131,14 @@ export function Header(props: Props) {
                                     return <div className={`tab ${tabs.openedTab === tabName ? "opened-tab" : ""}`}
                                                 key={i}
                                                 onClick={() => onTabOpen(t.name)}>
+                                        {
+                                            t.tab_type === TabTypeKind.LiveViewer &&
+                                            <div className={"tab-type-indicator"}>
+                                                <Icon name={IconName.EyeMedium} width={16} height={16}/>
+                                            </div>
+                                        }
                                         <p>{t.name}</p>
-                                        <div onClick={e => onTabClose(e, t.name)}>
+                                        <div onClick={e => onTabClose(e, t.name)} className={"close-tab-button"}>
                                             <Icon name={IconName.CloseSmall} width={12} height={12}/>
                                         </div>
                                     </div>

@@ -10,6 +10,7 @@ export type MultiMenuTab = {
 
 export type MultiMenuProps = {
     tabs: MultiMenuTab[]
+    onTabSelected?: (tab: MultiMenuTab) => void
 }
 
 export default function MultiMenu(props: MultiMenuProps) {
@@ -26,6 +27,7 @@ export default function MultiMenu(props: MultiMenuProps) {
                                  onClick={() => {
                                      if (t.isDisabled) return;
 
+                                     if (props.onTabSelected) props.onTabSelected(t);
                                      setSelectedTab(i)
                                  }}>
                                 {t.name}

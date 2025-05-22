@@ -3,6 +3,7 @@ pub(crate) mod io;
 pub(crate) mod item;
 pub(crate) mod map_data;
 pub(crate) mod monster;
+pub(crate) mod overmap;
 pub(crate) mod palettes;
 pub(crate) mod region_settings;
 pub(crate) mod terrain;
@@ -11,6 +12,10 @@ use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::item::CDDAItemGroupIntermediate;
 use crate::cdda_data::map_data::CDDAMapDataIntermediate;
 use crate::cdda_data::monster::CDDAMonsterGroup;
+use crate::cdda_data::overmap::{
+    CDDAOvermapLocation, CDDAOvermapSpecialIntermediate,
+    CDDAOvermapTerrainIntermediate,
+};
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
@@ -223,9 +228,9 @@ pub enum CDDAString {
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub enum IdOrAbstract {
+pub enum IdOrAbstract<T> {
     #[serde(rename = "id")]
-    Id(CDDAIdentifier),
+    Id(T),
     #[serde(rename = "abstract")]
     Abstract(CDDAIdentifier),
 }
@@ -233,10 +238,10 @@ pub enum IdOrAbstract {
 #[derive(Debug, Clone, Deserialize)]
 pub struct UnknownEntry {
     #[serde(flatten)]
-    identifier: IdOrAbstract,
+    pub id: IdOrAbstract<CDDAIdentifier>,
 
     #[serde(rename = "type")]
-    ty: KnownCataVariant,
+    pub ty: KnownCataVariant,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -257,6 +262,9 @@ pub enum CDDAJsonEntry {
     ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
     MonsterGroup(CDDAMonsterGroup),
+    OvermapLocation(CDDAOvermapLocation),
+    OvermapTerrain(CDDAOvermapTerrainIntermediate),
+    OvermapSpecial(CDDAOvermapSpecialIntermediate),
 
     // -- UNUSED
     WeatherType,
@@ -351,9 +359,6 @@ pub enum CDDAJsonEntry {
     ProfessionItemSubstitutions,
     ActivityType,
     OterVision,
-    OvermapLocation,
-    OvermapTerrain,
-    OvermapSpecial,
     OvermapLandUseCode,
     OvermapConnection,
     CityBuilding,

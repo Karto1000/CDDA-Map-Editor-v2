@@ -14,7 +14,10 @@ export function useTauriEvent<K extends keyof TauriEventMap>(
     }, [callback]);
 
     useEffect(() => {
+        console.log("Subscribing to event: ", event)
+
         const unsubscribe = tauriBridge.listen(event, (data) => {
+            console.log("Received event: ", event)
             savedCallback.current(data);
         });
 

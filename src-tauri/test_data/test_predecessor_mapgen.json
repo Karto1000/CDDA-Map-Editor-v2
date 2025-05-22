@@ -1,14 +1,23 @@
 [
   {
+    "type": "overmap_terrain",
+    "id": "test_predecessor_mapgen",
+    "name": "Predecessor Mapgen Test",
+    "sym": "L"
+  },
+  {
     "type": "mapgen",
     "method": "json",
     "om_terrain": "test_predecessor_mapgen",
     "object": {
-      "predecessor_mapgen": "field",
+      "fill_ter": "t_grass",
       "place_terrain": [
         {
           "ter": "t_rock_wall",
-          "x": [0, 10],
+          "x": [
+            0,
+            10
+          ],
           "y": 0
         }
       ],

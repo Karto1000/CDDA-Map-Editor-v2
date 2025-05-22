@@ -2,10 +2,13 @@ use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::item::CDDAItemGroup;
 use crate::cdda_data::map_data::OmTerrain;
 use crate::cdda_data::monster::CDDAMonsterGroup;
+use crate::cdda_data::overmap::{
+    CDDAOvermapLocation, CDDAOvermapSpecial, CDDAOvermapTerrain,
+};
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::{CDDAJsonEntry, TileLayer};
+use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
 use crate::editor_data::MapDataCollection;
 use crate::map::MapData;
 use crate::util::{CDDAIdentifier, Load};
@@ -37,6 +40,9 @@ pub struct DeserializedCDDAJsonData {
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
     pub item_groups: HashMap<CDDAIdentifier, CDDAItemGroup>,
     pub monstergroups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
+    pub overmap_locations: HashMap<CDDAIdentifier, CDDAOvermapLocation>,
+    pub overmap_terrains: HashMap<CDDAIdentifier, CDDAOvermapTerrain>,
+    pub overmap_specials: HashMap<CDDAIdentifier, CDDAOvermapSpecial>,
 }
 
 impl DeserializedCDDAJsonData {
@@ -152,6 +158,40 @@ impl DeserializedCDDAJsonData {
         .unwrap_or_default()
     }
 
+    fn calculate_copy_property_of_overmap_terrain(
+        &self,
+        overmap_terrain: CDDAOvermapTerrain,
+    ) -> CDDAOvermapTerrain {
+        match &overmap_terrain.copy_from {
+            None => overmap_terrain,
+            Some(copy_from_id) => {
+                let mut copy_from_terrain =
+                    match self.overmap_terrains.get(copy_from_id) {
+                        None => {
+                            warn!(
+                            "Could not copy {} for {} due to it not existing",
+                            copy_from_id, overmap_terrain.id
+                        );
+                            return overmap_terrain;
+                        },
+                        Some(t) => t.clone(),
+                    };
+
+                if copy_from_terrain.copy_from.is_some() {
+                    copy_from_terrain = self
+                        .calculate_copy_property_of_overmap_terrain(
+                            copy_from_terrain,
+                        );
+                }
+
+                CDDAOvermapTerrain::merge_with_precedence(
+                    &copy_from_terrain,
+                    &overmap_terrain,
+                )
+            },
+        }
+    }
+
     fn calculate_copy_property_of_terrain(
         &self,
         terrain: CDDATerrain,
@@ -224,7 +264,55 @@ impl DeserializedCDDAJsonData {
             updated_terrain.insert(copy_to_id.clone(), new_terrain);
         }
 
+        let mut updated_overmap_terrains: HashMap<
+            CDDAIdentifier,
+            CDDAOvermapTerrain,
+        > = HashMap::new();
+        for (copy_to_id, to) in self.overmap_terrains.iter() {
+            let mut new_terrain = self
+                .overmap_terrains
+                .get(copy_to_id)
+                .expect("To Exist")
+                .clone();
+            new_terrain =
+                self.calculate_copy_property_of_overmap_terrain(new_terrain);
+
+            match &to.extend {
+                None => {},
+                Some(extend) => match &extend.flags {
+                    None => {},
+                    Some(new_flags) => {
+                        let mut old_flags =
+                            new_terrain.flags.clone().unwrap_or_default();
+                        old_flags.extend(new_flags.clone());
+                        new_terrain.flags = Some(old_flags)
+                    },
+                },
+            }
+
+            match &to.delete {
+                None => {},
+                Some(delete) => match &delete.flags {
+                    None => {},
+                    Some(new_flags) => {
+                        let old_flags =
+                            new_terrain.flags.clone().unwrap_or_default();
+                        let new_flags = old_flags
+                            .into_iter()
+                            .filter(|f| {
+                                new_flags.iter().find(|nf| *nf == f).is_some()
+                            })
+                            .collect();
+                        new_terrain.flags = Some(new_flags)
+                    },
+                },
+            };
+
+            updated_overmap_terrains.insert(copy_to_id.clone(), new_terrain);
+        }
+
         self.terrain.extend(updated_terrain);
+        self.overmap_terrains.extend(updated_overmap_terrains);
     }
 }
 
@@ -442,6 +530,45 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             entry.path()
                         );
                         cdda_data.monstergroups.insert(group.id.clone(), group);
+                    },
+                    CDDAJsonEntry::OvermapLocation(location) => {
+                        debug!(
+                            "Found OvermapLocation entry {} in {:?}",
+                            location.id,
+                            entry.path()
+                        );
+                        cdda_data
+                            .overmap_locations
+                            .insert(location.id.clone(), location);
+                    },
+                    CDDAJsonEntry::OvermapTerrain(terrain) => {
+                        let terrain_vec: Vec<CDDAOvermapTerrain> =
+                            terrain.into();
+
+                        for terrain in terrain_vec {
+                            debug!(
+                                "Found OvermapTerrain entry {} in {:?}",
+                                terrain.id,
+                                entry.path()
+                            );
+
+                            cdda_data
+                                .overmap_terrains
+                                .insert(terrain.id.clone(), terrain);
+                        }
+                    },
+                    CDDAJsonEntry::OvermapSpecial(s) => {
+                        let special: CDDAOvermapSpecial = s.into();
+
+                        debug!(
+                            "Found OvermapSpecial entry {} in {:?}",
+                            special.id,
+                            entry.path()
+                        );
+
+                        cdda_data
+                            .overmap_specials
+                            .insert(special.id.clone(), special);
                     },
                     _ => {
                         info!("Unused JSON entry in {:?}", entry.path());

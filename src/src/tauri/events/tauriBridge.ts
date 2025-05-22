@@ -24,6 +24,7 @@ class TauriBridge {
         args: TauriCommandMap[K]
     ): Promise<BackendResponse<R, E>> {
         try {
+            console.log("Invoking command: ", command)
             return {
                 type: BackendResponseType.Success,
                 data: await invoke(command, args)
