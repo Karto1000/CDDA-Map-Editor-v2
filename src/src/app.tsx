@@ -2,13 +2,13 @@ import React, {createContext, useEffect, useRef} from 'react';
 import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
 
 import "./app.scss"
-import {TauriCommand} from "./tauri/events/types.js";
+import {TauriCommand, TauriEvent, ToastType} from "./tauri/events/types.js";
 import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
 import {WelcomeScreen} from "./shared/components/mainScreens/welcomeScreen.js";
 import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
 import MultiMenu from "./shared/components/multimenu.js";
-import {Theme, useTheme} from "./shared/hooks/useTheme.js";
+import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
 import {EditorData} from "./tauri/types/editor.js";
 import {useEditorData} from "./shared/hooks/useEditorData.js";
 import {MainCanvas} from "./shared/components/mainCanvas.js";
@@ -17,6 +17,9 @@ import {tauriBridge} from "./tauri/events/tauriBridge.js";
 import {useThreeSetup} from "./features/three/hooks/useThreeSetup.js";
 import {MapViewer} from "./features/viewer/components/mapViewer.js";
 import {useTileset} from "./features/sprites/hooks/useTileset.js";
+import toast, {ToastBar, Toaster} from "react-hot-toast";
+import Icon, {IconName} from "./shared/components/icon.js";
+import {useTauriEvent} from "./shared/hooks/useTauriEvent.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -46,6 +49,20 @@ function App() {
         })()
     }, []);
 
+    useTauriEvent(
+        TauriEvent.EMIT_TOAST_MESSAGE,
+        (d) => {
+            if (d.type === ToastType.Error) {
+                toast.error(d.message)
+            }
+
+            if (d.type === ToastType.Success) {
+                toast.success(d.message)
+            }
+        },
+        []
+    )
+
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.Welcome)
@@ -62,6 +79,31 @@ function App() {
 
     return (
         <div className={`app ${theme}-theme`}>
+            <Toaster
+                position={"bottom-right"}
+                toastOptions={{
+                    style: {
+                        borderRadius: 0,
+                        maxWidth: "100%",
+                    },
+                    success: {
+                        icon: <Icon name={IconName.CheckmarkMedium}/>,
+                        style: {
+                            background: getColorFromTheme(theme, "darkBlue"),
+                            border: `2px solid ${getColorFromTheme(theme, "selected")}`,
+                        }
+                    },
+                    error: {
+                        icon: <Icon name={IconName.CloseSmall}/>,
+                        duration: 5000,
+                        style: {
+                            background: getColorFromTheme(theme, "delete"),
+                            border: `2px solid ${getColorFromTheme(theme, "lightDelete")}`,
+                        }
+                    }
+                }}>
+                {(t) => <ToastBar toast={t}/>}
+            </Toaster>
             <EditorDataContext.Provider value={editorData}>
                 <ThemeContext.Provider value={{theme}}>
                     <TabContext.Provider value={tabs}>
