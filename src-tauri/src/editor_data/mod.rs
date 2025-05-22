@@ -12,7 +12,8 @@ use crate::map::{
     MapData, DEFAULT_MAP_DATA_SIZE,
 };
 use crate::tileset::legacy_tileset::MappedCDDAIds;
-use crate::util::{CDDAIdentifier, Load, Save, SaveError};
+use crate::util::{Load, Save, SaveError};
+use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
 use log::info;

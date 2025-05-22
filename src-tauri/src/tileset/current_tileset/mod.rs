@@ -1,8 +1,9 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::tileset::io::{TilesheetConfigLoader, TilesheetLoader};
 use crate::tileset::{SpriteKind, Tilesheet};
-use crate::util::{CDDAIdentifier, Load};
+use crate::util::Load;
 use anyhow::{anyhow, Error};
+use cdda_lib::types::CDDAIdentifier;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

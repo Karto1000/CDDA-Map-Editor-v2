@@ -1,6 +1,8 @@
-use crate::cdda_data::{CDDADeleteOp, CDDAExtendOp, CDDAString, IdOrAbstract};
 use crate::impl_merge_with_precedence;
-use crate::util::{CDDAIdentifier, MeabyVec};
+use cdda_lib::types::{
+    CDDADeleteOp, CDDAExtendOp, CDDAIdentifier, CDDAString, IdOrAbstract,
+    MeabyVec,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]

@@ -1,8 +1,8 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::vehicle_parts::CDDAVehiclePart;
-use crate::cdda_data::{CDDAString, IdOrAbstract};
 use crate::impl_merge_with_precedence;
-use crate::util::CDDAIdentifier;
+use cdda_lib::types::CDDAIdentifier;
+use cdda_lib::types::{CDDAString, IdOrAbstract};
 use log::warn;
 use serde::{Deserialize, Serialize};
 

@@ -50,3 +50,5 @@ paste = "1.0.15"
 notify = { version = "8.0.0" }
 notify-debouncer-full = "0.5.0"
 rayon = { version = "1.10.0", features = [] }
+cdda_lib = { path = "cdda_lib" }
+cdda_macros = { path = "cdda_macros" }

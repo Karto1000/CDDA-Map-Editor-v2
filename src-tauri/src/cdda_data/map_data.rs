@@ -2,7 +2,6 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::item::CDDAItemGroupInPlace;
 use crate::cdda_data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
 use crate::cdda_data::palettes::Parameter;
-use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::editor_data::{MapCoordinates, MapDataCollection};
 use crate::map::map_properties::ComputersProperty;
 use crate::map::map_properties::ToiletsProperty;
@@ -20,12 +19,12 @@ use crate::map::{
     SetPoint, SetSquare,
 };
 use crate::map::{VisibleMappingCommand, DEFAULT_MAP_DATA_SIZE};
-use crate::util::{
-    CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted,
-    ParameterIdentifier, Weighted,
-};
 use crate::warn;
 use crate::{skip_err, skip_none};
+use cdda_lib::types::{
+    CDDAIdentifier, DistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
+    NumberOrRange, ParameterIdentifier, Weighted,
+};
 use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
 use paste::paste;

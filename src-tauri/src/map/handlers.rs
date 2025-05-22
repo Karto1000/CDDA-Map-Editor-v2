@@ -1,5 +1,5 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::TileLayer;
+use crate::cdda_data::{replace_region_setting, TileLayer};
 use crate::editor_data::{
     get_map_data_collection_live_viewer_data, EditorData, EditorDataSaver,
     GetLiveViewerDataError, LiveViewerData, Project, ProjectType,
@@ -12,10 +12,11 @@ use crate::tileset::{
     AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
 use crate::util::{
-    get_current_project_mut, get_json_data, CDDADataError, CDDAIdentifier,
+    get_current_project_mut, get_json_data, CDDADataError,
     GetCurrentProjectError, IVec3JsonKey, Save, UVec2JsonKey,
 };
 use crate::{events, impl_serialize_for_error, tileset, util};
+use cdda_lib::types::CDDAIdentifier;
 use derive_more::Display;
 use glam::{IVec3, UVec2};
 use log::{debug, error, info, warn};
@@ -357,7 +358,8 @@ pub async fn get_sprites(
                 ] {
                     let id = match o_id {
                         None => continue,
-                        Some(id) => id.as_final_id(
+                        Some(id) => replace_region_setting(
+                            &id,
                             region_settings,
                             &json_data.terrain,
                             &json_data.furniture,

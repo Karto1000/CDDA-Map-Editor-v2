@@ -1,7 +1,8 @@
 use crate::tileset::io::TileConfigLoader;
 use crate::tileset::legacy_tileset::SpriteIndex;
 use crate::tileset::MeabyWeightedSprite;
-use crate::util::{CDDAIdentifier, Load, MeabyVec};
+use crate::util::Load;
+use cdda_lib::types::{CDDAIdentifier, MeabyVec};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::fs::File;

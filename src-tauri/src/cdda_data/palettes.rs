@@ -1,6 +1,7 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
-use crate::cdda_data::{Distribution, KnownCataVariant, MapGenValue};
+use crate::cdda_data::GetIdentifier;
+use crate::cdda_data::KnownCataVariant;
 use crate::map::map_properties::ItemsProperty;
 use crate::map::map_properties::{
     FurnitureProperty, MonstersProperty, TerrainProperty,
@@ -9,9 +10,9 @@ use crate::map::{
     CalculateParametersError, MapData, MappingKind, Property,
     VisibleMappingCommand,
 };
-use crate::util::{
-    CDDAIdentifier, Comment, GetIdentifier, MeabyVec, MeabyWeighted,
-    ParameterIdentifier,
+use cdda_lib::types::{
+    CDDAIdentifier, Comment, Distribution, MapGenValue, MeabyVec,
+    MeabyWeighted, ParameterIdentifier,
 };
 use futures_lite::StreamExt;
 use glam::IVec2;
@@ -224,7 +225,7 @@ impl CDDAPalette {
                 parameter
                     .default
                     .distribution
-                    .get_random(&calculated_parameters)?,
+                    .get_identifier(&calculated_parameters)?,
             );
         }
 

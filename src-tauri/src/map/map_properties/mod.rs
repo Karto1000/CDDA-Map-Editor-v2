@@ -6,9 +6,9 @@ use crate::cdda_data::map_data::{
     PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain, PlaceInnerToilets,
     PlaceInnerTraps, PlaceInnerVehicles,
 };
-use crate::cdda_data::MapGenValue;
 use crate::map::MapGenNested;
-use crate::util::Weighted;
+use cdda_lib::types::MapGenValue;
+use cdda_lib::types::Weighted;
 
 pub(crate) mod impl_property;
 

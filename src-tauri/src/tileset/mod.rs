@@ -6,7 +6,7 @@ use crate::tileset::legacy_tileset::{
     AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet,
     MappedCDDAIds, Rotated, Rotates, Rotation, SpriteIndex,
 };
-use crate::util::{CDDAIdentifier, MeabyVec, Weighted};
+use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
 use glam::IVec3;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;

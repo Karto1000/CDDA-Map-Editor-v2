@@ -621,14 +621,15 @@ impl Property for VehiclesProperty {
 
 #[cfg(test)]
 mod tests {
-    use crate::cdda_data::{CDDADistributionInner, MapGenValue};
     use crate::map::map_properties::TerrainProperty;
     use crate::map::{
         MapData, MappingKind, Property, VisibleMappingCommand,
         VisibleMappingCommandKind,
     };
-    use crate::util::{MeabyVec, MeabyWeighted};
     use crate::TEST_CDDA_DATA;
+    use cdda_lib::types::{
+        CDDADistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
+    };
     use glam::IVec2;
 
     #[tokio::test]

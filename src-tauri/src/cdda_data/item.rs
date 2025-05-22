@@ -1,5 +1,5 @@
-use crate::cdda_data::NumberOrRange;
-use crate::util::{CDDAIdentifier, Weighted};
+use cdda_lib::types::NumberOrRange;
+use cdda_lib::types::{CDDAIdentifier, Weighted};
 use serde::{Deserialize, Serialize};
 
 const fn default_probability() -> i32 {

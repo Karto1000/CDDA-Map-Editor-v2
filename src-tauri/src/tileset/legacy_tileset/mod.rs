@@ -9,8 +9,9 @@ use crate::tileset::{
     ForeBackIds, MeabyWeightedSprite, MultitileSprite, Sprite, SpriteKind,
     Tilesheet, WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
 };
-use crate::util::{CDDAIdentifier, Load, MeabyVec};
+use crate::util::Load;
 use anyhow::{anyhow, Error};
+use cdda_lib::types::{CDDAIdentifier, MeabyVec};
 use log::info;
 use rand::distr::Distribution;
 use serde::{Deserialize, Serialize};

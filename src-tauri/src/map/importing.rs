@@ -6,11 +6,11 @@ use crate::cdda_data::overmap::{
     CDDAOvermapSpecial, CDDAOvermapSpecialIntermediate, OvermapSpecialOvermap,
     OvermapSpecialSubType,
 };
-use crate::cdda_data::IdOrAbstract;
 use crate::editor_data::{MapDataCollection, ZLevel};
 use crate::map::{MapData, MapDataRotation};
-use crate::util::{CDDAIdentifier, Load};
+use crate::util::Load;
 use anyhow::{anyhow, Error};
+use cdda_lib::types::{CDDAIdentifier, IdOrAbstract};
 use glam::UVec2;
 use log::warn;
 use serde_json::Value;

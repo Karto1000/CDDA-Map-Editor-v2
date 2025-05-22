@@ -7,10 +7,11 @@ use crate::editor_data::{
 use crate::map::importing::{OvermapSpecialImporter, SingleMapDataImporter};
 use crate::map::{CalculateParametersError, Serializer, DEFAULT_MAP_DATA_SIZE};
 use crate::tab::{Tab, TabType};
-use crate::util::{get_json_data, get_size, CDDAIdentifier, Load};
+use crate::util::{get_json_data, get_size, Load};
 use crate::util::{CDDADataError, Save};
 use crate::{events, impl_serialize_for_error};
 use anyhow::Error;
+use cdda_lib::types::CDDAIdentifier;
 use glam::UVec2;
 use log::info;
 use notify::Watcher;

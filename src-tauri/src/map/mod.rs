@@ -13,14 +13,15 @@ use crate::cdda_data::map_data::{
 };
 use crate::cdda_data::overmap::OvermapTerrainMapgen;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
-use crate::cdda_data::{MapGenValue, NumberOrRange, TileLayer};
+use crate::cdda_data::{replace_region_setting, GetIdentifier, TileLayer};
 use crate::editor_data::ZLevel;
 use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
-use crate::util::{
-    bresenham_line, CDDAIdentifier, DistributionInner, GetIdentifier,
-    GetIdentifierError, GetRandomError, ParameterIdentifier, Weighted,
+use crate::util::{bresenham_line, GetIdentifierError, GetRandomError};
+use cdda_lib::types::{
+    CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
+    ParameterIdentifier, Weighted,
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
@@ -386,7 +387,7 @@ impl MapData {
             let calculated_value = parameter
                 .default
                 .distribution
-                .get_random(&calculated_parameters)?;
+                .get_identifier(&calculated_parameters)?;
 
             calculated_parameters.insert(id.clone(), calculated_value);
         }
@@ -472,7 +473,8 @@ impl MapData {
                     let mut mapped_ids = MappedCDDAIds::default();
 
                     mapped_ids.terrain = fill_terrain_sprite.clone().map(|s| {
-                        s.as_final_id(
+                        replace_region_setting(
+                            &s,
                             region_settings,
                             &json_data.terrain,
                             &json_data.furniture,
@@ -485,7 +487,8 @@ impl MapData {
                     if mapped_ids.terrain.is_none() {
                         mapped_ids.terrain =
                             fill_terrain_sprite.clone().map(|s| {
-                                s.as_final_id(
+                                replace_region_setting(
+                                    &s,
                                     region_settings,
                                     &json_data.terrain,
                                     &json_data.furniture,
@@ -504,7 +507,8 @@ impl MapData {
 
             match command.kind {
                 VisibleMappingCommandKind::Place => {
-                    let id = command.id.as_final_id(
+                    let id = replace_region_setting(
+                        &command.id,
                         region_settings,
                         &json_data.terrain,
                         &json_data.furniture,
@@ -1023,17 +1027,16 @@ impl Set for SetSquare {
 
 #[cfg(test)]
 mod tests {
-    use crate::cdda_data::{
-        CDDADistributionInner, Distribution, MapGenValue, Switch,
-    };
     use crate::map::importing::SingleMapDataImporter;
     use crate::map::map_properties::TerrainProperty;
     use crate::map::MappingKind;
-    use crate::util::{
-        CDDAIdentifier, DistributionInner, Load, MeabyVec, MeabyWeighted,
-        ParameterIdentifier, Weighted,
-    };
+    use crate::util::Load;
     use crate::TEST_CDDA_DATA;
+    use cdda_lib::types::{
+        CDDADistributionInner, CDDAIdentifier, Distribution, DistributionInner,
+        MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier, Switch,
+        Weighted,
+    };
     use glam::UVec2;
     use std::collections::HashMap;
     use std::path::PathBuf;
