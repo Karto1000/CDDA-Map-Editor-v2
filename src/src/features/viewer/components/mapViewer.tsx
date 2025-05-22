@@ -1,7 +1,8 @@
 import {Canvas, ThreeConfig} from "../../three/types/three.js";
 import React, {MutableRefObject, useContext, useEffect, useRef, useState} from "react";
 import {
-    ChangedThemeEvent, ChangeWorldMousePositionEvent,
+    ChangedThemeEvent,
+    ChangeWorldMousePositionEvent,
     ChangeZLevelEvent,
     CloseLocalTabEvent,
     LocalEvent,
@@ -14,13 +15,14 @@ import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../../sprites/tilesheets.js";
 import {TabContext, ThemeContext} from "../../../app.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
-import {serializedVec2ToVector2, TauriCommand, TauriEvent} from "../../../tauri/events/types.js";
+import {BackendResponseType, serializedVec2ToVector2, TauriCommand, TauriEvent} from "../../../tauri/events/types.js";
 import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {useWorldMousePosition} from "../../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../../three/hooks/useMouseCells.js";
 import {SHOW_STATS} from "../../three/hooks/useThreeSetup.js";
 import "./mapViewer.scss"
 import {clsx} from "clsx";
+import toast from "react-hot-toast";
 
 export type MapViewerProps = {
     threeConfig: MutableRefObject<ThreeConfig>
@@ -144,10 +146,23 @@ export function MapViewer(props: MapViewerProps) {
             setIsLoading(true)
 
             props.tilesheets.current.clearAll()
-            await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
-            await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+            const reloadResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
+
+            if (reloadResponse.type === BackendResponseType.Error) {
+                toast.error(reloadResponse.error)
+                return
+            }
+
+            const getSpritesResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+            if (getSpritesResponse.type === BackendResponseType.Error) {
+                toast.error(getSpritesResponse.error)
+                return
+            }
 
             setIsLoading(false)
+            toast.success("Reloaded Viewer")
         },
         [tabs.openedTab, props.tilesheets]
     )

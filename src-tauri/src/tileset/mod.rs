@@ -269,26 +269,57 @@ impl Sprite {
         json_data: &DeserializedCDDAJsonData,
         adjacent_sprites: &AdjacentSprites,
     ) -> (bool, bool, bool, bool) {
-        let mut this_connects_to =
-            json_data.get_connects_to(Some(this_id.clone()), layer);
-        let mut top_connect_groups =
-            json_data.get_connect_groups(adjacent_sprites.top.clone(), layer);
-        let mut right_connect_groups =
-            json_data.get_connect_groups(adjacent_sprites.right.clone(), layer);
-        let mut bottom_connect_groups = json_data
-            .get_connect_groups(adjacent_sprites.bottom.clone(), layer);
-        let mut left_connect_groups =
-            json_data.get_connect_groups(adjacent_sprites.left.clone(), layer);
+        let mut this_connects_to = json_data
+            .get_connects_to(this_id.clone(), layer)
+            .unwrap_or_default();
 
-        let this_flags = json_data.get_flags(Some(this_id.clone()), layer);
-        let top_flags =
-            json_data.get_flags(adjacent_sprites.top.clone(), layer);
-        let right_flags =
-            json_data.get_flags(adjacent_sprites.right.clone(), layer);
-        let bottom_flags =
-            json_data.get_flags(adjacent_sprites.bottom.clone(), layer);
-        let left_flags =
-            json_data.get_flags(adjacent_sprites.left.clone(), layer);
+        let this_flags = json_data
+            .get_flags(this_id.clone(), layer)
+            .unwrap_or_default();
+
+        let (mut top_connect_groups, top_flags) =
+            match adjacent_sprites.top.clone() {
+                None => (HashSet::new(), Vec::new()),
+                Some(top) => (
+                    json_data
+                        .get_connect_groups(top.clone(), layer)
+                        .unwrap_or_default(),
+                    json_data.get_flags(top, layer).unwrap_or_default(),
+                ),
+            };
+
+        let (mut right_connect_groups, right_flags) =
+            match adjacent_sprites.right.clone() {
+                None => (HashSet::new(), Vec::new()),
+                Some(right) => (
+                    json_data
+                        .get_connect_groups(right.clone(), layer)
+                        .unwrap_or_default(),
+                    json_data.get_flags(right, layer).unwrap_or_default(),
+                ),
+            };
+
+        let (mut bottom_connect_groups, bottom_flags) =
+            match adjacent_sprites.bottom.clone() {
+                None => (HashSet::new(), Vec::new()),
+                Some(bottom) => (
+                    json_data
+                        .get_connect_groups(bottom.clone(), layer)
+                        .unwrap_or_default(),
+                    json_data.get_flags(bottom, layer).unwrap_or_default(),
+                ),
+            };
+
+        let (mut left_connect_groups, left_flags) =
+            match adjacent_sprites.left.clone() {
+                None => (HashSet::new(), Vec::new()),
+                Some(left) => (
+                    json_data
+                        .get_connect_groups(left.clone(), layer)
+                        .unwrap_or_default(),
+                    json_data.get_flags(left, layer).unwrap_or_default(),
+                ),
+            };
 
         Self::edit_connection_groups(&this_flags, &mut this_connects_to);
         Self::edit_connection_groups(&top_flags, &mut top_connect_groups);

@@ -20,7 +20,8 @@ use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
 use crate::util::{
-    CDDAIdentifier, GetIdentifier, MeabyVec, MeabyWeighted, ParameterIdentifier,
+    CDDAIdentifier, GetIdentifier, GetIdentifierError, MeabyVec, MeabyWeighted,
+    ParameterIdentifier,
 };
 use derive_more::Display;
 use indexmap::IndexMap;
@@ -492,22 +493,30 @@ impl From<&str> for CDDADistributionInner {
 }
 
 impl GetIdentifier for CDDADistributionInner {
+    type Error = GetIdentifierError;
+
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier {
+    ) -> Result<CDDAIdentifier, GetIdentifierError> {
         match self {
-            CDDADistributionInner::String(s) => s.clone(),
+            CDDADistributionInner::String(s) => Ok(s.clone()),
             CDDADistributionInner::Distribution(d) => {
-                d.distribution.get(calculated_parameters)
+                Ok(d.distribution.get_random(calculated_parameters)?)
             },
             CDDADistributionInner::Param { param, fallback } => {
-                calculated_parameters
+                let calculated = calculated_parameters
                     .get(param)
-                    .map(|p| p.clone())
+                    .map(|p| Ok(p.clone()))
                     .unwrap_or_else(|| {
-                        fallback.clone().expect("Fallback to exist")
-                    })
+                        fallback.clone().ok_or(
+                            GetIdentifierError::MissingFallback(
+                                param.0.clone(),
+                            ),
+                        )
+                    })?;
+
+                Ok(calculated)
             },
             CDDADistributionInner::Switch { switch, cases } => {
                 let id = calculated_parameters
@@ -515,7 +524,13 @@ impl GetIdentifier for CDDADistributionInner {
                     .map(|p| p.clone())
                     .unwrap_or_else(|| switch.fallback.clone());
 
-                cases.get(&id).expect("MapTo to exist").clone()
+                cases
+                    .get(&id)
+                    .ok_or(GetIdentifierError::MissingSwitchCaseValue(
+                        id.0,
+                        switch.param.0.clone(),
+                    ))
+                    .map(Clone::clone)
             },
         }
     }
@@ -542,18 +557,24 @@ pub enum MapGenValue {
 }
 
 impl GetIdentifier for MapGenValue {
+    type Error = GetIdentifierError;
+
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> CDDAIdentifier {
+    ) -> Result<CDDAIdentifier, GetIdentifierError> {
         match self {
-            MapGenValue::String(s) => s.clone(),
-            MapGenValue::Distribution(d) => d.get(calculated_parameters),
+            MapGenValue::String(s) => Ok(s.clone()),
+            MapGenValue::Distribution(d) => {
+                Ok(d.get_random(calculated_parameters)?)
+            },
             MapGenValue::Param { param, fallback } => calculated_parameters
                 .get(param)
-                .map(|p| p.clone())
+                .map(|p| Ok(p.clone()))
                 .unwrap_or_else(|| {
-                    fallback.clone().expect("Fallback to exist")
+                    fallback.clone().ok_or(GetIdentifierError::MissingFallback(
+                        param.0.clone(),
+                    ))
                 }),
             MapGenValue::Switch { switch, cases } => {
                 let id = calculated_parameters
@@ -561,7 +582,13 @@ impl GetIdentifier for MapGenValue {
                     .map(|p| p.clone())
                     .unwrap_or_else(|| switch.fallback.clone());
 
-                cases.get(&id).expect("case MapTo to exist").clone()
+                cases
+                    .get(&id)
+                    .ok_or(GetIdentifierError::MissingSwitchCaseValue(
+                        id.0,
+                        switch.param.0.clone(),
+                    ))
+                    .map(Clone::clone)
             },
         }
     }

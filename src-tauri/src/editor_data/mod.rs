@@ -2,12 +2,21 @@ pub(crate) mod handlers;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
-use crate::map::importing::{OvermapSpecialImporter, SingleMapDataImporter};
-use crate::map::{CellRepresentation, MapData, DEFAULT_MAP_DATA_SIZE};
+use crate::impl_serialize_for_error;
+use crate::map::importing::{
+    OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
+    SingleMapDataImporterError,
+};
+use crate::map::{
+    CalculateParametersError, CellRepresentation, GetMappedCDDAIdsError,
+    MapData, DEFAULT_MAP_DATA_SIZE,
+};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::util::{CDDAIdentifier, Load, Save, SaveError};
+use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
 use log::info;
+use serde::Serializer;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -21,9 +30,20 @@ pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 pub type ZLevel = i32;
 pub type MapCoordinates = UVec2;
 
+#[derive(Debug, Error)]
+pub enum GetLiveViewerDataError {
+    #[error(transparent)]
+    SingleImporterError(#[from] SingleMapDataImporterError),
+
+    #[error(transparent)]
+    OvermapSpecialImporterError(#[from] OvermapSpecialImporterError),
+}
+
+impl_serialize_for_error!(GetLiveViewerDataError);
+
 pub async fn get_map_data_collection_live_viewer_data(
     data: &LiveViewerData,
-) -> HashMap<ZLevel, MapDataCollection> {
+) -> Result<HashMap<ZLevel, MapDataCollection>, GetLiveViewerDataError> {
     info!("Opening Live viewer");
 
     let map_data_collection = match &data {
@@ -37,7 +57,7 @@ pub async fn get_map_data_collection_live_viewer_data(
                 paths: mapgen_file_paths.clone(),
             };
 
-            let collection = overmap_terrain_importer.load().await.unwrap();
+            let collection = overmap_terrain_importer.load().await?;
             let mut map_data_collection = HashMap::new();
             map_data_collection.insert(0, collection);
             map_data_collection
@@ -54,11 +74,11 @@ pub async fn get_map_data_collection_live_viewer_data(
                 mapgen_entry_paths: mapgen_file_paths.clone(),
             };
 
-            om_special_importer.load().await.unwrap()
+            om_special_importer.load().await?
         },
     };
 
-    map_data_collection
+    Ok(map_data_collection)
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,11 +229,11 @@ impl MapDataCollection {
         &self,
         json_data: &DeserializedCDDAJsonData,
         z: ZLevel,
-    ) -> HashMap<IVec3, MappedCDDAIds> {
+    ) -> Result<HashMap<IVec3, MappedCDDAIds>, GetMappedCDDAIdsError> {
         let mut mapped_cdda_ids = HashMap::new();
 
         for (map_coords, map_data) in self.maps.iter() {
-            let mut ids = map_data.get_mapped_cdda_ids(json_data, z);
+            let mut ids = map_data.get_mapped_cdda_ids(json_data, z)?;
 
             // Transform every coordinate in the hashmap
             let mut new_ids = HashMap::new();
@@ -230,7 +250,7 @@ impl MapDataCollection {
             mapped_cdda_ids.extend(new_ids);
         }
 
-        mapped_cdda_ids
+        Ok(mapped_cdda_ids)
     }
 
     pub fn get_representations(
@@ -263,10 +283,15 @@ impl MapDataCollection {
         cell_repr
     }
 
-    pub fn calculate_parameters(&mut self, all_palettes: &Palettes) {
+    pub fn calculate_parameters(
+        &mut self,
+        all_palettes: &Palettes,
+    ) -> Result<(), CalculateParametersError> {
         for (_, map_data) in self.maps.iter_mut() {
-            map_data.calculate_parameters(all_palettes);
+            map_data.calculate_parameters(all_palettes)?;
         }
+
+        Ok(())
     }
 }
 

@@ -12,13 +12,14 @@ use crate::editor_data::handlers::{
     tileset_picked,
 };
 use crate::editor_data::{
-    get_map_data_collection_live_viewer_data, EditorData, ProjectType,
+    get_map_data_collection_live_viewer_data, EditorData, ProjectType, ZLevel,
 };
 use crate::map::handlers::{
     close_project, get_current_project_data, get_project_cell_data,
     get_sprites, open_project, reload_project,
 };
 use crate::map::viewer::open_viewer;
+use crate::map::CalculateParametersError;
 use crate::tab::{Tab, TabType};
 use crate::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
@@ -35,6 +36,7 @@ use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
 use rand::prelude::StdRng;
 use rand::SeedableRng;
+use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
 use std::ops::Deref;
@@ -70,6 +72,36 @@ lazy_static! {
 
             json_data
         });
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum ToastType {
+    Success,
+    Error,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct ToastMessage {
+    #[serde(rename = "type")]
+    ty: ToastType,
+    message: String,
+}
+
+impl ToastMessage {
+    pub fn success(message: impl Into<String>) -> Self {
+        Self {
+            ty: ToastType::Success,
+            message: message.into(),
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            ty: ToastType::Error,
+            message: message.into(),
+        }
+    }
 }
 
 #[tauri::command]
@@ -120,10 +152,35 @@ async fn frontend_ready(
                         info!("Opening Live viewer",);
 
                         let mut map_data_collection =
-                            get_map_data_collection_live_viewer_data(lvd).await;
-                        map_data_collection.iter_mut().for_each(|(_, m)| {
-                            m.calculate_parameters(&json_data.palettes)
-                        });
+                            match get_map_data_collection_live_viewer_data(lvd)
+                                .await
+                            {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    app.emit(
+                                        events::TOAST_MESSAGE,
+                                        ToastMessage::error(e.to_string()),
+                                    )
+                                    .unwrap();
+                                    warn!("Failed to load map data for project {}: {}", &project.name, e);
+                                    continue;
+                                },
+                            };
+
+                        map_data_collection.iter_mut().for_each(
+                            |(_, m)| match m
+                                .calculate_parameters(&json_data.palettes)
+                            {
+                                Ok(_) => {},
+                                Err(e) => app
+                                    .emit(
+                                        events::TOAST_MESSAGE,
+                                        ToastMessage::error(e.to_string()),
+                                    )
+                                    .unwrap(),
+                            },
+                        );
+
                         project.maps = map_data_collection;
 
                         app.emit(

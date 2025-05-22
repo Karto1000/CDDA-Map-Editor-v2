@@ -1,4 +1,7 @@
-use crate::cdda_data::map_data::{CDDAMapDataIntermediate, OmTerrain};
+use crate::cdda_data::map_data::{
+    CDDAMapDataIntermediate, IdCollection, IntoMapDataCollectionError,
+    OmTerrain,
+};
 use crate::cdda_data::overmap::{
     CDDAOvermapSpecial, CDDAOvermapSpecialIntermediate, OvermapSpecialOvermap,
     OvermapSpecialSubType,
@@ -9,32 +12,60 @@ use crate::map::{MapData, MapDataRotation};
 use crate::util::{CDDAIdentifier, Load};
 use anyhow::{anyhow, Error};
 use glam::UVec2;
+use log::warn;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use tauri::utils::config::parse::does_supported_file_name_exist;
+use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
+
+#[derive(Debug, Error)]
+pub enum MapDataImporterError {
+    #[error("Could not find file at path {0}")]
+    FileNotFound(PathBuf),
+    #[error("Could not find map data in given paths")]
+    NoMapDataFound,
+    #[error("Could not read bytes of file at path {0}")]
+    ReadError(PathBuf),
+    #[error("The file at {0} is not a valid CDDA json file. CDDA Json files must have a top level array"
+    )]
+    InvalidJson(PathBuf),
+}
 
 pub struct MapDataImporter {
     pub paths: Vec<PathBuf>,
     pub om_ids: Vec<CDDAIdentifier>,
 }
 
-impl Load<HashMap<CDDAIdentifier, MapData>> for MapDataImporter {
+impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
+    for MapDataImporter
+{
     async fn load(
         &mut self,
-    ) -> Result<HashMap<CDDAIdentifier, MapData>, Error> {
+    ) -> Result<HashMap<CDDAIdentifier, MapData>, MapDataImporterError> {
         let mut found_map_datas: HashMap<CDDAIdentifier, MapData> =
             HashMap::new();
 
         for path in self.paths.iter() {
-            let mut file = File::open(path).await?;
+            let mut file = File::open(path).await.map_err(|e| {
+                warn!("{}", e);
+                MapDataImporterError::FileNotFound(path.clone())
+            })?;
+
             let mut buf = Vec::new();
-            file.read_to_end(&mut buf).await?;
+            file.read_to_end(&mut buf).await.map_err(|e| {
+                warn!("{}", e);
+                MapDataImporterError::ReadError(path.clone())
+            })?;
 
             let importing_map_datas: Vec<CDDAMapDataIntermediate> =
                 serde_json::from_slice::<Vec<Value>>(buf.as_slice())
-                    .map_err(|e| anyhow::Error::from(e))?
+                    .map_err(|e| {
+                        warn!("{}", e);
+                        MapDataImporterError::InvalidJson(path.clone())
+                    })?
                     .into_iter()
                     .filter_map(|v: Value| {
                         serde_json::from_value::<CDDAMapDataIntermediate>(v)
@@ -48,16 +79,33 @@ impl Load<HashMap<CDDAIdentifier, MapData>> for MapDataImporter {
                         match &om_terrain {
                             OmTerrain::Single(s) => {
                                 if om_id_to_find == &CDDAIdentifier(s.clone()) {
-                                    let mut map_data: MapDataCollection =
-                                        mdi.into();
+                                    match <CDDAMapDataIntermediate as TryInto<
+                                        MapDataCollection,
+                                    >>::try_into(
+                                        mdi
+                                    ) {
+                                        Ok(mut map_data) => {
+                                            match map_data
+                                                .maps
+                                                .remove(&UVec2::ZERO)
+                                            {
+                                                None => {
+                                                    warn!("Missing map data at 0,0 for duplicate terrain {}", om_id_to_find);
+                                                    break;
+                                                },
+                                                Some(v) => {
+                                                    found_map_datas.insert(
+                                                        om_id_to_find.clone(),
+                                                        v,
+                                                    );
+                                                },
+                                            }
+                                        },
+                                        Err(e) => {
+                                            warn!("{}", e);
+                                        },
+                                    }
 
-                                    found_map_datas.insert(
-                                        om_id_to_find.clone(),
-                                        map_data
-                                            .maps
-                                            .remove(&UVec2::ZERO)
-                                            .unwrap(),
-                                    );
                                     break;
                                 }
                             },
@@ -71,16 +119,32 @@ impl Load<HashMap<CDDAIdentifier, MapData>> for MapDataImporter {
                                     .is_some();
 
                                 if any_matches {
-                                    let mut map_data: MapDataCollection =
-                                        mdi.into();
-
-                                    found_map_datas.insert(
-                                        om_id_to_find.clone(),
-                                        map_data
-                                            .maps
-                                            .remove(&UVec2::ZERO)
-                                            .unwrap(),
-                                    );
+                                    match <CDDAMapDataIntermediate as TryInto<
+                                        MapDataCollection,
+                                    >>::try_into(
+                                        mdi
+                                    ) {
+                                        Ok(mut map_data) => {
+                                            match map_data
+                                                .maps
+                                                .remove(&UVec2::ZERO)
+                                            {
+                                                None => {
+                                                    warn!("Missing map data at 0,0 for duplicate terrain {}", om_id_to_find);
+                                                    break;
+                                                },
+                                                Some(v) => {
+                                                    found_map_datas.insert(
+                                                        om_id_to_find.clone(),
+                                                        v,
+                                                    );
+                                                },
+                                            }
+                                        },
+                                        Err(e) => {
+                                            warn!("{}", e);
+                                        },
+                                    }
                                     break;
                                 }
                             },
@@ -95,19 +159,43 @@ impl Load<HashMap<CDDAIdentifier, MapData>> for MapDataImporter {
                                     .is_some();
 
                                 if any_matches {
-                                    let map_data: MapDataCollection =
-                                        mdi.into();
+                                    match <CDDAMapDataIntermediate as TryInto<
+                                        MapDataCollection,
+                                    >>::try_into(
+                                        mdi
+                                    ) {
+                                        Ok(map_data) => {
+                                            for (k, v) in map_data.maps {
+                                                let id_list = match n
+                                                    .get(k.y as usize)
+                                                {
+                                                    None => {
+                                                        warn!("Missing nested terrain identifier list for map data {}", om_id_to_find);
+                                                        break;
+                                                    },
+                                                    Some(id_list) => id_list,
+                                                };
 
-                                    for (k, v) in map_data.maps {
-                                        let id = n
-                                            .get(k.y as usize)
-                                            .unwrap()
-                                            .get(k.x as usize)
-                                            .unwrap()
-                                            .clone();
-
-                                        found_map_datas
-                                            .insert(CDDAIdentifier(id), v);
+                                                match id_list.get(k.x as usize)
+                                                {
+                                                    None => {
+                                                        warn!("Missing nested terrain identifier list for map data {}", om_id_to_find);
+                                                        break;
+                                                    },
+                                                    Some(id) => {
+                                                        found_map_datas.insert(
+                                                            CDDAIdentifier(
+                                                                id.clone(),
+                                                            ),
+                                                            v,
+                                                        );
+                                                    },
+                                                }
+                                            }
+                                        },
+                                        Err(e) => {
+                                            warn!("{}", e);
+                                        },
                                     }
 
                                     break;
@@ -123,82 +211,138 @@ impl Load<HashMap<CDDAIdentifier, MapData>> for MapDataImporter {
     }
 }
 
+#[derive(Debug, Error)]
+pub enum SingleMapDataImporterError {
+    #[error("Could not find file at path {0}")]
+    FileNotFound(PathBuf),
+    #[error("Could not find map data in given paths")]
+    NoMapDataFound,
+    #[error("Could not read bytes of file at path {0}")]
+    ReadError(PathBuf),
+    #[error("The file at {0} is not a valid CDDA json file; {1}")]
+    InvalidJson(PathBuf, serde_json::Error),
+    #[error(transparent)]
+    ImportError(#[from] IntoMapDataCollectionError),
+    #[error("The map data {0} at is not valid; {1}")]
+    InvalidMapData(CDDAIdentifier, serde_json::Error),
+}
+
 pub struct SingleMapDataImporter {
     pub paths: Vec<PathBuf>,
     pub om_terrain: CDDAIdentifier,
 }
 
-impl Load<MapDataCollection> for SingleMapDataImporter {
-    async fn load(&mut self) -> Result<MapDataCollection, Error> {
+impl Load<MapDataCollection, SingleMapDataImporterError>
+    for SingleMapDataImporter
+{
+    async fn load(
+        &mut self,
+    ) -> Result<MapDataCollection, SingleMapDataImporterError> {
         for path in &self.paths {
-            let mut file = File::open(path).await?;
-            let mut buf = Vec::new();
-            file.read_to_end(&mut buf).await?;
+            let mut file = File::open(path).await.map_err(|e| {
+                warn!("{}", e);
+                SingleMapDataImporterError::FileNotFound(path.clone())
+            })?;
 
-            let importing_map_datas: Vec<CDDAMapDataIntermediate> =
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf).await.map_err(|e| {
+                warn!("{}", e);
+                SingleMapDataImporterError::ReadError(path.clone())
+            })?;
+
+            let importing_map_data_ids: Vec<(IdCollection, Value)> =
                 serde_json::from_slice::<Vec<Value>>(buf.as_slice())
-                    .map_err(|e| anyhow::Error::from(e))?
+                    .map_err(|e| {
+                        warn!("{}", e);
+                        SingleMapDataImporterError::InvalidJson(path.clone(), e)
+                    })?
                     .into_iter()
                     .filter_map(|v: Value| {
-                        serde_json::from_value::<CDDAMapDataIntermediate>(v)
-                            .ok()
+                        let id_collection =
+                            serde_json::from_value::<IdCollection>(v.clone())
+                                .ok()?;
+                        Some((id_collection, v))
                     })
                     .collect();
 
-            let map_data = importing_map_datas
-                .into_iter()
-                .find_map(|mdi| {
-                    if let Some(update_terrain) = &mdi.update_mapgen_id {
-                        return match self.om_terrain == *update_terrain {
-                            true => Some(mdi.into()),
-                            false => None,
-                        };
-                    }
+            for (id_collection, v) in importing_map_data_ids {
+                let mdi: Result<CDDAMapDataIntermediate, serde_json::Error> =
+                    serde_json::from_value(v);
 
-                    if let Some(nested_terrain) = &mdi.nested_mapgen_id {
-                        return match self.om_terrain == *nested_terrain {
-                            true => Some(mdi.into()),
-                            false => None,
-                        };
-                    }
-
-                    if let Some(om_terrain) = &mdi.om_terrain {
-                        return match om_terrain {
-                            OmTerrain::Single(s) => match self.om_terrain
-                                == CDDAIdentifier((*s).clone())
-                            {
-                                true => Some(mdi.into()),
-                                false => None,
+                if let Some(update_terrain) = &id_collection.update_mapgen_id {
+                    if self.om_terrain == *update_terrain {
+                        return match mdi {
+                            Ok(mdi) => Ok(mdi.try_into()?),
+                            Err(e) => {
+                                Err(SingleMapDataImporterError::InvalidMapData(
+                                    self.om_terrain.clone(),
+                                    e,
+                                ))
                             },
-                            OmTerrain::Duplicate(duplicate) => {
-                                match duplicate.iter().find(|d| {
+                        };
+                    }
+                }
+
+                if let Some(nested_terrain) = &id_collection.nested_mapgen_id {
+                    if self.om_terrain == *nested_terrain {
+                        return match mdi {
+                            Ok(mdi) => Ok(mdi.try_into()?),
+                            Err(e) => {
+                                Err(SingleMapDataImporterError::InvalidMapData(
+                                    self.om_terrain.clone(),
+                                    e,
+                                ))
+                            },
+                        };
+                    }
+                }
+
+                if let Some(om_terrain) = &id_collection.om_terrain {
+                    match om_terrain {
+                        OmTerrain::Single(s) => {
+                            if self.om_terrain == CDDAIdentifier((*s).clone()) {
+                                return match mdi {
+                                    Ok(mdi) => Ok(mdi.try_into()?),
+                                    Err(e) => Err(SingleMapDataImporterError::InvalidMapData(self.om_terrain.clone(), e))
+                                };
+                            }
+                        },
+                        OmTerrain::Duplicate(duplicate) => {
+                            if duplicate
+                                .iter()
+                                .find(|d| {
                                     CDDAIdentifier((*d).clone())
                                         == self.om_terrain
-                                }) {
-                                    Some(_) => Some(mdi.into()),
-                                    None => None,
-                                }
-                            },
-                            OmTerrain::Nested(n) => {
-                                match n.iter().flatten().find(|s| {
+                                })
+                                .is_some()
+                            {
+                                return match mdi {
+                                    Ok(mdi) => Ok(mdi.try_into()?),
+                                    Err(e) => Err(SingleMapDataImporterError::InvalidMapData(self.om_terrain.clone(), e))
+                                };
+                            }
+                        },
+                        OmTerrain::Nested(n) => {
+                            if n.iter()
+                                .flatten()
+                                .find(|s| {
                                     CDDAIdentifier((*s).clone())
                                         == self.om_terrain
-                                }) {
-                                    None => None,
-                                    Some(_) => Some(mdi.into()),
-                                }
-                            },
-                        };
+                                })
+                                .is_some()
+                            {
+                                return match mdi {
+                                    Ok(mdi) => Ok(mdi.try_into()?),
+                                    Err(e) => Err(SingleMapDataImporterError::InvalidMapData(self.om_terrain.clone(), e))
+                                };
+                            }
+                        },
                     };
-
-                    None
-                })
-                .ok_or(anyhow!("Could not find map data"))?;
-
-            return Ok(map_data);
+                };
+            }
         }
 
-        Err(anyhow!("No map data found"))
+        Err(SingleMapDataImporterError::NoMapDataFound)
     }
 }
 
@@ -231,27 +375,56 @@ fn remove_orientation_suffix_and_get_rotation(
     (final_overmap_id, rotation)
 }
 
+#[derive(Debug, Error)]
+pub enum OvermapSpecialImporterError {
+    #[error("Could not find file at path {0}")]
+    FileNotFound(PathBuf),
+    #[error("Could not find overmap special {0} in given paths")]
+    NoOvermapSpecialFound(String),
+    #[error("Could not read bytes of file at path {0}")]
+    ReadError(PathBuf),
+    #[error("The file at {0} is not a valid CDDA json file; {1}")]
+    InvalidJson(PathBuf, serde_json::Error),
+    #[error("Overmap specials with mutable overmaps are not supported")]
+    MutableOvermapNotSupported,
+    #[error(transparent)]
+    ImportError(#[from] MapDataImporterError),
+}
+
 pub struct OvermapSpecialImporter {
     pub om_special_id: CDDAIdentifier,
     pub overmap_special_paths: Vec<PathBuf>,
     pub mapgen_entry_paths: Vec<PathBuf>,
 }
 
-impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
+impl Load<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
+    for OvermapSpecialImporter
+{
     async fn load(
         &mut self,
-    ) -> Result<HashMap<ZLevel, MapDataCollection>, Error> {
+    ) -> Result<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
+    {
         let mut aggregated_map_data: HashMap<ZLevel, MapDataCollection> =
             HashMap::new();
 
         for path in &self.overmap_special_paths {
-            let mut file = File::open(path).await?;
+            let mut file = File::open(path).await.map_err(|e| {
+                warn!("{}", e);
+                OvermapSpecialImporterError::FileNotFound(path.clone())
+            })?;
+
             let mut buf = Vec::new();
-            file.read_to_end(&mut buf).await?;
+            file.read_to_end(&mut buf).await.map_err(|e| {
+                warn!("{}", e);
+                OvermapSpecialImporterError::ReadError(path.clone())
+            })?;
 
             let overmap_special: CDDAOvermapSpecialIntermediate =
                 serde_json::from_slice::<Vec<Value>>(buf.as_slice())
-                    .map_err(|e| anyhow::Error::from(e))?
+                    .map_err(|e| {
+                        warn!("{}", e);
+                        OvermapSpecialImporterError::InvalidJson(path.clone(), e)
+                    })?
                     .into_iter()
                     .filter_map(|v: Value| {
                         serde_json::from_value::<CDDAOvermapSpecialIntermediate>(v)
@@ -267,21 +440,16 @@ impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
                         }
                         IdOrAbstract::Abstract(_) => None,
                     })
-                    .ok_or(anyhow!(
-                    "Overmap special {} not found",
-                    self.om_special_id
-                ))?;
+                    .ok_or(OvermapSpecialImporterError::NoOvermapSpecialFound(self.om_special_id.0.clone()))?;
 
             let overmap_special: CDDAOvermapSpecial = overmap_special.into();
 
             let om_specials: Vec<OvermapSpecialOvermap> =
                 match overmap_special.ty {
                     OvermapSpecialSubType::Fixed { overmaps, .. } => overmaps,
-                    OvermapSpecialSubType::Mutable { .. } => {
-                        return Err(anyhow!(
-                            "Mutable special overmap not supported"
-                        ))
-                    },
+                    OvermapSpecialSubType::Mutable { .. } => return Err(
+                        OvermapSpecialImporterError::MutableOvermapNotSupported,
+                    ),
                 };
 
             let mut importer = MapDataImporter {
@@ -298,7 +466,7 @@ impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
                     .collect(),
             };
 
-            let mut data = importer.load().await?;
+            let data = importer.load().await?;
 
             for om_special in om_specials {
                 let (final_id, rotation) =
@@ -318,8 +486,10 @@ impl Load<HashMap<ZLevel, MapDataCollection>> for OvermapSpecialImporter {
                             om_special.point.z,
                             MapDataCollection::default(),
                         );
+
                         let map_data_collection = aggregated_map_data
                             .get_mut(&om_special.point.z)
+                            // Safe since we just inserted it
                             .unwrap();
 
                         map_data_collection.maps.insert(

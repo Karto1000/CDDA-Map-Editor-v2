@@ -43,7 +43,8 @@ export enum IconName {
     SettingsSmall = "settings-small",
     ShapesSmall = "shapes-small",
     WindowedSmall = "windowed-small",
-    EyeMedium = "eye-medium"
+    EyeMedium = "eye-medium",
+    CheckmarkMedium = "checkmark-medium",
 }
 
 //===================================================================
