@@ -208,6 +208,7 @@ pub enum MappingKind {
     Monster,
     Field,
     Nested,
+    Vehicle,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -543,7 +544,9 @@ impl MapData {
                         MappingKind::Field => {
                             ident_mut.field = Some(id.clone())
                         },
-                        MappingKind::Nested | MappingKind::ItemGroups => {
+                        MappingKind::Nested
+                        | MappingKind::ItemGroups
+                        | MappingKind::Vehicle => {
                             unreachable!()
                         },
                     }
@@ -700,6 +703,7 @@ impl MapData {
                         MappingKind::Monster => {},
                         MappingKind::Field => {},
                         MappingKind::Nested => {},
+                        MappingKind::Vehicle => {},
                     }
                 }
             }

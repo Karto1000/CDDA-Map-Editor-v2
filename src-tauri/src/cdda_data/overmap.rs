@@ -144,8 +144,9 @@ pub struct CDDAOvermapSpecial {
     #[serde(flatten)]
     pub ty: OvermapSpecialSubType,
 
-    #[serde(rename = "copy-from")]
     pub is_abstract: bool,
+
+    #[serde(rename = "copy-from")]
     pub copy_from: Option<CDDAIdentifier>,
     pub flags: Option<Vec<String>>,
     pub extend: Option<CDDAExtendOp>,

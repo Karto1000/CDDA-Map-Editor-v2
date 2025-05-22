@@ -1,9 +1,10 @@
+use crate::cdda_data::map_data::MapGenVehicle;
 use crate::cdda_data::map_data::{
     MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonster,
     MapGenSign, MapGenTrap, PlaceInnerComputers, PlaceInnerFields,
     PlaceInnerFurniture, PlaceInnerGaspumps, PlaceInnerItems,
     PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain, PlaceInnerToilets,
-    PlaceInnerTraps,
+    PlaceInnerTraps, PlaceInnerVehicles,
 };
 use crate::cdda_data::MapGenValue;
 use crate::map::MapGenNested;
@@ -143,6 +144,19 @@ impl From<PlaceInnerTraps> for TrapsProperty {
 
         Self {
             trap: vec![Weighted::new(mgv, 1)],
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct VehiclesProperty {
+    pub vehicles: Vec<Weighted<MapGenVehicle>>,
+}
+
+impl From<PlaceInnerVehicles> for VehiclesProperty {
+    fn from(value: PlaceInnerVehicles) -> Self {
+        Self {
+            vehicles: vec![Weighted::new(value.value, 1)],
         }
     }
 }

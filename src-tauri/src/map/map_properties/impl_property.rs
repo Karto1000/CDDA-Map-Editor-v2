@@ -4,7 +4,7 @@ use crate::cdda_data::map_data::{MapGenGaspumpFuelType, ReferenceOrInPlace};
 use crate::map::map_properties::{
     ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty,
     ItemsProperty, MonstersProperty, NestedProperty, SignsProperty,
-    TerrainProperty, ToiletsProperty, TrapsProperty,
+    TerrainProperty, ToiletsProperty, TrapsProperty, VehiclesProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
@@ -602,6 +602,20 @@ impl Property for TrapsProperty {
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
         Value::Null
+    }
+}
+
+impl Property for VehiclesProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<VisibleMappingCommand>> {
+        todo!()
+    }
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        todo!()
     }
 }
 

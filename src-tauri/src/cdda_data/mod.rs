@@ -7,6 +7,8 @@ pub(crate) mod overmap;
 pub(crate) mod palettes;
 pub(crate) mod region_settings;
 pub(crate) mod terrain;
+mod vehicle_parts;
+pub(crate) mod vehicles;
 
 use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
 use crate::cdda_data::item::CDDAItemGroupIntermediate;
@@ -19,6 +21,8 @@ use crate::cdda_data::overmap::{
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrainIntermediate;
+use crate::cdda_data::vehicle_parts::CDDAVehiclePartIntermediate;
+use crate::cdda_data::vehicles::CDDAVehicleIntermediate;
 use crate::util::{
     CDDAIdentifier, GetIdentifier, GetIdentifierError, MeabyVec, MeabyWeighted,
     ParameterIdentifier,
@@ -266,6 +270,8 @@ pub enum CDDAJsonEntry {
     OvermapLocation(CDDAOvermapLocation),
     OvermapTerrain(CDDAOvermapTerrainIntermediate),
     OvermapSpecial(CDDAOvermapSpecialIntermediate),
+    Vehicle(CDDAVehicleIntermediate),
+    VehiclePart(CDDAVehiclePartIntermediate),
 
     // -- UNUSED
     WeatherType,
@@ -275,8 +281,6 @@ pub enum CDDAJsonEntry {
     WeaponCategory,
     Vitamin,
     VehicleGroup,
-    Vehicle,
-    VehiclePart,
     Uncraft,
     Widget,
     StartLocation,

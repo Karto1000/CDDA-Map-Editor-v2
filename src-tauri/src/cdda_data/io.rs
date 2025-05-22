@@ -8,6 +8,8 @@ use crate::cdda_data::overmap::{
 use crate::cdda_data::palettes::CDDAPalette;
 use crate::cdda_data::region_settings::CDDARegionSettings;
 use crate::cdda_data::terrain::CDDATerrain;
+use crate::cdda_data::vehicle_parts::CDDAVehiclePart;
+use crate::cdda_data::vehicles::CDDAVehicle;
 use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
 use crate::editor_data::MapDataCollection;
 use crate::map::MapData;
@@ -44,6 +46,8 @@ pub struct DeserializedCDDAJsonData {
     pub overmap_locations: HashMap<CDDAIdentifier, CDDAOvermapLocation>,
     pub overmap_terrains: HashMap<CDDAIdentifier, CDDAOvermapTerrain>,
     pub overmap_specials: HashMap<CDDAIdentifier, CDDAOvermapSpecial>,
+    pub vehicles: HashMap<CDDAIdentifier, CDDAVehicle>,
+    pub vehicle_parts: HashMap<CDDAIdentifier, CDDAVehiclePart>,
 }
 
 #[derive(Debug, Error)]
@@ -677,6 +681,30 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                         cdda_data
                             .overmap_specials
                             .insert(special.id.clone(), special);
+                    },
+                    CDDAJsonEntry::Vehicle(v) => {
+                        let vehicle: CDDAVehicle = v.into();
+
+                        debug!(
+                            "Found Vehicle entry {} in {:?}",
+                            vehicle.id,
+                            entry.path()
+                        );
+
+                        cdda_data.vehicles.insert(vehicle.id.clone(), vehicle);
+                    },
+                    CDDAJsonEntry::VehiclePart(vp) => {
+                        let vehicle_part: CDDAVehiclePart = vp.into();
+
+                        debug!(
+                            "Found VehiclePart entry {} in {:?}",
+                            vehicle_part.id,
+                            entry.path()
+                        );
+
+                        cdda_data
+                            .vehicle_parts
+                            .insert(vehicle_part.id.clone(), vehicle_part);
                     },
                     _ => {
                         info!("Unused JSON entry in {:?}", entry.path());

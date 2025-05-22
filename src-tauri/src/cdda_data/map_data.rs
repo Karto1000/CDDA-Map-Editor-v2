@@ -7,6 +7,7 @@ use crate::editor_data::{MapCoordinates, MapDataCollection};
 use crate::map::map_properties::ComputersProperty;
 use crate::map::map_properties::ToiletsProperty;
 use crate::map::map_properties::TrapsProperty;
+use crate::map::map_properties::VehiclesProperty;
 use crate::map::map_properties::{
     FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty,
     SignsProperty, TerrainProperty,
@@ -28,7 +29,7 @@ use crate::{skip_err, skip_none};
 use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
 use paste::paste;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -490,6 +491,7 @@ create_place_inner!(Monsters, MapGenMonster);
 create_place_inner!(Toilets, ());
 
 create_place_inner!(Traps, MapGenTrap);
+create_place_inner!(Vehicles, MapGenVehicle);
 
 const fn default_chance() -> i32 {
     100
@@ -560,6 +562,7 @@ impl_from!(PlaceInnerComputers);
 impl_from!(PlaceInnerSigns);
 impl_from!(PlaceInnerGaspumps);
 impl_from!(PlaceInnerTraps);
+impl_from!(PlaceInnerVehicles);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -619,7 +622,8 @@ map_data_object!(
     computers:  MeabyVec<MeabyWeighted<MapGenComputer>>,
     signs:  MeabyVec<MeabyWeighted<MapGenSign>>,
     gaspumps:  MeabyVec<MeabyWeighted<MapGenGaspump>>,
-    traps:  MeabyVec<MeabyWeighted<MapGenTrap>>
+    traps:  MeabyVec<MeabyWeighted<MapGenTrap>>,
+    vehicles: MeabyVec<MeabyWeighted<MapGenVehicle>>
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -801,6 +805,18 @@ impl CDDAMapDataIntermediate {
             trap_map.insert(char, trap_prop as Arc<dyn Property>);
         }
 
+        let mut vehicles_map = HashMap::new();
+        for (char, vehicles) in self.object.common.vehicles.clone() {
+            let vehicles_prop = Arc::new(VehiclesProperty {
+                vehicles: vehicles
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            vehicles_map.insert(char, vehicles_prop as Arc<dyn Property>);
+        }
+
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
         properties.insert(MappingKind::Monster, monster_map);
@@ -812,6 +828,7 @@ impl CDDAMapDataIntermediate {
         properties.insert(MappingKind::Sign, sign_map);
         properties.insert(MappingKind::Gaspump, gaspumps_map);
         properties.insert(MappingKind::Trap, trap_map);
+        properties.insert(MappingKind::Vehicle, vehicles_map);
 
         properties
     }
@@ -891,6 +908,7 @@ impl CDDAMapDataIntermediate {
         insert_place!(Nested);
         insert_place!(Field, fields);
         insert_place!(ItemGroups, items);
+        insert_place!(Vehicle, vehicles);
 
         place
     }
@@ -1212,4 +1230,57 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
         Ok(collection)
     }
+}
+
+fn default_rotation() -> MeabyVec<i32> {
+    MeabyVec::Single(0)
+}
+
+// (optional, integer) Defaults to -1, light damage. A value of 0 equates to undamaged,
+// 1 heavily damaged and 2 perfect condition with no faults and disabled security.
+#[derive(Debug, Default, Clone)]
+pub enum VehicleStatus {
+    #[default]
+    LightDamage = -1,
+    Undamaged = 0,
+    HeavilyDamaged = 1,
+    Perfect = 2,
+}
+
+impl<'de> Deserialize<'de> for VehicleStatus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = i32::deserialize(deserializer)?;
+        Ok(match value {
+            -1 => VehicleStatus::LightDamage,
+            0 => VehicleStatus::Undamaged,
+            1 => VehicleStatus::HeavilyDamaged,
+            2 => VehicleStatus::Perfect,
+            // TODO: Some values in the json files are above 2.
+            // These don't seem to be handled anywhere so i'm guessing it just defaults to light damage.
+            _ => VehicleStatus::LightDamage,
+        })
+    }
+}
+
+impl Serialize for VehicleStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i32(self.clone() as i32)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MapGenVehicle {
+    pub vehicle: CDDAIdentifier,
+
+    #[serde(default)]
+    pub status: VehicleStatus,
+
+    #[serde(default = "default_rotation")]
+    pub rotation: MeabyVec<i32>,
 }
