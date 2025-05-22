@@ -1,6 +1,5 @@
 use crate::cdda_data::map_data::MapGenMonsterType;
-use crate::cdda_data::GetIdentifier;
-use crate::util::{GetIdentifierError, WeightedIndexError};
+use crate::cdda_data::{GetIdentifier, GetIdentifierError, WeightedIndexError};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;

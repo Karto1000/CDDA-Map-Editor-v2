@@ -27,6 +27,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "cdda_macros"
+version = "0.1.0"
+dependencies = [
+ "cdda_lib",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "cfg-if"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

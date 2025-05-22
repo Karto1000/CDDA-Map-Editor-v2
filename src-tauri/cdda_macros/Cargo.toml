@@ -6,8 +6,8 @@ edition = "2021"
 [dependencies]
 proc-macro2 = "1.0.95"
 quote = "1.0.40"
-syn = "2.0.101"
-darling = "0.20.11"
+syn = { version = "2.0.101", features = ["full"] }
+cdda_lib = { path = "../cdda_lib" }
 
 [lib]
 proc-macro = true

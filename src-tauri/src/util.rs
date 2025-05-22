@@ -10,33 +10,6 @@ use std::ops::Deref;
 use thiserror::Error;
 use tokio::sync::MutexGuard;
 
-#[derive(Debug, Error)]
-pub enum GetIdentifierError {
-    #[error(transparent)]
-    GetRandomError(#[from] GetRandomError),
-
-    #[error("Missing fallback for non existing parameter {0}")]
-    MissingFallback(String),
-
-    #[error("Missing value in case {0} for switch {1}")]
-    MissingSwitchCaseValue(String, String),
-}
-
-#[derive(Debug, Error, Serialize)]
-pub enum WeightedIndexError {
-    #[error("Invalid weights for weighted index {0:?}")]
-    InvalidWeights(Vec<i32>),
-}
-
-#[derive(Debug, Error, Serialize)]
-pub enum GetRandomError {
-    #[error(transparent)]
-    WeightedIndexError(#[from] WeightedIndexError),
-
-    #[error("Failed to get the identifier for the chosen item at index {0}")]
-    GetIdentifierError(usize),
-}
-
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct UVec2JsonKey(pub UVec2);
 

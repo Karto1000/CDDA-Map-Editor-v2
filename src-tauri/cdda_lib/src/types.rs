@@ -8,6 +8,7 @@ use serde_derive::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
+use std::fmt::Debug;
 use std::ops::{Add, Deref, Rem, Sub};
 
 #[derive(Deserialize)]
@@ -22,6 +23,14 @@ pub struct CDDAExtendOp {
     pub flags: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub enum IdOrAbstract<T> {
+    #[serde(rename = "id")]
+    Id(T),
+    #[serde(rename = "abstract")]
+    Abstract(CDDAIdentifier),
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDADeleteOp {
     pub flags: Option<Vec<String>>,
@@ -32,14 +41,6 @@ pub struct CDDADeleteOp {
 pub enum CDDAString {
     String(String),
     StringMap { str: String },
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub enum IdOrAbstract<T> {
-    #[serde(rename = "id")]
-    Id(T),
-    #[serde(rename = "abstract")]
-    Abstract(CDDAIdentifier),
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
@@ -452,4 +453,81 @@ pub enum MapGenValue {
     // because serde keeps infinitely calling the Deserialize function even though it should deserialize to the String variant.
     // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde.
     Distribution(MeabyVec<MeabyWeighted<CDDADistributionInner>>),
+}
+
+pub trait ImportCDDAObject: Clone + Debug {
+    fn merge(base: &Self, override_: &Self) -> Self;
+
+    fn copy_from(&self) -> Option<&CDDAIdentifier>;
+
+    fn extend(&self) -> Option<&CDDAExtendOp>;
+    fn delete(&self) -> Option<&CDDADeleteOp>;
+
+    fn flags(&self) -> &Vec<String>;
+    fn set_flags(&mut self, flags: Vec<String>);
+
+    fn calculate_copy(
+        &self,
+        all_intermediate_objects: &HashMap<CDDAIdentifier, Self>,
+    ) -> Self {
+        match self.copy_from() {
+            None => self.clone(),
+            Some(copy_from_id) => {
+                let mut copy_from_special =
+                    match all_intermediate_objects.get(copy_from_id) {
+                        None => {
+                            log::warn!(
+                                "Could not copy {:?} due to it not existing",
+                                copy_from_id,
+                            );
+                            return self.clone();
+                        },
+                        Some(t) => t.clone(),
+                    };
+
+                if copy_from_special.copy_from().is_some() {
+                    copy_from_special = copy_from_special
+                        .calculate_copy(all_intermediate_objects);
+                }
+
+                match &self.extend() {
+                    None => {},
+                    Some(extend) => match &extend.flags {
+                        None => {},
+                        Some(new_flags) => {
+                            let mut old_flags =
+                                copy_from_special.flags().clone();
+                            old_flags.extend(new_flags.clone());
+                            copy_from_special.set_flags(old_flags);
+                        },
+                    },
+                }
+
+                match &self.delete() {
+                    None => {},
+                    Some(extend) => match &extend.flags {
+                        None => {},
+                        Some(new_flags) => {
+                            let mut old_flags =
+                                copy_from_special.flags().clone();
+
+                            old_flags = old_flags
+                                .into_iter()
+                                .filter(|f| {
+                                    new_flags
+                                        .iter()
+                                        .find(|nf| *nf == f)
+                                        .is_none()
+                                })
+                                .collect();
+
+                            copy_from_special.set_flags(old_flags);
+                        },
+                    },
+                }
+
+                Self::merge(&copy_from_special, self)
+            },
+        }
+    }
 }

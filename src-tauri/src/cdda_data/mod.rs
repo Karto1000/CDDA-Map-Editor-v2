@@ -1,22 +1,22 @@
 use rand::distr::Distribution;
-pub(crate) mod furniture;
-pub(crate) mod io;
-pub(crate) mod item;
-pub(crate) mod map_data;
-pub(crate) mod monster;
-pub(crate) mod overmap;
-pub(crate) mod palettes;
-pub(crate) mod region_settings;
-pub(crate) mod terrain;
-mod vehicle_parts;
-pub(crate) mod vehicles;
+pub mod furniture;
+pub mod io;
+pub mod item;
+pub mod map_data;
+pub mod monster;
+pub mod overmap;
+pub mod palettes;
+pub mod region_settings;
+pub mod terrain;
+pub mod vehicle_parts;
+pub mod vehicles;
 
 use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
 use crate::cdda_data::item::CDDAItemGroupIntermediate;
 use crate::cdda_data::map_data::CDDAMapDataIntermediate;
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::overmap::{
-    CDDAOvermapLocation, CDDAOvermapSpecialIntermediate,
+    CDDAOvermapLocationIntermediate, CDDAOvermapSpecialIntermediate,
     CDDAOvermapTerrainIntermediate,
 };
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
@@ -25,7 +25,6 @@ use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
 use crate::cdda_data::vehicle_parts::CDDAVehiclePartIntermediate;
 use crate::cdda_data::vehicles::CDDAVehicleIntermediate;
 use crate::tileset::GetRandom;
-use crate::util::{GetIdentifierError, GetRandomError, WeightedIndexError};
 use cdda_lib::types::{
     CDDADistributionInner, CDDAIdentifier, DistributionInner, IdOrAbstract,
     MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier,
@@ -42,6 +41,34 @@ use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
 use std::ops::{Add, Rem, Sub};
 use strum_macros::EnumIter;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum GetIdentifierError {
+    #[error(transparent)]
+    GetRandomError(#[from] GetRandomError),
+
+    #[error("Missing fallback for non existing parameter {0}")]
+    MissingFallback(String),
+
+    #[error("Missing value in case {0} for switch {1}")]
+    MissingSwitchCaseValue(String, String),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum WeightedIndexError {
+    #[error("Invalid weights for weighted index {0:?}")]
+    InvalidWeights(Vec<i32>),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum GetRandomError {
+    #[error(transparent)]
+    WeightedIndexError(#[from] WeightedIndexError),
+
+    #[error("Failed to get the identifier for the chosen item at index {0}")]
+    GetIdentifierError(usize),
+}
 
 pub fn extract_comments<'de, D>(
     deserializer: D,
@@ -279,7 +306,7 @@ pub enum CDDAJsonEntry {
     ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
     MonsterGroup(CDDAMonsterGroup),
-    OvermapLocation(CDDAOvermapLocation),
+    OvermapLocation(CDDAOvermapLocationIntermediate),
     OvermapTerrain(CDDAOvermapTerrainIntermediate),
     OvermapSpecial(CDDAOvermapSpecialIntermediate),
     Vehicle(CDDAVehicleIntermediate),

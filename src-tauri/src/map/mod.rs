@@ -13,12 +13,15 @@ use crate::cdda_data::map_data::{
 };
 use crate::cdda_data::overmap::OvermapTerrainMapgen;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
-use crate::cdda_data::{replace_region_setting, GetIdentifier, TileLayer};
+use crate::cdda_data::{
+    replace_region_setting, GetIdentifier, GetIdentifierError, GetRandomError,
+    TileLayer,
+};
 use crate::editor_data::ZLevel;
 use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
 use crate::tileset::legacy_tileset::MappedCDDAIds;
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
-use crate::util::{bresenham_line, GetIdentifierError, GetRandomError};
+use crate::util::bresenham_line;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,

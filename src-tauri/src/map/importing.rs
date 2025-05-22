@@ -430,16 +430,13 @@ impl Load<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
                         serde_json::from_value::<CDDAOvermapSpecialIntermediate>(v)
                             .ok()
                     })
-                    .find_map(|t| match &t.identifier {
-                        IdOrAbstract::Id(id) => {
-                            if id == &self.om_special_id {
-                                return Some(t);
-                            }
-
-                            None
+                    .find_map(|t| t.id.clone().into_vec().into_iter().find_map(|ident| {
+                        if ident == self.om_special_id {
+                            return Some(t.clone());
                         }
-                        IdOrAbstract::Abstract(_) => None,
-                    })
+
+                        None
+                    }))
                     .ok_or(OvermapSpecialImporterError::NoOvermapSpecialFound(self.om_special_id.0.clone()))?;
 
             let overmap_special: CDDAOvermapSpecial = overmap_special.into();
