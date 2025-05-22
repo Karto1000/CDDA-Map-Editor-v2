@@ -11,7 +11,7 @@ use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::{CDDAExtendOp, CDDAJsonEntry, TileLayer};
 use crate::editor_data::MapDataCollection;
 use crate::map::MapData;
-use crate::util::{CDDAIdentifier, Load};
+use crate::util::{CDDAIdentifier, DistributionInner, Load};
 use anyhow::Error;
 use async_walkdir::WalkDir;
 use futures_lite::stream::StreamExt;
@@ -221,6 +221,76 @@ impl DeserializedCDDAJsonData {
         }
     }
 
+    pub fn add_hardcoded_map_data(&mut self) {
+        // TODO: Implement this
+        // { "forest",           &mapgen_forest },
+        // { "river_curved_not", &mapgen_river_curved_not },
+        // { "river_straight",   &mapgen_river_straight },
+        // { "river_curved",     &mapgen_river_curved },
+        // { "subway_straight",    &mapgen_subway },
+        // { "subway_curved",      &mapgen_subway },
+        // { "subway_end",         &mapgen_subway },
+        // { "subway_tee",         &mapgen_subway },
+        // { "subway_four_way",    &mapgen_subway },
+        // { "lake_shore", &mapgen_lake_shore },
+        // { "ocean_shore", &mapgen_ocean_shore },
+        // { "ravine_edge", &mapgen_ravine_edge },
+
+        let mut forest = MapData::default();
+        forest.fill =
+            Some(DistributionInner::Normal("t_region_groundcover".into()));
+        self.map_data.insert("forest".into(), forest);
+
+        let mut river_curved_not = MapData::default();
+        river_curved_not.fill =
+            Some(DistributionInner::Normal("t_water".into()));
+        self.map_data
+            .insert("river_curved_not".into(), river_curved_not);
+
+        let mut river_straight = MapData::default();
+        river_straight.fill = Some(DistributionInner::Normal("t_water".into()));
+        self.map_data
+            .insert("river_straight".into(), river_straight);
+
+        let mut river_curved = MapData::default();
+        river_curved.fill = Some(DistributionInner::Normal("t_water".into()));
+        self.map_data.insert("river_curved".into(), river_curved);
+
+        let mut subway_straight = MapData::default();
+        subway_straight.fill = Some(DistributionInner::Normal("t_road".into()));
+        self.map_data
+            .insert("subway_straight".into(), subway_straight);
+
+        let mut subway_curved = MapData::default();
+        subway_curved.fill = Some(DistributionInner::Normal("t_road".into()));
+        self.map_data.insert("subway_curved".into(), subway_curved);
+
+        let mut subway_end = MapData::default();
+        subway_end.fill = Some(DistributionInner::Normal("t_road".into()));
+        self.map_data.insert("subway_end".into(), subway_end);
+
+        let mut subway_tee = MapData::default();
+        subway_tee.fill = Some(DistributionInner::Normal("t_road".into()));
+        self.map_data.insert("subway_tee".into(), subway_tee);
+
+        let mut subway_four_way = MapData::default();
+        subway_four_way.fill = Some(DistributionInner::Normal("t_road".into()));
+        self.map_data
+            .insert("subway_four_way".into(), subway_four_way);
+
+        let mut lake_shore = MapData::default();
+        lake_shore.fill = Some(DistributionInner::Normal("t_water".into()));
+        self.map_data.insert("lake_shore".into(), lake_shore);
+
+        let mut ocean_shore = MapData::default();
+        ocean_shore.fill = Some(DistributionInner::Normal("t_water".into()));
+        self.map_data.insert("ocean_shore".into(), ocean_shore);
+
+        let mut ravine_edge = MapData::default();
+        ravine_edge.fill = Some(DistributionInner::Normal("t_water".into()));
+        self.map_data.insert("ravine_edge".into(), ravine_edge);
+    }
+
     pub fn calculate_operations(&mut self) {
         let mut updated_terrain: HashMap<CDDAIdentifier, CDDATerrain> =
             HashMap::new();
@@ -325,6 +395,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
         let mut walkdir = WalkDir::new(&self.json_path);
 
         let mut cdda_data = DeserializedCDDAJsonData::default();
+        cdda_data.add_hardcoded_map_data();
 
         while let Some(entry) = walkdir.next().await {
             let entry = entry?;

@@ -34,7 +34,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 
@@ -392,60 +392,45 @@ impl MapData {
 
         let fill_terrain_sprite = match &self.fill {
             None => None,
-            Some(id) => {
-                let id = id.get_identifier(&self.calculated_parameters);
-
-                Some(id.as_final_id(
-                    &region_settings,
-                    &json_data.terrain,
-                    &json_data.furniture,
-                ))
-            },
+            Some(id) => Some(id.get_identifier(&self.calculated_parameters)),
         };
 
         // we need to calculate the predecessor_mapgen here before so we can replace it later
         match &self.predecessor {
             None => {},
             Some(predecessor_id) => {
-                let predecessor_map_data = match json_data
-                    .map_data
-                    .get(predecessor_id)
+                let predecessor =
+                    json_data.overmap_terrains.get(predecessor_id).expect(
+                        format!(
+                            "Overmap terrain for Predecessor {} to exist",
+                            predecessor_id
+                        )
+                        .as_str(),
+                    );
+
+                let predecessor_map_data = match &predecessor
+                    .mapgen
+                    .clone()
+                    .unwrap_or_default()
+                    .first()
                 {
                     None => {
-                        let predecessor =
-                                json_data.overmap_terrains.get(predecessor_id)
-                                    .expect(format!("Overmap terrain for Predecessor {} to exist", predecessor_id).as_str());
-
-                        match &predecessor
-                            .mapgen
-                            .clone()
-                            .unwrap_or_default()
-                            .first()
-                        {
-                            None => {
-                                // This terrain is defined in a json file, so we can just search for it
-                                json_data.map_data.get(predecessor_id).expect(
-                                    format!(
-                                        "Mapdata for Predecessor {} to exist",
-                                        predecessor_id
-                                    )
-                                    .as_str(),
-                                );
-                            },
-                            Some(omtm) => {
-                                json_data.map_data.get(&omtm.name).expect(
-                                    format!(
-                                        "Hardcoded Map data for predecessor {} to exist",
-                                        omtm.name
-                                    )
-                                    .as_str(),
-                                );
-                            },
-                        }
-
-                        panic!();
+                        // This terrain is defined in a json file, so we can just search for it
+                        json_data.map_data.get(predecessor_id).expect(
+                            format!(
+                                "Mapdata for Predecessor {} to exist",
+                                predecessor_id
+                            )
+                            .as_str(),
+                        )
                     },
-                    Some(s) => s,
+                    Some(omtm) => json_data.map_data.get(&omtm.name).expect(
+                        format!(
+                            "Hardcoded Map data for predecessor {} to exist",
+                            omtm.name
+                        )
+                        .as_str(),
+                    ),
                 };
 
                 local_mapped_cdda_ids =
@@ -463,13 +448,26 @@ impl MapData {
                 None => {
                     let mut mapped_ids = MappedCDDAIds::default();
 
-                    mapped_ids.terrain = fill_terrain_sprite.clone();
+                    mapped_ids.terrain = fill_terrain_sprite.clone().map(|s| {
+                        s.as_final_id(
+                            region_settings,
+                            &json_data.terrain,
+                            &json_data.furniture,
+                        )
+                    });
 
                     local_mapped_cdda_ids.insert(coords, mapped_ids);
                 },
                 Some(mapped_ids) => {
                     if mapped_ids.terrain.is_none() {
-                        mapped_ids.terrain = fill_terrain_sprite.clone();
+                        mapped_ids.terrain =
+                            fill_terrain_sprite.clone().map(|s| {
+                                s.as_final_id(
+                                    region_settings,
+                                    &json_data.terrain,
+                                    &json_data.furniture,
+                                )
+                            })
                     }
                 },
             };

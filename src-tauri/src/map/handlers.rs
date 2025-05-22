@@ -24,7 +24,7 @@ use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
-use std::ops::Deref;
+use std::ops::{Deref, DerefMut};
 use std::time::Duration;
 use strum::IntoEnumIterator;
 use tauri::async_runtime::Mutex;
@@ -264,28 +264,26 @@ pub async fn get_sprites(
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), ()> {
-    let json_data_lock = json_data.lock().await;
+    let mut json_data_lock = json_data.lock().await;
 
-    let json_data = match json_data_lock.deref() {
+    let mut json_data = match json_data_lock.deref_mut() {
         None => return Err(()),
         Some(d) => d,
     };
 
-    let editor_data_lock = editor_data.lock().await;
+    let mut editor_data_lock = editor_data.lock().await;
 
-    let project =
-        match editor_data_lock.projects.iter().find(|p| p.name == name) {
-            None => {
-                warn!("Could not find project with name {}", name);
-                return Err(());
-            },
-            Some(d) => d,
-        };
-
-    let region_settings = json_data
-        .region_settings
-        .get(&CDDAIdentifier("default".into()))
-        .expect("Region settings to exist");
+    let project = match editor_data_lock
+        .projects
+        .iter_mut()
+        .find(|p| p.name == name)
+    {
+        None => {
+            warn!("Could not find project with name {}", name);
+            return Err(());
+        },
+        Some(d) => d,
+    };
 
     let tilesheet_lock = tilesheet.lock().await;
     let tilesheet = match tilesheet_lock.as_ref() {
@@ -313,6 +311,17 @@ pub async fn get_sprites(
         };
     }
 
+    for (_, map_collection) in project.maps.iter_mut() {
+        // we need to calculate the parameters for the predecessor here because we cannot borrow
+        // json data as mutable inside the get_mapped_cdda_ids function
+        map_collection.calculate_predecessor_parameters(&mut json_data);
+    }
+
+    let region_settings = json_data
+        .region_settings
+        .get(&CDDAIdentifier("default".into()))
+        .expect("Region settings to exist");
+
     for (z, map_collection) in project.maps.iter() {
         let local_mapped_cdda_ids =
             map_collection.get_mapped_cdda_ids(json_data, *z);
@@ -337,7 +346,7 @@ pub async fn get_sprites(
 
                 let mut layer_map = HashMap::new();
 
-                // Layer here is done so furniture is above terrain
+                // Layer is used here so furniture is above terrain
                 for (layer, o_id) in [
                     (TileLayer::Terrain, &identifier_group.terrain),
                     (TileLayer::Furniture, &identifier_group.furniture),

@@ -154,6 +154,57 @@ impl MapDataCollection {
         )
     }
 
+    pub fn calculate_predecessor_parameters(
+        &mut self,
+        json_data: &mut DeserializedCDDAJsonData,
+    ) {
+        for (_, map) in self.maps.iter_mut() {
+            match &map.predecessor {
+                None => {},
+                Some(predecessor_id) => {
+                    let predecessor = json_data
+                        .overmap_terrains
+                        .get_mut(predecessor_id)
+                        .expect(
+                            format!(
+                                "Overmap terrain for Predecessor {} to exist",
+                                predecessor_id
+                            )
+                            .as_str(),
+                        );
+
+                    let predecessor_map_data = match &predecessor
+                        .mapgen
+                        .clone()
+                        .unwrap_or_default()
+                        .first_mut()
+                    {
+                        None => {
+                            // This terrain is defined in a json file, so we can just search for it
+                            json_data.map_data.get_mut(predecessor_id).expect(
+                                format!(
+                                    "Mapdata for Predecessor {} to exist",
+                                    predecessor_id
+                                )
+                                    .as_str(),
+                            )
+                        },
+                        Some(omtm) => json_data.map_data.get_mut(&omtm.name).expect(
+                            format!(
+                                "Hardcoded Map data for predecessor {} to exist",
+                                omtm.name
+                            )
+                                .as_str(),
+                        ),
+                    };
+
+                    predecessor_map_data
+                        .calculate_parameters(&json_data.palettes);
+                },
+            }
+        }
+    }
+
     pub fn get_mapped_cdda_ids(
         &self,
         json_data: &DeserializedCDDAJsonData,
