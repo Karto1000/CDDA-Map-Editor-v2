@@ -19,7 +19,7 @@ use crate::cdda_data::{
 };
 use crate::editor_data::ZLevel;
 use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
-use crate::tileset::legacy_tileset::MappedCDDAIds;
+use crate::tileset::legacy_tileset::{MappedCDDAIds, TilesheetCDDAId};
 use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
 use crate::util::bresenham_line;
 use cdda_lib::types::{
@@ -45,110 +45,6 @@ use thiserror::Error;
 
 pub const SPECIAL_EMPTY_CHAR: char = ' ';
 pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
-
-pub trait Set:
-    Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
-{
-    fn coordinates(&self) -> Vec<UVec2>;
-    fn operation(&self) -> &SetOperation;
-    fn tile_layer(&self) -> TileLayer {
-        match self.operation() {
-            SetOperation::Place { ty, .. } => match ty {
-                PlaceableSetType::Terrain => TileLayer::Terrain,
-                PlaceableSetType::Furniture | PlaceableSetType::Trap => {
-                    TileLayer::Furniture
-                },
-            },
-            // TODO: Default to terrain, change
-            _ => TileLayer::Terrain,
-        }
-    }
-
-    fn get_mapped_sprites(
-        &self,
-        chosen_coordinates: Vec<IVec3>,
-    ) -> HashMap<IVec3, MappedCDDAIds> {
-        let mut new_mapped_sprites = HashMap::new();
-
-        for coordinates in chosen_coordinates {
-            match self.operation() {
-                SetOperation::Place { ty, id } => {
-                    let mut mapped_sprite = MappedCDDAIds::default();
-
-                    match ty {
-                        PlaceableSetType::Terrain | PlaceableSetType::Trap => {
-                            mapped_sprite.terrain = Some(id.clone());
-                        },
-                        PlaceableSetType::Furniture => {
-                            mapped_sprite.furniture = Some(id.clone());
-                        },
-                    };
-
-                    new_mapped_sprites
-                        .insert(coordinates, mapped_sprite.clone());
-                },
-                _ => {},
-            }
-        }
-
-        new_mapped_sprites
-    }
-
-    fn get_sprites(
-        &self,
-        chosen_coordinates: Vec<IVec3>,
-        adjacent_sprites: Vec<AdjacentSprites>,
-        tilesheet: &TilesheetKind,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<SpriteType> {
-        let mut sprites = vec![];
-
-        for (coordinates, adjacent_sprites) in
-            chosen_coordinates.into_iter().zip(adjacent_sprites)
-        {
-            let (fg, bg) = match self.operation() {
-                SetOperation::Place { ty, id } => {
-                    let sprite_kind = match tilesheet {
-                        TilesheetKind::Legacy(l) => l.get_sprite(id, json_data),
-                        TilesheetKind::Current(c) => {
-                            c.get_sprite(id, json_data)
-                        },
-                    };
-
-                    let layer = match ty {
-                        PlaceableSetType::Terrain => TileLayer::Terrain,
-                        PlaceableSetType::Furniture
-                        | PlaceableSetType::Trap => TileLayer::Furniture,
-                    };
-
-                    let fg_bg = get_sprite_type_from_sprite(
-                        id,
-                        coordinates,
-                        &adjacent_sprites,
-                        layer.clone(),
-                        &sprite_kind,
-                        json_data,
-                    );
-
-                    fg_bg
-                },
-                _ => (None, None),
-            };
-
-            if let Some(fg) = fg {
-                sprites.push(fg);
-            }
-
-            if let Some(bg) = bg {
-                sprites.push(bg)
-            }
-        }
-        sprites
-    }
-}
-
-clone_trait_object!(Set);
-impl_downcast!(sync Set);
 
 pub trait Place:
     Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
@@ -235,7 +131,7 @@ pub enum VisibleMappingCommandKind {
 
 #[derive(Debug, Serialize, Eq, PartialEq)]
 pub struct VisibleMappingCommand {
-    id: CDDAIdentifier,
+    id: TilesheetCDDAId,
     mapping: MappingKind,
     coordinates: IVec2,
     kind: VisibleMappingCommandKind,
@@ -315,9 +211,8 @@ pub struct MapData {
     #[serde(skip)]
     pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
 
-    #[serde(skip)]
-    pub set: Vec<Arc<dyn Set>>,
-
+    // #[serde(skip)]
+    // pub set: Vec<Arc<dyn Set>>,
     #[serde(skip)]
     pub place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
 }
@@ -348,7 +243,6 @@ impl Default for MapData {
             parameters: Default::default(),
             properties: Default::default(),
             palettes: Default::default(),
-            set: vec![],
             place: Default::default(),
             flags: Default::default(),
         }
@@ -476,12 +370,12 @@ impl MapData {
                     let mut mapped_ids = MappedCDDAIds::default();
 
                     mapped_ids.terrain = fill_terrain_sprite.clone().map(|s| {
-                        replace_region_setting(
+                        TilesheetCDDAId::simple(replace_region_setting(
                             &s,
                             region_settings,
                             &json_data.terrain,
                             &json_data.furniture,
-                        )
+                        ))
                     });
 
                     local_mapped_cdda_ids.insert(coords, mapped_ids);
@@ -490,12 +384,12 @@ impl MapData {
                     if mapped_ids.terrain.is_none() {
                         mapped_ids.terrain =
                             fill_terrain_sprite.clone().map(|s| {
-                                replace_region_setting(
+                                TilesheetCDDAId::simple(replace_region_setting(
                                     &s,
                                     region_settings,
                                     &json_data.terrain,
                                     &json_data.furniture,
-                                )
+                                ))
                             })
                     }
                 },
@@ -510,12 +404,16 @@ impl MapData {
 
             match command.kind {
                 VisibleMappingCommandKind::Place => {
-                    let id = replace_region_setting(
-                        &command.id,
-                        region_settings,
-                        &json_data.terrain,
-                        &json_data.furniture,
-                    );
+                    let id = TilesheetCDDAId {
+                        id: replace_region_setting(
+                            &command.id.id,
+                            region_settings,
+                            &json_data.terrain,
+                            &json_data.furniture,
+                        ),
+                        prefix: command.id.prefix,
+                        postfix: command.id.postfix,
+                    };
 
                     let ident_mut = match local_mapped_cdda_ids
                         .get_mut(&command_3d_coords)
@@ -559,30 +457,6 @@ impl MapData {
                     }
                 },
             }
-        }
-
-        for set in self.set.iter() {
-            let chosen_coordinates: Vec<IVec3> = set
-                .coordinates()
-                .into_iter()
-                .map(|c| IVec3::new(c.x as i32, c.y as i32, z))
-                .collect();
-
-            set.get_mapped_sprites(chosen_coordinates.clone())
-                .into_iter()
-                .for_each(|(coords, ids)| {
-                    match local_mapped_cdda_ids.get_mut(&coords) {
-                        None => {
-                            warn!(
-                                "Coordinates {:?} for set are out of bounds",
-                                coords
-                            );
-                        },
-                        Some(existing_mapped) => {
-                            existing_mapped.update_override(ids);
-                        },
-                    }
-                });
         }
 
         Ok(local_mapped_cdda_ids)
@@ -909,34 +783,6 @@ pub struct SetPoint {
     pub operation: SetOperation,
 }
 
-impl Set for SetPoint {
-    fn coordinates(&self) -> Vec<UVec2> {
-        let mut coords = HashSet::new();
-
-        for _ in self.repeat.0..self.repeat.1 {
-            // Block here to release the lock on RANDOM since the number() function also uses RANDOM
-            {
-                let mut rng = rng();
-                //let mut random = RANDOM.write().unwrap();
-
-                if rng.random_range(1..=self.chance) != 1 {
-                    continue;
-                }
-            }
-
-            let coordinates =
-                UVec2::new(self.x.rand_number(), self.y.rand_number());
-            coords.insert(coordinates);
-        }
-
-        Vec::from_iter(coords)
-    }
-
-    fn operation(&self) -> &SetOperation {
-        &self.operation
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct SetLine {
     pub from_x: NumberOrRange<u32>,
@@ -951,45 +797,6 @@ pub struct SetLine {
     pub operation: SetOperation,
 }
 
-impl Set for SetLine {
-    fn coordinates(&self) -> Vec<UVec2> {
-        let mut coords = HashSet::new();
-
-        for _ in self.repeat.0..self.repeat.1 {
-            {
-                let mut rng = rng();
-                //let mut random = RANDOM.write().unwrap();
-
-                if rng.random_range(1..=self.chance) != 1 {
-                    continue;
-                }
-            }
-
-            let from_x = self.from_x.rand_number();
-            let from_y = self.from_y.rand_number();
-            let to_x = self.to_x.rand_number();
-            let to_y = self.to_y.rand_number();
-
-            let line = bresenham_line(
-                from_x as i32,
-                from_y as i32,
-                to_x as i32,
-                to_y as i32,
-            );
-
-            for (x, y) in line {
-                coords.insert(UVec2::new(x as u32, y as u32));
-            }
-        }
-
-        Vec::from_iter(coords)
-    }
-
-    fn operation(&self) -> &SetOperation {
-        &self.operation
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct SetSquare {
     pub top_left_x: NumberOrRange<u32>,
@@ -1002,30 +809,6 @@ pub struct SetSquare {
     pub chance: u32,
     pub repeat: (u32, u32),
     pub operation: SetOperation,
-}
-
-impl Set for SetSquare {
-    fn coordinates(&self) -> Vec<UVec2> {
-        let mut coordinates = vec![];
-
-        let top_left_chosen_y = self.top_left_y.rand_number();
-        let top_left_chosen_x = self.top_left_x.rand_number();
-
-        let bottom_right_chosen_y = self.bottom_right_y.rand_number();
-        let bottom_right_chosen_x = self.bottom_right_x.rand_number();
-
-        for y in top_left_chosen_y..bottom_right_chosen_y {
-            for x in top_left_chosen_x..bottom_right_chosen_x {
-                coordinates.push(UVec2::new(x, y))
-            }
-        }
-
-        coordinates
-    }
-
-    fn operation(&self) -> &SetOperation {
-        &self.operation
-    }
 }
 
 #[cfg(test)]

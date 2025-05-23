@@ -14,13 +14,11 @@ use crate::map::map_properties::{
 use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
 use crate::map::{
-    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place,
-    PlaceableSetType, Property, RemovableSetType, Set, SetLine, SetOperation,
-    SetPoint, SetSquare,
+    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place
+    , Property
+    ,
 };
 use crate::map::{VisibleMappingCommand, DEFAULT_MAP_DATA_SIZE};
-use crate::warn;
-use crate::{skip_err, skip_none};
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
     NumberOrRange, ParameterIdentifier, Weighted,
@@ -911,162 +909,6 @@ impl CDDAMapDataIntermediate {
 
         place
     }
-
-    fn get_set(&self, map_coordinates: MapCoordinates) -> Vec<Arc<dyn Set>> {
-        let mut set_vec: Vec<Arc<dyn Set>> = vec![];
-        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
-
-        for set in self.object.common.set.clone() {
-            if let Some(ty) = set.line {
-                let x = skip_none!(set.x);
-                let y = skip_none!(set.y);
-                let x2 = skip_none!(set.x2);
-                let y2 = skip_none!(set.y2);
-
-                let operation = match ty.0.as_str() {
-                    "terrain" | "furniture" | "trap" => {
-                        let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Place { id, ty })
-                    },
-                    "trap_remove" | "item_remove" | "field_remove"
-                    | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Remove { ty })
-                    },
-                    "radiation" => {
-                        let amount = skip_none!(set.amount);
-
-                        Some(SetOperation::Radiation { amount })
-                    },
-                    _ => {
-                        warn!("Unknown set line type {}; Skipping", ty);
-                        None
-                    },
-                };
-
-                if let Some(operation) = operation {
-                    let set_line = SetLine {
-                        from_x: x + map_coordinates.x * map_size.x,
-                        from_y: y + map_coordinates.y * map_size.y,
-                        to_x: x2 + map_coordinates.x * map_size.x,
-                        to_y: y2 + map_coordinates.y * map_size.y,
-                        z: set.z.unwrap_or(0),
-                        chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((0, 1)),
-                        operation,
-                    };
-
-                    set_vec.push(Arc::new(set_line));
-                }
-            } else if let Some(ty) = set.point {
-                let x = skip_none!(set.x);
-                let y = skip_none!(set.y);
-
-                let operation = match ty.0.as_str() {
-                    "terrain" | "furniture" | "trap" => {
-                        let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Place { id, ty })
-                    },
-                    "trap_remove" | "item_remove" | "field_remove"
-                    | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Remove { ty })
-                    },
-                    "radiation" => {
-                        let amount = skip_none!(set.amount);
-
-                        Some(SetOperation::Radiation { amount })
-                    },
-                    "variable" => {
-                        let id = skip_none!(set.id.clone());
-
-                        Some(SetOperation::Variable { id })
-                    },
-                    "bash" => Some(SetOperation::Bash {}),
-                    "burn" => Some(SetOperation::Burn {}),
-                    _ => {
-                        warn!("Unknown set point type {}; Skipping", ty);
-                        None
-                    },
-                };
-
-                if let Some(operation) = operation {
-                    let set_point = SetPoint {
-                        x: x + map_coordinates.x * map_size.x,
-                        y: y + map_coordinates.y * map_size.y,
-                        z: set.z.unwrap_or(0),
-                        chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((1, 1)),
-                        operation,
-                    };
-
-                    set_vec.push(Arc::new(set_point))
-                }
-            } else if let Some(ty) = set.square {
-                let x = skip_none!(set.x);
-                let y = skip_none!(set.y);
-                let x2 = skip_none!(set.x2);
-                let y2 = skip_none!(set.y2);
-
-                let operation = match ty.0.as_str() {
-                    "terrain" | "furniture" | "trap" => {
-                        let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Place { id, ty })
-                    },
-                    "trap_remove" | "item_remove" | "field_remove"
-                    | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Remove { ty })
-                    },
-                    "radiation" => Some(SetOperation::Radiation {
-                        amount: set.amount.unwrap_or(NumberOrRange::Number(1)),
-                    }),
-                    _ => {
-                        warn!("Unknown set square type {}; Skipping", ty);
-                        None
-                    },
-                };
-
-                if let Some(operation) = operation {
-                    let set_square = SetSquare {
-                        top_left_x: x + map_coordinates.x * map_size.x,
-                        top_left_y: y + map_coordinates.y * map_size.y,
-                        bottom_right_x: x2 + map_coordinates.x * map_size.x,
-                        bottom_right_y: y2 + map_coordinates.y * map_size.y,
-                        z: set.z.unwrap_or(0),
-                        chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((1, 1)),
-                        operation,
-                    };
-
-                    set_vec.push(Arc::new(set_square))
-                }
-            }
-        }
-
-        set_vec
-    }
 }
 
 #[derive(Debug, Error)]
@@ -1151,10 +993,8 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
                             let properties = self.get_properties();
                             let place = self.get_place(map_coordinates);
-                            let set = self.get_set(map_coordinates);
 
                             map_data.cells = nested_cells;
-                            map_data.set = set;
                             map_data.properties = properties;
                             map_data.place = place;
                             map_data.parameters =
@@ -1190,7 +1030,6 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
         let properties = self.get_properties();
         let place = self.get_place(UVec2::ZERO);
-        let set = self.get_set(UVec2::ZERO);
 
         let mut cells = IndexMap::new();
 
@@ -1214,7 +1053,6 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
         }
 
         map_data.cells = cells;
-        map_data.set = set;
         map_data.properties = properties;
         map_data.place = place;
         map_data.parameters = self.object.common.parameters.clone();

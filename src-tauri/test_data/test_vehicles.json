@@ -4,40 +4,78 @@
     "method": "json",
     "om_terrain": "test_vehicles",
     "object": {
+      "fill_ter": "t_region_groundcover",
       "rows": [
+        "||||||||||||||||||||||||",
         "........................",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "ppppppPppppppPpppppPpppp",
+        "PPPPPPPPPPPPPPPPPPPPPPPP",
         "........................",
+        ".T.T.T.T.T.T.T.T.T.T.T.T",
         "........................",
+        ".2222.....2222.....2222.",
         "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "..1.....................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................",
-        "........................"
+        "||||||||||||||||||||||||",
+        "                        ",
+        "                        ",
+        "   -                -   ",
+        "------------------------",
+        "||||||||||||||||||||||||"
       ],
       "terrain": {
-        ".": "t_grass"
+        "|": "t_chainfence",
+        ".": "t_concrete",
+        "p": "t_pavement",
+        "P": "t_pavement_y",
+        "T": "t_region_tree",
+        "-": "t_sewage_pipe",
+        " ": [
+          [
+            "t_region_shrub",
+            5
+          ],
+          [
+            "t_region_groundcover",
+            100
+          ]
+        ]
       },
-      "vehicles": {
-        "1": {
-          "vehicle": "fire_engine"
+      "furniture": {
+        "2": "f_bench"
+      },
+      "place_vehicles": [
+        {
+          "vehicle": "beetle",
+          "x": [
+            3,
+            5
+          ],
+          "y": [
+            5,
+            7
+          ]
+        },
+        {
+          "vehicle": "car_luxury",
+          "y": [
+            5,
+            7
+          ],
+          "x": [
+            10,
+            20
+          ]
         }
-      }
+      ]
     }
   }
 ]

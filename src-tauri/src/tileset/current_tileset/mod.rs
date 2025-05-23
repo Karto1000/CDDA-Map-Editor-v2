@@ -1,9 +1,9 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::tileset::io::{TilesheetConfigLoader, TilesheetLoader};
+use crate::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::tileset::{SpriteKind, Tilesheet};
 use crate::util::Load;
 use anyhow::{anyhow, Error};
-use cdda_lib::types::CDDAIdentifier;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -14,7 +14,7 @@ pub struct CurrentTilesheet {}
 impl Tilesheet for CurrentTilesheet {
     fn get_sprite(
         &self,
-        id: &CDDAIdentifier,
+        id: &TilesheetCDDAId,
         json_data: &DeserializedCDDAJsonData,
     ) -> SpriteKind {
         todo!()

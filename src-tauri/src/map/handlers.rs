@@ -7,7 +7,7 @@ use crate::editor_data::{
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::map::Serializer;
 use crate::map::{CalculateParametersError, CellRepresentation};
-use crate::tileset::legacy_tileset::MappedCDDAIds;
+use crate::tileset::legacy_tileset::{MappedCDDAIds, TilesheetCDDAId};
 use crate::tileset::{
     AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
 };
@@ -166,7 +166,7 @@ pub enum SpriteType {
 }
 
 pub fn get_sprite_type_from_sprite(
-    id: &CDDAIdentifier,
+    id: &TilesheetCDDAId,
     position: IVec3,
     adjacent_sprites: &AdjacentSprites,
     layer: TileLayer,
@@ -332,7 +332,7 @@ pub async fn get_sprites(
         let tile_map: Vec<
             HashMap<TileLayer, (Option<SpriteType>, Option<SpriteType>)>,
         > = local_mapped_cdda_ids
-            .par_iter()
+            .iter()
             .map(|(p, identifier_group)| {
                 let cell_3d_coords = IVec3::new(p.x, p.y, *z);
 
@@ -358,12 +358,16 @@ pub async fn get_sprites(
                 ] {
                     let id = match o_id {
                         None => continue,
-                        Some(id) => replace_region_setting(
-                            &id,
-                            region_settings,
-                            &json_data.terrain,
-                            &json_data.furniture,
-                        ),
+                        Some(id) => TilesheetCDDAId {
+                            id: replace_region_setting(
+                                &id.id,
+                                region_settings,
+                                &json_data.terrain,
+                                &json_data.furniture,
+                            ),
+                            prefix: id.prefix.clone(),
+                            postfix: id.postfix.clone(),
+                        },
                     };
 
                     let sprite_kind = match tilesheet {

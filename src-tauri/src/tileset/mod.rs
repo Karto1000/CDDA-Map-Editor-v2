@@ -4,7 +4,7 @@ use crate::tileset::current_tileset::CurrentTilesheet;
 use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
 use crate::tileset::legacy_tileset::{
     AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet,
-    MappedCDDAIds, Rotated, Rotates, Rotation, SpriteIndex,
+    MappedCDDAIds, Rotated, Rotates, Rotation, SpriteIndex, TilesheetCDDAId,
 };
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
 use glam::IVec3;
@@ -96,7 +96,7 @@ pub enum TilesheetKind {
 pub trait Tilesheet {
     fn get_sprite(
         &self,
-        id: &CDDAIdentifier,
+        id: &TilesheetCDDAId,
         json_data: &DeserializedCDDAJsonData,
     ) -> SpriteKind;
 }
@@ -264,17 +264,17 @@ impl Sprite {
     }
 
     fn get_matching_list(
-        this_id: &CDDAIdentifier,
+        this_id: &TilesheetCDDAId,
         layer: &TileLayer,
         json_data: &DeserializedCDDAJsonData,
         adjacent_sprites: &AdjacentSprites,
     ) -> (bool, bool, bool, bool) {
         let mut this_connects_to = json_data
-            .get_connects_to(this_id.clone(), layer)
+            .get_connects_to(this_id.id.clone(), layer)
             .unwrap_or_default();
 
         let this_flags = json_data
-            .get_flags(this_id.clone(), layer)
+            .get_flags(this_id.id.clone(), layer)
             .unwrap_or_default();
 
         let (mut top_connect_groups, top_flags) =
@@ -334,8 +334,8 @@ impl Sprite {
             // TODO: I think there's a no self connect flag to toggle this behaviour
             // although im not sure
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .top
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -344,8 +344,8 @@ impl Sprite {
             .intersection(&right_connect_groups)
             .next()
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .right
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -354,8 +354,8 @@ impl Sprite {
             .intersection(&bottom_connect_groups)
             .next()
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .bottom
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -364,8 +364,8 @@ impl Sprite {
             .intersection(&left_connect_groups)
             .next()
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .left
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -380,7 +380,7 @@ impl Sprite {
 
     pub fn get_fg_id(
         &self,
-        this_id: &CDDAIdentifier,
+        this_id: &TilesheetCDDAId,
         json_data: &DeserializedCDDAJsonData,
         layer: &TileLayer,
         adjacent_sprites: &AdjacentSprites,
@@ -653,14 +653,33 @@ impl Sprite {
                     }
                 },
             },
-            Sprite::Open { .. } => todo!(),
-            Sprite::Broken { .. } => todo!(),
+            // TODO: Revisit this, idk how to really implement it
+            Sprite::Open { ids, animated, .. } => match animated {
+                true => match &ids.fg {
+                    None => None,
+                    Some(fg) => Self::get_random_animated_sprite(fg),
+                },
+                false => match &ids.fg {
+                    None => None,
+                    Some(fg) => Self::get_random_sprite(fg),
+                },
+            },
+            Sprite::Broken { ids, animated, .. } => match animated {
+                true => match &ids.fg {
+                    None => None,
+                    Some(fg) => Self::get_random_animated_sprite(fg),
+                },
+                false => match &ids.fg {
+                    None => None,
+                    Some(fg) => Self::get_random_sprite(fg),
+                },
+            },
         }
     }
 
     pub fn get_bg_id(
         &self,
-        this_id: &CDDAIdentifier,
+        this_id: &TilesheetCDDAId,
         json_data: &DeserializedCDDAJsonData,
         layer: &TileLayer,
         adjacent_sprites: &AdjacentSprites,
@@ -751,8 +770,26 @@ impl Sprite {
                     }
                 },
             },
-            Sprite::Open { .. } => todo!(),
-            Sprite::Broken { .. } => todo!(),
+            Sprite::Open { ids, animated, .. } => match animated {
+                true => match &ids.bg {
+                    None => None,
+                    Some(bg) => Self::get_random_animated_sprite(bg),
+                },
+                false => match &ids.bg {
+                    None => None,
+                    Some(bg) => Self::get_random_sprite(bg),
+                },
+            },
+            Sprite::Broken { ids, animated, .. } => match animated {
+                true => match &ids.bg {
+                    None => None,
+                    Some(bg) => Self::get_random_animated_sprite(bg),
+                },
+                false => match &ids.bg {
+                    None => None,
+                    Some(bg) => Self::get_random_sprite(bg),
+                },
+            },
         }
     }
 }
@@ -886,10 +923,10 @@ pub fn get_id_from_mapped_sprites(
     mapped_cdda_ids
         .get(cords)
         .map(|v| match layer {
-            TileLayer::Terrain => v.terrain.clone(),
-            TileLayer::Furniture => v.furniture.clone(),
-            TileLayer::Monster => v.monster.clone(),
-            TileLayer::Field => v.field.clone(),
+            TileLayer::Terrain => v.terrain.clone().map(|v| v.id),
+            TileLayer::Furniture => v.furniture.clone().map(|v| v.id),
+            TileLayer::Monster => v.monster.clone().map(|v| v.id),
+            TileLayer::Field => v.field.clone().map(|v| v.id),
         })
         .flatten()
 }

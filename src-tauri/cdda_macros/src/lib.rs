@@ -98,8 +98,8 @@ fn cdda_entry_impl(tokens: TokenStream) -> TokenStream {
         quote! {
             fn merge(base: &Self, override_: &Self) -> Self {
                 Self {
-                    id: base.id.clone(),
-                    flags: base.flags.clone(),
+                    id: override_.id.clone(),
+                    flags: override_.flags.clone(),
                     copy_from: override_.copy_from.clone(),
                     extend: override_.extend.clone(),
                     delete: override_.delete.clone(),

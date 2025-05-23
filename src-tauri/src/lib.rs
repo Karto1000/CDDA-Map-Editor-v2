@@ -343,10 +343,7 @@ pub fn run() -> () {
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(LevelFilter::Warn)
-                .targets(vec![
-                    Target::new(TargetKind::Webview),
-                    Target::new(TargetKind::Stdout),
-                ])
+                .targets(vec![Target::new(TargetKind::Stdout)])
                 .build(),
         )
         .setup(|app| {

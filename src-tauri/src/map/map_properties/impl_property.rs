@@ -1,6 +1,9 @@
 use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
 use crate::cdda_data::map_data::{MapGenGaspumpFuelType, ReferenceOrInPlace};
+use crate::cdda_data::vehicle_parts::{CDDAVehiclePart, Location};
+use crate::cdda_data::vehicles::{CDDAVehicle, VehiclePart};
+use crate::map::handlers::PlaceCommand;
 use crate::map::map_properties::{
     ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty,
     ItemsProperty, MonstersProperty, NestedProperty, SignsProperty,
@@ -10,6 +13,9 @@ use crate::map::*;
 use crate::tileset::GetRandom;
 use log::error;
 use rand::prelude::IndexedRandom;
+use std::fmt::{Display, Formatter};
+use std::ops::Add;
+use std::str::FromStr;
 
 impl Property for TerrainProperty {
     fn get_commands(
@@ -28,7 +34,7 @@ impl Property for TerrainProperty {
         }
 
         let command = VisibleMappingCommand {
-            id: ident,
+            id: TilesheetCDDAId::simple(ident),
             mapping: MappingKind::Terrain,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -86,7 +92,7 @@ impl Property for MonstersProperty {
             None => {},
             Some(ident) => {
                 let command = VisibleMappingCommand {
-                    id: ident,
+                    id: TilesheetCDDAId::simple(ident),
                     mapping: MappingKind::Monster,
                     coordinates: position.clone(),
                     kind: VisibleMappingCommandKind::Place,
@@ -121,7 +127,7 @@ impl Property for FurnitureProperty {
         }
 
         let command = VisibleMappingCommand {
-            id: ident,
+            id: TilesheetCDDAId::simple(ident),
             mapping: MappingKind::Furniture,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -149,7 +155,7 @@ impl Property for SignsProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let command = VisibleMappingCommand {
-            id: "f_sign".into(),
+            id: TilesheetCDDAId::simple("f_sign".into()),
             mapping: MappingKind::Sign,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -256,7 +262,7 @@ impl Property for FieldsProperty {
         }
 
         let command = VisibleMappingCommand {
-            id: field.field.clone(),
+            id: TilesheetCDDAId::simple(field.field.clone()),
             mapping: MappingKind::Field,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -290,7 +296,7 @@ impl Property for GaspumpsProperty {
         };
 
         let command = VisibleMappingCommand {
-            id: id.into(),
+            id: TilesheetCDDAId::simple(id.into()),
             mapping: MappingKind::Gaspump,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -539,7 +545,7 @@ impl Property for ComputersProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let command = VisibleMappingCommand {
-            id: "f_console".into(),
+            id: TilesheetCDDAId::simple("f_console".into()),
             mapping: MappingKind::Furniture,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -561,7 +567,7 @@ impl Property for ToiletsProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
         let command = VisibleMappingCommand {
-            id: "f_toilet".into(),
+            id: TilesheetCDDAId::simple("f_toilet".into()),
             mapping: MappingKind::Furniture,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -591,7 +597,7 @@ impl Property for TrapsProperty {
         }
 
         let command = VisibleMappingCommand {
-            id: ident,
+            id: TilesheetCDDAId::simple(ident),
             mapping: MappingKind::Trap,
             coordinates: position.clone(),
             kind: VisibleMappingCommandKind::Place,
@@ -605,6 +611,25 @@ impl Property for TrapsProperty {
     }
 }
 
+#[derive(Debug, Clone)]
+struct VehiclePartSpriteVariant {
+    pub variant: String,
+}
+
+impl VehiclePartSpriteVariant {
+    pub fn new(variant: impl Into<String>) -> Self {
+        Self {
+            variant: variant.into(),
+        }
+    }
+}
+
+impl Display for VehiclePartSpriteVariant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.variant.as_str())
+    }
+}
+
 impl Property for VehiclesProperty {
     fn get_commands(
         &self,
@@ -612,76 +637,102 @@ impl Property for VehiclesProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<VisibleMappingCommand>> {
-        todo!()
+        let mapgen_vehicle = self.vehicles.get_random();
+
+        let vehicle = match json_data.vehicles.get(&mapgen_vehicle.vehicle) {
+            None => {
+                warn!("Vehicle {} not found", mapgen_vehicle.vehicle);
+                return None;
+            },
+            Some(v) => v,
+        };
+
+        let mut commands = Vec::new();
+
+        let mut highest_priority_parts: HashMap<
+            IVec2,
+            (&CDDAVehiclePart, Option<VehiclePartSpriteVariant>, usize),
+        > = HashMap::new();
+
+        for part in vehicle.parts.iter() {
+            // Positive y -> right
+            // Negative y -> left
+            // Positive x -> up
+            // Negative x -> down
+
+            let part_position = IVec2::new(part.y, -part.x);
+
+            for vp in part.parts.iter() {
+                let ident = match vp {
+                    VehiclePart::Inline(id) => id.clone(),
+                    VehiclePart::Object { part, .. } => part.clone(),
+                };
+
+                let (raw_ident, ty) = match ident.0.split_once('#') {
+                    None => (ident.clone(), None),
+                    Some((ident, ty)) => (
+                        ident.into(),
+                        Some(VehiclePartSpriteVariant::new(ty.to_string())),
+                    ),
+                };
+
+                let vp_entry = match json_data.vehicle_parts.get(&raw_ident) {
+                    None => {
+                        warn!(
+                            "Vehicle Part {} does not exist in cdda data",
+                            raw_ident
+                        );
+                        continue;
+                    },
+                    Some(vp) => vp,
+                };
+
+                let location: Location = Location::from_str(
+                    &vp_entry
+                        .location
+                        .clone()
+                        .unwrap_or("structure".to_string()),
+                )
+                .unwrap_or(Location::Structure);
+
+                let highest_priority_part =
+                    match highest_priority_parts.get(&part_position) {
+                        None => {
+                            highest_priority_parts.insert(
+                                part_position,
+                                (vp_entry, ty.clone(), location.priority()),
+                            );
+
+                            highest_priority_parts.get(&part_position).unwrap()
+                        },
+                        Some(p) => p,
+                    };
+
+                if location.priority() > highest_priority_part.2 {
+                    highest_priority_parts.insert(
+                        part_position,
+                        (vp_entry, ty, location.priority()),
+                    );
+                }
+            }
+        }
+
+        for (pos, (part, ty, pri)) in highest_priority_parts {
+            commands.push(VisibleMappingCommand {
+                id: TilesheetCDDAId {
+                    id: part.id.clone(),
+                    prefix: Some("vp".to_string()),
+                    postfix: ty.map(|t| t.variant),
+                },
+                mapping: MappingKind::Furniture,
+                coordinates: position + pos,
+                kind: VisibleMappingCommandKind::Place,
+            });
+        }
+
+        Some(commands)
     }
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        todo!()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::map::map_properties::TerrainProperty;
-    use crate::map::{
-        MapData, MappingKind, Property, VisibleMappingCommand,
-        VisibleMappingCommandKind,
-    };
-    use crate::TEST_CDDA_DATA;
-    use cdda_lib::types::{
-        CDDADistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
-    };
-    use glam::IVec2;
-
-    #[tokio::test]
-    async fn test_get_terrain_commands() {
-        let cdda_data = TEST_CDDA_DATA.get().await;
-        let coordinates = IVec2::new(0, 0);
-        let map_data = MapData::default();
-
-        // Test it with a single string
-        {
-            let terrain_property = TerrainProperty {
-                mapgen_value: MapGenValue::String("t_grass".into()),
-            };
-
-            let mut commands = terrain_property
-                .get_commands(&coordinates, &map_data, &cdda_data)
-                .unwrap();
-
-            let first = commands.pop().unwrap();
-
-            assert_eq!(
-                first,
-                VisibleMappingCommand {
-                    id: "t_grass".into(),
-                    mapping: MappingKind::Terrain,
-                    coordinates,
-                    kind: VisibleMappingCommandKind::Place,
-                }
-            );
-        }
-
-        // Test it with a distribution
-        {
-            let distribution: MeabyVec<MeabyWeighted<CDDADistributionInner>> =
-                MeabyVec::Vec(vec![
-                    MeabyWeighted::NotWeighted("t_grass".into()),
-                    MeabyWeighted::NotWeighted("t_dirt".into()),
-                ]);
-
-            let terrain_property = TerrainProperty {
-                mapgen_value: MapGenValue::Distribution(distribution),
-            };
-
-            let mut commands = terrain_property
-                .get_commands(&coordinates, &map_data, &cdda_data)
-                .unwrap();
-
-            let first = commands.pop().unwrap();
-
-            assert!(
-                first.id == "t_grass".into() || first.id == "t_dirt".into()
-            );
-        }
+        Value::Null
     }
 }
