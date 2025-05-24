@@ -13,12 +13,11 @@ use crate::map::map_properties::{
 };
 use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
+use crate::map::SetTile;
+use crate::map::DEFAULT_MAP_DATA_SIZE;
 use crate::map::{
-    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place
-    , Property
-    ,
+    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, Property,
 };
-use crate::map::{VisibleMappingCommand, DEFAULT_MAP_DATA_SIZE};
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
     NumberOrRange, ParameterIdentifier, Weighted,
@@ -399,7 +398,7 @@ macro_rules! create_place_inner {
                     position: &IVec2,
                     map_data: &MapData,
                     json_data: &DeserializedCDDAJsonData,
-                ) -> Option<Vec<VisibleMappingCommand>> {
+                ) -> Option<Vec<SetTile>> {
                     self.property.get_commands(position, map_data, json_data)
                 }
 

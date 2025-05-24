@@ -14,7 +14,7 @@ use crate::editor_data::handlers::{
 use crate::editor_data::{
     get_map_data_collection_live_viewer_data, EditorData, ProjectType, ZLevel,
 };
-use crate::map::handlers::{
+use crate::map::viewer::handlers::{
     close_project, get_current_project_data, get_project_cell_data,
     get_sprites, open_project, reload_project,
 };
@@ -25,8 +25,7 @@ use crate::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
 };
 use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
-use crate::tileset::legacy_tileset::MappedCDDAIds;
-use crate::tileset::TilesheetKind;
+use crate::tileset::legacy_tileset::{LegacyTilesheet, MappedCDDAIdsForTile};
 use crate::util::Load;
 use anyhow::Error;
 use async_once::AsyncOnce;
@@ -109,7 +108,7 @@ async fn frontend_ready(
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
+    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;
     let mut json_data_lock = json_data.lock().await;
@@ -299,7 +298,7 @@ fn get_saved_editor_data() -> Result<EditorData, Error> {
 
 async fn load_tilesheet(
     editor_data: &EditorData,
-) -> Result<Option<TilesheetKind>, Error> {
+) -> Result<Option<LegacyTilesheet>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
         Some(t) => t.clone(),
@@ -321,7 +320,7 @@ async fn load_tilesheet(
     let mut tilesheet_loader = TilesheetLoader::new(config);
     let tilesheet = tilesheet_loader.load().await?;
 
-    Ok(Some(TilesheetKind::Legacy(tilesheet)))
+    Ok(Some(tilesheet))
 }
 
 pub async fn load_cdda_json_data(
@@ -351,13 +350,13 @@ pub fn run() -> () {
             let editor_data = get_saved_editor_data()?;
 
             app.manage(Mutex::new(editor_data));
-            app.manage::<Mutex<HashMap<IVec3, MappedCDDAIds>>>(Mutex::new(
-                HashMap::new(),
-            ));
+            app.manage::<Mutex<HashMap<IVec3, MappedCDDAIdsForTile>>>(
+                Mutex::new(HashMap::new()),
+            );
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(
                 None,
             ));
-            app.manage::<Mutex<Option<TilesheetKind>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<LegacyTilesheet>>>(Mutex::new(None));
             app.manage::<Mutex<Option<JoinHandle<()>>>>(Mutex::new(None));
 
             Ok(())

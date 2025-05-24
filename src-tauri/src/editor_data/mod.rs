@@ -2,17 +2,23 @@ pub(crate) mod handlers;
 
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::palettes::Palettes;
+use crate::cdda_data::region_settings::CDDARegionSettings;
+use crate::cdda_data::{replace_region_setting, TileLayer};
 use crate::impl_serialize_for_error;
 use crate::map::importing::{
     OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
     SingleMapDataImporterError,
 };
+use crate::map::viewer::handlers::SpriteType;
 use crate::map::{
     CalculateParametersError, CellRepresentation, GetMappedCDDAIdsError,
     MapData, DEFAULT_MAP_DATA_SIZE,
 };
-use crate::tileset::legacy_tileset::MappedCDDAIds;
-use crate::util::{Load, Save, SaveError};
+use crate::tileset::legacy_tileset::{
+    MappedCDDAId, MappedCDDAIdsForTile, TilesheetCDDAId,
+};
+use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer};
+use crate::util::{Load, Save, SaveError, UVec2JsonKey};
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
@@ -80,6 +86,59 @@ pub async fn get_map_data_collection_live_viewer_data(
     };
 
     Ok(map_data_collection)
+}
+
+pub struct MappedCDDAIdContainer {
+    pub ids: HashMap<IVec3, MappedCDDAIdsForTile>,
+}
+
+impl MappedCDDAIdContainer {
+    fn get_id_from_mapped_sprites(
+        &self,
+        cords: &IVec3,
+        layer: &TileLayer,
+    ) -> Option<CDDAIdentifier> {
+        self.ids
+            .get(cords)
+            .map(|v| match layer {
+                TileLayer::Terrain => {
+                    v.terrain.clone().map(|v| v.tilesheet_id.id)
+                },
+                TileLayer::Furniture => {
+                    v.furniture.clone().map(|v| v.tilesheet_id.id)
+                },
+                TileLayer::Monster => {
+                    v.monster.clone().map(|v| v.tilesheet_id.id)
+                },
+                TileLayer::Field => v.field.clone().map(|v| v.tilesheet_id.id),
+            })
+            .flatten()
+    }
+
+    pub fn get_adjacent_identifiers(
+        &self,
+        coordinates: IVec3,
+        layer: &TileLayer,
+    ) -> AdjacentSprites {
+        let top_cords = coordinates + IVec3::new(0, 1, 0);
+        let top = self.get_id_from_mapped_sprites(&top_cords, &layer);
+
+        let right_cords = coordinates + IVec3::new(1, 0, 0);
+        let right = self.get_id_from_mapped_sprites(&right_cords, &layer);
+
+        let bottom_cords = coordinates - IVec3::new(0, 1, 0);
+        let bottom = self.get_id_from_mapped_sprites(&bottom_cords, &layer);
+
+        let left_cords = coordinates - IVec3::new(1, 0, 0);
+        let left = self.get_id_from_mapped_sprites(&left_cords, &layer);
+
+        AdjacentSprites {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -209,7 +268,7 @@ impl MapDataCollection {
                                 )
                                     .as_str(),
                             )
-                        },
+                        }
                         Some(omtm) => json_data.map_data.get_mut(&omtm.name).expect(
                             format!(
                                 "Hardcoded Map data for predecessor {} to exist",
@@ -220,7 +279,8 @@ impl MapDataCollection {
                     };
 
                     predecessor_map_data
-                        .calculate_parameters(&json_data.palettes);
+                        .calculate_parameters(&json_data.palettes)
+                        .unwrap();
                 },
             }
         }
@@ -230,7 +290,7 @@ impl MapDataCollection {
         &self,
         json_data: &DeserializedCDDAJsonData,
         z: ZLevel,
-    ) -> Result<HashMap<IVec3, MappedCDDAIds>, GetMappedCDDAIdsError> {
+    ) -> Result<MappedCDDAIdContainer, GetMappedCDDAIdsError> {
         let mut mapped_cdda_ids = HashMap::new();
 
         for (map_coords, map_data) in self.maps.iter() {
@@ -251,7 +311,9 @@ impl MapDataCollection {
             mapped_cdda_ids.extend(new_ids);
         }
 
-        Ok(mapped_cdda_ids)
+        Ok(MappedCDDAIdContainer {
+            ids: mapped_cdda_ids,
+        })
     }
 
     pub fn get_representations(

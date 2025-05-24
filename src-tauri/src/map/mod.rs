@@ -1,4 +1,3 @@
-pub(crate) mod handlers;
 pub(crate) mod importing;
 pub(crate) mod map_properties;
 pub(crate) mod place;
@@ -18,9 +17,11 @@ use crate::cdda_data::{
     TileLayer,
 };
 use crate::editor_data::ZLevel;
-use crate::map::handlers::{get_sprite_type_from_sprite, SpriteType};
-use crate::tileset::legacy_tileset::{MappedCDDAIds, TilesheetCDDAId};
-use crate::tileset::{AdjacentSprites, Tilesheet, TilesheetKind};
+use crate::map::viewer::handlers::SpriteType;
+use crate::tileset::legacy_tileset::{
+    MappedCDDAId, MappedCDDAIdsForTile, Rotation, TilesheetCDDAId,
+};
+use crate::tileset::{AdjacentSprites, Tilesheet};
 use crate::util::bresenham_line;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
@@ -54,7 +55,7 @@ pub trait Place:
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         None
     }
 
@@ -73,7 +74,7 @@ pub trait Property:
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         None
     }
 
@@ -124,17 +125,66 @@ pub struct CellRepresentation {
     computers: Value,
 }
 
-#[derive(Debug, Eq, PartialEq, Serialize)]
-pub enum VisibleMappingCommandKind {
-    Place,
+#[derive(Debug, Serialize, Eq, PartialEq)]
+pub struct SetTile {
+    id: TilesheetCDDAId,
+    layer: TileLayer,
+    coordinates: IVec2,
+    rotation: Rotation,
 }
 
-#[derive(Debug, Serialize, Eq, PartialEq)]
-pub struct VisibleMappingCommand {
-    id: TilesheetCDDAId,
-    mapping: MappingKind,
-    coordinates: IVec2,
-    kind: VisibleMappingCommandKind,
+impl SetTile {
+    pub fn terrain(
+        id: impl Into<TilesheetCDDAId>,
+        coordinates: IVec2,
+        rotation: impl Into<Rotation>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            layer: TileLayer::Terrain,
+            rotation: rotation.into(),
+            coordinates,
+        }
+    }
+
+    pub fn furniture(
+        id: impl Into<TilesheetCDDAId>,
+        coordinates: IVec2,
+        rotation: impl Into<Rotation>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            layer: TileLayer::Furniture,
+            rotation: rotation.into(),
+            coordinates,
+        }
+    }
+
+    pub fn field(
+        id: impl Into<TilesheetCDDAId>,
+        coordinates: IVec2,
+        rotation: impl Into<Rotation>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            layer: TileLayer::Field,
+            rotation: rotation.into(),
+            coordinates,
+        }
+    }
+
+    pub fn monster(
+        id: impl Into<TilesheetCDDAId>,
+        coordinates: IVec2,
+        rotation: impl Into<Rotation>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            layer: TileLayer::Monster,
+            rotation: rotation.into(),
+            coordinates,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Hash, Eq, PartialEq, Deserialize, Serialize)]
@@ -312,7 +362,8 @@ impl MapData {
         &self,
         json_data: &DeserializedCDDAJsonData,
         z: ZLevel,
-    ) -> Result<HashMap<IVec3, MappedCDDAIds>, GetMappedCDDAIdsError> {
+    ) -> Result<HashMap<IVec3, MappedCDDAIdsForTile>, GetMappedCDDAIdsError>
+    {
         let mut local_mapped_cdda_ids = HashMap::new();
 
         let region_settings = json_data
@@ -367,14 +418,16 @@ impl MapData {
             // If there was no id added from the predecessor mapgen, we will add the fill sprite here
             match local_mapped_cdda_ids.get_mut(&coords) {
                 None => {
-                    let mut mapped_ids = MappedCDDAIds::default();
+                    let mut mapped_ids = MappedCDDAIdsForTile::default();
 
                     mapped_ids.terrain = fill_terrain_sprite.clone().map(|s| {
-                        TilesheetCDDAId::simple(replace_region_setting(
-                            &s,
-                            region_settings,
-                            &json_data.terrain,
-                            &json_data.furniture,
+                        MappedCDDAId::simple(TilesheetCDDAId::simple(
+                            replace_region_setting(
+                                &s,
+                                region_settings,
+                                &json_data.terrain,
+                                &json_data.furniture,
+                            ),
                         ))
                     });
 
@@ -384,11 +437,13 @@ impl MapData {
                     if mapped_ids.terrain.is_none() {
                         mapped_ids.terrain =
                             fill_terrain_sprite.clone().map(|s| {
-                                TilesheetCDDAId::simple(replace_region_setting(
-                                    &s,
-                                    region_settings,
-                                    &json_data.terrain,
-                                    &json_data.furniture,
+                                MappedCDDAId::simple(TilesheetCDDAId::simple(
+                                    replace_region_setting(
+                                        &s,
+                                        region_settings,
+                                        &json_data.terrain,
+                                        &json_data.furniture,
+                                    ),
                                 ))
                             })
                     }
@@ -402,59 +457,47 @@ impl MapData {
             let command_3d_coords =
                 IVec3::new(command.coordinates.x, command.coordinates.y, z);
 
-            match command.kind {
-                VisibleMappingCommandKind::Place => {
-                    let id = TilesheetCDDAId {
-                        id: replace_region_setting(
-                            &command.id.id,
-                            region_settings,
-                            &json_data.terrain,
-                            &json_data.furniture,
-                        ),
-                        prefix: command.id.prefix,
-                        postfix: command.id.postfix,
-                    };
+            let id = TilesheetCDDAId {
+                id: replace_region_setting(
+                    &command.id.id,
+                    region_settings,
+                    &json_data.terrain,
+                    &json_data.furniture,
+                ),
+                prefix: command.id.prefix,
+                postfix: command.id.postfix,
+            };
 
-                    let ident_mut = match local_mapped_cdda_ids
-                        .get_mut(&command_3d_coords)
-                    {
-                        None => {
-                            local_mapped_cdda_ids.insert(
-                                command_3d_coords.clone(),
-                                MappedCDDAIds::default(),
-                            );
-                            local_mapped_cdda_ids
-                                .get_mut(&command_3d_coords)
-                                // Safe
-                                .unwrap()
-                        },
-                        Some(i) => i,
-                    };
+            let mut mapped_id = MappedCDDAId::simple(id);
+            mapped_id.rotation = command.rotation;
 
-                    match command.mapping {
-                        MappingKind::Terrain => {
-                            ident_mut.terrain = Some(id.clone());
-                        },
-                        MappingKind::Furniture
-                        | MappingKind::Computer
-                        | MappingKind::Toilet
-                        | MappingKind::Gaspump
-                        | MappingKind::Sign
-                        | MappingKind::Trap => {
-                            ident_mut.furniture = Some(id.clone());
-                        },
-                        MappingKind::Monster => {
-                            ident_mut.monster = Some(id.clone())
-                        },
-                        MappingKind::Field => {
-                            ident_mut.field = Some(id.clone())
-                        },
-                        MappingKind::Nested
-                        | MappingKind::ItemGroups
-                        | MappingKind::Vehicle => {
-                            unreachable!()
-                        },
-                    }
+            let ident_mut =
+                match local_mapped_cdda_ids.get_mut(&command_3d_coords) {
+                    None => {
+                        local_mapped_cdda_ids.insert(
+                            command_3d_coords.clone(),
+                            MappedCDDAIdsForTile::default(),
+                        );
+                        local_mapped_cdda_ids
+                            .get_mut(&command_3d_coords)
+                            // Safe
+                            .unwrap()
+                    },
+                    Some(i) => i,
+                };
+
+            match command.layer {
+                TileLayer::Terrain => {
+                    ident_mut.terrain = Some(mapped_id.clone());
+                },
+                TileLayer::Furniture => {
+                    ident_mut.furniture = Some(mapped_id.clone());
+                },
+                TileLayer::Monster => {
+                    ident_mut.monster = Some(mapped_id.clone());
+                },
+                TileLayer::Field => {
+                    ident_mut.field = Some(mapped_id.clone());
                 },
             }
         }
@@ -483,10 +526,10 @@ impl MapData {
     pub fn get_commands(
         &self,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<VisibleMappingCommand> {
+    ) -> Vec<SetTile> {
         // We need to store all commands in this list here so we can sort it and act them out in
         // the order the VisibleMappingCommandKind enum has
-        let mut all_commands: Vec<VisibleMappingCommand> = vec![];
+        let mut all_commands: Vec<SetTile> = vec![];
 
         // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
         // the function relies on the mapped sprite of this sprite to already exist
@@ -533,7 +576,7 @@ impl MapData {
             }
         }
 
-        all_commands.sort_by(|a, b| a.mapping.cmp(&b.mapping));
+        all_commands.sort_by(|a, b| a.layer.cmp(&b.layer));
         all_commands
     }
 
@@ -599,7 +642,7 @@ impl MapData {
         character: &char,
         position: &IVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let mapping = self.properties.get(mapping_kind)?;
 
         if let Some(id) = mapping.get(character) {
@@ -701,7 +744,7 @@ impl MapData {
         character: &char,
         position: &IVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<VisibleMappingCommand> {
+    ) -> Vec<SetTile> {
         let mut commands = Vec::new();
 
         for kind in MappingKind::iter() {

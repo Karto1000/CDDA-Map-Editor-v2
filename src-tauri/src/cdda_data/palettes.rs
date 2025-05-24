@@ -7,8 +7,7 @@ use crate::map::map_properties::{
     FurnitureProperty, MonstersProperty, TerrainProperty,
 };
 use crate::map::{
-    CalculateParametersError, MapData, MappingKind, Property,
-    VisibleMappingCommand,
+    CalculateParametersError, MapData, MappingKind, Property, SetTile,
 };
 use cdda_lib::types::{
     CDDAIdentifier, Comment, Distribution, MapGenValue, MeabyVec,
@@ -252,7 +251,7 @@ impl CDDAPalette {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let mapping = self.properties.get(mapping_kind.borrow())?;
 
         if let Some(id) = mapping.get(character.borrow()) {

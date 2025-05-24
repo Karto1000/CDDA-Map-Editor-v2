@@ -1,21 +1,18 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
-use crate::tileset::current_tileset::CurrentTilesheet;
 use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
 use crate::tileset::legacy_tileset::{
-    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet,
-    MappedCDDAIds, Rotated, Rotates, Rotation, SpriteIndex, TilesheetCDDAId,
+    AdditionalTileIds, CardinalDirection, FinalIds, Rotated, Rotates, Rotation,
+    SpriteIndex, TilesheetCDDAId,
 };
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
-use glam::IVec3;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use rand::rng;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-pub(crate) mod current_tileset;
 pub(crate) mod handlers;
 pub(crate) mod io;
 pub(crate) mod legacy_tileset;
@@ -87,11 +84,6 @@ const FALLBACK_TILE_MAPPING: &'static [(&'static str, u32)] = &[
     ("}", 124),
     ("|", 178),
 ];
-
-pub enum TilesheetKind {
-    Legacy(LegacyTilesheet),
-    Current(CurrentTilesheet),
-}
 
 pub trait Tilesheet {
     fn get_sprite(
@@ -913,58 +905,6 @@ impl<T> MeabyWeightedSprite<T> {
 pub enum SpriteLayer {
     Bg = 0,
     Fg = 1,
-}
-
-pub fn get_id_from_mapped_sprites(
-    mapped_cdda_ids: &HashMap<IVec3, MappedCDDAIds>,
-    cords: &IVec3,
-    layer: &TileLayer,
-) -> Option<CDDAIdentifier> {
-    mapped_cdda_ids
-        .get(cords)
-        .map(|v| match layer {
-            TileLayer::Terrain => v.terrain.clone().map(|v| v.id),
-            TileLayer::Furniture => v.furniture.clone().map(|v| v.id),
-            TileLayer::Monster => v.monster.clone().map(|v| v.id),
-            TileLayer::Field => v.field.clone().map(|v| v.id),
-        })
-        .flatten()
-}
-
-pub fn get_adjacent_sprites(
-    mapped_cdda_ids: &HashMap<IVec3, MappedCDDAIds>,
-    coordinates: IVec3,
-    layer: &TileLayer,
-) -> AdjacentSprites {
-    let top_cords = coordinates + IVec3::new(0, 1, 0);
-    let top = get_id_from_mapped_sprites(&mapped_cdda_ids, &top_cords, &layer);
-
-    let right_cords = coordinates + IVec3::new(1, 0, 0);
-    let right =
-        get_id_from_mapped_sprites(&mapped_cdda_ids, &right_cords, &layer);
-
-    let bottom = match coordinates.y > 0 {
-        true => {
-            let bottom_cords = coordinates - IVec3::new(0, 1, 0);
-            get_id_from_mapped_sprites(&mapped_cdda_ids, &bottom_cords, &layer)
-        },
-        false => None,
-    };
-
-    let left = match coordinates.x > 0 {
-        true => {
-            let left_cords = coordinates - IVec3::new(1, 0, 0);
-            get_id_from_mapped_sprites(&mapped_cdda_ids, &left_cords, &layer)
-        },
-        false => None,
-    };
-
-    AdjacentSprites {
-        top,
-        right,
-        bottom,
-        left,
-    }
 }
 
 #[derive(Debug)]

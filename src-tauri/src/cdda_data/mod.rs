@@ -270,7 +270,16 @@ impl<T: Clone + GetIdentifier> GetIdentifier for MeabyVec<MeabyWeighted<T>> {
 }
 
 #[derive(
-    Debug, Clone, Hash, Eq, PartialEq, EnumIter, Deserialize, Serialize,
+    Debug,
+    Clone,
+    Hash,
+    Eq,
+    Ord,
+    PartialOrd,
+    PartialEq,
+    EnumIter,
+    Deserialize,
+    Serialize,
 )]
 pub enum TileLayer {
     Terrain = 0,

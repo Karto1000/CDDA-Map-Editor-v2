@@ -1,3 +1,5 @@
+pub(crate) mod handlers;
+
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::overmap::OvermapSpecialOvermap;
 use crate::editor_data::{
@@ -95,7 +97,7 @@ pub async fn open_viewer(
             };
 
             let mut collection = overmap_terrain_importer.load().await.unwrap();
-            collection.calculate_parameters(&json_data.palettes);
+            collection.calculate_parameters(&json_data.palettes)?;
 
             let mut new_project = Project::new(
                 project_name.clone(),

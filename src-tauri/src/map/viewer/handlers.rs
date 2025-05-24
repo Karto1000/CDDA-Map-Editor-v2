@@ -7,10 +7,10 @@ use crate::editor_data::{
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::map::Serializer;
 use crate::map::{CalculateParametersError, CellRepresentation};
-use crate::tileset::legacy_tileset::{MappedCDDAIds, TilesheetCDDAId};
-use crate::tileset::{
-    AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet, TilesheetKind,
+use crate::tileset::legacy_tileset::{
+    LegacyTilesheet, MappedCDDAId, MappedCDDAIdsForTile, TilesheetCDDAId,
 };
+use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet};
 use crate::util::{
     get_current_project_mut, get_json_data, CDDADataError,
     GetCurrentProjectError, IVec3JsonKey, Save, UVec2JsonKey,
@@ -43,29 +43,6 @@ pub async fn get_current_project_data(
     let editor_data_lock = editor_data.lock().await;
     let data = util::get_current_project(&editor_data_lock)?;
     Ok(data.clone())
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlaceCommand {
-    position: UVec2JsonKey,
-    character: char,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct MapChangeEvent {
-    kind: MapChangeEventKind,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub enum MapChangeEventKind {
-    Place(PlaceCommand),
-    Delete(UVec2JsonKey),
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlaceSpriteEvent {
-    position: UVec2JsonKey,
-    index: u32,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -165,97 +142,105 @@ pub enum SpriteType {
     Fallback(FallbackSprite),
 }
 
-pub fn get_sprite_type_from_sprite(
-    id: &TilesheetCDDAId,
-    position: IVec3,
-    adjacent_sprites: &AdjacentSprites,
-    layer: TileLayer,
-    sprite_kind: &SpriteKind,
-    // ----
-    json_data: &DeserializedCDDAJsonData,
-) -> (Option<SpriteType>, Option<SpriteType>) {
-    let position_uvec2 = UVec2::new(position.x as u32, position.y as u32);
+impl SpriteType {
+    pub fn get_sprite_type_from_sprite_kind(
+        sprite_kind: &SpriteKind,
+        tile_id: &MappedCDDAId,
+        tile_position: IVec3,
+        tile_layer: TileLayer,
+        adjacent_sprites: &AdjacentSprites,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> (Option<SpriteType>, Option<SpriteType>) {
+        let position_uvec2 =
+            UVec2::new(tile_position.x as u32, tile_position.y as u32);
 
-    match sprite_kind {
-        SpriteKind::Exists(sprite) => {
-            let fg = match sprite.get_fg_id(
-                &id,
-                json_data,
-                &layer,
-                adjacent_sprites,
-            ) {
-                None => None,
-                Some(id) => match sprite.is_animated() {
-                    true => {
-                        let display_sprite = AnimatedSprite {
-                            position: UVec2JsonKey(position_uvec2),
-                            layer: (layer.clone() as u32) * 2
-                                + SpriteLayer::Fg as u32,
-                            indices: id.data.into_vec(),
-                            rotate_deg: id.rotation.deg(),
-                            z: position.z,
-                        };
+        match sprite_kind {
+            SpriteKind::Exists(sprite) => {
+                let fg = match sprite.get_fg_id(
+                    &tile_id.tilesheet_id,
+                    json_data,
+                    &tile_layer,
+                    adjacent_sprites,
+                ) {
+                    None => None,
+                    Some(sprite_id) => match sprite.is_animated() {
+                        true => {
+                            let display_sprite = AnimatedSprite {
+                                position: UVec2JsonKey(position_uvec2),
+                                layer: (tile_layer.clone() as u32) * 2
+                                    + SpriteLayer::Fg as u32,
+                                indices: sprite_id.data.into_vec(),
+                                rotate_deg: sprite_id.rotation.deg()
+                                    + tile_id.rotation.deg(),
+                                z: tile_position.z,
+                            };
 
-                        Some(SpriteType::Animated(display_sprite))
+                            Some(SpriteType::Animated(display_sprite))
+                        },
+                        false => {
+                            let display_sprite = StaticSprite {
+                                position: UVec2JsonKey(position_uvec2),
+                                layer: (tile_layer.clone() as u32) * 2
+                                    + SpriteLayer::Fg as u32,
+                                index: sprite_id.data.into_single().unwrap(),
+                                rotate_deg: sprite_id.rotation.deg()
+                                    + tile_id.rotation.deg(),
+                                z: tile_position.z,
+                            };
+
+                            Some(SpriteType::Static(display_sprite))
+                        },
                     },
-                    false => {
-                        let display_sprite = StaticSprite {
-                            position: UVec2JsonKey(position_uvec2),
-                            layer: (layer.clone() as u32) * 2
-                                + SpriteLayer::Fg as u32,
-                            index: id.data.into_single().unwrap(),
-                            rotate_deg: id.rotation.deg(),
-                            z: position.z,
-                        };
+                };
 
-                        Some(SpriteType::Static(display_sprite))
+                let bg = match sprite.get_bg_id(
+                    &tile_id.tilesheet_id,
+                    json_data,
+                    &tile_layer,
+                    adjacent_sprites,
+                ) {
+                    None => None,
+                    Some(id) => match sprite.is_animated() {
+                        true => {
+                            let display_sprite = AnimatedSprite {
+                                position: UVec2JsonKey(position_uvec2),
+                                layer: (tile_layer as u32) * 2
+                                    + SpriteLayer::Bg as u32,
+                                indices: id.data.into_vec(),
+                                rotate_deg: id.rotation.deg()
+                                    + tile_id.rotation.deg(),
+                                z: tile_position.z,
+                            };
+
+                            Some(SpriteType::Animated(display_sprite))
+                        },
+                        false => {
+                            let display_sprite = StaticSprite {
+                                position: UVec2JsonKey(position_uvec2),
+                                layer: (tile_layer as u32) * 2
+                                    + SpriteLayer::Bg as u32,
+                                index: id.data.into_single().unwrap(),
+                                rotate_deg: id.rotation.deg()
+                                    + tile_id.rotation.deg(),
+                                z: tile_position.z,
+                            };
+
+                            Some(SpriteType::Static(display_sprite))
+                        },
                     },
-                },
-            };
+                };
 
-            let bg = match sprite.get_bg_id(
-                &id,
-                json_data,
-                &layer,
-                adjacent_sprites,
-            ) {
-                None => None,
-                Some(id) => match sprite.is_animated() {
-                    true => {
-                        let display_sprite = AnimatedSprite {
-                            position: UVec2JsonKey(position_uvec2),
-                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                            indices: id.data.into_vec(),
-                            rotate_deg: id.rotation.deg(),
-                            z: position.z,
-                        };
-
-                        Some(SpriteType::Animated(display_sprite))
-                    },
-                    false => {
-                        let display_sprite = StaticSprite {
-                            position: UVec2JsonKey(position_uvec2),
-                            layer: (layer as u32) * 2 + SpriteLayer::Bg as u32,
-                            index: id.data.into_single().unwrap(),
-                            rotate_deg: id.rotation.deg(),
-                            z: position.z,
-                        };
-
-                        Some(SpriteType::Static(display_sprite))
-                    },
-                },
-            };
-
-            (fg, bg)
-        },
-        SpriteKind::Fallback(sprite_index) => (
-            Some(SpriteType::Fallback(FallbackSprite {
-                position: UVec2JsonKey(position_uvec2),
-                index: *sprite_index,
-                z: position.z,
-            })),
-            None,
-        ),
+                (fg, bg)
+            },
+            SpriteKind::Fallback(sprite_index) => (
+                Some(SpriteType::Fallback(FallbackSprite {
+                    position: UVec2JsonKey(position_uvec2),
+                    index: *sprite_index,
+                    z: tile_position.z,
+                })),
+                None,
+            ),
+        }
     }
 }
 
@@ -263,7 +248,7 @@ pub fn get_sprite_type_from_sprite(
 pub async fn get_sprites(
     name: String,
     app: AppHandle,
-    tilesheet: State<'_, Mutex<Option<TilesheetKind>>>,
+    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), ()> {
@@ -332,7 +317,8 @@ pub async fn get_sprites(
         let tile_map: Vec<
             HashMap<TileLayer, (Option<SpriteType>, Option<SpriteType>)>,
         > = local_mapped_cdda_ids
-            .iter()
+            .ids
+            .par_iter()
             .map(|(p, identifier_group)| {
                 let cell_3d_coords = IVec3::new(p.x, p.y, *z);
 
@@ -358,39 +344,35 @@ pub async fn get_sprites(
                 ] {
                     let id = match o_id {
                         None => continue,
-                        Some(id) => TilesheetCDDAId {
-                            id: replace_region_setting(
-                                &id.id,
-                                region_settings,
-                                &json_data.terrain,
-                                &json_data.furniture,
-                            ),
-                            prefix: id.prefix.clone(),
-                            postfix: id.postfix.clone(),
+                        Some(mapped_id) => MappedCDDAId {
+                            tilesheet_id: TilesheetCDDAId {
+                                id: replace_region_setting(
+                                    &mapped_id.tilesheet_id.id,
+                                    region_settings,
+                                    &json_data.terrain,
+                                    &json_data.furniture,
+                                ),
+                                prefix: mapped_id.tilesheet_id.prefix.clone(),
+                                postfix: mapped_id.tilesheet_id.postfix.clone(),
+                            },
+                            rotation: mapped_id.rotation.clone(),
+                            is_broken: mapped_id.is_broken,
+                            is_open: mapped_id.is_open,
                         },
                     };
 
-                    let sprite_kind = match tilesheet {
-                        TilesheetKind::Legacy(l) => {
-                            l.get_sprite(&id, &json_data)
-                        },
-                        TilesheetKind::Current(c) => {
-                            c.get_sprite(&id, &json_data)
-                        },
-                    };
+                    let sprite_kind =
+                        tilesheet.get_sprite(&id.tilesheet_id, &json_data);
 
-                    let adjacent_sprites = tileset::get_adjacent_sprites(
-                        &local_mapped_cdda_ids,
-                        cell_3d_coords.clone(),
-                        &layer,
-                    );
+                    let adjacent_idents = local_mapped_cdda_ids
+                        .get_adjacent_identifiers(cell_3d_coords, &layer);
 
-                    let (fg, bg) = get_sprite_type_from_sprite(
+                    let (fg, bg) = SpriteType::get_sprite_type_from_sprite_kind(
+                        &sprite_kind,
                         &id,
                         cell_3d_coords.clone(),
-                        &adjacent_sprites,
                         layer.clone(),
-                        &sprite_kind,
+                        &adjacent_idents,
                         json_data,
                     );
 
@@ -601,7 +583,7 @@ pub async fn get_project_cell_data(
 pub async fn close_project(
     app: AppHandle,
     name: String,
-    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedCDDAIds>>>,
+    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedCDDAIdsForTile>>>,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;

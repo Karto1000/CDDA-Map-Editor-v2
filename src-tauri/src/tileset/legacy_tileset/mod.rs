@@ -16,7 +16,8 @@ use cdda_lib::types::{CDDAIdentifier, MeabyVec};
 use derive_more::Display;
 use log::{debug, info, warn};
 use rand::distr::Distribution;
-use serde::{Deserialize, Serialize};
+use serde::de::Error as SerdeError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::ptr::write;
@@ -29,16 +30,60 @@ pub type SpriteIndex = u32;
 pub type FinalIds = Option<Vec<WeightedSprite<SpriteIndex>>>;
 pub type AdditionalTileIds = Option<Vec<WeightedSprite<Rotates>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub enum Rotation {
+    #[default]
     Deg0,
     Deg90,
     Deg180,
     Deg270,
 }
 
+impl Serialize for Rotation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.clone().deg().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Rotation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let deg = u32::deserialize(deserializer)? % 360;
+
+        match deg {
+            0 => Ok(Rotation::Deg0),
+            90 => Ok(Rotation::Deg90),
+            180 => Ok(Rotation::Deg180),
+            270 => Ok(Rotation::Deg270),
+            _ => Err(SerdeError::custom(format!(
+                "Invalid rotation value {}",
+                deg
+            ))),
+        }
+    }
+}
+
+impl From<i32> for Rotation {
+    fn from(value: i32) -> Self {
+        let value = value % 360;
+
+        match value {
+            0..90 => Self::Deg0,
+            90..180 => Self::Deg90,
+            180..270 => Self::Deg180,
+            270..360 => Self::Deg270,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl Rotation {
-    pub fn deg(self) -> i32 {
+    pub fn deg(&self) -> i32 {
         match self {
             Rotation::Deg0 => 0,
             Rotation::Deg90 => 90,
@@ -159,9 +204,9 @@ impl Display for TilesheetCDDAId {
 }
 
 impl TilesheetCDDAId {
-    pub fn simple(id: CDDAIdentifier) -> TilesheetCDDAId {
+    pub fn simple(id: impl Into<CDDAIdentifier>) -> TilesheetCDDAId {
         TilesheetCDDAId {
-            id,
+            id: id.into(),
             prefix: None,
             postfix: None,
         }
@@ -220,15 +265,34 @@ impl TilesheetCDDAId {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedCDDAIds {
-    pub terrain: Option<TilesheetCDDAId>,
-    pub furniture: Option<TilesheetCDDAId>,
-    pub monster: Option<TilesheetCDDAId>,
-    pub field: Option<TilesheetCDDAId>,
+pub struct MappedCDDAId {
+    pub tilesheet_id: TilesheetCDDAId,
+    pub rotation: Rotation,
+    pub is_broken: bool,
+    pub is_open: bool,
 }
 
-impl MappedCDDAIds {
-    pub fn update_override(&mut self, other: MappedCDDAIds) {
+impl MappedCDDAId {
+    pub fn simple(id: impl Into<TilesheetCDDAId>) -> Self {
+        Self {
+            tilesheet_id: id.into(),
+            rotation: Default::default(),
+            is_broken: false,
+            is_open: false,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedCDDAIdsForTile {
+    pub terrain: Option<MappedCDDAId>,
+    pub furniture: Option<MappedCDDAId>,
+    pub monster: Option<MappedCDDAId>,
+    pub field: Option<MappedCDDAId>,
+}
+
+impl MappedCDDAIdsForTile {
+    pub fn update_override(&mut self, other: MappedCDDAIdsForTile) {
         if other.terrain.is_some() {
             self.terrain = other.terrain;
         }
