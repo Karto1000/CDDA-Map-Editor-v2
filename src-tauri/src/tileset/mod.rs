@@ -393,6 +393,7 @@ impl Sprite {
                 },
             },
             Sprite::Multitile {
+                ids,
                 animated,
                 center,
                 corner,
@@ -413,7 +414,10 @@ impl Sprite {
 
                     match matching_list {
                         (true, true, true, true) => match center {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(center) => match &center.ids.fg {
                                 None => None,
                                 // TODO: Kind of weird but since the first elements index is 0 and
@@ -430,7 +434,10 @@ impl Sprite {
                             },
                         },
                         (true, true, true, false) => match t_connection {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(t_connection) => match &t_connection.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -444,7 +451,10 @@ impl Sprite {
                             },
                         },
                         (true, true, false, true) => match t_connection {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(t_connection) => match &t_connection.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -458,7 +468,10 @@ impl Sprite {
                             },
                         },
                         (true, false, true, true) => match t_connection {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(t_connection) => match &t_connection.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -472,7 +485,10 @@ impl Sprite {
                             },
                         },
                         (false, true, true, true) => match t_connection {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(t_connection) => match &t_connection.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -486,7 +502,10 @@ impl Sprite {
                             },
                         },
                         (true, true, false, false) => match corner {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -500,7 +519,10 @@ impl Sprite {
                             },
                         },
                         (true, false, false, true) => match corner {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -514,7 +536,10 @@ impl Sprite {
                             },
                         },
                         (false, true, true, false) => match corner {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -528,7 +553,10 @@ impl Sprite {
                             },
                         },
                         (false, false, true, true) => match corner {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(corner) => match &corner.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -542,7 +570,10 @@ impl Sprite {
                             },
                         },
                         (true, false, false, false) => match end_piece {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(end_piece) => match &end_piece.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -556,7 +587,10 @@ impl Sprite {
                             },
                         },
                         (false, true, false, false) => match end_piece {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(end_piece) => match &end_piece.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -570,7 +604,10 @@ impl Sprite {
                             },
                         },
                         (false, false, true, false) => match end_piece {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(end_piece) => match &end_piece.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -584,7 +621,10 @@ impl Sprite {
                             },
                         },
                         (false, false, false, true) => match end_piece {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(end_piece) => match &end_piece.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -598,7 +638,10 @@ impl Sprite {
                             },
                         },
                         (false, true, false, true) => match edge {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(edge) => match &edge.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -613,7 +656,10 @@ impl Sprite {
                             },
                         },
                         (true, false, true, false) => match edge {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(edge) => match &edge.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -628,7 +674,10 @@ impl Sprite {
                             },
                         },
                         (false, false, false, false) => match unconnected {
-                            None => None,
+                            None => match &ids.fg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(unconnected) => match &unconnected.ids.fg {
                                 None => None,
                                 Some(fg) => {
@@ -688,6 +737,7 @@ impl Sprite {
                 },
             },
             Sprite::Multitile {
+                ids,
                 animated,
                 center,
                 corner,
@@ -708,7 +758,10 @@ impl Sprite {
 
                     match matching_list {
                         (true, true, true, true) => match center {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(center) => match &center.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -718,7 +771,10 @@ impl Sprite {
                         | (true, true, false, true)
                         | (true, false, true, true)
                         | (false, true, true, true) => match t_connection {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(t_connection) => match &t_connection.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -728,7 +784,10 @@ impl Sprite {
                         | (true, false, false, true)
                         | (false, true, true, false)
                         | (false, false, true, true) => match corner {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(corner) => match &corner.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -738,7 +797,10 @@ impl Sprite {
                         | (false, true, false, false)
                         | (false, false, true, false)
                         | (false, false, false, true) => match end_piece {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(end_piece) => match &end_piece.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -746,14 +808,20 @@ impl Sprite {
                         },
                         (false, true, false, true)
                         | (true, false, true, false) => match edge {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(edge) => match &edge.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
                             },
                         },
                         (false, false, false, false) => match unconnected {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(unconnected) => match &unconnected.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
