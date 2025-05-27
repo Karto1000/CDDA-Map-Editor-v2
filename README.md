@@ -15,8 +15,57 @@ the selected map when you save the file.
 > The map editor has not been implemented and is currently in the works.
 > If you still want to use a map editor,
 > the best alternative as of right now is
-> the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
+>
+the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
 > Editor, which makes map editing easier, without having to read the CDDA Game directory.
+
+## What does this Map Editor support?
+
+### What is supported?
+
+This editor currently supports the following mapgen file object properties including their `place` counterparts:
+
+- terrain
+- furniture
+- monsters
+- items
+- nested
+- toilets
+- fields
+- signs
+- computers
+- gaspumps
+- traps
+- vehicles
+
+### What is not supported?
+
+The following properties are not supported yet:
+
+- monster
+- npcs
+- loot
+- sealed_item
+- rubble
+- liquids
+- corpses
+- remove_vehicles
+- graffiti
+
+> [!IMPORTANT]
+> Please keep in mind that the editor does not represent the map perfectly as it will be shown ingame.
+> Always load your map in the actual game to check if it matches the map that is shown.
+> If you find any inconsistencies, please head over to
+> the [Issues](https://github.com/Karto1000/CDDA-Map-Editor-v2/issues) Page and submit a new issue after checking the
+> [Known Problems](#known-problems).
+
+### Known Problems
+
+Here is a list of known limitations, which may or may not be fixed in the future.
+
+- Vehicle Rotations beside 0, 90, 180 and 270 degrees look bad
+- Damaged and Broken vehicles are not accurately spawned as they should be (With parts removed and disabled)
+- Mutable overmap terrain entries are not supported
 
 ## Prerequisites
 
