@@ -3,7 +3,7 @@ pub mod furniture;
 pub mod io;
 pub mod item;
 pub mod map_data;
-pub mod monster;
+mod monster_group;
 pub mod overmap;
 pub mod palettes;
 pub mod region_settings;
@@ -14,7 +14,7 @@ pub mod vehicles;
 use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
 use crate::cdda_data::item::CDDAItemGroupIntermediate;
 use crate::cdda_data::map_data::CDDAMapDataIntermediate;
-use crate::cdda_data::monster::CDDAMonsterGroup;
+use crate::cdda_data::monster_group::CDDAMonsterGroupIntermediate;
 use crate::cdda_data::overmap::{
     CDDAOvermapLocationIntermediate, CDDAOvermapSpecialIntermediate,
     CDDAOvermapTerrainIntermediate,
@@ -314,7 +314,7 @@ pub enum CDDAJsonEntry {
     ConnectGroup(ConnectGroup),
     ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
-    MonsterGroup(CDDAMonsterGroup),
+    MonsterGroup(CDDAMonsterGroupIntermediate),
     OvermapLocation(CDDAOvermapLocationIntermediate),
     OvermapTerrain(CDDAOvermapTerrainIntermediate),
     OvermapSpecial(CDDAOvermapSpecialIntermediate),

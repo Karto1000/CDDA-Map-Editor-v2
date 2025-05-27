@@ -1,6 +1,6 @@
-use crate::cdda_data::map_data::MapGenMonsterType;
 use crate::cdda_data::{GetIdentifier, GetIdentifierError, WeightedIndexError};
-use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
+use cdda_lib::types::{CDDAIdentifier, NumberOrRange, ParameterIdentifier};
+use cdda_macros::cdda_entry;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
@@ -16,21 +16,38 @@ const fn default_cost_multiplier() -> u32 {
     1
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MonsterGroupEntry {
-    #[serde(flatten)]
-    pub id: MapGenMonsterType,
-    #[serde(default = "default_weight")]
-    pub weight: i32,
-    #[serde(default = "default_cost_multiplier")]
-    pub cost_multiplier: u32,
+const fn default_pack_size() -> NumberOrRange<u32> {
+    NumberOrRange::Number(1)
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(untagged)]
+pub enum MonsterGroupMonsterKind {
+    Group { group: CDDAIdentifier },
+    Monster { monster: CDDAIdentifier },
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MonsterGroupMonster {
+    #[serde(flatten)]
+    pub id: MonsterGroupMonsterKind,
+
+    #[serde(default = "default_weight")]
+    pub weight: i32,
+
+    #[serde(default = "default_cost_multiplier")]
+    pub cost_multiplier: u32,
+
+    #[serde(default = "default_pack_size")]
+    pub pack_size: NumberOrRange<u32>,
+}
+
+#[cdda_entry]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMonsterGroup {
     pub id: CDDAIdentifier,
-    pub default: Option<CDDAIdentifier>,
-    pub monsters: Vec<MonsterGroupEntry>,
+    pub monsters: Vec<MonsterGroupMonster>,
+    pub flags: Vec<String>,
 }
 
 #[derive(Debug, Error)]
@@ -63,11 +80,11 @@ impl CDDAMonsterGroup {
         let chosen_monster = &self.monsters[chosen_index];
 
         let id = match &chosen_monster.id {
-            MapGenMonsterType::Monster { monster } => {
-                monster.get_identifier(calculated_parameters)?
+            MonsterGroupMonsterKind::Monster { monster } => {
+                monster.get_identifier(calculated_parameters).unwrap()
             },
-            MapGenMonsterType::MonsterGroup { group } => {
-                let id = group.get_identifier(calculated_parameters)?;
+            MonsterGroupMonsterKind::Group { group } => {
+                let id = group.get_identifier(calculated_parameters).unwrap();
                 let group = monstergroups.get(&id).ok_or(
                     GetRandomMonsterError::MissingMonstergroup(id.to_string()),
                 )?;

@@ -4,6 +4,7 @@ use crate::cdda_data::map_data::IntoMapDataCollectionError::MissingNestedOmTerra
 use crate::cdda_data::palettes::Parameter;
 use crate::editor_data::{MapCoordinates, MapDataCollection};
 use crate::map::map_properties::ComputersProperty;
+use crate::map::map_properties::CorpsesProperty;
 use crate::map::map_properties::ToiletsProperty;
 use crate::map::map_properties::TrapsProperty;
 use crate::map::map_properties::VehiclesProperty;
@@ -381,6 +382,12 @@ pub enum MapGenTrap {
     MapGenValue(MapGenValue),
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenCorpse {
+    pub group: CDDAIdentifier,
+    pub age: Option<i32>,
+}
+
 macro_rules! create_place_inner {
     (
         $name: ident,
@@ -488,6 +495,7 @@ create_place_inner!(Toilets, ());
 
 create_place_inner!(Traps, MapGenTrap);
 create_place_inner!(Vehicles, MapGenVehicle);
+create_place_inner!(Corpses, MapGenCorpse);
 
 const fn default_chance() -> i32 {
     100
@@ -559,6 +567,7 @@ impl_from!(PlaceInnerSigns);
 impl_from!(PlaceInnerGaspumps);
 impl_from!(PlaceInnerTraps);
 impl_from!(PlaceInnerVehicles);
+impl_from!(PlaceInnerCorpses);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -619,7 +628,8 @@ map_data_object!(
     signs:  MeabyVec<MeabyWeighted<MapGenSign>>,
     gaspumps:  MeabyVec<MeabyWeighted<MapGenGaspump>>,
     traps:  MeabyVec<MeabyWeighted<MapGenTrap>>,
-    vehicles: MeabyVec<MeabyWeighted<MapGenVehicle>>
+    vehicles: MeabyVec<MeabyWeighted<MapGenVehicle>>,
+    corpses: MeabyVec<MeabyWeighted<MapGenCorpse>>
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -813,6 +823,18 @@ impl CDDAMapDataIntermediate {
             vehicles_map.insert(char, vehicles_prop as Arc<dyn Property>);
         }
 
+        let mut corpses_map = HashMap::new();
+        for (char, corpses) in self.object.common.corpses.clone() {
+            let corpses_prop = Arc::new(CorpsesProperty {
+                corpses: corpses
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            corpses_map.insert(char, corpses_prop as Arc<dyn Property>);
+        }
+
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
         properties.insert(MappingKind::Monster, monster_map);
@@ -825,6 +847,7 @@ impl CDDAMapDataIntermediate {
         properties.insert(MappingKind::Gaspump, gaspumps_map);
         properties.insert(MappingKind::Trap, trap_map);
         properties.insert(MappingKind::Vehicle, vehicles_map);
+        properties.insert(MappingKind::Corpse, corpses_map);
 
         properties
     }
@@ -905,6 +928,7 @@ impl CDDAMapDataIntermediate {
         insert_place!(Field, fields);
         insert_place!(ItemGroups, items);
         insert_place!(Vehicle, vehicles);
+        insert_place!(Corpse, corpses);
 
         place
     }

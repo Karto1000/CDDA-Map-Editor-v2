@@ -110,6 +110,7 @@ pub enum MappingKind {
     Field,
     Nested,
     Vehicle,
+    Corpse,
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -651,6 +652,7 @@ impl MapData {
                         MappingKind::Field => {},
                         MappingKind::Nested => {},
                         MappingKind::Vehicle => {},
+                        &MappingKind::Corpse => {},
                     }
                 }
             }

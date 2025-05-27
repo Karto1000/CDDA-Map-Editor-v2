@@ -1,10 +1,12 @@
-use crate::cdda_data::map_data::MapGenVehicle;
 use crate::cdda_data::map_data::{
     MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonster,
     MapGenSign, MapGenTrap, PlaceInnerComputers, PlaceInnerFields,
     PlaceInnerFurniture, PlaceInnerGaspumps, PlaceInnerItems,
     PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain, PlaceInnerToilets,
     PlaceInnerTraps, PlaceInnerVehicles,
+};
+use crate::cdda_data::map_data::{
+    MapGenCorpse, MapGenVehicle, PlaceInnerCorpses,
 };
 use crate::map::MapGenNested;
 use cdda_lib::types::MapGenValue;
@@ -157,6 +159,19 @@ impl From<PlaceInnerVehicles> for VehiclesProperty {
     fn from(value: PlaceInnerVehicles) -> Self {
         Self {
             vehicles: vec![Weighted::new(value.value, 1)],
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CorpsesProperty {
+    pub corpses: Vec<Weighted<MapGenCorpse>>,
+}
+
+impl From<PlaceInnerCorpses> for CorpsesProperty {
+    fn from(value: PlaceInnerCorpses) -> Self {
+        Self {
+            corpses: vec![Weighted::new(value.value, 1)],
         }
     }
 }

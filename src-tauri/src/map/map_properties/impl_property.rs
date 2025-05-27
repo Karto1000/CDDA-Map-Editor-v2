@@ -6,9 +6,10 @@ use crate::cdda_data::map_data::{
 use crate::cdda_data::vehicle_parts::{CDDAVehiclePart, Location};
 use crate::cdda_data::vehicles::{CDDAVehicle, VehiclePart};
 use crate::map::map_properties::{
-    ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty,
-    ItemsProperty, MonstersProperty, NestedProperty, SignsProperty,
-    TerrainProperty, ToiletsProperty, TrapsProperty, VehiclesProperty,
+    ComputersProperty, CorpsesProperty, FieldsProperty, FurnitureProperty,
+    GaspumpsProperty, ItemsProperty, MonstersProperty, NestedProperty,
+    SignsProperty, TerrainProperty, ToiletsProperty, TrapsProperty,
+    VehiclesProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
@@ -74,11 +75,11 @@ impl Property for MonstersProperty {
                     let id = group
                         .get_identifier(&map_data.calculated_parameters)
                         .ok()?;
-                    let mon_group = json_data.monstergroups.get(&id)?;
+                    let mon_group = json_data.monster_groups.get(&id)?;
 
                     let rand_monster = mon_group
                         .get_random_monster(
-                            &json_data.monstergroups,
+                            &json_data.monster_groups,
                             &map_data.calculated_parameters,
                         )
                         .ok();
@@ -781,6 +782,52 @@ impl Property for VehiclesProperty {
         }
 
         Some(commands)
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
+    }
+}
+
+impl Property for CorpsesProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<SetTile>> {
+        let mapgen_corpse = self.corpses.get_random();
+
+        let group = match json_data.monster_groups.get(&mapgen_corpse.group) {
+            None => {
+                warn!("Could not find monstergroup {}", mapgen_corpse.group);
+                return None;
+            },
+            Some(g) => g,
+        };
+
+        let monster = match group.get_random_monster(
+            &json_data.monster_groups,
+            &map_data.calculated_parameters,
+        ) {
+            Ok(m) => m,
+            Err(e) => {
+                warn!("Could not get random monster {}", e);
+                return None;
+            },
+        };
+
+        Some(vec![SetTile {
+            id: TilesheetCDDAId {
+                id: monster,
+                prefix: Some("corpse".into()),
+                postfix: None,
+            },
+            layer: TileLayer::Monster,
+            coordinates: position.clone(),
+            rotation: Rotation::Deg0,
+            state: TileState::Normal,
+        }])
     }
 
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {

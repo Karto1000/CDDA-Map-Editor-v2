@@ -1,7 +1,7 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::item::CDDAItemGroup;
 use crate::cdda_data::map_data::OmTerrain;
-use crate::cdda_data::monster::CDDAMonsterGroup;
+use crate::cdda_data::monster_group::CDDAMonsterGroup;
 use crate::cdda_data::overmap::{
     CDDAOvermapLocation, CDDAOvermapSpecial, CDDAOvermapTerrain,
 };
@@ -45,12 +45,12 @@ pub struct DeserializedCDDAJsonData {
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
     pub item_groups: HashMap<CDDAIdentifier, CDDAItemGroup>,
-    pub monstergroups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
     pub overmap_locations: HashMap<CDDAIdentifier, CDDAOvermapLocation>,
     pub overmap_terrains: HashMap<CDDAIdentifier, CDDAOvermapTerrain>,
     pub overmap_specials: HashMap<CDDAIdentifier, CDDAOvermapSpecial>,
     pub vehicles: HashMap<CDDAIdentifier, CDDAVehicle>,
     pub vehicle_parts: HashMap<CDDAIdentifier, CDDAVehiclePart>,
+    pub monster_groups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
 }
 
 #[derive(Debug, Error)]
@@ -291,6 +291,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
         let mut intermediate_overmap_locations = HashMap::new();
         let mut intermediate_overmap_terrains = HashMap::new();
         let mut intermediate_overmap_specials = HashMap::new();
+        let mut intermediate_monster_groups = HashMap::new();
 
         while let Some(entry) = walkdir.next().await {
             let entry = entry?;
@@ -496,12 +497,18 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                             .insert(new_group.id.clone(), new_group);
                     },
                     CDDAJsonEntry::MonsterGroup(group) => {
-                        debug!(
-                            "Found MonsterGroup entry {} in {:?}",
-                            group.id,
-                            entry.path()
-                        );
-                        cdda_data.monstergroups.insert(group.id.clone(), group);
+                        for ident in group.id.clone().into_vec() {
+                            debug!(
+                                "Found MonsterGroup entry {} in {:?}",
+                                ident,
+                                entry.path()
+                            );
+
+                            let mut clone = group.clone();
+                            clone.id = MeabyVec::Single(ident.clone());
+
+                            intermediate_monster_groups.insert(ident, clone);
+                        }
                     },
                     CDDAJsonEntry::OvermapLocation(location) => {
                         for ident in location.id.clone().into_vec() {
@@ -635,6 +642,17 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                 id.clone(),
                 intermediate_overmap_terrain
                     .calculate_copy(&intermediate_overmap_terrains)
+                    .into(),
+            );
+        }
+
+        for (id, intermediate_monster_group) in
+            intermediate_monster_groups.iter()
+        {
+            cdda_data.monster_groups.insert(
+                id.clone(),
+                intermediate_monster_group
+                    .calculate_copy(&intermediate_monster_groups)
                     .into(),
             );
         }
