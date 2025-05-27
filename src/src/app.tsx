@@ -1,5 +1,4 @@
-import React, {createContext, useEffect, useRef} from 'react';
-import {Panel, PanelGroup, PanelResizeHandle} from "react-resizable-panels";
+import React, {createContext, useEffect, useRef, useState} from 'react';
 
 import "./app.scss"
 import {TauriCommand, TauriEvent, ToastType} from "./tauri/events/types.js";
@@ -20,6 +19,9 @@ import {useTileset} from "./features/sprites/hooks/useTileset.js";
 import toast, {ToastBar, Toaster} from "react-hot-toast";
 import Icon, {IconName} from "./shared/components/icon.js";
 import {useTauriEvent} from "./shared/hooks/useTauriEvent.js";
+import {Panel, PanelGroup, PanelResizer} from "@window-splitter/react";
+import {clsx} from "clsx";
+import {Sidemenu} from "./shared/components/sidemenu.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -42,6 +44,7 @@ function App() {
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus)
     const {openMapWindowRef, settingsWindowRef} = useWindows()
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
 
     useEffect(() => {
         (async () => {
@@ -76,6 +79,56 @@ function App() {
         return <NoTabScreen setIsCreatingMapWindowOpen={() => {
         }}/>
     }
+
+    const sideMenuTabs = tabs.shouldDisplayCanvas() ? [
+        {
+            icon: <Icon name={IconName.SettingsSmall}/>,
+            content: <MultiMenu tabs={
+                [
+                    {
+                        name: "Terrain",
+                        content: <></>
+                    },
+                    {
+                        name: "Furniture",
+                        content: <></>
+                    },
+                    {
+                        name: "Items",
+                        content: <></>,
+                    },
+                    {
+                        name: "Monsters",
+                        content: <></>,
+                    },
+                    {
+                        name: "Signs",
+                        content: <></>,
+                    },
+                    {
+                        name: "Computers",
+                        content: <></>
+                    },
+                    {
+                        name: "Gaspumps",
+                        content: <></>
+                    },
+                    {
+                        name: "Toilets",
+                        content: <></>
+                    }
+                ]}
+            />
+        }
+    ] : [
+        {
+            icon: <Icon name={IconName.QuestionSmall} pointerEvents={"none"}/>,
+            content: <div>
+                <h2>What is this?</h2>
+                <p>This is the panel where you will be able to see different properties of tiles you select</p>
+            </div>
+        }
+    ]
 
     return (
         <div className={`app ${theme}-theme`}>
@@ -114,62 +167,25 @@ function App() {
                         />
 
                         <PanelGroup direction={'horizontal'}>
-                            <Panel collapsible={true} minSize={10} defaultSize={20} maxSize={50}
-                                   onResize={onResize}>
-                                <div className={"side-panel"}>
-                                    <div className={"side-panel-left"}>
-                                        {
-                                            tabs.shouldDisplayCanvas() ?
-                                                <MultiMenu tabs={
-                                                    [
-                                                        {
-                                                            name: "Terrain",
-                                                            content: <></>
-                                                        },
-                                                        {
-                                                            name: "Furniture",
-                                                            content: <></>
-                                                        },
-                                                        {
-                                                            name: "Items",
-                                                            content: <></>,
-                                                        },
-                                                        {
-                                                            name: "Monsters",
-                                                            content: <></>,
-                                                        },
-                                                        {
-                                                            name: "Signs",
-                                                            content: <></>,
-                                                        },
-                                                        {
-                                                            name: "Computers",
-                                                            content: <></>
-                                                        },
-                                                        {
-                                                            name: "Gaspumps",
-                                                            content: <></>
-                                                        },
-                                                        {
-                                                            name: "Toilets",
-                                                            content: <></>
-                                                        }
-                                                    ]}
-                                                />
-                                                :
-                                                <div>
-                                                    <h1>Hey there!</h1>
-                                                    <p>This is where you can see the properties of any tiles you hover
-                                                        over</p>
-                                                    <p>If you wish to close this panel you can just drag the Line
-                                                        between this panel and the main content to the left</p>
-                                                </div>
-                                        }
-                                    </div>
-                                    <div className={"side-panel-right"}/>
+                            <Panel
+                                collapsible
+                                collapsed={isSidebarCollapsed}
+                                onCollapseChange={v => setIsSidebarCollapsed(v)}
+                                collapsedSize={"32px"}
+                                min={"100px"}
+                                max={"1000px"}
+                                onResize={onResize}>
+                                <div className={clsx("side-panel", isSidebarCollapsed && "collapsed")}>
+                                    {
+                                        <Sidemenu
+                                            setIsCollapsed={setIsSidebarCollapsed}
+                                            isCollapsed={isSidebarCollapsed}
+                                            tabs={sideMenuTabs}
+                                        />
+                                    }
                                 </div>
                             </Panel>
-                            <PanelResizeHandle hitAreaMargins={{coarse: 30, fine: 10}}/>
+                            <PanelResizer className={clsx("resize-handle")} disabled={isSidebarCollapsed} size={"5px"}/>
                             <Panel>
                                 <MapViewer
                                     threeConfig={threeConfigRef}

@@ -16,11 +16,12 @@ import {ThemeContext} from "../../app.js";
 //===================================================================
 // Local Type Definitions
 //===================================================================
-type Props = {
+export type IconProps = {
     name: IconName,
     width?: number,
     height?: number,
     rotation?: number
+    pointerEvents?: string
 }
 
 //===================================================================
@@ -45,6 +46,7 @@ export enum IconName {
     WindowedSmall = "windowed-small",
     EyeMedium = "eye-medium",
     CheckmarkMedium = "checkmark-medium",
+    QuestionSmall = "question-small"
 }
 
 //===================================================================
@@ -59,14 +61,15 @@ export default function Icon(
         name,
         width = 14,
         height = 14,
-        rotation = 0
-    }: Props
+        rotation = 0,
+        pointerEvents = "auto"
+    }: IconProps
 ): React.JSX.Element {
     const {theme} = useContext(ThemeContext);
 
     const imgFilter = theme === Theme.Dark ? "invert(0%)" : "invert(100%)";
     return <img
-        style={{rotate: `${rotation}deg`, filter: imgFilter}}
+        style={{rotate: `${rotation}deg`, filter: imgFilter, pointerEvents}}
         width={width}
         className={"icon"}
         height={height}

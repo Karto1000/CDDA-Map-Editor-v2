@@ -1,0 +1,28 @@
+@import "../../theme";
+
+@include themed($themes) {
+  .sidemenu {
+    .side-buttons {
+      button {
+        &.selected {
+          background-color: theme-var("selected");
+        }
+      }
+    }
+  }
+}
+
+.sidemenu {
+  display: flex;
+  gap: 8px;
+
+  .side-buttons {
+    display: flex;
+    flex-direction: column;
+
+    button {
+      width: 32px;
+      height: 32px;
+    }
+  }
+}
