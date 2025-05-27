@@ -226,10 +226,10 @@ impl MapDataCollection {
         z: ZLevel,
     ) -> IVec3 {
         IVec3::new(
-            (cell_coordinates.x + map_coordinates.x * DEFAULT_MAP_DATA_SIZE.x)
-                as i32,
-            (cell_coordinates.y + map_coordinates.y * DEFAULT_MAP_DATA_SIZE.y)
-                as i32,
+            cell_coordinates.x as i32
+                + map_coordinates.x as i32 * DEFAULT_MAP_DATA_SIZE.x as i32,
+            cell_coordinates.y as i32
+                + map_coordinates.y as i32 * DEFAULT_MAP_DATA_SIZE.y as i32,
             z,
         )
     }

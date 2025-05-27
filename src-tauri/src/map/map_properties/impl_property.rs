@@ -1,6 +1,8 @@
 use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
-use crate::cdda_data::map_data::{MapGenGaspumpFuelType, ReferenceOrInPlace};
+use crate::cdda_data::map_data::{
+    MapGenGaspumpFuelType, ReferenceOrInPlace, VehicleStatus,
+};
 use crate::cdda_data::vehicle_parts::{CDDAVehiclePart, Location};
 use crate::cdda_data::vehicles::{CDDAVehicle, VehiclePart};
 use crate::map::map_properties::{
@@ -13,6 +15,7 @@ use crate::tileset::GetRandom;
 use log::error;
 use num_traits::real::Real;
 use rand::prelude::IndexedRandom;
+use rand::random_range;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 use std::str::FromStr;
@@ -37,6 +40,7 @@ impl Property for TerrainProperty {
             TilesheetCDDAId::simple(ident),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
 
         Some(vec![command])
@@ -94,6 +98,7 @@ impl Property for MonstersProperty {
                     TilesheetCDDAId::simple(ident),
                     position.clone(),
                     Rotation::Deg0,
+                    TileState::Normal,
                 );
 
                 return Some(vec![command]);
@@ -128,6 +133,7 @@ impl Property for FurnitureProperty {
             TilesheetCDDAId::simple(ident),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
 
         Some(vec![command])
@@ -155,6 +161,7 @@ impl Property for SignsProperty {
             TilesheetCDDAId::simple("f_sign"),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
         Some(vec![command])
     }
@@ -260,6 +267,7 @@ impl Property for FieldsProperty {
             TilesheetCDDAId::simple(field.field.clone()),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
         Some(vec![command])
     }
@@ -292,6 +300,7 @@ impl Property for GaspumpsProperty {
             TilesheetCDDAId::simple(id),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
         Some(vec![command])
     }
@@ -539,6 +548,7 @@ impl Property for ComputersProperty {
             TilesheetCDDAId::simple("f_console"),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
 
         Some(vec![command])
@@ -560,6 +570,7 @@ impl Property for ToiletsProperty {
             TilesheetCDDAId::simple("f_toilet"),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
 
         Some(vec![command])
@@ -589,6 +600,7 @@ impl Property for TrapsProperty {
             TilesheetCDDAId::simple(ident),
             position.clone(),
             Rotation::Deg0,
+            TileState::Normal,
         );
 
         Some(vec![command])
@@ -657,7 +669,7 @@ impl Property for VehiclesProperty {
             // Negative y -> left
             // Positive x -> up
             // Negative x -> down
-            let base_position = IVec2::new(part.y, -part.x);
+            let base_position = IVec2::new(part.x, part.y);
 
             // TODO: This rotation looks pretty munted for any rotation other than 0, 90, 180 and 270 degrees
             let rotated_x = (base_position.x as f32 * rotation_radians.cos()
@@ -727,10 +739,33 @@ impl Property for VehiclesProperty {
         // Generate visible mapping commands
         for (pos, (part, ty, _)) in highest_priority_parts {
             let rotation = match random_rotation % 360 {
-                0..90 => Rotation::Deg0,
-                180..270 => Rotation::Deg180,
+                0..90 => Rotation::Deg270,
+                180..270 => Rotation::Deg90,
                 // TODO: dirty hack to make the rotation work "counter clockwise"
-                n => Rotation::from(n + 180),
+                n => Rotation::from(n + 90),
+            };
+
+            // TODO: Not that accurate to what it will look like in game since the status can also
+            // remove tiles and do other things,
+            // but for the purposes of this editor i think this i enough
+            let tile_state = match mapgen_vehicle.status {
+                VehicleStatus::LightDamage => {
+                    if random_range(0..3) == 0 {
+                        TileState::Broken
+                    } else {
+                        TileState::Normal
+                    }
+                },
+                VehicleStatus::HeavilyDamaged => {
+                    if random_range(0..5) == 0 {
+                        TileState::Normal
+                    } else {
+                        TileState::Broken
+                    }
+                },
+                VehicleStatus::Perfect | VehicleStatus::Undamaged => {
+                    TileState::Normal
+                },
             };
 
             commands.push(SetTile::furniture(
@@ -741,6 +776,7 @@ impl Property for VehiclesProperty {
                 },
                 position + pos,
                 rotation,
+                tile_state,
             ));
         }
 

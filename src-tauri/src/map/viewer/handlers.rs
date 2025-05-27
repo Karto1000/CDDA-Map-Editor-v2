@@ -157,10 +157,10 @@ impl SpriteType {
         match sprite_kind {
             SpriteKind::Exists(sprite) => {
                 let fg = match sprite.get_fg_id(
-                    &tile_id.tilesheet_id,
-                    json_data,
+                    &tile_id,
                     &tile_layer,
                     adjacent_sprites,
+                    json_data,
                 ) {
                     None => None,
                     Some(sprite_id) => match sprite.is_animated() {
@@ -194,10 +194,10 @@ impl SpriteType {
                 };
 
                 let bg = match sprite.get_bg_id(
-                    &tile_id.tilesheet_id,
-                    json_data,
+                    &tile_id,
                     &tile_layer,
                     adjacent_sprites,
+                    json_data,
                 ) {
                     None => None,
                     Some(id) => match sprite.is_animated() {
@@ -361,8 +361,7 @@ pub async fn get_sprites(
                         },
                     };
 
-                    let sprite_kind =
-                        tilesheet.get_sprite(&id.tilesheet_id, &json_data);
+                    let sprite_kind = tilesheet.get_sprite(&id, &json_data);
 
                     let adjacent_idents = local_mapped_cdda_ids
                         .get_adjacent_identifiers(cell_3d_coords, &layer);

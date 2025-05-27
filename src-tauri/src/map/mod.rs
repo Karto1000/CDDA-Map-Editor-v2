@@ -125,12 +125,21 @@ pub struct CellRepresentation {
     computers: Value,
 }
 
+#[derive(Debug, Default, Serialize, Eq, PartialEq)]
+pub enum TileState {
+    #[default]
+    Normal,
+    Broken,
+    Open,
+}
+
 #[derive(Debug, Serialize, Eq, PartialEq)]
 pub struct SetTile {
     id: TilesheetCDDAId,
     layer: TileLayer,
     coordinates: IVec2,
     rotation: Rotation,
+    state: TileState,
 }
 
 impl SetTile {
@@ -138,12 +147,14 @@ impl SetTile {
         id: impl Into<TilesheetCDDAId>,
         coordinates: IVec2,
         rotation: impl Into<Rotation>,
+        state: TileState,
     ) -> Self {
         Self {
             id: id.into(),
             layer: TileLayer::Terrain,
             rotation: rotation.into(),
             coordinates,
+            state,
         }
     }
 
@@ -151,12 +162,14 @@ impl SetTile {
         id: impl Into<TilesheetCDDAId>,
         coordinates: IVec2,
         rotation: impl Into<Rotation>,
+        state: TileState,
     ) -> Self {
         Self {
             id: id.into(),
             layer: TileLayer::Furniture,
             rotation: rotation.into(),
             coordinates,
+            state,
         }
     }
 
@@ -164,12 +177,14 @@ impl SetTile {
         id: impl Into<TilesheetCDDAId>,
         coordinates: IVec2,
         rotation: impl Into<Rotation>,
+        state: TileState,
     ) -> Self {
         Self {
             id: id.into(),
             layer: TileLayer::Field,
             rotation: rotation.into(),
             coordinates,
+            state,
         }
     }
 
@@ -177,12 +192,14 @@ impl SetTile {
         id: impl Into<TilesheetCDDAId>,
         coordinates: IVec2,
         rotation: impl Into<Rotation>,
+        state: TileState,
     ) -> Self {
         Self {
             id: id.into(),
             layer: TileLayer::Monster,
             rotation: rotation.into(),
             coordinates,
+            state,
         }
     }
 }
@@ -470,6 +487,12 @@ impl MapData {
 
             let mut mapped_id = MappedCDDAId::simple(id);
             mapped_id.rotation = command.rotation;
+
+            match command.state {
+                TileState::Normal => {},
+                TileState::Broken => mapped_id.is_broken = true,
+                TileState::Open => mapped_id.is_open = true,
+            }
 
             let ident_mut =
                 match local_mapped_cdda_ids.get_mut(&command_3d_coords) {

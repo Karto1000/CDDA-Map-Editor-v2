@@ -226,6 +226,25 @@ impl TilesheetCDDAId {
                 .unwrap_or_default(),
         ))
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedCDDAId {
+    pub tilesheet_id: TilesheetCDDAId,
+    pub rotation: Rotation,
+    pub is_broken: bool,
+    pub is_open: bool,
+}
+
+impl MappedCDDAId {
+    pub fn simple(id: impl Into<TilesheetCDDAId>) -> Self {
+        Self {
+            tilesheet_id: id.into(),
+            rotation: Default::default(),
+            is_broken: false,
+            is_open: false,
+        }
+    }
 
     ///
     /// Some parts can have multiple variants; each variant can define the symbols and broken symbols,
@@ -250,35 +269,22 @@ impl TilesheetCDDAId {
     //     vp_seat
     ///
     ///
-    pub fn slice_right(&self) -> TilesheetCDDAId {
+    pub fn slice_right(&self) -> MappedCDDAId {
         let new_postfix = self
+            .tilesheet_id
             .postfix
             .clone()
             .map(|p| p.rsplit_once('_').map(|(s, _)| s.to_string()));
 
-        TilesheetCDDAId {
-            id: self.id.clone(),
-            prefix: self.prefix.clone(),
-            postfix: new_postfix.flatten(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedCDDAId {
-    pub tilesheet_id: TilesheetCDDAId,
-    pub rotation: Rotation,
-    pub is_broken: bool,
-    pub is_open: bool,
-}
-
-impl MappedCDDAId {
-    pub fn simple(id: impl Into<TilesheetCDDAId>) -> Self {
-        Self {
-            tilesheet_id: id.into(),
-            rotation: Default::default(),
-            is_broken: false,
-            is_open: false,
+        MappedCDDAId {
+            tilesheet_id: TilesheetCDDAId {
+                id: self.tilesheet_id.id.clone(),
+                prefix: self.tilesheet_id.prefix.clone(),
+                postfix: new_postfix.flatten(),
+            },
+            rotation: self.rotation.clone(),
+            is_broken: self.is_broken.clone(),
+            is_open: self.is_open.clone(),
         }
     }
 }
@@ -360,10 +366,8 @@ fn get_multitile_sprite_from_additional_tiles(
 ) -> Result<Sprite, Error> {
     let mut additional_tile_ids = HashMap::new();
     // Special cases for open and broken
-    let mut broken: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> =
-        None;
-    let mut open: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> =
-        None;
+    let mut broken: Option<ForeBackIds<FinalIds, FinalIds>> = None;
+    let mut open: Option<ForeBackIds<FinalIds, FinalIds>> = None;
 
     for additional_tile in additional_tiles {
         match additional_tile.id {
@@ -375,7 +379,7 @@ fn get_multitile_sprite_from_additional_tiles(
                     additional_tile.bg.clone(),
                 );
 
-                broken = Some((&additional_tile, ForeBackIds::new(fg, bg)))
+                broken = Some(ForeBackIds::new(fg, bg))
             },
             AdditionalTileId::Open => {
                 let fg = to_weighted_vec_additional_exception(
@@ -385,7 +389,7 @@ fn get_multitile_sprite_from_additional_tiles(
                     additional_tile.bg.clone(),
                 );
 
-                open = Some((&additional_tile, ForeBackIds::new(fg, bg)))
+                open = Some(ForeBackIds::new(fg, bg))
             },
             _ => {
                 let fg = to_weighted_vec_additional(additional_tile.fg.clone());
@@ -408,30 +412,6 @@ fn get_multitile_sprite_from_additional_tiles(
     let fg = to_weighted_vec(tile.fg.clone());
     let bg = to_weighted_vec(tile.bg.clone());
 
-    match broken {
-        None => {},
-        Some((tile, ids)) => {
-            return Ok(Sprite::Broken {
-                ids: ForeBackIds::new(fg, bg),
-                animated: tile.animated.unwrap_or(false),
-                broken: ids,
-                rotates: tile.rotates.unwrap_or(false),
-            })
-        },
-    }
-
-    match open {
-        None => {},
-        Some((tile, ids)) => {
-            return Ok(Sprite::Open {
-                ids: ForeBackIds::new(fg, bg),
-                animated: tile.animated.unwrap_or(false),
-                rotates: tile.rotates.unwrap_or(false),
-                open: ids,
-            })
-        },
-    }
-
     Ok(Sprite::Multitile {
         ids: ForeBackIds::new(fg, bg),
         rotates: tile.rotates.unwrap_or(false),
@@ -443,6 +423,8 @@ fn get_multitile_sprite_from_additional_tiles(
             .remove(&AdditionalTileId::TConnection),
         unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
         end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
+        broken: broken.unwrap_or(ForeBackIds::new(None, None)),
+        open: open.unwrap_or(ForeBackIds::new(None, None)),
     })
 }
 
@@ -454,26 +436,26 @@ pub struct LegacyTilesheet {
 impl Tilesheet for LegacyTilesheet {
     fn get_sprite(
         &self,
-        id: &TilesheetCDDAId,
+        id: &MappedCDDAId,
         json_data: &DeserializedCDDAJsonData,
     ) -> SpriteKind {
-        match self.id_map.get(&id.full()) {
+        match self.id_map.get(&id.tilesheet_id.full()) {
             None => {
                 debug!(
                     "Could not find {} in tilesheet ids, trying to use looks_like property",
-                    id.full(),
+                    id.tilesheet_id.full(),
                 );
 
                 let sliced_postfix = id.slice_right();
                 debug!(
                     "Slicing postfix and trying to get sprite again, new id {}",
-                    &sliced_postfix
+                    &sliced_postfix.tilesheet_id
                 );
 
-                match sliced_postfix.postfix {
+                match sliced_postfix.tilesheet_id.postfix {
                     None => {
                         // We want to get the sprites one more time after the entire postfix has been sliced
-                        if id.postfix.is_some() {
+                        if id.tilesheet_id.postfix.is_some() {
                             return self.get_sprite(&sliced_postfix, json_data);
                         }
                     },
@@ -482,15 +464,17 @@ impl Tilesheet for LegacyTilesheet {
                     },
                 }
 
-                match self.get_looks_like_sprite(&sliced_postfix.id, &json_data)
-                {
+                match self.get_looks_like_sprite(
+                    &sliced_postfix.tilesheet_id.id,
+                    &json_data,
+                ) {
                     None => {
                         debug!(
                             "Could not find {} in tilesheet ids or looks_like property, using fallback",
-                            sliced_postfix.full()
+                            sliced_postfix.tilesheet_id.full()
                         );
 
-                        match json_data.terrain.get(&id.id) {
+                        match json_data.terrain.get(&id.tilesheet_id.id) {
                             None => {},
                             Some(t) => {
                                 return SpriteKind::Fallback(
@@ -517,7 +501,7 @@ impl Tilesheet for LegacyTilesheet {
                             },
                         }
 
-                        match json_data.furniture.get(&id.id) {
+                        match json_data.furniture.get(&id.tilesheet_id.id) {
                             None => {},
                             Some(f) => {
                                 return SpriteKind::Fallback(
@@ -551,14 +535,14 @@ impl Tilesheet for LegacyTilesheet {
                     Some(s) => {
                         debug!(
                             "Found looks like sprite with id {}",
-                            sliced_postfix.full()
+                            sliced_postfix.tilesheet_id.full()
                         );
                         SpriteKind::Exists(s)
                     },
                 }
             },
             Some(s) => {
-                debug!("Found sprite with id {}", id.full());
+                debug!("Found sprite with id {}", id.tilesheet_id.full());
                 SpriteKind::Exists(s)
             },
         }
