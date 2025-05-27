@@ -47,11 +47,13 @@ export function Sidemenu(props: SidemenuProps) {
                     })
                 }
             </div>
-            {
-                selectedMenu !== null
-                    ? props.tabs[selectedMenu] ? props.tabs[selectedMenu].content : <></>
-                    : <></>
-            }
+            <div className={"side-content"}>
+                {
+                    selectedMenu !== null
+                        ? props.tabs[selectedMenu] ? props.tabs[selectedMenu].content : <></>
+                        : <></>
+                }
+            </div>
         </div>
     )
 }

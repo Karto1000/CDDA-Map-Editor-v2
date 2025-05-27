@@ -22,6 +22,13 @@
   }
 }
 
+.sidebar-chosen-properties {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 8px;
+}
+
 .loader-container {
   position: absolute;
   top: 54px;

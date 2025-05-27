@@ -21,9 +21,39 @@ export type DisplaySign = {
     snippet: string
 }
 
-export type CellData = {
-    [coords: string]: { item_groups: DisplayItemGroup[], signs: DisplaySign }
+export type TilesheetCDDAId = {
+    id: string,
+    prefix: string,
+    postfix: string
 }
+
+export type MappedCDDAId = {
+    tilesheet_id: TilesheetCDDAId
+}
+
+export type CellData = {
+    [zLevel: number]: {
+        [position: string]: {
+            terrain?: MappedCDDAId,
+            furniture?: MappedCDDAId,
+            monster?: MappedCDDAId,
+            field?: MappedCDDAId
+        }
+    }
+}
+
+// export type CellData = {
+//     [coords: string]: {
+//         terrain: string | null,
+//         furniture: {
+//             selectedSign: DisplaySign | null,
+//             selectedFurniture: string | null,
+//             selectedComputer: unknown | null,
+//             selectedGaspump: string | null
+//         },
+//         itemGroups: DisplayItemGroup[] | null
+//     }
+// }
 
 export type StaticSprite = {
     position: string

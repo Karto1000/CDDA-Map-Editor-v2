@@ -1,4 +1,4 @@
-import React, {createContext, useEffect, useRef, useState} from 'react';
+import React, {createContext, useEffect, useMemo, useRef, useState} from 'react';
 
 import "./app.scss"
 import {TauriCommand, TauriEvent, ToastType} from "./tauri/events/types.js";
@@ -27,6 +27,10 @@ export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
 });
 
+export type SidebarContent = {
+    chosenProperties: React.JSX.Element,
+}
+
 export const TabContext = createContext<UseTabsReturn>(null)
 export const EditorDataContext = createContext<EditorData>(null)
 
@@ -45,6 +49,7 @@ function App() {
     const {spritesheetConfig, tilesheets} = useTileset(eventBus)
     const {openMapWindowRef, settingsWindowRef} = useWindows()
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
+    const [sidebarContent, setSidebarContent] = useState<SidebarContent>({})
 
     useEffect(() => {
         (async () => {
@@ -80,55 +85,29 @@ function App() {
         }}/>
     }
 
-    const sideMenuTabs = tabs.shouldDisplayCanvas() ? [
-        {
-            icon: <Icon name={IconName.SettingsSmall}/>,
-            content: <MultiMenu tabs={
-                [
-                    {
-                        name: "Terrain",
-                        content: <></>
-                    },
-                    {
-                        name: "Furniture",
-                        content: <></>
-                    },
-                    {
-                        name: "Items",
-                        content: <></>,
-                    },
-                    {
-                        name: "Monsters",
-                        content: <></>,
-                    },
-                    {
-                        name: "Signs",
-                        content: <></>,
-                    },
-                    {
-                        name: "Computers",
-                        content: <></>
-                    },
-                    {
-                        name: "Gaspumps",
-                        content: <></>
-                    },
-                    {
-                        name: "Toilets",
-                        content: <></>
-                    }
-                ]}
-            />
-        }
-    ] : [
-        {
-            icon: <Icon name={IconName.QuestionSmall} pointerEvents={"none"}/>,
-            content: <div>
-                <h2>What is this?</h2>
-                <p>This is the panel where you will be able to see different properties of tiles you select</p>
-            </div>
-        }
-    ]
+    const sideMenuTabs = useMemo(() => {
+        return tabs.shouldDisplayCanvas() ? [
+            {
+                icon: <Icon name={IconName.SettingsSmall}/>,
+                content: <MultiMenu tabs={
+                    [
+                        {
+                            name: "Chosen Properties",
+                            content: sidebarContent.chosenProperties
+                        },
+                    ]}
+                />
+            }
+        ] : [
+            {
+                icon: <Icon name={IconName.QuestionSmall} pointerEvents={"none"}/>,
+                content: <div>
+                    <h2>What is this?</h2>
+                    <p>This is the panel where you will be able to see different properties of tiles you select</p>
+                </div>
+            }
+        ]
+    }, [sidebarContent, tabs.openedTab])
 
     return (
         <div className={`app ${theme}-theme`}>
@@ -155,7 +134,7 @@ function App() {
                         }
                     }
                 }}>
-                {(t) => <ToastBar toast={t}/>}
+                {(t: any) => <ToastBar toast={t}/>}
             </Toaster>
             <EditorDataContext.Provider value={editorData}>
                 <ThemeContext.Provider value={{theme}}>
@@ -194,6 +173,7 @@ function App() {
                                     tileInfo={spritesheetConfig.current?.tile_info[0]}
                                     isOpen={tabs.getCurrentTab()?.tab_type === TabTypeKind.LiveViewer}
                                     tilesheets={tilesheets}
+                                    setSidebarContent={setSidebarContent}
                                     canvas={{
                                         canvasRef: canvasRef,
                                         canvasContainerRef: canvasContainerRef

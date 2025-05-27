@@ -13,7 +13,7 @@ import {GridHelper, Vector3} from "three";
 import {degToRad} from "three/src/math/MathUtils.js";
 import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../../sprites/tilesheets.js";
-import {TabContext, ThemeContext} from "../../../app.js";
+import {SidebarContent, TabContext, ThemeContext} from "../../../app.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
 import {BackendResponseType, serializedVec2ToVector2, TauriCommand, TauriEvent} from "../../../tauri/events/types.js";
 import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
@@ -23,6 +23,7 @@ import {SHOW_STATS} from "../../three/hooks/useThreeSetup.js";
 import "./mapViewer.scss"
 import {clsx} from "clsx";
 import toast from "react-hot-toast";
+import {CellData} from "../../../tauri/types/map_data.js";
 
 export type MapViewerProps = {
     threeConfig: MutableRefObject<ThreeConfig>
@@ -32,6 +33,7 @@ export type MapViewerProps = {
     canvas: Canvas,
     isOpen: boolean
     tilesheets: MutableRefObject<Tilesheets>
+    setSidebarContent: React.SetStateAction<SidebarContent>
 }
 
 export function MapViewer(props: MapViewerProps) {
@@ -63,6 +65,7 @@ export function MapViewer(props: MapViewerProps) {
         }
     })
     const tabs = useContext(TabContext)
+    const cellRepresentation = useRef<CellData>()
 
     function setupSceneData(theme: Theme) {
         if (!props.threeConfig.current || !props.tileInfo) return;
@@ -151,6 +154,7 @@ export function MapViewer(props: MapViewerProps) {
 
             if (reloadResponse.type === BackendResponseType.Error) {
                 toast.error(reloadResponse.error)
+                setIsLoading(false)
                 return
             }
 
@@ -158,8 +162,19 @@ export function MapViewer(props: MapViewerProps) {
 
             if (getSpritesResponse.type === BackendResponseType.Error) {
                 toast.error(getSpritesResponse.error)
+                setIsLoading(false)
                 return
             }
+
+            const getRepresentationResponse = await tauriBridge.invoke<CellData, unknown, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
+
+            if (getRepresentationResponse.type === BackendResponseType.Error) {
+                toast.error(getRepresentationResponse.error)
+                setIsLoading(false)
+                return
+            }
+
+            cellRepresentation.current = getRepresentationResponse.data
 
             setIsLoading(false)
             toast.success("Reloaded Viewer")
@@ -315,6 +330,63 @@ export function MapViewer(props: MapViewerProps) {
                     )
                     selectedCellMeshRef.current.visible = true
                     setSelectedCellPosition(worldMousePosition.current)
+
+                    const positionString = `${worldMousePosition.current.x},${worldMousePosition.current.y},${zLevel.current}`
+
+                    const selectedMapZ = cellRepresentation.current[zLevel.current]
+
+                    if (!selectedMapZ) {
+                        props.setSidebarContent({})
+                        return
+                    }
+
+                    const selectedRepr = selectedMapZ[positionString]
+
+                    if (!selectedRepr) {
+                        props.setSidebarContent({})
+                        return
+                    }
+
+                    const newSidebarContent: SidebarContent = {
+                        chosenProperties:
+                            <div className={"sidebar-chosen-properties"}>
+                                {
+                                    selectedRepr.terrain &&
+                                    <fieldset>
+                                        <legend>Terrain</legend>
+
+                                        terrain: {selectedRepr.terrain.tilesheet_id.id}
+                                    </fieldset>
+                                }
+                                {
+                                    selectedRepr.furniture &&
+                                    <fieldset>
+                                        <legend>Furniture</legend>
+
+                                        furniture: {selectedRepr.furniture.tilesheet_id.id}
+                                    </fieldset>
+                                }
+                                {
+                                    selectedRepr.field &&
+                                    <fieldset>
+                                        <legend>Field</legend>
+
+                                        field: {selectedRepr.field.tilesheet_id.id}
+                                    </fieldset>
+                                }
+                                {
+                                    selectedRepr.monster &&
+                                    <fieldset>
+                                        <legend>Monster</legend>
+
+                                        monster: {selectedRepr.monster.tilesheet_id.id}
+                                    </fieldset>
+
+                                }
+                            </div>
+                    }
+
+                    props.setSidebarContent(newSidebarContent)
                 }
             }
         }

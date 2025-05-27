@@ -4,6 +4,12 @@
   .sidemenu {
     .side-buttons {
       button {
+        background-color: theme-var("darker");
+
+        &:hover {
+          background-color: theme-var("dark-blue")
+        }
+
         &.selected {
           background-color: theme-var("selected");
         }
@@ -14,6 +20,7 @@
 
 .sidemenu {
   display: flex;
+  width: 100%;
   gap: 8px;
 
   .side-buttons {
@@ -24,5 +31,9 @@
       width: 32px;
       height: 32px;
     }
+  }
+
+  .side-content {
+    flex: 1;
   }
 }
