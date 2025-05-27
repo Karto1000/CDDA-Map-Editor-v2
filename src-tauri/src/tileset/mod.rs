@@ -145,65 +145,136 @@ impl Sprite {
     }
 
     fn get_random_animated_sprite(
+        id: &MappedCDDAId,
         ids: &Vec<WeightedSprite<SpriteIndex>>,
+        rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if ids.len() == 0 {
             return None;
         }
 
-        Some(Rotated::none(MeabyVec::Vec(
-            ids.to_vec().into_iter().map(|v| v.sprite).collect(),
-        )))
+        let animated_sprites =
+            MeabyVec::Vec(ids.to_vec().into_iter().map(|v| v.sprite).collect());
+
+        match rotates {
+            true => Some(Rotated {
+                rotation: id.rotation.clone(),
+                data: animated_sprites,
+            }),
+            false => Some(Rotated::none(animated_sprites)),
+        }
     }
 
     fn get_random_sprite(
+        id: &MappedCDDAId,
         ids: &Vec<WeightedSprite<SpriteIndex>>,
+        rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if ids.len() == 0 {
             return None;
         }
 
-        let rotated =
-            Rotated::none(MeabyAnimated::Single(ids.get_random().clone()));
-        Some(rotated)
+        let random_id = MeabyAnimated::Single(ids.get_random().clone());
+        match rotates {
+            true => Some(Rotated {
+                rotation: id.rotation.clone(),
+                data: random_id,
+            }),
+            false => Some(Rotated::none(random_id)),
+        }
     }
 
     fn get_random_additional_tile_sprite(
+        id: &MappedCDDAId,
+        ids: &Vec<WeightedSprite<Rotates>>,
         direction: CardinalDirection,
         tile_id: AdditionalTileId,
         rotates: bool,
-        ids: &Vec<WeightedSprite<Rotates>>,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if ids.len() == 0 {
             return None;
         }
 
         let rotated = match tile_id {
-            Center | Unconnected => Rotated {
-                data: MeabyAnimated::Single(
+            Center | Unconnected => {
+                let random_id = MeabyAnimated::Single(
                     ids.get_random().get(&direction).clone(),
-                ),
-                rotation: Rotation::Deg0,
+                );
+
+                match rotates {
+                    true => Rotated {
+                        data: random_id,
+                        rotation: id.rotation.clone(),
+                    },
+                    false => Rotated::none(random_id),
+                }
             },
             Corner | TConnection | Edge | EndPiece => match ids.get_random() {
                 Rotates::Auto(a) => match rotates {
                     true => Rotated {
                         data: MeabyAnimated::Single(a.clone()),
-                        rotation: Rotation::from(direction),
+                        rotation: Rotation::from(direction)
+                            + id.rotation.clone(),
                     },
                     false => Rotated::none(MeabyAnimated::Single(a.clone())),
                 },
-                Rotates::Pre2(p) => match direction {
-                    North => Rotated::none(MeabyAnimated::Single(p.0.clone())),
-                    East => Rotated::none(MeabyAnimated::Single(p.1.clone())),
-                    South => unreachable!(),
-                    West => unreachable!(),
+                Rotates::Pre2(p) => match rotates {
+                    true => match direction {
+                        North => Rotated::new(
+                            MeabyAnimated::Single(p.0.clone()),
+                            id.rotation.clone(),
+                        ),
+                        East => Rotated::new(
+                            MeabyAnimated::Single(p.1.clone()),
+                            id.rotation.clone(),
+                        ),
+                        South => unreachable!(),
+                        West => unreachable!(),
+                    },
+                    false => match direction {
+                        North => {
+                            Rotated::none(MeabyAnimated::Single(p.0.clone()))
+                        },
+                        East => {
+                            Rotated::none(MeabyAnimated::Single(p.1.clone()))
+                        },
+                        South => unreachable!(),
+                        West => unreachable!(),
+                    },
                 },
-                Rotates::Pre4(p) => match direction {
-                    North => Rotated::none(MeabyAnimated::Single(p.0.clone())),
-                    East => Rotated::none(MeabyAnimated::Single(p.1.clone())),
-                    South => Rotated::none(MeabyAnimated::Single(p.2.clone())),
-                    West => Rotated::none(MeabyAnimated::Single(p.3.clone())),
+                Rotates::Pre4(p) => match rotates {
+                    true => match direction {
+                        North => Rotated::new(
+                            MeabyAnimated::Single(p.0.clone()),
+                            id.rotation.clone(),
+                        ),
+                        East => Rotated::new(
+                            MeabyAnimated::Single(p.1.clone()),
+                            id.rotation.clone(),
+                        ),
+                        South => Rotated::new(
+                            MeabyAnimated::Single(p.2.clone()),
+                            id.rotation.clone(),
+                        ),
+                        West => Rotated::new(
+                            MeabyAnimated::Single(p.3.clone()),
+                            id.rotation.clone(),
+                        ),
+                    },
+                    false => match direction {
+                        North => {
+                            Rotated::none(MeabyAnimated::Single(p.0.clone()))
+                        },
+                        East => {
+                            Rotated::none(MeabyAnimated::Single(p.1.clone()))
+                        },
+                        South => {
+                            Rotated::none(MeabyAnimated::Single(p.2.clone()))
+                        },
+                        West => {
+                            Rotated::none(MeabyAnimated::Single(p.3.clone()))
+                        },
+                    },
                 },
             },
             _ => unreachable!(),
@@ -348,23 +419,26 @@ impl Sprite {
     }
 
     fn get_sprite_from_multitile_sprite(
+        id: &MappedCDDAId,
+        ids: &ForeBackIds<FinalIds, FinalIds>,
         direction: &CardinalDirection,
         add_id: &AdditionalTileId,
-        all_ids: &ForeBackIds<FinalIds, FinalIds>,
         sprite: Option<&MultitileSprite>,
+        rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         match sprite {
-            None => match &all_ids.fg {
+            None => match &ids.fg {
                 None => None,
-                Some(bg) => Self::get_random_sprite(bg),
+                Some(fg) => Self::get_random_sprite(id, fg, rotates),
             },
             Some(sprite) => match &sprite.ids.fg {
                 None => None,
                 Some(fg) => Self::get_random_additional_tile_sprite(
+                    id,
+                    fg,
                     direction.clone(),
                     add_id.clone(),
                     sprite.rotates,
-                    fg,
                 ),
             },
         }
@@ -385,11 +459,15 @@ impl Sprite {
             } => match *animated {
                 true => match &ids.fg {
                     None => None,
-                    Some(fg) => Self::get_random_animated_sprite(fg),
+                    Some(fg) => Self::get_random_animated_sprite(
+                        mapped_id, fg, *rotates,
+                    ),
                 },
                 false => match &ids.fg {
                     None => None,
-                    Some(fg) => Self::get_random_sprite(fg),
+                    Some(fg) => {
+                        Self::get_random_sprite(mapped_id, fg, *rotates)
+                    },
                 },
             },
             Sprite::Multitile {
@@ -411,9 +489,13 @@ impl Sprite {
                         return match &broken.fg {
                             None => match &ids.fg {
                                 None => None,
-                                Some(fg) => Self::get_random_sprite(fg),
+                                Some(fg) => Self::get_random_sprite(
+                                    mapped_id, fg, *rotates,
+                                ),
                             },
-                            Some(fg) => Self::get_random_sprite(fg),
+                            Some(fg) => {
+                                Self::get_random_sprite(mapped_id, fg, *rotates)
+                            },
                         };
                     }
 
@@ -421,9 +503,13 @@ impl Sprite {
                         return match &open.fg {
                             None => match &ids.fg {
                                 None => None,
-                                Some(fg) => Self::get_random_sprite(fg),
+                                Some(fg) => Self::get_random_sprite(
+                                    mapped_id, fg, *rotates,
+                                ),
                             },
-                            Some(fg) => Self::get_random_sprite(fg),
+                            Some(fg) => {
+                                Self::get_random_sprite(mapped_id, fg, *rotates)
+                            },
                         };
                     }
 
@@ -437,130 +523,162 @@ impl Sprite {
                     match matching_list {
                         (true, true, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &North,
                                 &Center,
-                                ids,
                                 center.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, true, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &East,
                                 &TConnection,
-                                ids,
                                 t_connection.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, true, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &North,
                                 &TConnection,
-                                ids,
                                 t_connection.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, false, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &West,
                                 &TConnection,
-                                ids,
                                 t_connection.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, true, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &South,
                                 &TConnection,
-                                ids,
                                 t_connection.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, true, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &North,
                                 &Corner,
-                                ids,
                                 corner.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, false, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &West,
                                 &Corner,
-                                ids,
                                 corner.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, true, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &East,
                                 &Corner,
-                                ids,
                                 corner.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, false, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &South,
                                 &Corner,
-                                ids,
                                 corner.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, false, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &North,
                                 &EndPiece,
-                                ids,
                                 end_piece.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, true, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &East,
                                 &EndPiece,
-                                ids,
                                 end_piece.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, false, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &South,
                                 &EndPiece,
-                                ids,
                                 end_piece.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, false, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &West,
                                 &EndPiece,
-                                ids,
                                 end_piece.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, true, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &East,
                                 &Edge,
-                                ids,
                                 edge.as_ref(),
+                                *rotates,
                             )
                         },
                         (true, false, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &North,
                                 &Edge,
-                                ids,
                                 edge.as_ref(),
+                                *rotates,
                             )
                         },
                         (false, false, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
+                                mapped_id,
+                                ids,
                                 &North,
                                 &Unconnected,
-                                ids,
                                 unconnected.as_ref(),
+                                *rotates,
                             )
                         },
                     }
@@ -577,14 +695,22 @@ impl Sprite {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
-            Sprite::Single { ids, animated, .. } => match *animated {
+            Sprite::Single {
+                ids,
+                animated,
+                rotates,
+            } => match *animated {
                 true => match &ids.bg {
                     None => None,
-                    Some(bg) => Self::get_random_animated_sprite(bg),
+                    Some(bg) => Self::get_random_animated_sprite(
+                        mapped_id, bg, *rotates,
+                    ),
                 },
                 false => match &ids.bg {
                     None => None,
-                    Some(bg) => Self::get_random_sprite(bg),
+                    Some(bg) => {
+                        Self::get_random_sprite(mapped_id, bg, *rotates)
+                    },
                 },
             },
             Sprite::Multitile {
@@ -606,9 +732,13 @@ impl Sprite {
                         return match &broken.bg {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
-                            Some(bg) => Self::get_random_sprite(bg),
+                            Some(bg) => {
+                                Self::get_random_sprite(mapped_id, bg, *rotates)
+                            },
                         };
                     }
 
@@ -616,9 +746,13 @@ impl Sprite {
                         return match &open.bg {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
-                            Some(bg) => Self::get_random_sprite(bg),
+                            Some(bg) => {
+                                Self::get_random_sprite(mapped_id, bg, *rotates)
+                            },
                         };
                     }
 
@@ -633,11 +767,15 @@ impl Sprite {
                         (true, true, true, true) => match center {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                             Some(center) => match &center.ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                         },
                         (true, true, true, false)
@@ -646,11 +784,15 @@ impl Sprite {
                         | (false, true, true, true) => match t_connection {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                             Some(t_connection) => match &t_connection.ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                         },
                         (true, true, false, false)
@@ -659,11 +801,15 @@ impl Sprite {
                         | (false, false, true, true) => match corner {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                             Some(corner) => match &corner.ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                         },
                         (true, false, false, false)
@@ -672,32 +818,44 @@ impl Sprite {
                         | (false, false, false, true) => match end_piece {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                             Some(end_piece) => match &end_piece.ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                         },
                         (false, true, false, true)
                         | (true, false, true, false) => match edge {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                             Some(edge) => match &edge.ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                         },
                         (false, false, false, false) => match unconnected {
                             None => match &ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                             Some(unconnected) => match &unconnected.ids.bg {
                                 None => None,
-                                Some(bg) => Self::get_random_sprite(bg),
+                                Some(bg) => Self::get_random_sprite(
+                                    mapped_id, bg, *rotates,
+                                ),
                             },
                         },
                     }

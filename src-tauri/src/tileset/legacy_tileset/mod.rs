@@ -20,6 +20,7 @@ use serde::de::Error as SerdeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::ops::Add;
 use std::ptr::write;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -65,6 +66,15 @@ impl<'de> Deserialize<'de> for Rotation {
                 deg
             ))),
         }
+    }
+}
+
+impl Add<Rotation> for Rotation {
+    type Output = Rotation;
+
+    fn add(self, rhs: Rotation) -> Self::Output {
+        let value = self.deg() + rhs.deg();
+        Self::from(value)
     }
 }
 
@@ -116,6 +126,10 @@ impl<T> Rotated<T> {
             data,
             rotation: Rotation::Deg0,
         }
+    }
+
+    pub fn new(data: T, rotation: Rotation) -> Self {
+        Self { data, rotation }
     }
 }
 
