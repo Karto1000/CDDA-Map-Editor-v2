@@ -277,36 +277,4 @@ impl CDDAPalette {
 
         None
     }
-
-    pub fn get_representative_mapping(
-        &self,
-        mapping_kind: impl Borrow<MappingKind>,
-        character: impl Borrow<char>,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Value> {
-        let mapping = self.properties.get(mapping_kind.borrow())?;
-
-        match mapping.get(character.borrow()) {
-            None => {},
-            Some(s) => return Some(s.representation(json_data)),
-        }
-
-        for mapgen_value in self.palettes.iter() {
-            let palette_id =
-                mapgen_value.get_identifier(calculated_parameters).ok()?;
-            let palette = json_data.palettes.get(&palette_id)?;
-
-            if let Some(id) = palette.get_representative_mapping(
-                mapping_kind.borrow(),
-                character.borrow(),
-                calculated_parameters,
-                json_data,
-            ) {
-                return Some(id);
-            }
-        }
-
-        None
-    }
 }

@@ -12,7 +12,8 @@ use crate::editor_data::handlers::{
     tileset_picked,
 };
 use crate::editor_data::{
-    get_map_data_collection_live_viewer_data, EditorData, ProjectType, ZLevel,
+    get_map_data_collection_live_viewer_data, EditorData,
+    MappedCDDAIdContainer, ProjectType, ZLevel,
 };
 use crate::map::viewer::handlers::{
     close_project, get_current_project_data, get_project_cell_data,
@@ -350,14 +351,12 @@ pub fn run() -> () {
             let editor_data = get_saved_editor_data()?;
 
             app.manage(Mutex::new(editor_data));
-            app.manage::<Mutex<HashMap<IVec3, MappedCDDAIdsForTile>>>(
-                Mutex::new(HashMap::new()),
-            );
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(
                 None,
             ));
             app.manage::<Mutex<Option<LegacyTilesheet>>>(Mutex::new(None));
             app.manage::<Mutex<Option<JoinHandle<()>>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>>(Mutex::new(None));
 
             Ok(())
         })

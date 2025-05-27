@@ -11,20 +11,22 @@ use crate::map::importing::{
 };
 use crate::map::viewer::handlers::SpriteType;
 use crate::map::{
-    CalculateParametersError, CellRepresentation, GetMappedCDDAIdsError,
-    MapData, DEFAULT_MAP_DATA_SIZE,
+    CalculateParametersError, CellRepresentation, FurnitureRepresentation,
+    GetMappedCDDAIdsError, MapData, DEFAULT_MAP_DATA_SIZE,
 };
 use crate::tileset::legacy_tileset::{
     MappedCDDAId, MappedCDDAIdsForTile, TilesheetCDDAId,
 };
 use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer};
-use crate::util::{Load, Save, SaveError, UVec2JsonKey};
+use crate::util::{IVec3JsonKey, Load, Save, SaveError, UVec2JsonKey};
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
 use log::info;
+use serde::ser::SerializeMap;
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -88,8 +90,24 @@ pub async fn get_map_data_collection_live_viewer_data(
     Ok(map_data_collection)
 }
 
+#[derive(Debug, Clone)]
 pub struct MappedCDDAIdContainer {
     pub ids: HashMap<IVec3, MappedCDDAIdsForTile>,
+}
+
+impl Serialize for MappedCDDAIdContainer {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut map_serializer =
+            serializer.serialize_map(Some(self.ids.len()))?;
+        for (key, value) in &self.ids {
+            let key_wrapper = IVec3JsonKey(key.clone());
+            map_serializer.serialize_entry(&key_wrapper, value)?;
+        }
+        map_serializer.end()
+    }
 }
 
 impl MappedCDDAIdContainer {
@@ -314,36 +332,6 @@ impl MapDataCollection {
         Ok(MappedCDDAIdContainer {
             ids: mapped_cdda_ids,
         })
-    }
-
-    pub fn get_representations(
-        &self,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> HashMap<UVec2, CellRepresentation> {
-        let mut cell_repr: HashMap<UVec2, CellRepresentation> = HashMap::new();
-
-        for (map_coords, map_data) in self.maps.iter() {
-            let mut repr = map_data.get_representations(json_data);
-
-            let mut new_repr = HashMap::new();
-
-            for (cell_coords, cell_repr) in repr.drain() {
-                let new_cell_coords = Self::map_to_global_cell_coords(
-                    map_coords,
-                    &cell_coords,
-                    0,
-                )
-                .as_uvec3();
-                new_repr.insert(
-                    UVec2::new(new_cell_coords.x, new_cell_coords.y),
-                    cell_repr,
-                );
-            }
-
-            cell_repr.extend(new_repr);
-        }
-
-        cell_repr
     }
 
     pub fn calculate_parameters(

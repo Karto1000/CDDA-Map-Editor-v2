@@ -10,19 +10,16 @@ use crate::cdda_data::map_data::{
     MapGenMonsterType, NeighborDirection, OmTerrainMatch, PlaceOuter,
     DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
-use crate::cdda_data::overmap::OvermapTerrainMapgen;
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{
     replace_region_setting, GetIdentifier, GetIdentifierError, GetRandomError,
     TileLayer,
 };
 use crate::editor_data::ZLevel;
-use crate::map::viewer::handlers::SpriteType;
 use crate::tileset::legacy_tileset::{
     MappedCDDAId, MappedCDDAIdsForTile, Rotation, TilesheetCDDAId,
 };
-use crate::tileset::{AdjacentSprites, Tilesheet};
-use crate::util::bresenham_line;
+use crate::tileset::Tilesheet;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,
@@ -39,7 +36,7 @@ use serde::{Deserialize, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 use thiserror::Error;
@@ -58,8 +55,6 @@ pub trait Place:
     ) -> Option<Vec<SetTile>> {
         None
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
 }
 
 clone_trait_object!(Place);
@@ -77,8 +72,6 @@ pub trait Property:
     ) -> Option<Vec<SetTile>> {
         None
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value;
 }
 
 clone_trait_object!(Property);
@@ -119,12 +112,22 @@ pub struct Cell {
     pub character: char,
 }
 
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FurnitureRepresentation {
+    pub selected_furniture: Value,
+    pub selected_sign: Value,
+    pub selected_computer: Value,
+    pub selected_gaspump: Value,
+}
+
 // The struct which holds the data that will be shown in the side panel in the ui
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct CellRepresentation {
-    item_groups: Value,
-    signs: Value,
-    computers: Value,
+    pub terrain: Value,
+    pub furniture: FurnitureRepresentation,
+    pub item_groups: Value,
 }
 
 #[derive(Debug, Default, Serialize, Eq, PartialEq)]
@@ -605,64 +608,6 @@ impl MapData {
         all_commands
     }
 
-    pub fn get_representations(
-        &self,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> HashMap<UVec2, CellRepresentation> {
-        let mut cell_data = HashMap::new();
-
-        for (cell_coordinates, cell) in self.cells.iter() {
-            let cell_repr = self.get_cell_data(&cell.character, &json_data);
-            let transformed_position =
-                self.transform_coordinates(&cell_coordinates.as_ivec2());
-
-            cell_data.insert(transformed_position.as_uvec2(), cell_repr);
-        }
-
-        for (kind, place_vec) in self.place.iter() {
-            for place in place_vec {
-                for _ in 0..place.repeat.get_from_to().1 {
-                    let position = place.coordinates();
-                    let transformed_position =
-                        self.transform_coordinates(&position);
-
-                    let cell_data = match cell_data
-                        .get_mut(&transformed_position.as_uvec2())
-                    {
-                        None => {
-                            warn!("No cell data found for position {} in place {:?}", transformed_position, kind);
-                            continue;
-                        },
-                        Some(s) => s,
-                    };
-
-                    let repr = place.inner.representation(json_data);
-
-                    match kind {
-                        MappingKind::Terrain => {},
-                        MappingKind::Furniture => {},
-                        MappingKind::Trap => {},
-                        MappingKind::ItemGroups => {
-                            cell_data.item_groups = repr;
-                        },
-                        MappingKind::Computer => cell_data.computers = repr,
-                        MappingKind::Sign => cell_data.signs = repr,
-                        MappingKind::Toilet => {},
-                        MappingKind::Gaspump => {},
-                        MappingKind::Monsters => {},
-                        MappingKind::Field => {},
-                        MappingKind::Nested => {},
-                        MappingKind::Vehicle => {},
-                        &MappingKind::Corpse => {},
-                        &MappingKind::Monster => {},
-                    }
-                }
-            }
-        }
-
-        cell_data
-    }
-
     pub fn get_visible_mapping(
         &self,
         mapping_kind: &MappingKind,
@@ -696,74 +641,6 @@ impl MapData {
         }
 
         None
-    }
-
-    pub fn get_representative_mapping(
-        &self,
-        mapping_kind: &MappingKind,
-        character: &char,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Value> {
-        let mapping = self.properties.get(mapping_kind)?;
-
-        match mapping.get(character) {
-            None => {},
-            Some(s) => return Some(s.representation(json_data)),
-        }
-
-        for mapgen_value in self.palettes.iter() {
-            let palette_id = mapgen_value
-                .get_identifier(&self.calculated_parameters)
-                .ok()?;
-            let palette = json_data.palettes.get(&palette_id)?;
-
-            if let Some(id) = palette.get_representative_mapping(
-                mapping_kind,
-                character,
-                &self.calculated_parameters,
-                json_data,
-            ) {
-                return Some(id);
-            }
-        }
-
-        None
-    }
-
-    pub fn get_cell_data(
-        &self,
-        character: &char,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> CellRepresentation {
-        let item_groups = self
-            .get_representative_mapping(
-                &MappingKind::ItemGroups,
-                character,
-                json_data,
-            )
-            .unwrap_or(Value::Array(vec![]));
-
-        let computers = self
-            .get_representative_mapping(
-                &MappingKind::Computer,
-                character,
-                json_data,
-            )
-            .unwrap_or(Value::Array(vec![]));
-
-        let signs = self
-            .get_representative_mapping(
-                &MappingKind::Sign,
-                character,
-                json_data,
-            )
-            .unwrap_or(Value::Array(vec![]));
-
-        CellRepresentation {
-            item_groups,
-            signs,
-            computers,
-        }
     }
 
     pub fn get_identifier_change_commands(

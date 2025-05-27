@@ -2,7 +2,8 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::{replace_region_setting, TileLayer};
 use crate::editor_data::{
     get_map_data_collection_live_viewer_data, EditorData, EditorDataSaver,
-    GetLiveViewerDataError, LiveViewerData, Project, ProjectType,
+    GetLiveViewerDataError, LiveViewerData, MapDataCollection,
+    MappedCDDAIdContainer, Project, ProjectType, ZLevel,
 };
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::map::Serializer;
@@ -248,6 +249,10 @@ pub async fn get_sprites(
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    mapped_cdda_ids: State<
+        '_,
+        Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>,
+    >,
 ) -> Result<(), ()> {
     let mut json_data_lock = json_data.lock().await;
 
@@ -306,6 +311,8 @@ pub async fn get_sprites(
         .region_settings
         .get(&CDDAIdentifier("default".into()))
         .expect("Region settings to exist");
+
+    let mut saved_cdda_ids = HashMap::new();
 
     for (z, map_collection) in project.maps.iter() {
         let local_mapped_cdda_ids =
@@ -395,7 +402,12 @@ pub async fn get_sprites(
                 }
             }
         });
+
+        saved_cdda_ids.insert(*z, local_mapped_cdda_ids);
     }
+
+    let mut mapped_cdda_ids_lock = mapped_cdda_ids.lock().await;
+    mapped_cdda_ids_lock.replace(saved_cdda_ids);
 
     app.emit(
         events::PLACE_SPRITES,
@@ -539,41 +551,25 @@ pub enum GetProjectCellDataError {
 
     #[error(transparent)]
     CDDADataError(#[from] CDDADataError),
+
+    #[error("No map is opened")]
+    NoMapOpened,
 }
 
 #[tauri::command]
 pub async fn get_project_cell_data(
-    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<HashMap<IVec3JsonKey, CellRepresentation>, GetProjectCellDataError>
-{
-    let json_data_lock = json_data.lock().await;
-    let json_data = util::get_json_data(&json_data_lock)?;
+    mapped_cdda_ids: State<
+        '_,
+        Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>,
+    >,
+) -> Result<HashMap<ZLevel, MappedCDDAIdContainer>, GetProjectCellDataError> {
+    let mapped_cdda_ids_lock = mapped_cdda_ids.lock().await;
+    let mapped_cdda_ids = match mapped_cdda_ids_lock.deref() {
+        None => return Err(GetProjectCellDataError::NoMapOpened),
+        Some(m) => m,
+    };
 
-    let editor_data_lock = editor_data.lock().await;
-    let project = util::get_current_project(&editor_data_lock)?;
-
-    let mut item_data: HashMap<IVec3JsonKey, CellRepresentation> =
-        HashMap::new();
-
-    for (z, map_data) in project.maps.iter() {
-        let map_cell_data = map_data.get_representations(json_data);
-
-        map_cell_data
-            .into_iter()
-            .for_each(|(cell_coordinates, cell_data)| {
-                item_data.insert(
-                    IVec3JsonKey(IVec3::new(
-                        cell_coordinates.x as i32,
-                        cell_coordinates.y as i32,
-                        *z,
-                    )),
-                    cell_data,
-                );
-            });
-    }
-
-    Ok(item_data)
+    Ok(mapped_cdda_ids.clone())
 }
 
 #[tauri::command]

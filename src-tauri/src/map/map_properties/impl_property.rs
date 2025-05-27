@@ -46,10 +46,6 @@ impl Property for TerrainProperty {
 
         Some(vec![command])
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
-    }
 }
 
 impl Property for MonstersProperty {
@@ -108,10 +104,6 @@ impl Property for MonstersProperty {
 
         None
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
-    }
 }
 
 impl Property for FurnitureProperty {
@@ -139,10 +131,6 @@ impl Property for FurnitureProperty {
 
         Some(vec![command])
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -165,15 +153,6 @@ impl Property for SignsProperty {
             TileState::Normal,
         );
         Some(vec![command])
-    }
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        let sign = self.signs.get_random();
-
-        serde_json::to_value(SignRepresentation {
-            signage: sign.signage.clone().unwrap_or("".into()),
-            snipped: sign.snippet.clone().unwrap_or("".into()),
-        })
-        .unwrap()
     }
 }
 
@@ -245,10 +224,6 @@ impl Property for NestedProperty {
 
         Some(commands)
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
-    }
 }
 
 impl Property for FieldsProperty {
@@ -271,10 +246,6 @@ impl Property for FieldsProperty {
             TileState::Normal,
         );
         Some(vec![command])
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
     }
 }
 
@@ -304,9 +275,6 @@ impl Property for GaspumpsProperty {
             TileState::Normal,
         );
         Some(vec![command])
-    }
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
     }
 }
 
@@ -467,76 +435,7 @@ impl ItemsProperty {
     }
 }
 
-impl Property for ItemsProperty {
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
-
-        for mapgen_item in self.items.iter() {
-            let item_group_entries = match &mapgen_item.data.item {
-                ReferenceOrInPlace::Reference(i) => {
-                    &json_data
-                        .item_groups
-                        .get(&i)
-                        .expect(format!("Item group {} to exist", i).as_str())
-                        .common
-                },
-                ReferenceOrInPlace::InPlace(ip) => &ip.common,
-            };
-
-            let probability = mapgen_item
-                .data
-                .chance
-                .clone()
-                .map(|v| v.get_from_to().0)
-                .unwrap_or(100) as f32
-                // the default chance is 100, but we want to have a range from 0-1 so / 100
-                / 100.;
-
-            let items = self.get_display_items_from_entries(
-                &item_group_entries.entries,
-                json_data,
-                probability,
-            );
-
-            match &item_group_entries.subtype {
-                ItemGroupSubtype::Collection => {
-                    display_item_groups.push(DisplayItemGroup::Collection {
-                        name: Some(
-                            mapgen_item
-                                .data
-                                .item
-                                .ref_or("Unnamed Collection")
-                                .0,
-                        ),
-                        probability,
-                        items,
-                    });
-                },
-                ItemGroupSubtype::Distribution => {
-                    display_item_groups.push(DisplayItemGroup::Distribution {
-                        name: Some(
-                            mapgen_item
-                                .data
-                                .item
-                                .ref_or("Unnamed Distribution")
-                                .0,
-                        ),
-                        probability,
-                        items,
-                    });
-                },
-            }
-        }
-
-        display_item_groups.sort_by(|v1, v2| {
-            v2.probability()
-                .partial_cmp(&v1.probability())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        serde_json::to_value(display_item_groups).unwrap()
-    }
-}
+impl Property for ItemsProperty {}
 
 impl Property for ComputersProperty {
     fn get_commands(
@@ -553,10 +452,6 @@ impl Property for ComputersProperty {
         );
 
         Some(vec![command])
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
     }
 }
 
@@ -575,10 +470,6 @@ impl Property for ToiletsProperty {
         );
 
         Some(vec![command])
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
     }
 }
 
@@ -605,10 +496,6 @@ impl Property for TrapsProperty {
         );
 
         Some(vec![command])
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
     }
 }
 
@@ -783,10 +670,6 @@ impl Property for VehiclesProperty {
 
         Some(commands)
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
-    }
 }
 
 impl Property for CorpsesProperty {
@@ -828,9 +711,5 @@ impl Property for CorpsesProperty {
             rotation: Rotation::Deg0,
             state: TileState::Normal,
         }])
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        Value::Null
     }
 }

@@ -416,10 +416,6 @@ macro_rules! create_place_inner {
                 ) -> Option<Vec<SetTile>> {
                     self.property.get_commands(position, map_data, json_data)
                 }
-
-                fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-                    self.property.representation(json_data)
-                }
             }
 
             #[derive(Debug, Clone, Deserialize, Serialize)]

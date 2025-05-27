@@ -4,7 +4,6 @@ use crate::map::map_properties::{
 };
 use crate::map::{MapData, Place, Property, SetTile};
 use glam::IVec2;
-use serde_json::Value;
 
 #[derive(Debug, Clone)]
 pub struct PlaceTerrain {
@@ -19,10 +18,6 @@ impl Place for PlaceTerrain {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         self.visible.get_commands(position, map_data, json_data)
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        self.visible.representation(json_data)
     }
 }
 
@@ -40,10 +35,6 @@ impl Place for PlaceFurniture {
     ) -> Option<Vec<SetTile>> {
         self.visible.get_commands(position, map_data, json_data)
     }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        self.visible.representation(json_data)
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -60,9 +51,5 @@ impl Place for PlaceNested {
     ) -> Option<Vec<SetTile>> {
         self.nested_property
             .get_commands(position, map_data, json_data)
-    }
-
-    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
-        self.nested_property.representation(json_data)
     }
 }
