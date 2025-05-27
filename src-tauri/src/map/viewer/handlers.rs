@@ -218,8 +218,7 @@ impl SpriteType {
                                 layer: (tile_layer as u32) * 2
                                     + SpriteLayer::Bg as u32,
                                 index: id.data.into_single().unwrap(),
-                                rotate_deg: id.rotation.deg()
-                                    + tile_id.rotation.deg(),
+                                rotate_deg: id.rotation.deg(),
                                 z: tile_position.z,
                             };
 
