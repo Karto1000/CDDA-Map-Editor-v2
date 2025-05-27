@@ -14,9 +14,7 @@ the selected map when you save the file.
 > As of right now, this program only supports the Mapgen Viewer.
 > The map editor has not been implemented and is currently in the works.
 > If you still want to use a map editor,
-> the best alternative as of right now is
->
-the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
+> the best alternative as of right now is the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
 > Editor, which makes map editing easier, without having to read the CDDA Game directory.
 
 ## What does this Map Editor support?
