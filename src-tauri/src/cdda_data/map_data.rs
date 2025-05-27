@@ -20,8 +20,8 @@ use crate::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, Property,
 };
 use cdda_lib::types::{
-    CDDAIdentifier, DistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
-    NumberOrRange, ParameterIdentifier, Weighted,
+    CDDAIdentifier, CDDAString, DistributionInner, MapGenValue, MeabyVec,
+    MeabyWeighted, NumberOrRange, ParameterIdentifier, Weighted,
 };
 use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
@@ -119,7 +119,7 @@ pub enum MapGenMonsterType {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct MapGenMonster {
+pub struct MapGenMonsters {
     #[serde(flatten)]
     pub id: MapGenMonsterType,
     pub chance: Option<NumberOrRange<u32>>,
@@ -388,6 +388,14 @@ pub struct MapGenCorpse {
     pub age: Option<i32>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MapGenMonster {
+    #[serde(rename = "mon")]
+    pub monster: CDDAIdentifier,
+    pub name: CDDAString,
+    pub chance: Option<NumberOrRange<u32>>,
+}
+
 macro_rules! create_place_inner {
     (
         $name: ident,
@@ -479,6 +487,20 @@ impl Into<Arc<dyn Place>> for PlaceInnerNested {
     }
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PlaceInnerMonster {
+    #[serde(flatten)]
+    pub value: MapGenMonsters,
+}
+
+impl Into<Arc<dyn Place>> for PlaceInnerMonster {
+    fn into(self) -> Arc<dyn Place> {
+        Arc::new(PlaceMonsters {
+            property: MonstersProperty::from(self),
+        })
+    }
+}
+
 create_place_inner!(Items, MapGenItem);
 
 create_place_inner!(Fields, MapGenField);
@@ -489,7 +511,7 @@ create_place_inner!(Signs, MapGenSign);
 
 create_place_inner!(Gaspumps, MapGenGaspump);
 
-create_place_inner!(Monsters, MapGenMonster);
+create_place_inner!(Monsters, MapGenMonsters);
 
 create_place_inner!(Toilets, ());
 
@@ -507,6 +529,9 @@ const fn default_repeat() -> NumberOrRange<i32> {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct PlaceOuter<T> {
+    #[serde(flatten)]
+    pub inner: T,
+
     pub x: NumberOrRange<i32>,
     pub y: NumberOrRange<i32>,
 
@@ -515,9 +540,6 @@ pub struct PlaceOuter<T> {
 
     #[serde(default = "default_chance")]
     pub chance: i32,
-
-    #[serde(flatten)]
-    pub inner: T,
 }
 
 pub trait IntoArcDyn<T> {
@@ -558,7 +580,6 @@ macro_rules! impl_from {
 impl_from!(PlaceInnerFurniture);
 impl_from!(PlaceInnerTerrain);
 impl_from!(PlaceInnerItems);
-impl_from!(PlaceInnerMonsters);
 impl_from!(PlaceInnerNested);
 impl_from!(PlaceInnerToilets);
 impl_from!(PlaceInnerFields);
@@ -568,6 +589,48 @@ impl_from!(PlaceInnerGaspumps);
 impl_from!(PlaceInnerTraps);
 impl_from!(PlaceInnerVehicles);
 impl_from!(PlaceInnerCorpses);
+
+impl IntoArcDyn<PlaceOuter<PlaceInnerMonster>> for PlaceOuter<Arc<dyn Place>> {
+    fn into_arc_dyn_place(
+        mut value: PlaceOuter<PlaceInnerMonster>,
+        local_x_coords: NumberOrRange<i32>,
+        local_y_coords: NumberOrRange<i32>,
+    ) -> Self {
+        // TODO: Special case since both PlaceOuter and Monster can have a chance field which
+        // causes one of these to not be set when deserializing so we do this here
+        value.inner.value.chance =
+            Some(NumberOrRange::Number(value.chance as u32));
+
+        PlaceOuter {
+            x: local_x_coords,
+            y: local_y_coords,
+            repeat: value.repeat,
+            chance: value.chance,
+            inner: value.inner.into(),
+        }
+    }
+}
+
+impl IntoArcDyn<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
+    fn into_arc_dyn_place(
+        mut value: PlaceOuter<PlaceInnerMonsters>,
+        local_x_coords: NumberOrRange<i32>,
+        local_y_coords: NumberOrRange<i32>,
+    ) -> Self {
+        // TODO: Special case since both PlaceOuter and Monster can have a chance field which
+        // causes one of these to not be set when deserializing so we do this here
+        value.inner.value.chance =
+            Some(NumberOrRange::Number(value.chance as u32));
+
+        PlaceOuter {
+            x: local_x_coords,
+            y: local_y_coords,
+            repeat: value.repeat,
+            chance: value.chance,
+            inner: value.inner.into(),
+        }
+    }
+}
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -617,7 +680,8 @@ map_data_object!(
     terrain: MapGenValue,
     furniture: MapGenValue,
     items: MeabyVec<MeabyWeighted<MapGenItem>>,
-    monsters: MeabyVec<MeabyWeighted<MapGenMonster>>,
+    monsters: MeabyVec<MeabyWeighted<MapGenMonsters>>,
+    monster: MeabyVec<MeabyWeighted<MapGenMonsters>>,
     nested: MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
     // Toilets do not have any data
     // TODO: we have to use Value here since there is a comment in one of the files with fails
@@ -716,8 +780,21 @@ impl CDDAMapDataIntermediate {
             computer_map.insert(char, ter_prop as Arc<dyn Property>);
         }
 
-        let mut monster_map = HashMap::new();
+        let mut monsters_map = HashMap::new();
         for (char, monster) in self.object.common.monsters.clone() {
+            let monster_prop = Arc::new(MonstersProperty {
+                monster: monster
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+
+            monsters_map.insert(char, monster_prop as Arc<dyn Property>);
+        }
+
+        let mut monster_map = HashMap::new();
+        for (char, monster) in self.object.common.monster.clone() {
             let monster_prop = Arc::new(MonstersProperty {
                 monster: monster
                     .into_vec()
@@ -837,7 +914,7 @@ impl CDDAMapDataIntermediate {
 
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
-        properties.insert(MappingKind::Monster, monster_map);
+        properties.insert(MappingKind::Monsters, monsters_map);
         properties.insert(MappingKind::Nested, nested_map);
         properties.insert(MappingKind::Field, field_map);
         properties.insert(MappingKind::ItemGroups, item_map);
@@ -848,6 +925,7 @@ impl CDDAMapDataIntermediate {
         properties.insert(MappingKind::Trap, trap_map);
         properties.insert(MappingKind::Vehicle, vehicles_map);
         properties.insert(MappingKind::Corpse, corpses_map);
+        properties.insert(MappingKind::Monster, monster_map);
 
         properties
     }
@@ -923,7 +1001,8 @@ impl CDDAMapDataIntermediate {
         insert_place!(Sign, signs);
         insert_place!(Trap, traps);
         insert_place!(Gaspump, gaspumps);
-        insert_place!(Monster, monsters);
+        insert_place!(Monsters);
+        insert_place!(Monster);
         insert_place!(Nested);
         insert_place!(Field, fields);
         insert_place!(ItemGroups, items);

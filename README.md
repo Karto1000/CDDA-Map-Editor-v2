@@ -36,18 +36,18 @@ This editor currently supports the following mapgen file object properties inclu
 - gaspumps
 - traps
 - vehicles
+- corpses
+- monster
 
 ### What is not supported?
 
 The following properties are not supported yet:
 
-- monster
 - npcs
 - loot
 - sealed_item
 - rubble
 - liquids
-- corpses
 - remove_vehicles
 - graffiti
 

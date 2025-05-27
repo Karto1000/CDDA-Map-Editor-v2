@@ -3,6 +3,7 @@ pub mod furniture;
 pub mod io;
 pub mod item;
 pub mod map_data;
+mod monster;
 mod monster_group;
 pub mod overmap;
 pub mod palettes;

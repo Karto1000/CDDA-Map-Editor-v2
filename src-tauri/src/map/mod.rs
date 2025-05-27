@@ -106,6 +106,7 @@ pub enum MappingKind {
     Sign,
     Toilet,
     Gaspump,
+    Monsters,
     Monster,
     Field,
     Nested,
@@ -648,11 +649,12 @@ impl MapData {
                         MappingKind::Sign => cell_data.signs = repr,
                         MappingKind::Toilet => {},
                         MappingKind::Gaspump => {},
-                        MappingKind::Monster => {},
+                        MappingKind::Monsters => {},
                         MappingKind::Field => {},
                         MappingKind::Nested => {},
                         MappingKind::Vehicle => {},
                         &MappingKind::Corpse => {},
+                        &MappingKind::Monster => {},
                     }
                 }
             }

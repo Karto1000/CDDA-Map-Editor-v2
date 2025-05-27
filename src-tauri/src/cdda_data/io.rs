@@ -1,6 +1,7 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::item::CDDAItemGroup;
 use crate::cdda_data::map_data::OmTerrain;
+use crate::cdda_data::monster::CDDAMonster;
 use crate::cdda_data::monster_group::CDDAMonsterGroup;
 use crate::cdda_data::overmap::{
     CDDAOvermapLocation, CDDAOvermapSpecial, CDDAOvermapTerrain,
@@ -51,6 +52,7 @@ pub struct DeserializedCDDAJsonData {
     pub vehicles: HashMap<CDDAIdentifier, CDDAVehicle>,
     pub vehicle_parts: HashMap<CDDAIdentifier, CDDAVehiclePart>,
     pub monster_groups: HashMap<CDDAIdentifier, CDDAMonsterGroup>,
+    pub monsters: HashMap<CDDAIdentifier, CDDAMonster>,
 }
 
 #[derive(Debug, Error)]

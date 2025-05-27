@@ -1,9 +1,9 @@
 use crate::cdda_data::map_data::{
-    MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonster,
+    MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonsters,
     MapGenSign, MapGenTrap, PlaceInnerComputers, PlaceInnerFields,
     PlaceInnerFurniture, PlaceInnerGaspumps, PlaceInnerItems,
-    PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain, PlaceInnerToilets,
-    PlaceInnerTraps, PlaceInnerVehicles,
+    PlaceInnerMonster, PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain,
+    PlaceInnerToilets, PlaceInnerTraps, PlaceInnerVehicles,
 };
 use crate::cdda_data::map_data::{
     MapGenCorpse, MapGenVehicle, PlaceInnerCorpses,
@@ -29,11 +29,19 @@ impl From<PlaceInnerTerrain> for TerrainProperty {
 
 #[derive(Debug, Clone)]
 pub struct MonstersProperty {
-    pub monster: Vec<Weighted<MapGenMonster>>,
+    pub monster: Vec<Weighted<MapGenMonsters>>,
 }
 
 impl From<PlaceInnerMonsters> for MonstersProperty {
     fn from(value: PlaceInnerMonsters) -> Self {
+        Self {
+            monster: vec![Weighted::new(value.value, 1)],
+        }
+    }
+}
+
+impl From<PlaceInnerMonster> for MonstersProperty {
+    fn from(value: PlaceInnerMonster) -> Self {
         Self {
             monster: vec![Weighted::new(value.value, 1)],
         }

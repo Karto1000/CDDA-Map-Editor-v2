@@ -1,5 +1,5 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::map_data::{MapGenItem, MapGenMonster};
+use crate::cdda_data::map_data::{MapGenItem, MapGenMonsters};
 use crate::cdda_data::GetIdentifier;
 use crate::cdda_data::KnownCataVariant;
 use crate::map::map_properties::ItemsProperty;
@@ -72,7 +72,7 @@ pub struct CDDAPaletteIntermediate {
     pub furniture: HashMap<char, MapGenValue>,
 
     #[serde(default)]
-    pub monster: HashMap<char, MeabyVec<MeabyWeighted<MapGenMonster>>>,
+    pub monster: HashMap<char, MeabyVec<MeabyWeighted<MapGenMonsters>>>,
 
     #[serde(default)]
     pub monsters: HashMap<char, Value>,
@@ -175,7 +175,7 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
 
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
-        properties.insert(MappingKind::Monster, monster_map);
+        properties.insert(MappingKind::Monsters, monster_map);
         properties.insert(MappingKind::ItemGroups, item_map);
 
         CDDAPalette {

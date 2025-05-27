@@ -323,8 +323,9 @@ pub async fn get_sprites(
                     && identifier_group.furniture.is_none()
                 {
                     warn!(
-                        "No sprites found for identifier_group {:?}",
-                        identifier_group
+                        "No sprites found for identifier_group {:?} at coordinates {}",
+                        identifier_group,
+                        cell_3d_coords
                     );
 
                     return HashMap::new();
