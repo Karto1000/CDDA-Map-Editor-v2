@@ -22,8 +22,6 @@ export default function MultiMenu(props: MultiMenuProps) {
                 e.preventDefault()
 
                 if (e.shiftKey) {
-                    console.log(props.tabs.findLastIndex(t => !t.isDisabled))
-
                     if (selectedTab === 0) {
                         setSelectedTab(props.tabs.findLastIndex(t => !t.isDisabled))
                         return
