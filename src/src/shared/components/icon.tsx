@@ -46,7 +46,8 @@ export enum IconName {
     WindowedSmall = "windowed-small",
     EyeMedium = "eye-medium",
     CheckmarkMedium = "checkmark-medium",
-    QuestionSmall = "question-small"
+    QuestionSmall = "question-small",
+    ReloadMedium = "reload-medium"
 }
 
 //===================================================================

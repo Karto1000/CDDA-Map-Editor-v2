@@ -15,14 +15,12 @@ export type DropdownItem = {
 }
 
 export type DropdownProps = {
-    name: string
+    name: string,
     groups: DropdownItem[][],
-
-    ref?: React.RefObject<DropdownRef>
-
-    onMenuToggle?: (state: boolean) => void
-    onDropdownButtonHover?: () => void
-    onOutsideClick?: () => void
+    ref?: React.RefObject<DropdownRef>,
+    onMenuToggle?: (state: boolean) => void,
+    onDropdownButtonHover?: () => void,
+    onOutsideClick?: () => void,
 }
 
 export type DropdownRef = {
@@ -88,7 +86,8 @@ export function Dropdown(
                         <div className={`dropdown-items`}>
                             {
                                 items.map((item, ii) => (
-                                    <div className={"dropdown-item"} key={ii}
+                                    <div className={"dropdown-item"}
+                                         key={ii}
                                          tabIndex={ii}
                                          onMouseEnter={() => onDropdownItemMouseEnter(gi, ii, item, sub)}
                                          onClick={() => item.onClick(ref)}

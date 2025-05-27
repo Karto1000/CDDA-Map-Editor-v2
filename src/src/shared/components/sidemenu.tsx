@@ -40,7 +40,7 @@ export function Sidemenu(props: SidemenuProps) {
                     props.tabs.map((t, i) => {
                         return (
                             <button className={clsx(selectedMenu === i && "selected")}
-                                    onClick={() => onMenuSelect(i)}>
+                                    onClick={() => onMenuSelect(i)} key={`side-button-${i}`}>
                                 {t.icon}
                             </button>
                         )

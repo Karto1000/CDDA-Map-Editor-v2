@@ -60,7 +60,11 @@
       }
 
       .world-position-indicator {
-        background-color: theme-var('dark-blue');
+        background-color: theme-var('darkest-blue');
+      }
+
+      .selected-position-indicator {
+        background-color: theme-var('selected');
       }
     }
   }
@@ -181,7 +185,7 @@
       display: flex;
       gap: 2px;
 
-      .world-position-indicator {
+      .world-position-indicator, .selected-position-indicator {
         height: 24px;
         padding: 0 8px;
 

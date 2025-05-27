@@ -8,17 +8,21 @@ import {open} from "@tauri-apps/plugin-shell";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {TabContext, ThemeContext} from "../../app.js";
 import {
-    ChangedThemeEvent, ChangeWorldMousePositionEvent,
+    ChangedThemeEvent,
+    ChangeSelectedPositionEvent,
+    ChangeWorldMousePositionEvent,
     ChangeZLevelEvent,
     CloseLocalTabEvent,
     LocalEvent,
     OpenLocalTabEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {TauriCommand} from "../../tauri/events/types.js";
+import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {Theme} from "../hooks/useTheme.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
+import toast from "react-hot-toast";
+import {CellData} from "../../tauri/types/map_data.js";
 
 type Props = {
     eventBus: MutableRefObject<EventTarget>
@@ -35,6 +39,7 @@ export function Header(props: Props) {
 
     const [zLevelIndicator, setZLevelIndicator] = React.useState<number | null>(null)
     const [mousePositionIndicator, setMousePositionIndicator] = React.useState<{ x: number, y: number } | null>(null)
+    const [selectedPositionIndicator, setSelectedPositionIndicator] = React.useState<{x: number, y: number}>(null)
 
     useEffect(() => {
         props.settingsWindowRef.current = settingsWindow
@@ -69,9 +74,18 @@ export function Header(props: Props) {
             setMousePositionIndicator(() => e.detail.position)
         }
 
+        const handleChangeSelectedPosition = (e: ChangeSelectedPositionEvent) => {
+            setSelectedPositionIndicator(() => e.detail.position)
+        }
+
         props.eventBus.current.addEventListener(
             LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
             handleChangeWorldMousePosition
+        )
+
+        props.eventBus.current.addEventListener(
+            LocalEvent.CHANGE_SELECTED_POSITION,
+            handleChangeSelectedPosition
         )
 
         props.eventBus.current.addEventListener(
@@ -85,6 +99,11 @@ export function Header(props: Props) {
         )
 
         return () => {
+            props.eventBus.current.removeEventListener(
+                LocalEvent.CHANGE_SELECTED_POSITION,
+                handleChangeSelectedPosition
+            )
+
             props.eventBus.current.removeEventListener(
                 LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
                 handleChangeWorldMousePosition
@@ -162,6 +181,31 @@ export function Header(props: Props) {
         }
 
         await tauriWindow.close();
+    }
+
+    async function onReloadClicked() {
+        const reloadResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
+
+        if (reloadResponse.type === BackendResponseType.Error) {
+            toast.error(reloadResponse.error)
+            return
+        }
+
+        const getSpritesResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+        if (getSpritesResponse.type === BackendResponseType.Error) {
+            toast.error(getSpritesResponse.error)
+            return
+        }
+
+        const getRepresentationResponse = await tauriBridge.invoke<CellData, unknown, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
+
+        if (getRepresentationResponse.type === BackendResponseType.Error) {
+            toast.error(getRepresentationResponse.error)
+            return
+        }
+
+        toast.success("Reloaded Viewer")
     }
 
     return (
@@ -468,10 +512,22 @@ export function Header(props: Props) {
                     </DropdownGroup>
                     <div className={"indicator-container"}>
                         {
+                            zLevelIndicator !== null && selectedPositionIndicator !== null &&
+                            <div className={"selected-position-indicator"}>
+                                <span>{selectedPositionIndicator.x}, {selectedPositionIndicator.y}, {zLevelIndicator}</span>
+                            </div>
+                        }
+                        {
                             zLevelIndicator !== null && mousePositionIndicator !== null &&
                             <div className={"world-position-indicator"}>
                                 <span>{mousePositionIndicator.x}, {mousePositionIndicator.y}, {zLevelIndicator}</span>
                             </div>
+                        }
+                        {
+                            tabs.shouldDisplayCanvas() &&
+                            <button onClick={onReloadClicked}>
+                                <Icon name={IconName.ReloadMedium} pointerEvents={"none"}/>
+                            </button>
                         }
                     </div>
                 </div>

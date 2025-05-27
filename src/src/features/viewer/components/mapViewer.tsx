@@ -1,7 +1,7 @@
 import {Canvas, ThreeConfig} from "../../three/types/three.js";
 import React, {MutableRefObject, useContext, useEffect, useRef, useState} from "react";
 import {
-    ChangedThemeEvent,
+    ChangedThemeEvent, ChangeSelectedPositionEvent,
     ChangeWorldMousePositionEvent,
     ChangeZLevelEvent,
     CloseLocalTabEvent,
@@ -322,6 +322,13 @@ export function MapViewer(props: MapViewerProps) {
                 if (selectedCellPosition?.x === worldMousePosition.current.x && selectedCellPosition?.y === worldMousePosition.current.y) {
                     selectedCellMeshRef.current.visible = false
                     setSelectedCellPosition(null)
+                    props.setSidebarContent({})
+                    props.eventBus.current.dispatchEvent(
+                        new ChangeSelectedPositionEvent(
+                            LocalEvent.CHANGE_SELECTED_POSITION,
+                            {detail: {position: null}}
+                        )
+                    )
                 } else {
                     selectedCellMeshRef.current.position.set(
                         worldMousePosition.current.x * props.tileInfo.width,
@@ -330,6 +337,13 @@ export function MapViewer(props: MapViewerProps) {
                     )
                     selectedCellMeshRef.current.visible = true
                     setSelectedCellPosition(worldMousePosition.current)
+
+                    props.eventBus.current.dispatchEvent(
+                        new ChangeSelectedPositionEvent(
+                            LocalEvent.CHANGE_SELECTED_POSITION,
+                            {detail: {position: {x: worldMousePosition.current.x, y: worldMousePosition.current.y}}}
+                        )
+                    )
 
                     const positionString = `${worldMousePosition.current.x},${worldMousePosition.current.y},${zLevel.current}`
 

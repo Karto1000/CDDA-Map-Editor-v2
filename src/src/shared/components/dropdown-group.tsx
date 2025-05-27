@@ -22,7 +22,6 @@ export function DropdownGroup(props: Props) {
                         name={child.props.name}
                         groups={child.props.groups}
                         ref={refs[i]}
-                        key={i}
                         onMenuToggle={(opened) => {
                             if (opened) {
                                 refs.forEach((ref, refI) => refI !== i && ref.current.closeMenu())
