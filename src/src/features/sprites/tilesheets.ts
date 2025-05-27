@@ -4,7 +4,7 @@ import {TileInfo} from "../../tauri/types/spritesheet.js";
 
 export const MAX_DEPTH = 999997
 const MAX_ROW = 1000
-const ANIMATION_FRAME_DURATION = 200
+const ANIMATION_FRAME_DURATION = 50
 
 export type DrawStaticSprite = {
     position: Vector2
