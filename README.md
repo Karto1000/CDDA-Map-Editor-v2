@@ -1,7 +1,43 @@
-# Tauri + Vanilla
+# CDDA Map Editor
 
-This template should help get you started developing with Tauri in vanilla HTML, CSS and Javascript.
+![Preview](data/screenshots/preview.png)
 
-## Recommended IDE Setup
+The CDDA Map Editor is a map editor for the Open-Source
+roguelike [Cataclysm: Dark Days Ahead](https://github.com/CleverRaven/Cataclysm-DDA/tree/master).
+It allows you to edit the Maps in an easy-to-use interface and receive instant feedback
+without having to reload the game or touch the underlying JSON Files.
 
-- [VS Code](https://code.visualstudio.com/) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer)
+If you prefer editing the Mapgen files directly, you can create a new __Mapgen Viewer__ Which will automatically reload
+the selected map when you save the file.
+
+> [!IMPORTANT]
+> As of right now, this program only supports the Mapgen Viewer.
+> The map editor has not been implemented and is currently in the works.
+> If you still want to use a map editor,
+> the best alternative as of right now is
+> the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
+> Editor, which makes map editing easier, without having to read the CDDA Game directory.
+
+## Prerequisites
+
+To provide support for Palettes, Nested Mapgens and other related data, you will need to have a local copy /
+installation of CDDA which will be read and parsed by the application.
+
+## Downloads
+
+Check out the [Releases](https://github.com/Karto1000/CDDA-Map-Editor-v2/releases) page to download the most recent
+executable for your platform.
+
+## Compiling
+
+If you want to compile the program yourself, you can follow the steps below.
+
+1. Install the required system dependencies for your Operating System outlined
+   in https://v2.tauri.app/start/prerequisites/
+2. Install Rust from [rust-lang.org](https://www.rust-lang.org/tools/install).
+   This is used to run the Webview backend, which provides support for OS native operations such as Filesystem access.
+3. Install Node.Js (LTS) from [nodejs.org](https://nodejs.org/en).
+   This is used by the Webview frontend, which is powered by React.
+4. Install the [Tauri CLI](https://v2.tauri.app/reference/cli/) using your preferred package manager
+5. Finally, to build the application, run the `cargo tauri build` command in your terminal
+6. The application should be located in the `src-tauri/target/release` directory
