@@ -66,6 +66,7 @@ Here is a list of known limitations, which may or may not be fixed in the future
 - Damaged and Broken vehicles are not accurately spawned as they should be (With parts removed and disabled)
 - Mutable overmap terrain entries are not supported
 - Isometric tilesets are not supported
+- `rotates_to` is not supported
 
 ## Installation
 
