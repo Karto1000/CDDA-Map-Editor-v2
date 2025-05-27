@@ -17,7 +17,7 @@ the selected map when you save the file.
 > the best alternative as of right now is the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
 > Editor, which makes map editing easier, without having to read the CDDA Game directory.
 
-## What does this Map Editor support?
+## What can this Map Editor do?
 
 ### What is supported?
 
@@ -65,17 +65,19 @@ Here is a list of known limitations, which may or may not be fixed in the future
 - Damaged and Broken vehicles are not accurately spawned as they should be (With parts removed and disabled)
 - Mutable overmap terrain entries are not supported
 
-## Prerequisites
+## Installation
+
+### Prerequisites
 
 To provide support for Palettes, Nested Mapgens and other related data, you will need to have a local copy /
 installation of CDDA which will be read and parsed by the application.
 
-## Downloads
+### Downloads
 
 Check out the [Releases](https://github.com/Karto1000/CDDA-Map-Editor-v2/releases) page to download the most recent
 executable for your platform.
 
-## Compiling
+### Compiling
 
 If you want to compile the program yourself, you can follow the steps below.
 
