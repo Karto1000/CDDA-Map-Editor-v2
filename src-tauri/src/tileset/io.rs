@@ -1,7 +1,7 @@
-use crate::tileset::current_tileset::CurrentTileConfig;
 use crate::tileset::legacy_tileset::tile_config::LegacyTileConfig;
 use crate::util::Load;
-use anyhow::{anyhow, Error};
+use anyhow::Error;
+use serde_json::Value;
 use std::path::PathBuf;
 
 pub struct TilesheetLoader<Config> {
@@ -33,22 +33,14 @@ impl TilesheetConfigLoader {
         Self { tileset_path }
     }
 
-    pub async fn load_serde_value(
-        &mut self,
-    ) -> Result<serde_json::Value, Error> {
+    pub async fn load_value(&mut self) -> Result<Value, Error> {
         let legacy_tilesheet =
             <TilesheetConfigLoader as Load<LegacyTileConfig>>::load(self).await;
+
         if let Ok(val) = legacy_tilesheet {
             return Ok(serde_json::to_value(val)?);
         }
 
-        let current_tilesheet =
-            <TilesheetConfigLoader as Load<CurrentTileConfig>>::load(self)
-                .await;
-        if let Ok(val) = current_tilesheet {
-            return Ok(serde_json::to_value(val)?);
-        }
-
-        Err(anyhow!("Invalid Data"))
+        anyhow::bail!("Failed to load legacy tileset config");
     }
 }

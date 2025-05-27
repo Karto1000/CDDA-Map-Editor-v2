@@ -1,39 +1,74 @@
-pub(crate) mod furniture;
-pub(crate) mod io;
-pub(crate) mod item;
-pub(crate) mod map_data;
-pub(crate) mod monster;
-pub(crate) mod overmap;
-pub(crate) mod palettes;
-pub(crate) mod region_settings;
-pub(crate) mod terrain;
+use rand::distr::Distribution;
+pub mod furniture;
+pub mod io;
+pub mod item;
+pub mod map_data;
+pub mod monster;
+pub mod overmap;
+pub mod palettes;
+pub mod region_settings;
+pub mod terrain;
+pub mod vehicle_parts;
+pub mod vehicles;
 
-use crate::cdda_data::furniture::CDDAFurnitureIntermediate;
+use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
 use crate::cdda_data::item::CDDAItemGroupIntermediate;
 use crate::cdda_data::map_data::CDDAMapDataIntermediate;
 use crate::cdda_data::monster::CDDAMonsterGroup;
 use crate::cdda_data::overmap::{
-    CDDAOvermapLocation, CDDAOvermapSpecialIntermediate,
+    CDDAOvermapLocationIntermediate, CDDAOvermapSpecialIntermediate,
     CDDAOvermapTerrainIntermediate,
 };
 use crate::cdda_data::palettes::CDDAPaletteIntermediate;
-use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::terrain::CDDATerrainIntermediate;
-use crate::util::{
-    CDDAIdentifier, GetIdentifier, GetIdentifierError, MeabyVec, MeabyWeighted,
-    ParameterIdentifier,
+use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
+use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
+use crate::cdda_data::vehicle_parts::CDDAVehiclePartIntermediate;
+use crate::cdda_data::vehicles::CDDAVehicleIntermediate;
+use crate::tileset::GetRandom;
+use cdda_lib::types::{
+    CDDADistributionInner, CDDAIdentifier, DistributionInner, IdOrAbstract,
+    MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier,
 };
 use derive_more::Display;
 use indexmap::IndexMap;
 use num_traits::PrimInt;
 use rand::distr::uniform::SampleUniform;
+use rand::distr::weighted::WeightedIndex;
 use rand::{rng, Rng};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
-use std::cmp::Ordering;
 use std::collections::{BTreeMap, HashMap};
+use std::convert::Infallible;
 use std::ops::{Add, Rem, Sub};
 use strum_macros::EnumIter;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum GetIdentifierError {
+    #[error(transparent)]
+    GetRandomError(#[from] GetRandomError),
+
+    #[error("Missing fallback for non existing parameter {0}")]
+    MissingFallback(String),
+
+    #[error("Missing value in case {0} for switch {1}")]
+    MissingSwitchCaseValue(String, String),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum WeightedIndexError {
+    #[error("Invalid weights for weighted index {0:?}")]
+    InvalidWeights(Vec<i32>),
+}
+
+#[derive(Debug, Error, Serialize)]
+pub enum GetRandomError {
+    #[error(transparent)]
+    WeightedIndexError(#[from] WeightedIndexError),
+
+    #[error("Failed to get the identifier for the chosen item at index {0}")]
+    GetIdentifierError(usize),
+}
 
 pub fn extract_comments<'de, D>(
     deserializer: D,
@@ -56,184 +91,201 @@ where
     Ok(comments)
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(untagged)]
-pub enum NumberOrRange<T: PrimInt + Clone + SampleUniform> {
-    Number(T),
-    Range((T, T)),
+pub fn replace_region_setting(
+    id: &CDDAIdentifier,
+    region_setting: &CDDARegionSettings,
+    terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
+    furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
+) -> CDDAIdentifier {
+    // If it starts with t_region, we know it is a regional setting
+    if id.starts_with("t_region") {
+        if id.starts_with("f_") {
+            return replace_region_setting(
+                region_setting
+                    .region_terrain_and_furniture
+                    .furniture
+                    .get(&RegionIdentifier(id.0.clone()))
+                    .expect("Furniture Region identifier to exist")
+                    .get_random(),
+                region_setting,
+                terrain,
+                furniture,
+            );
+        } else if id.0.starts_with("t_") {
+            return replace_region_setting(
+                region_setting
+                    .region_terrain_and_furniture
+                    .terrain
+                    .get(&RegionIdentifier(id.0.clone()))
+                    .expect("Terrain Region identifier to exist")
+                    .get_random(),
+                region_setting,
+                terrain,
+                furniture,
+            );
+        }
+    }
+
+    id.clone()
 }
 
-impl<T: PrimInt + SampleUniform> Add<T> for NumberOrRange<T> {
-    type Output = Self;
+impl GetIdentifier for DistributionInner {
+    type Error = Infallible;
 
-    fn add(self, rhs: T) -> Self::Output {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Result<CDDAIdentifier, Infallible> {
         match self {
-            NumberOrRange::Number(n) => NumberOrRange::Number(n + rhs),
-            NumberOrRange::Range(r) => {
-                NumberOrRange::Range((r.0 + rhs, r.1 + rhs))
+            DistributionInner::Param { param, fallback } => {
+                Ok(calculated_parameters
+                    .get(param)
+                    .map(|p| p.clone())
+                    .unwrap_or(fallback.clone()))
             },
+            DistributionInner::Normal(n) => Ok(n.clone()),
+            _ => todo!(),
         }
     }
 }
 
-impl<T: PrimInt + SampleUniform> Sub<T> for NumberOrRange<T> {
-    type Output = Self;
+impl GetIdentifier for CDDAIdentifier {
+    type Error = Infallible;
 
-    fn sub(self, rhs: T) -> Self::Output {
+    fn get_identifier(
+        &self,
+        _calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Result<CDDAIdentifier, Infallible> {
+        Ok(self.clone())
+    }
+}
+
+impl GetIdentifier for CDDADistributionInner {
+    type Error = GetIdentifierError;
+
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Result<CDDAIdentifier, GetIdentifierError> {
         match self {
-            NumberOrRange::Number(n) => NumberOrRange::Number(n - rhs),
-            NumberOrRange::Range(r) => {
-                NumberOrRange::Range((r.0 - rhs, r.1 - rhs))
+            CDDADistributionInner::String(s) => Ok(s.clone()),
+            CDDADistributionInner::Distribution(d) => {
+                Ok(d.distribution.get_identifier(calculated_parameters)?)
+            },
+            CDDADistributionInner::Param { param, fallback } => {
+                let calculated = calculated_parameters
+                    .get(param)
+                    .map(|p| Ok(p.clone()))
+                    .unwrap_or_else(|| {
+                        fallback.clone().ok_or(
+                            GetIdentifierError::MissingFallback(
+                                param.0.clone(),
+                            ),
+                        )
+                    })?;
+
+                Ok(calculated)
+            },
+            CDDADistributionInner::Switch { switch, cases } => {
+                let id = calculated_parameters
+                    .get(&switch.param)
+                    .map(|p| p.clone())
+                    .unwrap_or_else(|| switch.fallback.clone());
+
+                cases
+                    .get(&id)
+                    .ok_or(GetIdentifierError::MissingSwitchCaseValue(
+                        id.0,
+                        switch.param.0.clone(),
+                    ))
+                    .map(Clone::clone)
             },
         }
     }
 }
 
-impl<T: PrimInt + SampleUniform> Rem<T> for NumberOrRange<T> {
-    type Output = Self;
+impl GetIdentifier for MapGenValue {
+    type Error = GetIdentifierError;
 
-    fn rem(self, rhs: T) -> Self::Output {
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Result<CDDAIdentifier, GetIdentifierError> {
         match self {
-            NumberOrRange::Number(n) => NumberOrRange::Number(n % rhs),
-            NumberOrRange::Range(r) => {
-                NumberOrRange::Range((r.0 % rhs, r.1 % rhs))
+            MapGenValue::String(s) => Ok(s.clone()),
+            MapGenValue::Distribution(d) => {
+                Ok(d.get_identifier(calculated_parameters)?)
+            },
+            MapGenValue::Param { param, fallback } => calculated_parameters
+                .get(param)
+                .map(|p| Ok(p.clone()))
+                .unwrap_or_else(|| {
+                    fallback.clone().ok_or(GetIdentifierError::MissingFallback(
+                        param.0.clone(),
+                    ))
+                }),
+            MapGenValue::Switch { switch, cases } => {
+                let id = calculated_parameters
+                    .get(&switch.param)
+                    .map(|p| p.clone())
+                    .unwrap_or_else(|| switch.fallback.clone());
+
+                cases
+                    .get(&id)
+                    .ok_or(GetIdentifierError::MissingSwitchCaseValue(
+                        id.0,
+                        switch.param.0.clone(),
+                    ))
+                    .map(Clone::clone)
             },
         }
     }
 }
 
-impl<T: PrimInt + SampleUniform> PartialEq<T> for NumberOrRange<T> {
-    fn eq(&self, other: &T) -> bool {
-        match self {
-            NumberOrRange::Number(n) => n == other,
-            NumberOrRange::Range((min, max)) => other >= min && other <= max,
-        }
+impl<T: Clone + GetIdentifier> GetIdentifier for MeabyVec<MeabyWeighted<T>> {
+    type Error = GetRandomError;
+
+    fn get_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Result<CDDAIdentifier, Self::Error> {
+        let mut weights = vec![];
+        let mut self_vec = self.clone().into_vec();
+
+        self.for_each(|v| weights.push(v.weight_or_one()));
+
+        let weighted_index = WeightedIndex::new(weights.clone())
+            .map_err(|_| WeightedIndexError::InvalidWeights(weights.clone()))?;
+
+        // let mut rng = RANDOM.write().unwrap();
+        let mut rng = rng();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+        let item = self_vec.remove(chosen_index);
+
+        item.data()
+            .get_identifier(calculated_parameters)
+            .map_err(|_| GetRandomError::GetIdentifierError(chosen_index))
     }
-}
-
-impl<T: PrimInt + SampleUniform> PartialOrd<T> for NumberOrRange<T> {
-    fn partial_cmp(&self, other: &T) -> Option<Ordering> {
-        match self {
-            NumberOrRange::Number(n) => n.partial_cmp(other),
-            NumberOrRange::Range((min, max)) => {
-                if other < min {
-                    Some(Ordering::Greater)
-                } else if other > max {
-                    Some(Ordering::Less)
-                } else {
-                    Some(Ordering::Equal)
-                }
-            },
-        }
-    }
-}
-
-#[derive(Deserialize)]
-#[serde(untagged)]
-enum NumberOrArray<T: PrimInt + Clone + SampleUniform> {
-    Number(T),
-    Array(Vec<T>),
-}
-
-impl<'de, T: PrimInt + Clone + SampleUniform + Deserialize<'de>>
-    Deserialize<'de> for NumberOrRange<T>
-{
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let value = NumberOrArray::<T>::deserialize(deserializer)?;
-        match value {
-            NumberOrArray::Number(n) => Ok(NumberOrRange::Number(n)),
-            NumberOrArray::Array(arr) => match arr.len() {
-                1 => Ok(NumberOrRange::Number(arr[0].clone())),
-                2 => Ok(NumberOrRange::Range((arr[0].clone(), arr[1].clone()))),
-                _ => Err(serde::de::Error::custom(
-                    "Array must contain 1 or 2 elements",
-                )),
-            },
-        }
-    }
-}
-
-impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
-    pub fn rand_number(&self) -> T {
-        match self.clone() {
-            NumberOrRange::Number(n) => n,
-            NumberOrRange::Range((from, to)) => {
-                let mut rng = rng();
-                //let mut rng = RANDOM.write().unwrap();
-                let num = rng.random_range(from..to);
-                num
-            },
-        }
-    }
-
-    pub fn is_random_hit(&self, default_upper_bound: T) -> bool {
-        match self.clone() {
-            NumberOrRange::Number(n) => {
-                // This will always be true
-                if n >= default_upper_bound {
-                    return true;
-                }
-
-                let mut rng = rng();
-                //let mut rng = RANDOM.write().unwrap();
-                let num = rng.random_range(n..default_upper_bound);
-
-                num == n
-            },
-            NumberOrRange::Range((from, to)) => {
-                let mut rng = rng();
-                //let mut rng = RANDOM.write().unwrap();
-                let num = rng.random_range(from..to);
-
-                num == from
-            },
-        }
-    }
-
-    pub fn get_from_to(&self) -> (T, T) {
-        match self.clone() {
-            NumberOrRange::Number(n) => (n, n),
-            NumberOrRange::Range((from, to)) => (from, to),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDAExtendOp {
-    pub flags: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CDDADeleteOp {
-    pub flags: Option<Vec<String>>,
 }
 
 #[derive(
-    Debug, Clone, Hash, Eq, PartialEq, EnumIter, Deserialize, Serialize,
+    Debug,
+    Clone,
+    Hash,
+    Eq,
+    Ord,
+    PartialOrd,
+    PartialEq,
+    EnumIter,
+    Deserialize,
+    Serialize,
 )]
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
     Monster = 2,
     Field = 3,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum CDDAString {
-    String(String),
-    StringMap { str: String },
-}
-
-#[derive(Debug, Clone, Deserialize)]
-pub enum IdOrAbstract<T> {
-    #[serde(rename = "id")]
-    Id(T),
-    #[serde(rename = "abstract")]
-    Abstract(CDDAIdentifier),
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -263,9 +315,11 @@ pub enum CDDAJsonEntry {
     ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
     MonsterGroup(CDDAMonsterGroup),
-    OvermapLocation(CDDAOvermapLocation),
+    OvermapLocation(CDDAOvermapLocationIntermediate),
     OvermapTerrain(CDDAOvermapTerrainIntermediate),
     OvermapSpecial(CDDAOvermapSpecialIntermediate),
+    Vehicle(CDDAVehicleIntermediate),
+    VehiclePart(CDDAVehiclePartIntermediate),
 
     // -- UNUSED
     WeatherType,
@@ -275,8 +329,6 @@ pub enum CDDAJsonEntry {
     WeaponCategory,
     Vitamin,
     VehicleGroup,
-    Vehicle,
-    VehiclePart,
     Uncraft,
     Widget,
     StartLocation,
@@ -454,142 +506,11 @@ pub enum KnownCataVariant {
     Other,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Switch {
-    pub param: ParameterIdentifier,
-    pub fallback: CDDAIdentifier,
-}
-
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
-pub struct Distribution {
-    pub distribution: MeabyVec<MeabyWeighted<CDDAIdentifier>>,
-}
-
-// TODO: Kind of a hacky solution to a Stack Overflow problem that i experienced when using
-// a self-referencing MapGenValue enum
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum CDDADistributionInner {
-    String(CDDAIdentifier),
-    Param {
-        param: ParameterIdentifier,
-        fallback: Option<CDDAIdentifier>,
-    },
-    Switch {
-        switch: Switch,
-        cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
-    },
-    // The distribution inside another distribution must have the 'distribution'
-    // property. This is why we're using the Distribution struct here
-    //                 --- Here ---
-    // "palettes": [ { "distribution": [ [ "cabin_palette", 1 ], [ "cabin_palette_abandoned", 1 ] ] } ],
-    Distribution(Distribution),
-}
-
-impl From<&str> for CDDADistributionInner {
-    fn from(value: &str) -> Self {
-        Self::String(value.into())
-    }
-}
-
-impl GetIdentifier for CDDADistributionInner {
-    type Error = GetIdentifierError;
+pub trait GetIdentifier {
+    type Error;
 
     fn get_identifier(
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> Result<CDDAIdentifier, GetIdentifierError> {
-        match self {
-            CDDADistributionInner::String(s) => Ok(s.clone()),
-            CDDADistributionInner::Distribution(d) => {
-                Ok(d.distribution.get_random(calculated_parameters)?)
-            },
-            CDDADistributionInner::Param { param, fallback } => {
-                let calculated = calculated_parameters
-                    .get(param)
-                    .map(|p| Ok(p.clone()))
-                    .unwrap_or_else(|| {
-                        fallback.clone().ok_or(
-                            GetIdentifierError::MissingFallback(
-                                param.0.clone(),
-                            ),
-                        )
-                    })?;
-
-                Ok(calculated)
-            },
-            CDDADistributionInner::Switch { switch, cases } => {
-                let id = calculated_parameters
-                    .get(&switch.param)
-                    .map(|p| p.clone())
-                    .unwrap_or_else(|| switch.fallback.clone());
-
-                cases
-                    .get(&id)
-                    .ok_or(GetIdentifierError::MissingSwitchCaseValue(
-                        id.0,
-                        switch.param.0.clone(),
-                    ))
-                    .map(Clone::clone)
-            },
-        }
-    }
-}
-
-// https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#mapgen-values
-#[derive(Debug, Eq, PartialEq, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum MapGenValue {
-    String(CDDAIdentifier),
-    Param {
-        param: ParameterIdentifier,
-        fallback: Option<CDDAIdentifier>,
-    },
-    Switch {
-        switch: Switch,
-        cases: HashMap<CDDAIdentifier, CDDAIdentifier>,
-    },
-    // TODO: We could probably use a MapGenValue instead of this DistributionInner type, but that would
-    // require a Box<> since we don't know the size. I tried this but for some reason it causes a Stack Overflow
-    // because serde keeps infinitely calling the Deserialize function even though it should deserialize to the String variant.
-    // I'm not sure if this is a bug with my logic or if this is some sort of oversight in serde.
-    Distribution(MeabyVec<MeabyWeighted<CDDADistributionInner>>),
-}
-
-impl GetIdentifier for MapGenValue {
-    type Error = GetIdentifierError;
-
-    fn get_identifier(
-        &self,
-        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
-    ) -> Result<CDDAIdentifier, GetIdentifierError> {
-        match self {
-            MapGenValue::String(s) => Ok(s.clone()),
-            MapGenValue::Distribution(d) => {
-                Ok(d.get_random(calculated_parameters)?)
-            },
-            MapGenValue::Param { param, fallback } => calculated_parameters
-                .get(param)
-                .map(|p| Ok(p.clone()))
-                .unwrap_or_else(|| {
-                    fallback.clone().ok_or(GetIdentifierError::MissingFallback(
-                        param.0.clone(),
-                    ))
-                }),
-            MapGenValue::Switch { switch, cases } => {
-                let id = calculated_parameters
-                    .get(&switch.param)
-                    .map(|p| p.clone())
-                    .unwrap_or_else(|| switch.fallback.clone());
-
-                cases
-                    .get(&id)
-                    .ok_or(GetIdentifierError::MissingSwitchCaseValue(
-                        id.0,
-                        switch.param.0.clone(),
-                    ))
-                    .map(Clone::clone)
-            },
-        }
-    }
+    ) -> Result<CDDAIdentifier, Self::Error>;
 }

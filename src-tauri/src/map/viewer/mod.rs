@@ -1,3 +1,5 @@
+pub(crate) mod handlers;
+
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::overmap::OvermapSpecialOvermap;
 use crate::editor_data::{
@@ -7,10 +9,11 @@ use crate::editor_data::{
 use crate::map::importing::{OvermapSpecialImporter, SingleMapDataImporter};
 use crate::map::{CalculateParametersError, Serializer, DEFAULT_MAP_DATA_SIZE};
 use crate::tab::{Tab, TabType};
-use crate::util::{get_json_data, get_size, CDDAIdentifier, Load};
+use crate::util::{get_json_data, get_size, Load};
 use crate::util::{CDDADataError, Save};
 use crate::{events, impl_serialize_for_error};
 use anyhow::Error;
+use cdda_lib::types::CDDAIdentifier;
 use glam::UVec2;
 use log::info;
 use notify::Watcher;
@@ -94,7 +97,7 @@ pub async fn open_viewer(
             };
 
             let mut collection = overmap_terrain_importer.load().await.unwrap();
-            collection.calculate_parameters(&json_data.palettes);
+            collection.calculate_parameters(&json_data.palettes)?;
 
             let mut new_project = Project::new(
                 project_name.clone(),

@@ -1,6 +1,7 @@
 use crate::cdda_data::furniture::CDDAFurniture;
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::terrain::CDDATerrain;
+use crate::cdda_data::vehicle_parts::CDDAVehiclePart;
 use crate::tileset::io::{TilesheetConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::tile_config::{
     AdditionalTile, AdditionalTileId, LegacyTileConfig, Spritesheet, Tile,
@@ -9,12 +10,17 @@ use crate::tileset::{
     ForeBackIds, MeabyWeightedSprite, MultitileSprite, Sprite, SpriteKind,
     Tilesheet, WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
 };
-use crate::util::{CDDAIdentifier, Load, MeabyVec};
+use crate::util::Load;
 use anyhow::{anyhow, Error};
-use log::info;
+use cdda_lib::types::{CDDAIdentifier, MeabyVec};
+use derive_more::Display;
+use log::{debug, info, warn};
 use rand::distr::Distribution;
-use serde::{Deserialize, Serialize};
+use serde::de::Error as SerdeError;
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt::{Display, Formatter};
+use std::ptr::write;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
@@ -24,16 +30,60 @@ pub type SpriteIndex = u32;
 pub type FinalIds = Option<Vec<WeightedSprite<SpriteIndex>>>;
 pub type AdditionalTileIds = Option<Vec<WeightedSprite<Rotates>>>;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub enum Rotation {
+    #[default]
     Deg0,
     Deg90,
     Deg180,
     Deg270,
 }
 
+impl Serialize for Rotation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.clone().deg().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Rotation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let deg = u32::deserialize(deserializer)? % 360;
+
+        match deg {
+            0 => Ok(Rotation::Deg0),
+            90 => Ok(Rotation::Deg90),
+            180 => Ok(Rotation::Deg180),
+            270 => Ok(Rotation::Deg270),
+            _ => Err(SerdeError::custom(format!(
+                "Invalid rotation value {}",
+                deg
+            ))),
+        }
+    }
+}
+
+impl From<i32> for Rotation {
+    fn from(value: i32) -> Self {
+        let value = value % 360;
+
+        match value {
+            0..90 => Self::Deg0,
+            90..180 => Self::Deg90,
+            180..270 => Self::Deg180,
+            270..360 => Self::Deg270,
+            _ => unreachable!(),
+        }
+    }
+}
+
 impl Rotation {
-    pub fn deg(self) -> i32 {
+    pub fn deg(&self) -> i32 {
         match self {
             Rotation::Deg0 => 0,
             Rotation::Deg90 => 90,
@@ -126,16 +176,129 @@ pub enum CardinalDirection {
     West = 3,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedCDDAIds {
-    pub terrain: Option<CDDAIdentifier>,
-    pub furniture: Option<CDDAIdentifier>,
-    pub monster: Option<CDDAIdentifier>,
-    pub field: Option<CDDAIdentifier>,
+#[derive(Clone, Debug, Deserialize, Serialize, Default, Eq, PartialEq)]
+pub struct TilesheetCDDAId {
+    pub id: CDDAIdentifier,
+    pub prefix: Option<String>,
+    pub postfix: Option<String>,
 }
 
-impl MappedCDDAIds {
-    pub fn update_override(&mut self, other: MappedCDDAIds) {
+impl Display for TilesheetCDDAId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match &self.prefix {
+            None => {},
+            Some(prefix) => {
+                write!(f, "{}_", prefix)?;
+            },
+        }
+
+        let res = write!(f, "{}", self.id);
+
+        match &self.postfix {
+            None => res,
+            Some(postfix) => {
+                write!(f, "_{}", postfix)
+            },
+        }
+    }
+}
+
+impl TilesheetCDDAId {
+    pub fn simple(id: impl Into<CDDAIdentifier>) -> TilesheetCDDAId {
+        TilesheetCDDAId {
+            id: id.into(),
+            prefix: None,
+            postfix: None,
+        }
+    }
+
+    pub fn full(&self) -> CDDAIdentifier {
+        CDDAIdentifier(format!(
+            "{}{}{}",
+            self.prefix
+                .clone()
+                .map(|p| format!("{}_", p))
+                .unwrap_or_default(),
+            self.id,
+            self.postfix
+                .clone()
+                .map(|p| format!("_{}", p))
+                .unwrap_or_default(),
+        ))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedCDDAId {
+    pub tilesheet_id: TilesheetCDDAId,
+    pub rotation: Rotation,
+    pub is_broken: bool,
+    pub is_open: bool,
+}
+
+impl MappedCDDAId {
+    pub fn simple(id: impl Into<TilesheetCDDAId>) -> Self {
+        Self {
+            tilesheet_id: id.into(),
+            rotation: Default::default(),
+            is_broken: false,
+            is_open: false,
+        }
+    }
+
+    ///
+    /// Some parts can have multiple variants; each variant can define the symbols and broken symbols,
+    /// also each variant is a tileset sprite, if the tileset defines one for the variant.
+    //
+    // If a part has variants, the specific variant can be specified in the vehicle prototype by
+    // appending the variant to the part id after a # symbol. Thus, "frame#cross" is the "cross" variant of the "frame" part.
+    //
+    // Variants perform a mini-lookup chain by slicing variant string until the next _ from the
+    // right until a match is found. For example the tileset lookups for seat_leather#windshield_left are as follows:
+    //
+    //     vp_seat_leather_windshield_left
+    //
+    //     vp_seat_leather_windshield
+    //
+    // ( At this point variant is completely gone and default tile is looked for: )
+    //
+    //     vp_seat_leather
+    //
+    // ( If still no match is found then the looks_like field of vp_seat_leather is used and tileset looks for: )
+    //
+    //     vp_seat
+    ///
+    ///
+    pub fn slice_right(&self) -> MappedCDDAId {
+        let new_postfix = self
+            .tilesheet_id
+            .postfix
+            .clone()
+            .map(|p| p.rsplit_once('_').map(|(s, _)| s.to_string()));
+
+        MappedCDDAId {
+            tilesheet_id: TilesheetCDDAId {
+                id: self.tilesheet_id.id.clone(),
+                prefix: self.tilesheet_id.prefix.clone(),
+                postfix: new_postfix.flatten(),
+            },
+            rotation: self.rotation.clone(),
+            is_broken: self.is_broken.clone(),
+            is_open: self.is_open.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedCDDAIdsForTile {
+    pub terrain: Option<MappedCDDAId>,
+    pub furniture: Option<MappedCDDAId>,
+    pub monster: Option<MappedCDDAId>,
+    pub field: Option<MappedCDDAId>,
+}
+
+impl MappedCDDAIdsForTile {
+    pub fn update_override(&mut self, other: MappedCDDAIdsForTile) {
         if other.terrain.is_some() {
             self.terrain = other.terrain;
         }
@@ -203,10 +366,8 @@ fn get_multitile_sprite_from_additional_tiles(
 ) -> Result<Sprite, Error> {
     let mut additional_tile_ids = HashMap::new();
     // Special cases for open and broken
-    let mut broken: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> =
-        None;
-    let mut open: Option<(&AdditionalTile, ForeBackIds<FinalIds, FinalIds>)> =
-        None;
+    let mut broken: Option<ForeBackIds<FinalIds, FinalIds>> = None;
+    let mut open: Option<ForeBackIds<FinalIds, FinalIds>> = None;
 
     for additional_tile in additional_tiles {
         match additional_tile.id {
@@ -218,7 +379,7 @@ fn get_multitile_sprite_from_additional_tiles(
                     additional_tile.bg.clone(),
                 );
 
-                broken = Some((&additional_tile, ForeBackIds::new(fg, bg)))
+                broken = Some(ForeBackIds::new(fg, bg))
             },
             AdditionalTileId::Open => {
                 let fg = to_weighted_vec_additional_exception(
@@ -228,7 +389,7 @@ fn get_multitile_sprite_from_additional_tiles(
                     additional_tile.bg.clone(),
                 );
 
-                open = Some((&additional_tile, ForeBackIds::new(fg, bg)))
+                open = Some(ForeBackIds::new(fg, bg))
             },
             _ => {
                 let fg = to_weighted_vec_additional(additional_tile.fg.clone());
@@ -251,30 +412,6 @@ fn get_multitile_sprite_from_additional_tiles(
     let fg = to_weighted_vec(tile.fg.clone());
     let bg = to_weighted_vec(tile.bg.clone());
 
-    match broken {
-        None => {},
-        Some((tile, ids)) => {
-            return Ok(Sprite::Broken {
-                ids: ForeBackIds::new(fg, bg),
-                animated: tile.animated.unwrap_or(false),
-                broken: ids,
-                rotates: tile.rotates.unwrap_or(false),
-            })
-        },
-    }
-
-    match open {
-        None => {},
-        Some((tile, ids)) => {
-            return Ok(Sprite::Open {
-                ids: ForeBackIds::new(fg, bg),
-                animated: tile.animated.unwrap_or(false),
-                rotates: tile.rotates.unwrap_or(false),
-                open: ids,
-            })
-        },
-    }
-
     Ok(Sprite::Multitile {
         ids: ForeBackIds::new(fg, bg),
         rotates: tile.rotates.unwrap_or(false),
@@ -286,6 +423,8 @@ fn get_multitile_sprite_from_additional_tiles(
             .remove(&AdditionalTileId::TConnection),
         unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
         end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
+        broken: broken.unwrap_or(ForeBackIds::new(None, None)),
+        open: open.unwrap_or(ForeBackIds::new(None, None)),
     })
 }
 
@@ -297,23 +436,45 @@ pub struct LegacyTilesheet {
 impl Tilesheet for LegacyTilesheet {
     fn get_sprite(
         &self,
-        id: &CDDAIdentifier,
+        id: &MappedCDDAId,
         json_data: &DeserializedCDDAJsonData,
     ) -> SpriteKind {
-        match self.id_map.get(&id) {
+        match self.id_map.get(&id.tilesheet_id.full()) {
             None => {
-                info!(
+                debug!(
                     "Could not find {} in tilesheet ids, trying to use looks_like property",
-                    id
+                    id.tilesheet_id.full(),
                 );
 
+                let sliced_postfix = id.slice_right();
+                debug!(
+                    "Slicing postfix and trying to get sprite again, new id {}",
+                    &sliced_postfix.tilesheet_id
+                );
+
+                match sliced_postfix.tilesheet_id.postfix {
+                    None => {
+                        // We want to get the sprites one more time after the entire postfix has been sliced
+                        if id.tilesheet_id.postfix.is_some() {
+                            return self.get_sprite(&sliced_postfix, json_data);
+                        }
+                    },
+                    Some(_) => {
+                        return self.get_sprite(&sliced_postfix, json_data)
+                    },
+                }
+
                 match self.get_looks_like_sprite(
-                    &id,
-                    &json_data.terrain,
-                    &json_data.furniture,
+                    &sliced_postfix.tilesheet_id.id,
+                    &json_data,
                 ) {
                     None => {
-                        match json_data.terrain.get(id) {
+                        debug!(
+                            "Could not find {} in tilesheet ids or looks_like property, using fallback",
+                            sliced_postfix.tilesheet_id.full()
+                        );
+
+                        match json_data.terrain.get(&id.tilesheet_id.id) {
                             None => {},
                             Some(t) => {
                                 return SpriteKind::Fallback(
@@ -340,7 +501,7 @@ impl Tilesheet for LegacyTilesheet {
                             },
                         }
 
-                        match json_data.furniture.get(id) {
+                        match json_data.furniture.get(&id.tilesheet_id.id) {
                             None => {},
                             Some(f) => {
                                 return SpriteKind::Fallback(
@@ -371,10 +532,19 @@ impl Tilesheet for LegacyTilesheet {
                             FALLBACK_TILE_MAPPING.first().unwrap().1,
                         )
                     },
-                    Some(s) => SpriteKind::Exists(s),
+                    Some(s) => {
+                        debug!(
+                            "Found looks like sprite with id {}",
+                            sliced_postfix.tilesheet_id.full()
+                        );
+                        SpriteKind::Exists(s)
+                    },
                 }
             },
-            Some(s) => SpriteKind::Exists(s),
+            Some(s) => {
+                debug!("Found sprite with id {}", id.tilesheet_id.full());
+                SpriteKind::Exists(s)
+            },
         }
     }
 }
@@ -383,28 +553,31 @@ impl LegacyTilesheet {
     fn get_looks_like_sprite(
         &self,
         id: &CDDAIdentifier,
-        terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
-        furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
+        json_data: &DeserializedCDDAJsonData,
     ) -> Option<&Sprite> {
-        // id of a similar item that this item looks like. The tileset loader will try to load the
-        // tile for that item if this item doesn't have a tile. looks_like entries are implicitly
+        // Id of a similar item that this item looks like. The tileset loader will try to load the
+        // tile for that item if this item doesn't have a tile. Looks_like entries are implicitly
         // chained, so if 'throne' has looks_like 'big_chair' and 'big_chair' has looks_like 'chair',
         // a throne will be displayed using the chair tile if tiles for throne and big_chair do not exist.
         // If a tileset can't find a tile for any item in the looks_like chain, it will default to the ascii symbol.
 
         // The tiles with this property do not have a corresponding entry in the tilesheet which
         // means that we have to check this here dynamically
-        match terrain.get(&id) {
+        match json_data.terrain.get(&id) {
             None => {},
             Some(s) => {
                 return match &s.looks_like {
                     None => None,
                     Some(ident) => {
                         // "looks_like entries are implicitly chained"
+                        if ident == id {
+                            return self.id_map.get(ident);
+                        }
+
                         match self.id_map.get(ident) {
-                            None => self.get_looks_like_sprite(
-                                ident, terrain, furniture,
-                            ),
+                            None => {
+                                self.get_looks_like_sprite(ident, json_data)
+                            },
                             Some(s) => Some(s),
                         }
                     },
@@ -413,15 +586,46 @@ impl LegacyTilesheet {
         };
 
         // Do again with furniture
-        match furniture.get(&id) {
+        match json_data.furniture.get(&id) {
+            None => {},
+            Some(s) => {
+                return match &s.looks_like {
+                    None => None,
+                    Some(ident) => {
+                        if ident == id {
+                            return self.id_map.get(ident);
+                        }
+
+                        match self.id_map.get(ident) {
+                            None => {
+                                self.get_looks_like_sprite(ident, json_data)
+                            },
+                            Some(s) => Some(s),
+                        }
+                    },
+                }
+            },
+        }
+
+        match json_data.vehicle_parts.get(&id) {
             None => None,
             Some(s) => match &s.looks_like {
                 None => None,
-                Some(ident) => match self.id_map.get(ident) {
-                    None => {
-                        self.get_looks_like_sprite(ident, terrain, furniture)
-                    },
-                    Some(s) => Some(s),
+                Some(ident) => {
+                    debug!("Looking for looks like {} for {}", ident, id);
+
+                    // Stop stackoverflow when object "looks_like" itself
+                    if ident == id {
+                        return self.id_map.get(ident);
+                    }
+
+                    match self
+                        .id_map
+                        .get(&CDDAIdentifier(format!("vp_{}", ident)))
+                    {
+                        None => self.get_looks_like_sprite(ident, json_data),
+                        Some(s) => Some(s),
+                    }
                 },
             },
         }

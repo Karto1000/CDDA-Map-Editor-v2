@@ -1,21 +1,24 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
-use crate::tileset::current_tileset::CurrentTilesheet;
 use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
-use crate::tileset::legacy_tileset::{
-    AdditionalTileIds, CardinalDirection, FinalIds, LegacyTilesheet,
-    MappedCDDAIds, Rotated, Rotates, Rotation, SpriteIndex,
+use crate::tileset::legacy_tileset::tile_config::AdditionalTileId::{
+    Center, Corner, Edge, EndPiece, TConnection, Unconnected,
 };
-use crate::util::{CDDAIdentifier, MeabyVec, Weighted};
-use glam::IVec3;
+use crate::tileset::legacy_tileset::CardinalDirection::{
+    East, North, South, West,
+};
+use crate::tileset::legacy_tileset::{
+    AdditionalTileIds, CardinalDirection, FinalIds, MappedCDDAId, Rotated,
+    Rotates, Rotation, SpriteIndex, TilesheetCDDAId,
+};
+use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use rand::rng;
 use serde::{Deserialize, Serialize};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
-pub(crate) mod current_tileset;
 pub(crate) mod handlers;
 pub(crate) mod io;
 pub(crate) mod legacy_tileset;
@@ -88,15 +91,10 @@ const FALLBACK_TILE_MAPPING: &'static [(&'static str, u32)] = &[
     ("|", 178),
 ];
 
-pub enum TilesheetKind {
-    Legacy(LegacyTilesheet),
-    Current(CurrentTilesheet),
-}
-
 pub trait Tilesheet {
     fn get_sprite(
         &self,
-        id: &CDDAIdentifier,
+        id: &MappedCDDAId,
         json_data: &DeserializedCDDAJsonData,
     ) -> SpriteKind;
 }
@@ -121,18 +119,6 @@ pub enum Sprite {
         rotates: bool,
         animated: bool,
     },
-    Open {
-        ids: ForeBackIds<FinalIds, FinalIds>,
-        open: ForeBackIds<FinalIds, FinalIds>,
-        rotates: bool,
-        animated: bool,
-    },
-    Broken {
-        ids: ForeBackIds<FinalIds, FinalIds>,
-        broken: ForeBackIds<FinalIds, FinalIds>,
-        rotates: bool,
-        animated: bool,
-    },
     Multitile {
         ids: ForeBackIds<FinalIds, FinalIds>,
 
@@ -145,6 +131,8 @@ pub enum Sprite {
         t_connection: Option<MultitileSprite>,
         end_piece: Option<MultitileSprite>,
         unconnected: Option<MultitileSprite>,
+        broken: ForeBackIds<FinalIds, FinalIds>,
+        open: ForeBackIds<FinalIds, FinalIds>,
     },
 }
 
@@ -152,8 +140,6 @@ impl Sprite {
     pub fn is_animated(&self) -> bool {
         match self {
             Sprite::Single { animated, .. } => animated.clone(),
-            Sprite::Open { animated, .. } => animated.clone(),
-            Sprite::Broken { animated, .. } => animated.clone(),
             Sprite::Multitile { animated, .. } => animated.clone(),
         }
     }
@@ -193,18 +179,13 @@ impl Sprite {
         }
 
         let rotated = match tile_id {
-            AdditionalTileId::Center | AdditionalTileId::Unconnected => {
-                Rotated {
-                    data: MeabyAnimated::Single(
-                        ids.get_random().get(&direction).clone(),
-                    ),
-                    rotation: Rotation::Deg0,
-                }
+            Center | Unconnected => Rotated {
+                data: MeabyAnimated::Single(
+                    ids.get_random().get(&direction).clone(),
+                ),
+                rotation: Rotation::Deg0,
             },
-            AdditionalTileId::Corner
-            | AdditionalTileId::TConnection
-            | AdditionalTileId::Edge
-            | AdditionalTileId::EndPiece => match ids.get_random() {
+            Corner | TConnection | Edge | EndPiece => match ids.get_random() {
                 Rotates::Auto(a) => match rotates {
                     true => Rotated {
                         data: MeabyAnimated::Single(a.clone()),
@@ -213,28 +194,16 @@ impl Sprite {
                     false => Rotated::none(MeabyAnimated::Single(a.clone())),
                 },
                 Rotates::Pre2(p) => match direction {
-                    CardinalDirection::North => {
-                        Rotated::none(MeabyAnimated::Single(p.0.clone()))
-                    },
-                    CardinalDirection::East => {
-                        Rotated::none(MeabyAnimated::Single(p.1.clone()))
-                    },
-                    CardinalDirection::South => unreachable!(),
-                    CardinalDirection::West => unreachable!(),
+                    North => Rotated::none(MeabyAnimated::Single(p.0.clone())),
+                    East => Rotated::none(MeabyAnimated::Single(p.1.clone())),
+                    South => unreachable!(),
+                    West => unreachable!(),
                 },
                 Rotates::Pre4(p) => match direction {
-                    CardinalDirection::North => {
-                        Rotated::none(MeabyAnimated::Single(p.0.clone()))
-                    },
-                    CardinalDirection::East => {
-                        Rotated::none(MeabyAnimated::Single(p.1.clone()))
-                    },
-                    CardinalDirection::South => {
-                        Rotated::none(MeabyAnimated::Single(p.2.clone()))
-                    },
-                    CardinalDirection::West => {
-                        Rotated::none(MeabyAnimated::Single(p.3.clone()))
-                    },
+                    North => Rotated::none(MeabyAnimated::Single(p.0.clone())),
+                    East => Rotated::none(MeabyAnimated::Single(p.1.clone())),
+                    South => Rotated::none(MeabyAnimated::Single(p.2.clone())),
+                    West => Rotated::none(MeabyAnimated::Single(p.3.clone())),
                 },
             },
             _ => unreachable!(),
@@ -264,17 +233,17 @@ impl Sprite {
     }
 
     fn get_matching_list(
-        this_id: &CDDAIdentifier,
+        this_id: &TilesheetCDDAId,
         layer: &TileLayer,
         json_data: &DeserializedCDDAJsonData,
         adjacent_sprites: &AdjacentSprites,
     ) -> (bool, bool, bool, bool) {
         let mut this_connects_to = json_data
-            .get_connects_to(this_id.clone(), layer)
+            .get_connects_to(this_id.id.clone(), layer)
             .unwrap_or_default();
 
         let this_flags = json_data
-            .get_flags(this_id.clone(), layer)
+            .get_flags(this_id.id.clone(), layer)
             .unwrap_or_default();
 
         let (mut top_connect_groups, top_flags) =
@@ -334,8 +303,8 @@ impl Sprite {
             // TODO: I think there's a no self connect flag to toggle this behaviour
             // although im not sure
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .top
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -344,8 +313,8 @@ impl Sprite {
             .intersection(&right_connect_groups)
             .next()
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .right
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -354,8 +323,8 @@ impl Sprite {
             .intersection(&bottom_connect_groups)
             .next()
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .bottom
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -364,8 +333,8 @@ impl Sprite {
             .intersection(&left_connect_groups)
             .next()
             .is_some()
-            || this_id
-                == &adjacent_sprites
+            || this_id.id
+                == adjacent_sprites
                     .left
                     .clone()
                     .unwrap_or(CDDAIdentifier("".to_string()));
@@ -378,12 +347,35 @@ impl Sprite {
         )
     }
 
+    fn get_sprite_from_multitile_sprite(
+        direction: &CardinalDirection,
+        add_id: &AdditionalTileId,
+        all_ids: &ForeBackIds<FinalIds, FinalIds>,
+        sprite: Option<&MultitileSprite>,
+    ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
+        match sprite {
+            None => match &all_ids.fg {
+                None => None,
+                Some(bg) => Self::get_random_sprite(bg),
+            },
+            Some(sprite) => match &sprite.ids.fg {
+                None => None,
+                Some(fg) => Self::get_random_additional_tile_sprite(
+                    direction.clone(),
+                    add_id.clone(),
+                    sprite.rotates,
+                    fg,
+                ),
+            },
+        }
+    }
+
     pub fn get_fg_id(
         &self,
-        this_id: &CDDAIdentifier,
-        json_data: &DeserializedCDDAJsonData,
+        mapped_id: &MappedCDDAId,
         layer: &TileLayer,
         adjacent_sprites: &AdjacentSprites,
+        json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
             Sprite::Single {
@@ -401,6 +393,7 @@ impl Sprite {
                 },
             },
             Sprite::Multitile {
+                ids,
                 animated,
                 center,
                 corner,
@@ -408,262 +401,180 @@ impl Sprite {
                 edge,
                 unconnected,
                 end_piece,
-                ..
+                broken,
+                open,
+                rotates,
             } => match *animated {
                 true => todo!(),
                 false => {
+                    if mapped_id.is_broken {
+                        return match &broken.fg {
+                            None => match &ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_sprite(fg),
+                            },
+                            Some(fg) => Self::get_random_sprite(fg),
+                        };
+                    }
+
+                    if mapped_id.is_open {
+                        return match &open.fg {
+                            None => match &ids.fg {
+                                None => None,
+                                Some(fg) => Self::get_random_sprite(fg),
+                            },
+                            Some(fg) => Self::get_random_sprite(fg),
+                        };
+                    }
+
                     let matching_list = Self::get_matching_list(
-                        this_id,
+                        &mapped_id.tilesheet_id,
                         layer,
                         json_data,
                         adjacent_sprites,
                     );
 
                     match matching_list {
-                        (true, true, true, true) => match center {
-                            None => None,
-                            Some(center) => match &center.ids.fg {
-                                None => None,
-                                // TODO: Kind of weird but since the first elements index is 0 and
-                                // the CardinalDirection North is mapped to 0, we can use North here
-                                // instead of copying the contents of the function into this match arm
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::North,
-                                        AdditionalTileId::Center,
-                                        center.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, true, true, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &North,
+                                &Center,
+                                ids,
+                                center.as_ref(),
+                            )
                         },
-                        (true, true, true, false) => match t_connection {
-                            None => None,
-                            Some(t_connection) => match &t_connection.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::East,
-                                        AdditionalTileId::TConnection,
-                                        t_connection.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, true, true, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &East,
+                                &TConnection,
+                                ids,
+                                t_connection.as_ref(),
+                            )
                         },
-                        (true, true, false, true) => match t_connection {
-                            None => None,
-                            Some(t_connection) => match &t_connection.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::North,
-                                        AdditionalTileId::TConnection,
-                                        t_connection.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, true, false, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &North,
+                                &TConnection,
+                                ids,
+                                t_connection.as_ref(),
+                            )
                         },
-                        (true, false, true, true) => match t_connection {
-                            None => None,
-                            Some(t_connection) => match &t_connection.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::West,
-                                        AdditionalTileId::TConnection,
-                                        t_connection.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, false, true, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &West,
+                                &TConnection,
+                                ids,
+                                t_connection.as_ref(),
+                            )
                         },
-                        (false, true, true, true) => match t_connection {
-                            None => None,
-                            Some(t_connection) => match &t_connection.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::South,
-                                        AdditionalTileId::TConnection,
-                                        t_connection.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, true, true, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &South,
+                                &TConnection,
+                                ids,
+                                t_connection.as_ref(),
+                            )
                         },
-                        (true, true, false, false) => match corner {
-                            None => None,
-                            Some(corner) => match &corner.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::North,
-                                        AdditionalTileId::Corner,
-                                        corner.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, true, false, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &North,
+                                &Corner,
+                                ids,
+                                corner.as_ref(),
+                            )
                         },
-                        (true, false, false, true) => match corner {
-                            None => None,
-                            Some(corner) => match &corner.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::West,
-                                        AdditionalTileId::Corner,
-                                        corner.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, false, false, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &West,
+                                &Corner,
+                                ids,
+                                corner.as_ref(),
+                            )
                         },
-                        (false, true, true, false) => match corner {
-                            None => None,
-                            Some(corner) => match &corner.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::East,
-                                        AdditionalTileId::Corner,
-                                        corner.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, true, true, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &East,
+                                &Corner,
+                                ids,
+                                corner.as_ref(),
+                            )
                         },
-                        (false, false, true, true) => match corner {
-                            None => None,
-                            Some(corner) => match &corner.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::South,
-                                        AdditionalTileId::Corner,
-                                        corner.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, false, true, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &South,
+                                &Corner,
+                                ids,
+                                corner.as_ref(),
+                            )
                         },
-                        (true, false, false, false) => match end_piece {
-                            None => None,
-                            Some(end_piece) => match &end_piece.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::North,
-                                        AdditionalTileId::EndPiece,
-                                        end_piece.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, false, false, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &North,
+                                &EndPiece,
+                                ids,
+                                end_piece.as_ref(),
+                            )
                         },
-                        (false, true, false, false) => match end_piece {
-                            None => None,
-                            Some(end_piece) => match &end_piece.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::East,
-                                        AdditionalTileId::EndPiece,
-                                        end_piece.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, true, false, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &East,
+                                &EndPiece,
+                                ids,
+                                end_piece.as_ref(),
+                            )
                         },
-                        (false, false, true, false) => match end_piece {
-                            None => None,
-                            Some(end_piece) => match &end_piece.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::South,
-                                        AdditionalTileId::EndPiece,
-                                        end_piece.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, false, true, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &South,
+                                &EndPiece,
+                                ids,
+                                end_piece.as_ref(),
+                            )
                         },
-                        (false, false, false, true) => match end_piece {
-                            None => None,
-                            Some(end_piece) => match &end_piece.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        CardinalDirection::West,
-                                        AdditionalTileId::EndPiece,
-                                        end_piece.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, false, false, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &West,
+                                &EndPiece,
+                                ids,
+                                end_piece.as_ref(),
+                            )
                         },
-                        (false, true, false, true) => match edge {
-                            None => None,
-                            Some(edge) => match &edge.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        // East-West
-                                        CardinalDirection::East,
-                                        AdditionalTileId::Edge,
-                                        edge.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, true, false, true) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &East,
+                                &Edge,
+                                ids,
+                                edge.as_ref(),
+                            )
                         },
-                        (true, false, true, false) => match edge {
-                            None => None,
-                            Some(edge) => match &edge.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        // North-South
-                                        CardinalDirection::North,
-                                        AdditionalTileId::Edge,
-                                        edge.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (true, false, true, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &North,
+                                &Edge,
+                                ids,
+                                edge.as_ref(),
+                            )
                         },
-                        (false, false, false, false) => match unconnected {
-                            None => None,
-                            Some(unconnected) => match &unconnected.ids.fg {
-                                None => None,
-                                Some(fg) => {
-                                    Self::get_random_additional_tile_sprite(
-                                        // First
-                                        CardinalDirection::North,
-                                        AdditionalTileId::Unconnected,
-                                        unconnected.rotates,
-                                        fg,
-                                    )
-                                },
-                            },
+                        (false, false, false, false) => {
+                            Self::get_sprite_from_multitile_sprite(
+                                &North,
+                                &Unconnected,
+                                ids,
+                                unconnected.as_ref(),
+                            )
                         },
                     }
                 },
             },
-            Sprite::Open { .. } => todo!(),
-            Sprite::Broken { .. } => todo!(),
         }
     }
 
     pub fn get_bg_id(
         &self,
-        this_id: &CDDAIdentifier,
-        json_data: &DeserializedCDDAJsonData,
+        mapped_id: &MappedCDDAId,
         layer: &TileLayer,
         adjacent_sprites: &AdjacentSprites,
+        json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
             Sprite::Single { ids, animated, .. } => match *animated {
@@ -677,6 +588,7 @@ impl Sprite {
                 },
             },
             Sprite::Multitile {
+                ids,
                 animated,
                 center,
                 corner,
@@ -684,12 +596,34 @@ impl Sprite {
                 edge,
                 unconnected,
                 end_piece,
-                ..
+                broken,
+                open,
+                rotates,
             } => match *animated {
                 true => todo!(),
                 false => {
+                    if mapped_id.is_broken {
+                        return match &broken.bg {
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                            Some(bg) => Self::get_random_sprite(bg),
+                        };
+                    }
+
+                    if mapped_id.is_open {
+                        return match &open.bg {
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
+                            Some(bg) => Self::get_random_sprite(bg),
+                        };
+                    }
+
                     let matching_list = Self::get_matching_list(
-                        this_id,
+                        &mapped_id.tilesheet_id,
                         layer,
                         json_data,
                         adjacent_sprites,
@@ -697,7 +631,10 @@ impl Sprite {
 
                     match matching_list {
                         (true, true, true, true) => match center {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(center) => match &center.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -707,7 +644,10 @@ impl Sprite {
                         | (true, true, false, true)
                         | (true, false, true, true)
                         | (false, true, true, true) => match t_connection {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(t_connection) => match &t_connection.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -717,7 +657,10 @@ impl Sprite {
                         | (true, false, false, true)
                         | (false, true, true, false)
                         | (false, false, true, true) => match corner {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(corner) => match &corner.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -727,7 +670,10 @@ impl Sprite {
                         | (false, true, false, false)
                         | (false, false, true, false)
                         | (false, false, false, true) => match end_piece {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(end_piece) => match &end_piece.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -735,14 +681,20 @@ impl Sprite {
                         },
                         (false, true, false, true)
                         | (true, false, true, false) => match edge {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(edge) => match &edge.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
                             },
                         },
                         (false, false, false, false) => match unconnected {
-                            None => None,
+                            None => match &ids.bg {
+                                None => None,
+                                Some(bg) => Self::get_random_sprite(bg),
+                            },
                             Some(unconnected) => match &unconnected.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(bg),
@@ -751,8 +703,6 @@ impl Sprite {
                     }
                 },
             },
-            Sprite::Open { .. } => todo!(),
-            Sprite::Broken { .. } => todo!(),
         }
     }
 }
@@ -876,58 +826,6 @@ impl<T> MeabyWeightedSprite<T> {
 pub enum SpriteLayer {
     Bg = 0,
     Fg = 1,
-}
-
-pub fn get_id_from_mapped_sprites(
-    mapped_cdda_ids: &HashMap<IVec3, MappedCDDAIds>,
-    cords: &IVec3,
-    layer: &TileLayer,
-) -> Option<CDDAIdentifier> {
-    mapped_cdda_ids
-        .get(cords)
-        .map(|v| match layer {
-            TileLayer::Terrain => v.terrain.clone(),
-            TileLayer::Furniture => v.furniture.clone(),
-            TileLayer::Monster => v.monster.clone(),
-            TileLayer::Field => v.field.clone(),
-        })
-        .flatten()
-}
-
-pub fn get_adjacent_sprites(
-    mapped_cdda_ids: &HashMap<IVec3, MappedCDDAIds>,
-    coordinates: IVec3,
-    layer: &TileLayer,
-) -> AdjacentSprites {
-    let top_cords = coordinates + IVec3::new(0, 1, 0);
-    let top = get_id_from_mapped_sprites(&mapped_cdda_ids, &top_cords, &layer);
-
-    let right_cords = coordinates + IVec3::new(1, 0, 0);
-    let right =
-        get_id_from_mapped_sprites(&mapped_cdda_ids, &right_cords, &layer);
-
-    let bottom = match coordinates.y > 0 {
-        true => {
-            let bottom_cords = coordinates - IVec3::new(0, 1, 0);
-            get_id_from_mapped_sprites(&mapped_cdda_ids, &bottom_cords, &layer)
-        },
-        false => None,
-    };
-
-    let left = match coordinates.x > 0 {
-        true => {
-            let left_cords = coordinates - IVec3::new(1, 0, 0);
-            get_id_from_mapped_sprites(&mapped_cdda_ids, &left_cords, &layer)
-        },
-        false => None,
-    };
-
-    AdjacentSprites {
-        top,
-        right,
-        bottom,
-        left,
-    }
 }
 
 #[derive(Debug)]

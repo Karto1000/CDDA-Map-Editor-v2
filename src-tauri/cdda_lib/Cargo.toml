@@ -1,0 +1,12 @@
+[package]
+name = "cdda_lib"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde_derive = "1.0.219"
+rand = "0.9.1"
+num-traits = "0.2.19"
+serde = "1.0.219"
+log = "0.4.27"
+derive_more = { version = "2.0.1", features = ["full"] }

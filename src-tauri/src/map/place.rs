@@ -2,7 +2,7 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::map::map_properties::{
     FurnitureProperty, NestedProperty, TerrainProperty,
 };
-use crate::map::{MapData, Place, Property, VisibleMappingCommand};
+use crate::map::{MapData, Place, Property, SetTile};
 use glam::IVec2;
 use serde_json::Value;
 
@@ -17,7 +17,7 @@ impl Place for PlaceTerrain {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         self.visible.get_commands(position, map_data, json_data)
     }
 
@@ -37,7 +37,7 @@ impl Place for PlaceFurniture {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         self.visible.get_commands(position, map_data, json_data)
     }
 
@@ -57,7 +57,7 @@ impl Place for PlaceNested {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         self.nested_property
             .get_commands(position, map_data, json_data)
     }

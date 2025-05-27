@@ -2,33 +2,30 @@ use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::item::CDDAItemGroupInPlace;
 use crate::cdda_data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
 use crate::cdda_data::palettes::Parameter;
-use crate::cdda_data::{MapGenValue, NumberOrRange};
 use crate::editor_data::{MapCoordinates, MapDataCollection};
 use crate::map::map_properties::ComputersProperty;
 use crate::map::map_properties::ToiletsProperty;
 use crate::map::map_properties::TrapsProperty;
+use crate::map::map_properties::VehiclesProperty;
 use crate::map::map_properties::{
     FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty,
     SignsProperty, TerrainProperty,
 };
 use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
+use crate::map::SetTile;
+use crate::map::DEFAULT_MAP_DATA_SIZE;
 use crate::map::{
-    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place,
-    PlaceableSetType, Property, RemovableSetType, Set, SetLine, SetOperation,
-    SetPoint, SetSquare,
+    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, Property,
 };
-use crate::map::{VisibleMappingCommand, DEFAULT_MAP_DATA_SIZE};
-use crate::util::{
-    CDDAIdentifier, DistributionInner, MeabyVec, MeabyWeighted,
-    ParameterIdentifier, Weighted,
+use cdda_lib::types::{
+    CDDAIdentifier, DistributionInner, MapGenValue, MeabyVec, MeabyWeighted,
+    NumberOrRange, ParameterIdentifier, Weighted,
 };
-use crate::warn;
-use crate::{skip_err, skip_none};
 use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
 use paste::paste;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
@@ -401,7 +398,7 @@ macro_rules! create_place_inner {
                     position: &IVec2,
                     map_data: &MapData,
                     json_data: &DeserializedCDDAJsonData,
-                ) -> Option<Vec<VisibleMappingCommand>> {
+                ) -> Option<Vec<SetTile>> {
                     self.property.get_commands(position, map_data, json_data)
                 }
 
@@ -490,6 +487,7 @@ create_place_inner!(Monsters, MapGenMonster);
 create_place_inner!(Toilets, ());
 
 create_place_inner!(Traps, MapGenTrap);
+create_place_inner!(Vehicles, MapGenVehicle);
 
 const fn default_chance() -> i32 {
     100
@@ -560,6 +558,7 @@ impl_from!(PlaceInnerComputers);
 impl_from!(PlaceInnerSigns);
 impl_from!(PlaceInnerGaspumps);
 impl_from!(PlaceInnerTraps);
+impl_from!(PlaceInnerVehicles);
 
 impl<T> PlaceOuter<T> {
     pub fn coordinates(&self) -> IVec2 {
@@ -619,7 +618,8 @@ map_data_object!(
     computers:  MeabyVec<MeabyWeighted<MapGenComputer>>,
     signs:  MeabyVec<MeabyWeighted<MapGenSign>>,
     gaspumps:  MeabyVec<MeabyWeighted<MapGenGaspump>>,
-    traps:  MeabyVec<MeabyWeighted<MapGenTrap>>
+    traps:  MeabyVec<MeabyWeighted<MapGenTrap>>,
+    vehicles: MeabyVec<MeabyWeighted<MapGenVehicle>>
 );
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -801,6 +801,18 @@ impl CDDAMapDataIntermediate {
             trap_map.insert(char, trap_prop as Arc<dyn Property>);
         }
 
+        let mut vehicles_map = HashMap::new();
+        for (char, vehicles) in self.object.common.vehicles.clone() {
+            let vehicles_prop = Arc::new(VehiclesProperty {
+                vehicles: vehicles
+                    .into_vec()
+                    .into_iter()
+                    .map(MeabyWeighted::to_weighted)
+                    .collect(),
+            });
+            vehicles_map.insert(char, vehicles_prop as Arc<dyn Property>);
+        }
+
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
         properties.insert(MappingKind::Monster, monster_map);
@@ -812,6 +824,7 @@ impl CDDAMapDataIntermediate {
         properties.insert(MappingKind::Sign, sign_map);
         properties.insert(MappingKind::Gaspump, gaspumps_map);
         properties.insert(MappingKind::Trap, trap_map);
+        properties.insert(MappingKind::Vehicle, vehicles_map);
 
         properties
     }
@@ -891,164 +904,9 @@ impl CDDAMapDataIntermediate {
         insert_place!(Nested);
         insert_place!(Field, fields);
         insert_place!(ItemGroups, items);
+        insert_place!(Vehicle, vehicles);
 
         place
-    }
-
-    fn get_set(&self, map_coordinates: MapCoordinates) -> Vec<Arc<dyn Set>> {
-        let mut set_vec: Vec<Arc<dyn Set>> = vec![];
-        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
-
-        for set in self.object.common.set.clone() {
-            if let Some(ty) = set.line {
-                let x = skip_none!(set.x);
-                let y = skip_none!(set.y);
-                let x2 = skip_none!(set.x2);
-                let y2 = skip_none!(set.y2);
-
-                let operation = match ty.0.as_str() {
-                    "terrain" | "furniture" | "trap" => {
-                        let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Place { id, ty })
-                    },
-                    "trap_remove" | "item_remove" | "field_remove"
-                    | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Remove { ty })
-                    },
-                    "radiation" => {
-                        let amount = skip_none!(set.amount);
-
-                        Some(SetOperation::Radiation { amount })
-                    },
-                    _ => {
-                        warn!("Unknown set line type {}; Skipping", ty);
-                        None
-                    },
-                };
-
-                if let Some(operation) = operation {
-                    let set_line = SetLine {
-                        from_x: x + map_coordinates.x * map_size.x,
-                        from_y: y + map_coordinates.y * map_size.y,
-                        to_x: x2 + map_coordinates.x * map_size.x,
-                        to_y: y2 + map_coordinates.y * map_size.y,
-                        z: set.z.unwrap_or(0),
-                        chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((0, 1)),
-                        operation,
-                    };
-
-                    set_vec.push(Arc::new(set_line));
-                }
-            } else if let Some(ty) = set.point {
-                let x = skip_none!(set.x);
-                let y = skip_none!(set.y);
-
-                let operation = match ty.0.as_str() {
-                    "terrain" | "furniture" | "trap" => {
-                        let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Place { id, ty })
-                    },
-                    "trap_remove" | "item_remove" | "field_remove"
-                    | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Remove { ty })
-                    },
-                    "radiation" => {
-                        let amount = skip_none!(set.amount);
-
-                        Some(SetOperation::Radiation { amount })
-                    },
-                    "variable" => {
-                        let id = skip_none!(set.id.clone());
-
-                        Some(SetOperation::Variable { id })
-                    },
-                    "bash" => Some(SetOperation::Bash {}),
-                    "burn" => Some(SetOperation::Burn {}),
-                    _ => {
-                        warn!("Unknown set point type {}; Skipping", ty);
-                        None
-                    },
-                };
-
-                if let Some(operation) = operation {
-                    let set_point = SetPoint {
-                        x: x + map_coordinates.x * map_size.x,
-                        y: y + map_coordinates.y * map_size.y,
-                        z: set.z.unwrap_or(0),
-                        chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((1, 1)),
-                        operation,
-                    };
-
-                    set_vec.push(Arc::new(set_point))
-                }
-            } else if let Some(ty) = set.square {
-                let x = skip_none!(set.x);
-                let y = skip_none!(set.y);
-                let x2 = skip_none!(set.x2);
-                let y2 = skip_none!(set.y2);
-
-                let operation = match ty.0.as_str() {
-                    "terrain" | "furniture" | "trap" => {
-                        let id = skip_none!(set.id.clone());
-                        let ty = skip_err!(PlaceableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Place { id, ty })
-                    },
-                    "trap_remove" | "item_remove" | "field_remove"
-                    | "creature_remove" => {
-                        let ty = skip_err!(RemovableSetType::from_str(
-                            ty.0.as_str()
-                        ));
-
-                        Some(SetOperation::Remove { ty })
-                    },
-                    "radiation" => Some(SetOperation::Radiation {
-                        amount: set.amount.unwrap_or(NumberOrRange::Number(1)),
-                    }),
-                    _ => {
-                        warn!("Unknown set square type {}; Skipping", ty);
-                        None
-                    },
-                };
-
-                if let Some(operation) = operation {
-                    let set_square = SetSquare {
-                        top_left_x: x + map_coordinates.x * map_size.x,
-                        top_left_y: y + map_coordinates.y * map_size.y,
-                        bottom_right_x: x2 + map_coordinates.x * map_size.x,
-                        bottom_right_y: y2 + map_coordinates.y * map_size.y,
-                        z: set.z.unwrap_or(0),
-                        chance: set.chance.unwrap_or(1),
-                        repeat: set.repeat.unwrap_or((1, 1)),
-                        operation,
-                    };
-
-                    set_vec.push(Arc::new(set_square))
-                }
-            }
-        }
-
-        set_vec
     }
 }
 
@@ -1134,10 +992,8 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
                             let properties = self.get_properties();
                             let place = self.get_place(map_coordinates);
-                            let set = self.get_set(map_coordinates);
 
                             map_data.cells = nested_cells;
-                            map_data.set = set;
                             map_data.properties = properties;
                             map_data.place = place;
                             map_data.parameters =
@@ -1173,7 +1029,6 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
         let properties = self.get_properties();
         let place = self.get_place(UVec2::ZERO);
-        let set = self.get_set(UVec2::ZERO);
 
         let mut cells = IndexMap::new();
 
@@ -1197,7 +1052,6 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
         }
 
         map_data.cells = cells;
-        map_data.set = set;
         map_data.properties = properties;
         map_data.place = place;
         map_data.parameters = self.object.common.parameters.clone();
@@ -1212,4 +1066,57 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
         Ok(collection)
     }
+}
+
+fn default_rotation() -> MeabyVec<i32> {
+    MeabyVec::Single(0)
+}
+
+// (optional, integer) Defaults to -1, light damage. A value of 0 equates to undamaged,
+// 1 heavily damaged and 2 perfect condition with no faults and disabled security.
+#[derive(Debug, Default, Clone)]
+pub enum VehicleStatus {
+    #[default]
+    LightDamage = -1,
+    Undamaged = 0,
+    HeavilyDamaged = 1,
+    Perfect = 2,
+}
+
+impl<'de> Deserialize<'de> for VehicleStatus {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let value = i32::deserialize(deserializer)?;
+        Ok(match value {
+            -1 => VehicleStatus::LightDamage,
+            0 => VehicleStatus::Undamaged,
+            1 => VehicleStatus::HeavilyDamaged,
+            2 => VehicleStatus::Perfect,
+            // TODO: Some values in the json files are above 2.
+            // These don't seem to be handled anywhere so i'm guessing it just defaults to light damage.
+            _ => VehicleStatus::LightDamage,
+        })
+    }
+}
+
+impl Serialize for VehicleStatus {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_i32(self.clone() as i32)
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct MapGenVehicle {
+    pub vehicle: CDDAIdentifier,
+
+    #[serde(default)]
+    pub status: VehicleStatus,
+
+    #[serde(default = "default_rotation")]
+    pub rotation: MeabyVec<i32>,
 }

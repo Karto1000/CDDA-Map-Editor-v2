@@ -1,4 +1,4 @@
-use crate::util::{CDDAIdentifier, Weighted};
+use cdda_lib::types::{CDDAIdentifier, Weighted};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

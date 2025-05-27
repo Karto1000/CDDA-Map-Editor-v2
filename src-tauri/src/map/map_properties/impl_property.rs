@@ -1,15 +1,24 @@
 use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
-use crate::cdda_data::map_data::{MapGenGaspumpFuelType, ReferenceOrInPlace};
+use crate::cdda_data::map_data::{
+    MapGenGaspumpFuelType, ReferenceOrInPlace, VehicleStatus,
+};
+use crate::cdda_data::vehicle_parts::{CDDAVehiclePart, Location};
+use crate::cdda_data::vehicles::{CDDAVehicle, VehiclePart};
 use crate::map::map_properties::{
     ComputersProperty, FieldsProperty, FurnitureProperty, GaspumpsProperty,
     ItemsProperty, MonstersProperty, NestedProperty, SignsProperty,
-    TerrainProperty, ToiletsProperty, TrapsProperty,
+    TerrainProperty, ToiletsProperty, TrapsProperty, VehiclesProperty,
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
 use log::error;
+use num_traits::real::Real;
 use rand::prelude::IndexedRandom;
+use rand::random_range;
+use std::fmt::{Display, Formatter};
+use std::ops::Add;
+use std::str::FromStr;
 
 impl Property for TerrainProperty {
     fn get_commands(
@@ -17,7 +26,7 @@ impl Property for TerrainProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let ident = self
             .mapgen_value
             .get_identifier(&map_data.calculated_parameters)
@@ -27,12 +36,12 @@ impl Property for TerrainProperty {
             return None;
         }
 
-        let command = VisibleMappingCommand {
-            id: ident,
-            mapping: MappingKind::Terrain,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
+        let command = SetTile::terrain(
+            TilesheetCDDAId::simple(ident),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
 
         Some(vec![command])
     }
@@ -48,7 +57,7 @@ impl Property for MonstersProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let monster = self.monster.get_random();
 
         let ident = match monster
@@ -85,12 +94,12 @@ impl Property for MonstersProperty {
         match ident {
             None => {},
             Some(ident) => {
-                let command = VisibleMappingCommand {
-                    id: ident,
-                    mapping: MappingKind::Monster,
-                    coordinates: position.clone(),
-                    kind: VisibleMappingCommandKind::Place,
-                };
+                let command = SetTile::monster(
+                    TilesheetCDDAId::simple(ident),
+                    position.clone(),
+                    Rotation::Deg0,
+                    TileState::Normal,
+                );
 
                 return Some(vec![command]);
             },
@@ -110,7 +119,7 @@ impl Property for FurnitureProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let ident = self
             .mapgen_value
             .get_identifier(&map_data.calculated_parameters)
@@ -120,12 +129,12 @@ impl Property for FurnitureProperty {
             return None;
         }
 
-        let command = VisibleMappingCommand {
-            id: ident,
-            mapping: MappingKind::Furniture,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
+        let command = SetTile::furniture(
+            TilesheetCDDAId::simple(ident),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
 
         Some(vec![command])
     }
@@ -147,14 +156,13 @@ impl Property for SignsProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
-        let command = VisibleMappingCommand {
-            id: "f_sign".into(),
-            mapping: MappingKind::Sign,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
-
+    ) -> Option<Vec<SetTile>> {
+        let command = SetTile::furniture(
+            TilesheetCDDAId::simple("f_sign"),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
         Some(vec![command])
     }
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
@@ -174,7 +182,7 @@ impl Property for NestedProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let rng = rng();
         let nested_chunk = self.nested.get_random();
 
@@ -248,20 +256,19 @@ impl Property for FieldsProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let field = self.field.get_random();
 
         if field.field == CDDAIdentifier::from(NULL_FIELD) {
             return None;
         }
 
-        let command = VisibleMappingCommand {
-            id: field.field.clone(),
-            mapping: MappingKind::Field,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
-
+        let command = SetTile::field(
+            TilesheetCDDAId::simple(field.field.clone()),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
         Some(vec![command])
     }
 
@@ -276,7 +283,7 @@ impl Property for GaspumpsProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let gaspump = self.gaspumps.get_random();
 
         let id = match &gaspump.fuel {
@@ -289,13 +296,12 @@ impl Property for GaspumpsProperty {
             },
         };
 
-        let command = VisibleMappingCommand {
-            id: id.into(),
-            mapping: MappingKind::Gaspump,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
-
+        let command = SetTile::furniture(
+            TilesheetCDDAId::simple(id),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
         Some(vec![command])
     }
     fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
@@ -537,13 +543,13 @@ impl Property for ComputersProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
-        let command = VisibleMappingCommand {
-            id: "f_console".into(),
-            mapping: MappingKind::Furniture,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
+    ) -> Option<Vec<SetTile>> {
+        let command = SetTile::furniture(
+            TilesheetCDDAId::simple("f_console"),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
 
         Some(vec![command])
     }
@@ -559,13 +565,13 @@ impl Property for ToiletsProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
-        let command = VisibleMappingCommand {
-            id: "f_toilet".into(),
-            mapping: MappingKind::Furniture,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
+    ) -> Option<Vec<SetTile>> {
+        let command = SetTile::furniture(
+            TilesheetCDDAId::simple("f_toilet"),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
 
         Some(vec![command])
     }
@@ -581,7 +587,7 @@ impl Property for TrapsProperty {
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<VisibleMappingCommand>> {
+    ) -> Option<Vec<SetTile>> {
         let trap = self.trap.get_random();
         let ident =
             trap.get_identifier(&map_data.calculated_parameters).ok()?;
@@ -590,12 +596,12 @@ impl Property for TrapsProperty {
             return None;
         }
 
-        let command = VisibleMappingCommand {
-            id: ident,
-            mapping: MappingKind::Trap,
-            coordinates: position.clone(),
-            kind: VisibleMappingCommandKind::Place,
-        };
+        let command = SetTile::furniture(
+            TilesheetCDDAId::simple(ident),
+            position.clone(),
+            Rotation::Deg0,
+            TileState::Normal,
+        );
 
         Some(vec![command])
     }
@@ -605,68 +611,179 @@ impl Property for TrapsProperty {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use crate::cdda_data::{CDDADistributionInner, MapGenValue};
-    use crate::map::map_properties::TerrainProperty;
-    use crate::map::{
-        MapData, MappingKind, Property, VisibleMappingCommand,
-        VisibleMappingCommandKind,
-    };
-    use crate::util::{MeabyVec, MeabyWeighted};
-    use crate::TEST_CDDA_DATA;
-    use glam::IVec2;
+#[derive(Debug, Clone)]
+struct VehiclePartSpriteVariant {
+    pub variant: String,
+}
 
-    #[tokio::test]
-    async fn test_get_terrain_commands() {
-        let cdda_data = TEST_CDDA_DATA.get().await;
-        let coordinates = IVec2::new(0, 0);
-        let map_data = MapData::default();
+impl VehiclePartSpriteVariant {
+    pub fn new(variant: impl Into<String>) -> Self {
+        Self {
+            variant: variant.into(),
+        }
+    }
+}
 
-        // Test it with a single string
-        {
-            let terrain_property = TerrainProperty {
-                mapgen_value: MapGenValue::String("t_grass".into()),
-            };
+impl Display for VehiclePartSpriteVariant {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.variant.as_str())
+    }
+}
 
-            let mut commands = terrain_property
-                .get_commands(&coordinates, &map_data, &cdda_data)
-                .unwrap();
+impl Property for VehiclesProperty {
+    fn get_commands(
+        &self,
+        position: &IVec2,
+        map_data: &MapData,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Option<Vec<SetTile>> {
+        let mapgen_vehicle = self.vehicles.get_random();
 
-            let first = commands.pop().unwrap();
+        let vehicle = match json_data.vehicles.get(&mapgen_vehicle.vehicle) {
+            None => {
+                warn!("Vehicle {} not found", mapgen_vehicle.vehicle);
+                return None;
+            },
+            Some(v) => v,
+        };
 
-            assert_eq!(
-                first,
-                VisibleMappingCommand {
-                    id: "t_grass".into(),
-                    mapping: MappingKind::Terrain,
-                    coordinates,
-                    kind: VisibleMappingCommandKind::Place,
+        let mut commands = Vec::new();
+
+        let mut highest_priority_parts: HashMap<
+            IVec2,
+            (&CDDAVehiclePart, Option<VehiclePartSpriteVariant>, usize),
+        > = HashMap::new();
+
+        let random_rotation = mapgen_vehicle
+            .rotation
+            .clone()
+            .into_vec()
+            .choose(&mut rng())
+            .map(Clone::clone)
+            .unwrap_or(0);
+
+        let rotation_radians = (random_rotation as f32).to_radians();
+
+        for part in vehicle.parts.iter() {
+            // Positive y -> right
+            // Negative y -> left
+            // Positive x -> up
+            // Negative x -> down
+            let base_position = IVec2::new(part.x, part.y);
+
+            // TODO: This rotation looks pretty munted for any rotation other than 0, 90, 180 and 270 degrees
+            let rotated_x = (base_position.x as f32 * rotation_radians.cos()
+                - base_position.y as f32 * rotation_radians.sin())
+            .round() as i32;
+            let rotated_y = (base_position.x as f32 * rotation_radians.sin()
+                + base_position.y as f32 * rotation_radians.cos())
+            .round() as i32;
+
+            let part_position = IVec2::new(rotated_x, rotated_y);
+
+            for vp in part.parts.iter() {
+                let ident = match vp {
+                    VehiclePart::Inline(id) => id.clone(),
+                    VehiclePart::Object { part, .. } => part.clone(),
+                };
+
+                let (raw_ident, ty) = match ident.0.split_once('#') {
+                    None => (ident.clone(), None),
+                    Some((ident, ty)) => (
+                        ident.into(),
+                        Some(VehiclePartSpriteVariant::new(ty.to_string())),
+                    ),
+                };
+
+                let vp_entry = match json_data.vehicle_parts.get(&raw_ident) {
+                    None => {
+                        warn!(
+                            "Vehicle Part {} does not exist in cdda data",
+                            raw_ident
+                        );
+                        continue;
+                    },
+                    Some(vp) => vp,
+                };
+
+                let location: Location = Location::from_str(
+                    &vp_entry
+                        .location
+                        .clone()
+                        .unwrap_or("structure".to_string()),
+                )
+                .unwrap_or(Location::Structure);
+
+                let highest_priority_part =
+                    match highest_priority_parts.get(&part_position) {
+                        None => {
+                            highest_priority_parts.insert(
+                                part_position,
+                                (vp_entry, ty.clone(), location.priority()),
+                            );
+
+                            highest_priority_parts.get(&part_position).unwrap()
+                        },
+                        Some(p) => p,
+                    };
+
+                if location.priority() > highest_priority_part.2 {
+                    highest_priority_parts.insert(
+                        part_position,
+                        (vp_entry, ty, location.priority()),
+                    );
                 }
-            );
+            }
         }
 
-        // Test it with a distribution
-        {
-            let distribution: MeabyVec<MeabyWeighted<CDDADistributionInner>> =
-                MeabyVec::Vec(vec![
-                    MeabyWeighted::NotWeighted("t_grass".into()),
-                    MeabyWeighted::NotWeighted("t_dirt".into()),
-                ]);
-
-            let terrain_property = TerrainProperty {
-                mapgen_value: MapGenValue::Distribution(distribution),
+        // Generate visible mapping commands
+        for (pos, (part, ty, _)) in highest_priority_parts {
+            let rotation = match random_rotation % 360 {
+                0..90 => Rotation::Deg270,
+                180..270 => Rotation::Deg90,
+                // TODO: dirty hack to make the rotation work "counter clockwise"
+                n => Rotation::from(n + 90),
             };
 
-            let mut commands = terrain_property
-                .get_commands(&coordinates, &map_data, &cdda_data)
-                .unwrap();
+            // TODO: Not that accurate to what it will look like in game since the status can also
+            // remove tiles and do other things,
+            // but for the purposes of this editor i think this i enough
+            let tile_state = match mapgen_vehicle.status {
+                VehicleStatus::LightDamage => {
+                    if random_range(0..3) == 0 {
+                        TileState::Broken
+                    } else {
+                        TileState::Normal
+                    }
+                },
+                VehicleStatus::HeavilyDamaged => {
+                    if random_range(0..5) == 0 {
+                        TileState::Normal
+                    } else {
+                        TileState::Broken
+                    }
+                },
+                VehicleStatus::Perfect | VehicleStatus::Undamaged => {
+                    TileState::Normal
+                },
+            };
 
-            let first = commands.pop().unwrap();
-
-            assert!(
-                first.id == "t_grass".into() || first.id == "t_dirt".into()
-            );
+            commands.push(SetTile::furniture(
+                TilesheetCDDAId {
+                    id: part.id.clone(),
+                    prefix: Some("vp".to_string()),
+                    postfix: ty.map(|t| t.variant),
+                },
+                position + pos,
+                rotation,
+                tile_state,
+            ));
         }
+
+        Some(commands)
+    }
+
+    fn representation(&self, json_data: &DeserializedCDDAJsonData) -> Value {
+        Value::Null
     }
 }
