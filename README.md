@@ -14,7 +14,8 @@ the selected map when you save the file.
 > As of right now, this program only supports the Mapgen Viewer.
 > The map editor has not been implemented and is currently in the works.
 > If you still want to use a map editor,
-> the best alternative as of right now is the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
+> the best alternative as of right now is
+> the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
 > Editor, which makes map editing easier, without having to read the CDDA Game directory.
 
 ## What can this Map Editor do?
@@ -64,6 +65,7 @@ Here is a list of known limitations, which may or may not be fixed in the future
 - Vehicle Rotations beside 0, 90, 180 and 270 degrees look bad
 - Damaged and Broken vehicles are not accurately spawned as they should be (With parts removed and disabled)
 - Mutable overmap terrain entries are not supported
+- Isometric tilesets are not supported
 
 ## Installation
 
