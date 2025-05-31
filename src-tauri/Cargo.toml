@@ -23,7 +23,7 @@ tauri-plugin-shell = "2.0.0"
 tauri-plugin-dialog = "2.2.0"
 tauri-plugin-log = "2.2.1"
 serde = { version = "1.0.217", features = ["derive"] }
-serde_json = { version = "1", features = ["default"] }
+serde_json = { version = "1", features = ["default", "preserve_order"] }
 image = { version = "0.25.5", features = ["serde"] }
 glam = { version = "0.30.0", features = ["serde"] }
 anyhow = "1.0.95"

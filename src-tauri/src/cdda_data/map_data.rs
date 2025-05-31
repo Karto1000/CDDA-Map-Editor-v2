@@ -23,6 +23,7 @@ use cdda_lib::types::{
     CDDAIdentifier, CDDAString, DistributionInner, MapGenValue, MeabyVec,
     MeabyWeighted, NumberOrRange, ParameterIdentifier, Weighted,
 };
+use cdda_lib::{DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH};
 use glam::{IVec2, UVec2};
 use indexmap::IndexMap;
 use paste::paste;
@@ -32,36 +33,6 @@ use std::collections::{HashMap, HashSet};
 use std::str::FromStr;
 use std::sync::Arc;
 use thiserror::Error;
-
-pub const DEFAULT_MAP_WIDTH: usize = 24;
-pub const DEFAULT_MAP_HEIGHT: usize = 24;
-pub const DEFAULT_CELL_CHARACTER: char = ' ';
-pub const DEFAULT_MAP_ROWS: [&'static str; 24] = [
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-    "                        ",
-];
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(untagged)]

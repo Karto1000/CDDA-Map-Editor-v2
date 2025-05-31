@@ -1,4 +1,3 @@
-use crate::cdda_data::io::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
 use crate::cdda_data::map_data::{
     MapGenGaspumpFuelType, ReferenceOrInPlace, VehicleStatus,
@@ -13,6 +12,7 @@ use crate::map::map_properties::{
 };
 use crate::map::*;
 use crate::tileset::GetRandom;
+use cdda_lib::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use log::error;
 use num_traits::real::Real;
 use rand::prelude::IndexedRandom;

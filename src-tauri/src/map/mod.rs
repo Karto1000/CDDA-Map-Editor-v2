@@ -3,12 +3,9 @@ pub(crate) mod map_properties;
 pub(crate) mod place;
 pub(crate) mod viewer;
 
-use crate::cdda_data::io::{
-    DeserializedCDDAJsonData, NULL_FURNITURE, NULL_TERRAIN,
-};
+use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::map_data::{
     MapGenMonsterType, NeighborDirection, OmTerrainMatch, PlaceOuter,
-    DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH,
 };
 use crate::cdda_data::palettes::{CDDAPalette, Parameter};
 use crate::cdda_data::{
@@ -23,6 +20,9 @@ use crate::tileset::Tilesheet;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,
+};
+use cdda_lib::{
+    DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH, NULL_FURNITURE, NULL_TERRAIN,
 };
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};

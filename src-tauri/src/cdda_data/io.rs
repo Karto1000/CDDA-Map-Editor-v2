@@ -20,6 +20,7 @@ use async_walkdir::WalkDir;
 use cdda_lib::types::{
     CDDAExtendOp, CDDAIdentifier, DistributionInner, ImportCDDAObject, MeabyVec,
 };
+use cdda_lib::{NULL_FURNITURE, NULL_TERRAIN};
 use futures_lite::stream::StreamExt;
 use glam::UVec2;
 use log::kv::Source;
@@ -31,12 +32,6 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::string::ToString;
 use thiserror::Error;
-
-pub const NULL_TERRAIN: &'static str = "t_null";
-pub const NULL_FURNITURE: &'static str = "f_null";
-pub const NULL_NESTED: &'static str = "null";
-pub const NULL_FIELD: &'static str = "fd_null";
-pub const NULL_TRAP: &'static str = "tr_null";
 
 #[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {
