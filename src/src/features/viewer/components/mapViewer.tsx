@@ -12,7 +12,7 @@ import {
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
 import {GridHelper, Vector3} from "three";
 import {degToRad} from "three/src/math/MathUtils.js";
-import {SpritesheetConfig} from "../../../tauri/types/spritesheet.js";
+import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../../sprites/tilesheets.js";
 import {SidebarContent, TabContext, ThemeContext} from "../../../app.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
@@ -75,23 +75,21 @@ export function MapViewer(props: MapViewerProps) {
     const tabs = useContext(TabContext)
     const cellRepresentation = useRef<CellData>(null)
 
-    function setupSceneData(theme: Theme) {
-        const tile_info = props.spritesheetConfig.current.tile_info[0]
-
+    function setupSceneData(tileInfo: TileInfo, theme: Theme) {
         props.threeConfig.current.renderer.setClearColor(getColorFromTheme(theme, "darker"))
 
         regenerate(theme)
 
         const gridHelper = new GridHelper(
             1,
-            16 * 8 * tile_info.width * 24 / tile_info.height,
+            16 * 8 * tileInfo.width * 24 / tileInfo.height,
             getColorFromTheme(theme, "disabled"), getColorFromTheme(theme, "light")
         )
-        gridHelper.scale.x = 16 * 8 * tile_info.width * 24
-        gridHelper.scale.z = 16 * 8 * tile_info.height * 24
+        gridHelper.scale.x = 16 * 8 * tileInfo.width * 24
+        gridHelper.scale.z = 16 * 8 * tileInfo.height * 24
 
-        gridHelper.position.x -= tile_info.width / 2
-        gridHelper.position.y -= tile_info.height / 2
+        gridHelper.position.x -= tileInfo.width / 2
+        gridHelper.position.y -= tileInfo.height / 2
 
         gridHelper.rotateX(degToRad(90))
 
@@ -149,7 +147,7 @@ export function MapViewer(props: MapViewerProps) {
             props.tilesheets.current.drawStaticSpritesBatched(drawStaticSprites, zLevel.current)
             props.tilesheets.current.drawAnimatedSpritesBatched(drawAnimatedSprites)
         },
-        [props.tilesheets, props.spritesheetConfig],
+        [],
     )
 
     useTauriEvent(
@@ -189,7 +187,7 @@ export function MapViewer(props: MapViewerProps) {
             setIsLoading(false)
             toast.success("Reloaded Viewer")
         },
-        [tabs.openedTab, props.tilesheets]
+        [tabs.openedTab]
     )
 
     useEffect(() => {
@@ -222,6 +220,8 @@ export function MapViewer(props: MapViewerProps) {
             // We want to regenerate the sprites if we removed them
             if (removedSprites && props.isOpen) {
                 (async () => {
+                    if (!props.tilesheets.current || !props.spritesheetConfig.current) return;
+
                     const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
 
                     if (getSpritesResponse.type === BackendResponseType.Error) {
@@ -230,14 +230,19 @@ export function MapViewer(props: MapViewerProps) {
                         return
                     }
 
-                    setupSceneData(theme.theme)
+                    const tileInfo = props.spritesheetConfig.current.tile_info[0]
+
+                    setupSceneData(tileInfo, theme.theme)
                 })()
             }
         }
 
         const changeThemeHandler = (e: ChangedThemeEvent) => {
+            if (!props.spritesheetConfig.current) return;
+            const tileInfo = props.spritesheetConfig.current.tile_info[0]
+
             console.log(`Changing Map viewer theme to ${e.detail.theme}`)
-            setupSceneData(e.detail.theme)
+            setupSceneData(tileInfo, e.detail.theme)
         }
 
         const keydownHandler = (e: KeyboardEvent) => {
@@ -297,14 +302,15 @@ export function MapViewer(props: MapViewerProps) {
                 changeThemeHandler
             )
         }
-    }, [props.eventBus, props.tilesheets, props.isOpen, props.spritesheetConfig, setupSceneData]);
+    }, [setupSceneData]);
 
     useEffect(() => {
         if (!props.isOpen) return
-        if (!props.threeConfig.current) return;
+
+        const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
         console.log("Setting up scene data")
-        setupSceneData(theme.theme)
+        setupSceneData(tileInfo, theme.theme)
 
         function initialValueUpdate() {
             const newWidth = props.canvas.canvasContainerRef.current.clientWidth
@@ -348,7 +354,7 @@ export function MapViewer(props: MapViewerProps) {
         return () => {
             cancelAnimationFrame(handler)
         }
-    }, [props.isOpen, props.threeConfig, props.tilesheets]);
+    }, [props.isOpen]);
 
     useEffect(() => {
         if (!props.eventBus.current || !props.spritesheetConfig.current?.tile_info[0]) return;
@@ -447,7 +453,7 @@ export function MapViewer(props: MapViewerProps) {
         return () => {
             props.canvas.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
-    }, [props.eventBus, props.spritesheetConfig, selectedCellPosition, worldMousePosition]);
+    }, [selectedCellPosition, worldMousePosition]);
 
     return <>
         <div className={clsx("loader-container", isLoading && "visible")}>
