@@ -1,0 +1,15 @@
+@import "../../theme.scss";
+
+@include themed($themes) {
+  .form-error {
+    border: 2px solid theme-var("delete");
+    background-color: theme-var("light-delete");
+  }
+}
+
+.form-error {
+  display: flex;
+  padding: 8px 16px;
+  align-items: center;
+  gap: 8px;
+}

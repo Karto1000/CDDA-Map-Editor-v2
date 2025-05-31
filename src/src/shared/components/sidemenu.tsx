@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {Dispatch, SetStateAction, useEffect, useState} from "react";
 import {IconProps} from "./icon.js";
 import "./sidemenu.scss"
 import {clsx} from "clsx";
@@ -10,7 +10,7 @@ export type SidemenuTab = {
 
 export type SidemenuProps = {
     tabs: SidemenuTab[]
-    setIsCollapsed: React.SetStateAction<boolean>
+    setIsCollapsed: Dispatch<SetStateAction<boolean>>
     isCollapsed: boolean
 }
 

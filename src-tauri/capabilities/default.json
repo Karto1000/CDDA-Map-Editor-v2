@@ -5,6 +5,7 @@
   "windows": [
     "main",
     "open-map",
+    "new-map",
     "settings"
   ],
   "permissions": [

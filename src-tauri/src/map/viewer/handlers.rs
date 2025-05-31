@@ -6,6 +6,7 @@ use crate::editor_data::{
     MappedCDDAIdContainer, Project, ProjectType, ZLevel,
 };
 use crate::events::UPDATE_LIVE_VIEWER;
+use crate::map::viewer::{open_viewer, OpenViewerData, OpenViewerError};
 use crate::map::Serializer;
 use crate::map::{CalculateParametersError, CellRepresentation};
 use crate::tileset::legacy_tileset::{
@@ -18,6 +19,7 @@ use crate::util::{
 };
 use crate::{events, impl_serialize_for_error, tileset, util};
 use cdda_lib::types::CDDAIdentifier;
+use cdda_lib::{DEFAULT_EMPTY_CHAR_ROW, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_ROWS};
 use derive_more::Display;
 use glam::{IVec3, UVec2};
 use log::{debug, error, info, warn};
@@ -26,14 +28,18 @@ use notify_debouncer_full::{new_debouncer, new_debouncer_opt, Debouncer};
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::ops::{Deref, DerefMut};
+use std::path::PathBuf;
 use std::time::Duration;
 use strum::IntoEnumIterator;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
+use tokio::fs::File;
+use tokio::io::AsyncWriteExt;
 use tokio::time::Instant;
 use tokio_test::block_on;
 
@@ -576,7 +582,6 @@ pub async fn get_project_cell_data(
 pub async fn close_project(
     app: AppHandle,
     name: String,
-    mapped_sprites: State<'_, Mutex<HashMap<IVec3, MappedCDDAIdsForTile>>>,
     editor_data: State<'_, Mutex<EditorData>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;
@@ -604,6 +609,147 @@ pub async fn close_project(
 
     saver.save(&editor_data_lock).await.unwrap();
 
-    mapped_sprites.lock().await.clear();
+    Ok(())
+}
+
+#[derive(Debug, Error)]
+pub enum NewSingleMapgenViewerError {
+    #[error(transparent)]
+    OpenViewerError(#[from] OpenViewerError),
+}
+
+impl_serialize_for_error!(NewSingleMapgenViewerError);
+
+#[tauri::command]
+pub async fn new_single_mapgen_viewer(
+    path: PathBuf,
+    om_terrain_name: String,
+    project_name: String,
+    app: AppHandle,
+    editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<(), NewSingleMapgenViewerError> {
+    let data = serde_json::to_string_pretty(&json!(
+        [
+            {
+                "type": "mapgen",
+                "method": "json",
+                "om_terrain": om_terrain_name,
+                "object": {
+                    "fill_ter": "t_region_groundcover",
+                    "rows": DEFAULT_MAP_ROWS
+                }
+            }
+        ]
+    ))
+    .unwrap();
+
+    let mut file = File::create(&path).await.unwrap();
+
+    file.write_all(data.as_bytes()).await.unwrap();
+
+    open_viewer(
+        app,
+        OpenViewerData::Terrain {
+            mapgen_file_paths: vec![path],
+            project_name,
+            om_id: CDDAIdentifier(om_terrain_name),
+        },
+        editor_data,
+        json_data,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn new_special_mapgen_viewer(
+    path: PathBuf,
+    om_terrain_name: String,
+    project_name: String,
+    special_width: usize,
+    special_height: usize,
+    special_z_from: i32,
+    special_z_to: i32,
+    app: AppHandle,
+    editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<(), NewSingleMapgenViewerError> {
+    let mut data = Vec::new();
+
+    let mut overmaps_list = Vec::new();
+
+    for z in special_z_from..=special_z_to {
+        for y in 0..special_height {
+            for x in 0..special_width {
+                let om_terrain_name =
+                    format!("{}_{}_{}_{}", om_terrain_name, x, y, z);
+
+                overmaps_list.push(json!({
+                   "point": [x, y, z],
+                    "overmap": om_terrain_name,
+                }));
+            }
+        }
+    }
+
+    data.push(json!({
+        "type": "overmap_special",
+        "id": om_terrain_name,
+        "overmaps": overmaps_list
+    }));
+
+    for z in special_z_from..=special_z_to {
+        let mut z_om_terrain_names = Vec::new();
+        z_om_terrain_names.reserve(special_height);
+
+        for y in 0..special_height {
+            let mut y_om_terrain_names = Vec::new();
+            y_om_terrain_names.reserve(special_width);
+
+            for x in 0..special_width {
+                let om_terrain_name =
+                    format!("{}_{}_{}_{}", om_terrain_name, x, y, z);
+                y_om_terrain_names.push(om_terrain_name.clone());
+            }
+
+            z_om_terrain_names.push(y_om_terrain_names)
+        }
+
+        let mut rows = Vec::new();
+
+        for _ in 0..special_height * DEFAULT_MAP_HEIGHT {
+            rows.push(DEFAULT_EMPTY_CHAR_ROW.repeat(special_width));
+        }
+
+        data.push(json!({
+            "type": "mapgen",
+            "method": "json",
+            "om_terrain": z_om_terrain_names,
+            "object": {
+                "fill_ter": "t_region_groundcover",
+                "rows": rows
+            }
+        }));
+    }
+
+    let data_ser = serde_json::to_string_pretty(&data).unwrap();
+    let mut file = File::create(&path).await.unwrap();
+    file.write_all(data_ser.as_bytes()).await.unwrap();
+
+    open_viewer(
+        app,
+        OpenViewerData::Special {
+            mapgen_file_paths: vec![path.clone()],
+            om_file_paths: vec![path.clone()],
+            project_name,
+            om_id: CDDAIdentifier(om_terrain_name),
+        },
+        editor_data,
+        json_data,
+    )
+    .await?;
+
     Ok(())
 }

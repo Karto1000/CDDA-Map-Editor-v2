@@ -4,7 +4,8 @@ import {Theme} from "@tauri-apps/api/window";
 export enum WindowLabel {
     Main = "main",
     Settings = "settings",
-    OpenMap = "open-map"
+    OpenMap = "open-map",
+    NewMap = "new-map"
 }
 
 export function openWindow(label: WindowLabel, theme: Theme): WebviewWindow {

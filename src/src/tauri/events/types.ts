@@ -51,6 +51,8 @@ export enum TauriCommand {
     GET_INFO_OF_CURRENT_TILESET = "get_info_of_current_tileset",
     DOWNLOAD_SPRITESHEET = "download_spritesheet",
     FRONTEND_READY = "frontend_ready",
+    NEW_SINGLE_MAPGEN_VIEWER = "new_single_mapgen_viewer",
+    NEW_SPECIAL_MAPGEN_VIEWER = "new_special_mapgen_viewer",
 }
 
 export interface TauriCommandMap {
@@ -82,6 +84,20 @@ export interface TauriCommandMap {
         name: string
     };
     [TauriCommand.FRONTEND_READY]: {};
+    [TauriCommand.NEW_SINGLE_MAPGEN_VIEWER]: {
+        path: string
+        omTerrainName: string,
+        projectName: string,
+    },
+    [TauriCommand.NEW_SPECIAL_MAPGEN_VIEWER]: {
+        path: string
+        omTerrainName: string,
+        projectName: string,
+        specialWidth: number,
+        specialHeight: number,
+        specialZFrom: number,
+        specialZTo: number,
+    }
 }
 
 export enum TauriEvent {

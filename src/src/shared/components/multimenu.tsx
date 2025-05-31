@@ -2,6 +2,7 @@ import React, {useEffect, useState} from "react"
 import "./multimenu.scss"
 import {clsx} from "clsx";
 
+
 export type MultiMenuTab = {
     name: string
     content: React.JSX.Element | React.JSX.Element[]
@@ -13,7 +14,7 @@ export type MultiMenuProps = {
     onTabSelected?: (tab: MultiMenuTab) => void
 }
 
-export default function MultiMenu(props: MultiMenuProps) {
+export function MultiMenu(props: MultiMenuProps) {
     const [selectedTab, setSelectedTab] = useState<number>(props.tabs.findIndex(t => !t.isDisabled))
 
     return (

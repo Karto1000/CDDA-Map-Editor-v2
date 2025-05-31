@@ -1,17 +1,21 @@
-import React, {Dispatch, SetStateAction} from "react"
+import React, {Dispatch, RefObject, SetStateAction, useContext} from "react"
 import "./noTabScreen.scss"
+import {openWindow, WindowLabel} from "../../../windows/lib.js";
+import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
+import {ThemeContext} from "../../../app.js";
 
 type Props = {
-    setIsCreatingMapWindowOpen: Dispatch<SetStateAction<boolean>>
+    openMapWindowRef: RefObject<WebviewWindow>
 }
 
 export function NoTabScreen(props: Props) {
+    const {theme} = useContext(ThemeContext)
+
     function onOpenClicked() {
-        alert("TBD")
+        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
     }
 
     function onCreateClicked() {
-        props.setIsCreatingMapWindowOpen(true)
     }
 
     function onImportClicked() {

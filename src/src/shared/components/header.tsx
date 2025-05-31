@@ -1,4 +1,4 @@
-import React, {MutableRefObject, useContext, useEffect} from "react";
+import React, {MutableRefObject, RefObject, useContext, useEffect} from "react";
 import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
@@ -23,12 +23,14 @@ import {Theme} from "../hooks/useTheme.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
 import toast from "react-hot-toast";
 import {CellData} from "../../tauri/types/map_data.js";
+import {useKeybindings} from "../hooks/useKeybindings.js";
 
 type Props = {
-    eventBus: MutableRefObject<EventTarget>
+    eventBus: RefObject<EventTarget>
 
-    openMapWindowRef: MutableRefObject<WebviewWindow>
-    settingsWindowRef: MutableRefObject<WebviewWindow>
+    openMapWindowRef: RefObject<WebviewWindow>
+    newMapWindowRef: RefObject<WebviewWindow>
+    settingsWindowRef: RefObject<WebviewWindow>
 }
 
 export function Header(props: Props) {
@@ -39,7 +41,87 @@ export function Header(props: Props) {
 
     const [zLevelIndicator, setZLevelIndicator] = React.useState<number | null>(null)
     const [mousePositionIndicator, setMousePositionIndicator] = React.useState<{ x: number, y: number } | null>(null)
-    const [selectedPositionIndicator, setSelectedPositionIndicator] = React.useState<{x: number, y: number}>(null)
+    const [selectedPositionIndicator, setSelectedPositionIndicator] = React.useState<{ x: number, y: number }>(null)
+
+    function onNewClicked() {
+        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
+    }
+
+    function onOpenClicked() {
+        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
+    }
+
+    function onSave() {
+        console.log("Save")
+    }
+
+    function onClose() {
+
+    }
+
+    function onCloseAll() {
+
+    }
+
+    function onImport() {
+
+    }
+
+    function onExport() {
+
+    }
+
+    function onSettingsOpen() {
+        setSettingsWindow(openWindow(WindowLabel.Settings, theme))
+    }
+
+    useKeybindings(
+        window,
+        [
+            {
+                key: "n",
+                withCtrl: true,
+                action: onNewClicked
+            },
+            {
+                key: "o",
+                withCtrl: true,
+                action: onOpenClicked
+            },
+            {
+                key: "s",
+                withCtrl: true,
+                action: onSave,
+            },
+            {
+                key: "w",
+                withCtrl: true,
+                action: onClose
+            },
+            {
+                key: "w",
+                withCtrl: true,
+                withAlt: true,
+                action: onCloseAll
+            },
+            {
+                key: "i",
+                withCtrl: true,
+                action: onImport
+            },
+            {
+                key: "e",
+                withCtrl: true,
+                action: onExport
+            },
+            {
+                key: "s",
+                withCtrl: true,
+                withAlt: true,
+                action: onSettingsOpen
+            }
+        ]
+    )
 
     useEffect(() => {
         props.settingsWindowRef.current = settingsWindow
@@ -184,21 +266,21 @@ export function Header(props: Props) {
     }
 
     async function onReloadClicked() {
-        const reloadResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
+        const reloadResponse = await tauriBridge.invoke<unknown, string, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
 
         if (reloadResponse.type === BackendResponseType.Error) {
             toast.error(reloadResponse.error)
             return
         }
 
-        const getSpritesResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+        const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
 
         if (getSpritesResponse.type === BackendResponseType.Error) {
             toast.error(getSpritesResponse.error)
             return
         }
 
-        const getRepresentationResponse = await tauriBridge.invoke<CellData, unknown, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
+        const getRepresentationResponse = await tauriBridge.invoke<CellData, string, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
 
         if (getRepresentationResponse.type === BackendResponseType.Error) {
             toast.error(getRepresentationResponse.error)
@@ -274,13 +356,17 @@ export function Header(props: Props) {
                                 {
                                     name: "New",
                                     shortcut: "Ctrl+n",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onNewClicked()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Open",
                                     shortcut: "Ctrl+o",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onOpenClicked()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
@@ -303,19 +389,25 @@ export function Header(props: Props) {
                                 {
                                     name: "Save",
                                     shortcut: "Ctrl+s",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onSave()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Close",
                                     shortcut: "Ctr+w",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onClose()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Close All",
                                     shortcut: "Ctr+Shift+w",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onCloseAll()
+                                        ref.current.closeMenu()
                                     }
                                 }
                             ],
@@ -323,13 +415,17 @@ export function Header(props: Props) {
                                 {
                                     name: "Import",
                                     shortcut: "Ctrl+i",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onImport()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Export",
                                     shortcut: "Ctrl+e",
-                                    onClick: () => {
+                                    onClick: (ref) => {
+                                        onExport()
+                                        ref.current.closeMenu()
                                     }
                                 }
                             ],
@@ -338,7 +434,7 @@ export function Header(props: Props) {
                                     name: "Settings",
                                     shortcut: "Ctrl+Alt+s",
                                     onClick: (ref) => {
-                                        setSettingsWindow(openWindow(WindowLabel.Settings, theme))
+                                        onSettingsOpen()
                                         ref.current.closeMenu()
                                     }
                                 },

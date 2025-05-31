@@ -68,7 +68,6 @@ p {
 * {
   font-smooth: never;
   -webkit-font-smoothing: none;
-  cursor: url(../public/icons/cursor-small.png), auto;
 }
 
 :root, button, input, select, option, label {
@@ -105,6 +104,19 @@ form {
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+.submit-container {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-elements {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .form-element {

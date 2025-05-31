@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from "react";
+import React, {useEffect, useState, JSX} from "react";
 import "./generic-window.scss"
 import "../index.scss"
 import {getCurrentWindow} from "@tauri-apps/api/window";
@@ -8,7 +8,7 @@ import Icon, {IconName} from "../shared/components/icon.js";
 
 export type GenericWindowProps = {
     title: string,
-    children: React.ReactNode[] | React.ReactNode,
+    children: React.ReactNode
 }
 
 export default function GenericWindow(props: GenericWindowProps) {

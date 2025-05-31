@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "dependencies": {
+    "@hookform/error-message": "^2.0.1",
     "@tauri-apps/api": "2.0.1",
     "@tauri-apps/plugin-dialog": "^2.2.0",
     "@tauri-apps/plugin-log": "^2.2.1",
@@ -14,6 +15,7 @@
     "clsx": "^2.1.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-hook-form": "^7.56.4",
     "react-hot-toast": "^2.5.2",
     "sass": "^1.79.4",
     "stats.js": "^0.17.0",
@@ -45,6 +47,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.7.5",
+    "@types/react": "^19.1.6",
     "@types/stats.js": "^0.17.3",
     "@types/three": "^0.173.0",
     "@webgpu/types": "^0.1.48",

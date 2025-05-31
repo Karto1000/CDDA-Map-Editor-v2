@@ -6,7 +6,7 @@ import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
 import {WelcomeScreen} from "./shared/components/mainScreens/welcomeScreen.js";
 import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
-import MultiMenu from "./shared/components/multimenu.js";
+import {MultiMenu} from "./shared/components/multimenu.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
 import {EditorData} from "./tauri/types/editor.js";
 import {useEditorData} from "./shared/hooks/useEditorData.js";
@@ -36,8 +36,8 @@ export const EditorDataContext = createContext<EditorData>(null)
 
 function App() {
     const eventBus = useRef<EventTarget>(new EventTarget())
-    const canvasContainerRef = useRef<HTMLDivElement>()
-    const canvasRef = useRef<HTMLCanvasElement>();
+    const canvasContainerRef = useRef<HTMLDivElement>(null)
+    const canvasRef = useRef<HTMLCanvasElement>(null);
     const {threeConfigRef, onResize} = useThreeSetup(
         canvasRef,
         canvasContainerRef
@@ -47,9 +47,9 @@ function App() {
     const editorData = useEditorData(eventBus)
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus)
-    const {openMapWindowRef, settingsWindowRef} = useWindows()
+    const {openMapWindowRef, settingsWindowRef, newMapWindowRef} = useWindows()
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
-    const [sidebarContent, setSidebarContent] = useState<SidebarContent>({})
+    const [sidebarContent, setSidebarContent] = useState<SidebarContent>({chosenProperties: <></>})
 
     useEffect(() => {
         (async () => {
@@ -81,8 +81,7 @@ function App() {
                 return <></>
         }
 
-        return <NoTabScreen setIsCreatingMapWindowOpen={() => {
-        }}/>
+        return <NoTabScreen openMapWindowRef={openMapWindowRef}/>
     }
 
     const sideMenuTabs = useMemo(() => {
@@ -143,9 +142,10 @@ function App() {
                             openMapWindowRef={openMapWindowRef}
                             settingsWindowRef={settingsWindowRef}
                             eventBus={eventBus}
+                            newMapWindowRef={newMapWindowRef}
                         />
 
-                        <PanelGroup direction={'horizontal'}>
+                        <PanelGroup>
                             <Panel
                                 collapsible
                                 collapsed={isSidebarCollapsed}

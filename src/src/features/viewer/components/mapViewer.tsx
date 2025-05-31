@@ -1,5 +1,14 @@
 import {Canvas, ThreeConfig} from "../../three/types/three.js";
-import React, {MutableRefObject, useContext, useEffect, useRef, useState} from "react";
+import React, {
+    Dispatch,
+    MutableRefObject,
+    RefObject,
+    SetStateAction,
+    useContext,
+    useEffect,
+    useRef,
+    useState
+} from "react";
 import {
     ChangedThemeEvent, ChangeSelectedPositionEvent,
     ChangeWorldMousePositionEvent,
@@ -26,14 +35,14 @@ import toast from "react-hot-toast";
 import {CellData} from "../../../tauri/types/map_data.js";
 
 export type MapViewerProps = {
-    threeConfig: MutableRefObject<ThreeConfig>
-    eventBus: MutableRefObject<EventTarget>,
-    spritesheetConfig: MutableRefObject<SpritesheetConfig>,
+    threeConfig: RefObject<ThreeConfig>
+    eventBus: RefObject<EventTarget>,
+    spritesheetConfig: RefObject<SpritesheetConfig>,
     tileInfo: TileInfo | null
     canvas: Canvas,
     isOpen: boolean
-    tilesheets: MutableRefObject<Tilesheets>
-    setSidebarContent: React.SetStateAction<SidebarContent>
+    tilesheets: RefObject<Tilesheets>
+    setSidebarContent: Dispatch<SetStateAction<SidebarContent>>
 }
 
 export function MapViewer(props: MapViewerProps) {
@@ -65,7 +74,7 @@ export function MapViewer(props: MapViewerProps) {
         }
     })
     const tabs = useContext(TabContext)
-    const cellRepresentation = useRef<CellData>()
+    const cellRepresentation = useRef<CellData>(null)
 
     function setupSceneData(theme: Theme) {
         if (!props.threeConfig.current || !props.tileInfo) return;
@@ -150,7 +159,7 @@ export function MapViewer(props: MapViewerProps) {
 
             props.tilesheets.current.clearAll()
 
-            const reloadResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
+            const reloadResponse = await tauriBridge.invoke<unknown, string, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
 
             if (reloadResponse.type === BackendResponseType.Error) {
                 toast.error(reloadResponse.error)
@@ -158,7 +167,7 @@ export function MapViewer(props: MapViewerProps) {
                 return
             }
 
-            const getSpritesResponse = await tauriBridge.invoke<unknown, unknown, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+            const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
 
             if (getSpritesResponse.type === BackendResponseType.Error) {
                 toast.error(getSpritesResponse.error)
@@ -166,7 +175,7 @@ export function MapViewer(props: MapViewerProps) {
                 return
             }
 
-            const getRepresentationResponse = await tauriBridge.invoke<CellData, unknown, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
+            const getRepresentationResponse = await tauriBridge.invoke<CellData, string, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
 
             if (getRepresentationResponse.type === BackendResponseType.Error) {
                 toast.error(getRepresentationResponse.error)
@@ -322,7 +331,7 @@ export function MapViewer(props: MapViewerProps) {
                 if (selectedCellPosition?.x === worldMousePosition.current.x && selectedCellPosition?.y === worldMousePosition.current.y) {
                     selectedCellMeshRef.current.visible = false
                     setSelectedCellPosition(null)
-                    props.setSidebarContent({})
+                    props.setSidebarContent({chosenProperties: <></>})
                     props.eventBus.current.dispatchEvent(
                         new ChangeSelectedPositionEvent(
                             LocalEvent.CHANGE_SELECTED_POSITION,
@@ -350,14 +359,14 @@ export function MapViewer(props: MapViewerProps) {
                     const selectedMapZ = cellRepresentation.current[zLevel.current]
 
                     if (!selectedMapZ) {
-                        props.setSidebarContent({})
+                        props.setSidebarContent({chosenProperties: <></>})
                         return
                     }
 
                     const selectedRepr = selectedMapZ[positionString]
 
                     if (!selectedRepr) {
-                        props.setSidebarContent({})
+                        props.setSidebarContent({chosenProperties: <></>})
                         return
                     }
 

@@ -3,12 +3,12 @@ import GenericWindow from "../generic-window.js";
 import {open} from "@tauri-apps/plugin-dialog";
 import "./main.scss"
 import {getCurrentWindow} from "@tauri-apps/api/window";
-import MultiMenu from "../../shared/components/multimenu.js";
+import {MultiMenu} from "../../shared/components/multimenu.js";
 import {OpenViewerData, OpenViewerDataType} from "../../tauri/types/viewer.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {TauriCommand} from "../../tauri/events/types.js";
 
-function MapViewer() {
+function OpenMapViewer() {
     const [omFilePaths, setOmFilePaths] = useState<string[]>([])
     const [mapgenFilePaths, setMapgenFilePaths] = useState<string[]>([])
     const [projectName, setProjectName] = useState<string>("")
@@ -194,13 +194,13 @@ function Main() {
         <GenericWindow title={"Open Map"}>
             <MultiMenu tabs={[
                 {
-                    name: "New Map Editor",
+                    name: "Open Map Editor Map",
                     content: <></>,
                     isDisabled: true
                 },
                 {
-                    name: "New Map Viewer",
-                    content: <MapViewer/>,
+                    name: "Open Map Viewer",
+                    content: <OpenMapViewer/>,
                 }
             ]}/>
         </GenericWindow>
