@@ -39,6 +39,12 @@
     }
   }
 
+  input, button, select, option {
+    &::placeholder {
+      color: theme-var("disabled")
+    }
+  }
+
   input {
     &:focus {
       background-color: theme-var("selected");

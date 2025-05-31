@@ -53,6 +53,7 @@ export enum TauriCommand {
     FRONTEND_READY = "frontend_ready",
     NEW_SINGLE_MAPGEN_VIEWER = "new_single_mapgen_viewer",
     NEW_SPECIAL_MAPGEN_VIEWER = "new_special_mapgen_viewer",
+    NEW_NESTED_MAPGEN_VIEWER = "new_nested_mapgen_viewer",
 }
 
 export interface TauriCommandMap {
@@ -97,7 +98,14 @@ export interface TauriCommandMap {
         specialHeight: number,
         specialZFrom: number,
         specialZTo: number,
-    }
+    },
+    [TauriCommand.NEW_NESTED_MAPGEN_VIEWER]: {
+        path: string
+        omTerrainName: string,
+        projectName: string,
+        nestedWidth: number,
+        nestedHeight: number,
+    },
 }
 
 export enum TauriEvent {
