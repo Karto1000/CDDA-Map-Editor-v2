@@ -54,6 +54,7 @@ export enum TauriCommand {
     NEW_SINGLE_MAPGEN_VIEWER = "new_single_mapgen_viewer",
     NEW_SPECIAL_MAPGEN_VIEWER = "new_special_mapgen_viewer",
     NEW_NESTED_MAPGEN_VIEWER = "new_nested_mapgen_viewer",
+    GET_CALCULATED_PARAMETERS = "get_calculated_parameters"
 }
 
 export interface TauriCommandMap {
@@ -106,6 +107,7 @@ export interface TauriCommandMap {
         nestedWidth: number,
         nestedHeight: number,
     },
+    [TauriCommand.GET_CALCULATED_PARAMETERS]: {}
 }
 
 export enum TauriEvent {

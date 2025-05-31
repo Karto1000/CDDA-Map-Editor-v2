@@ -145,7 +145,7 @@ function OpenMapViewer() {
                             content: <form onSubmit={onSubmit} className={"map-viewer-form"}>
                                 <div className={"map-viewer-form-special"}>
                                     <div className={"form-element"}>
-                                        <label className={"file-input"}>
+                                        <label className={clsx("file-input", omFilePaths.length === 0 && "placeholder")}>
                                             {omFilePaths.length > 0 ? omFilePaths : "Select a Overmap special File Path"}
                                             <button onClick={onOmFileInputChange}/>
                                         </label>

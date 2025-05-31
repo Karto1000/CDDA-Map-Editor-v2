@@ -12,7 +12,8 @@ export enum LocalEvent {
     TILESET_LOADED = "tileset-loaded",
     CHANGE_Z_LEVEL = "change-z-level",
     CHANGE_WORLD_MOUSE_POSITION = "change-world-mouse-position",
-    CHANGE_SELECTED_POSITION = "change-selected-position"
+    CHANGE_SELECTED_POSITION = "change-selected-position",
+    UPDATE_VIEWER = "update-viewer"
 }
 
 export interface LocalEventsMap {
@@ -26,6 +27,7 @@ export interface LocalEventsMap {
     [LocalEvent.CHANGE_Z_LEVEL]: { zLevel: number }
     [LocalEvent.CHANGE_WORLD_MOUSE_POSITION]: { position: { x: number, y: number } }
     [LocalEvent.CHANGE_SELECTED_POSITION]: { position?: { x: number, y: number } }
+    [LocalEvent.UPDATE_VIEWER]: {  }
 }
 
 export class ChangedThemeEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGED_THEME]> {
@@ -56,3 +58,4 @@ export class ChangeWorldMousePositionEvent extends CustomEvent<LocalEventsMap[Lo
 }
 export class ChangeSelectedPositionEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_SELECTED_POSITION]> {
 }
+export class UpdateViewerEvent extends CustomEvent<LocalEventsMap[LocalEvent.UPDATE_VIEWER]> {}

@@ -14,7 +14,7 @@ import {
     ChangeZLevelEvent,
     CloseLocalTabEvent,
     LocalEvent,
-    OpenLocalTabEvent
+    OpenLocalTabEvent, UpdateViewerEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
@@ -266,28 +266,12 @@ export function Header(props: Props) {
     }
 
     async function onReloadClicked() {
-        const reloadResponse = await tauriBridge.invoke<unknown, string, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
-
-        if (reloadResponse.type === BackendResponseType.Error) {
-            toast.error(reloadResponse.error)
-            return
-        }
-
-        const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
-
-        if (getSpritesResponse.type === BackendResponseType.Error) {
-            toast.error(getSpritesResponse.error)
-            return
-        }
-
-        const getRepresentationResponse = await tauriBridge.invoke<CellData, string, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
-
-        if (getRepresentationResponse.type === BackendResponseType.Error) {
-            toast.error(getRepresentationResponse.error)
-            return
-        }
-
-        toast.success("Reloaded Viewer")
+        props.eventBus.current.dispatchEvent(
+            new UpdateViewerEvent(
+                LocalEvent.UPDATE_VIEWER,
+                {}
+            )
+        )
     }
 
     return (

@@ -1,4 +1,4 @@
-import React, {Dispatch, RefObject, SetStateAction, useContext} from "react"
+import React, {RefObject, useContext} from "react"
 import "./noTabScreen.scss"
 import {openWindow, WindowLabel} from "../../../windows/lib.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
@@ -6,6 +6,7 @@ import {ThemeContext} from "../../../app.js";
 
 type Props = {
     openMapWindowRef: RefObject<WebviewWindow>
+    newMapWindowRef: RefObject<WebviewWindow>
 }
 
 export function NoTabScreen(props: Props) {
@@ -16,6 +17,7 @@ export function NoTabScreen(props: Props) {
     }
 
     function onCreateClicked() {
+        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
     }
 
     function onImportClicked() {

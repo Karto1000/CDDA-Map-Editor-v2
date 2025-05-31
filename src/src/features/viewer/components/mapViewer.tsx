@@ -16,7 +16,13 @@ import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../../sprites/tilesheets.js";
 import {SidebarContent, TabContext, ThemeContext} from "../../../app.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
-import {BackendResponseType, serializedVec2ToVector2, TauriCommand, TauriEvent} from "../../../tauri/events/types.js";
+import {
+    BackendResponseType,
+    serializedVec2ToVector2,
+    serializedVec3ToVector3,
+    TauriCommand,
+    TauriEvent
+} from "../../../tauri/events/types.js";
 import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {useWorldMousePosition} from "../../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../../three/hooks/useMouseCells.js";
@@ -25,6 +31,57 @@ import "./mapViewer.scss"
 import {clsx} from "clsx";
 import toast from "react-hot-toast";
 import {CellData} from "../../../tauri/types/map_data.js";
+import {Accordion} from "../../../shared/components/imguilike/accordion.js";
+
+type CalculatedParametersTabProps = {
+    calculatedParameters: RefObject<CalculatedParameters>
+    zLevel: RefObject<number>
+}
+
+function CalculatedParametersTab(props: CalculatedParametersTabProps) {
+    const [search, setSearch] = useState<string>("")
+
+    function getCalculatedParameters(): React.JSX.Element {
+        return <div style={{display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", }}>
+            {
+                Object.keys(props.calculatedParameters.current).map(k => {
+                    const position = serializedVec3ToVector3(k)
+
+                    if (position.z !== props.zLevel.current) return;
+
+                    const params = props.calculatedParameters.current[k]
+
+                    const filtered = Object.keys(params).filter(paramName => {
+                        return paramName.toLowerCase().includes(search.toLowerCase()) ||
+                            params[paramName].toLowerCase().includes(search.toLowerCase())
+                    })
+
+                    if (filtered.length === 0) return;
+
+                    return (
+                        <Accordion title={`Chunk at ${k}`} key={k} defaultCollapsed={true}>
+                            {
+                                filtered.map(paramName => {
+                                    return (
+                                        <p>{paramName}: {params[paramName]}</p>
+                                    )
+                                })
+                            }
+                        </Accordion>
+                    )
+                })
+
+            }
+        </div>
+    }
+
+    return (
+        <div style={{display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto",}}>
+            <input type="text" placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)}/>
+            {getCalculatedParameters()}
+        </div>
+    )
+}
 
 export type MapViewerProps = {
     threeConfig: RefObject<ThreeConfig>
@@ -34,7 +91,10 @@ export type MapViewerProps = {
     isOpen: boolean
     tilesheets: RefObject<Tilesheets>
     setSidebarContent: Dispatch<SetStateAction<SidebarContent>>
+    sidebarContent: SidebarContent
 }
+
+type CalculatedParameters = { [coords: string]: { [parameterIdentifier: string]: string } }
 
 export function MapViewer(props: MapViewerProps) {
     const theme = useContext(ThemeContext)
@@ -74,6 +134,7 @@ export function MapViewer(props: MapViewerProps) {
     })
     const tabs = useContext(TabContext)
     const cellRepresentation = useRef<CellData>(null)
+    const calculatedParameters = useRef<CalculatedParameters>({})
 
     function setupSceneData(tileInfo: TileInfo, theme: Theme) {
         props.threeConfig.current.renderer.setClearColor(getColorFromTheme(theme, "darker"))
@@ -96,6 +157,64 @@ export function MapViewer(props: MapViewerProps) {
         props.threeConfig.current.scene.remove(props.threeConfig.current.gridHelper)
         props.threeConfig.current.scene.add(gridHelper)
         props.threeConfig.current.gridHelper = gridHelper
+    }
+
+    async function updateLiveViewer() {
+        console.log("Updating live viewer")
+        setIsLoading(true)
+
+        props.tilesheets.current.clearAll()
+
+        const reloadResponse = await tauriBridge.invoke<unknown, string, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
+
+        if (reloadResponse.type === BackendResponseType.Error) {
+            toast.error(reloadResponse.error)
+            setIsLoading(false)
+            return
+        }
+
+        const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+        if (getSpritesResponse.type === BackendResponseType.Error) {
+            toast.error(getSpritesResponse.error)
+            setIsLoading(false)
+            return
+        }
+
+        const getRepresentationResponse = await tauriBridge.invoke<CellData, string, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
+
+        if (getRepresentationResponse.type === BackendResponseType.Error) {
+            toast.error(getRepresentationResponse.error)
+            setIsLoading(false)
+            return
+        }
+
+        cellRepresentation.current = getRepresentationResponse.data
+
+        const getCalculatedParametersResponse = await tauriBridge.invoke<CalculatedParameters, string, TauriCommand.GET_CALCULATED_PARAMETERS>(TauriCommand.GET_CALCULATED_PARAMETERS, {})
+
+        if (getCalculatedParametersResponse.type === BackendResponseType.Error) {
+            toast.error(getCalculatedParametersResponse.error)
+            setIsLoading(false)
+            return
+        }
+
+        calculatedParameters.current = getCalculatedParametersResponse.data
+
+        props.setSidebarContent(
+            (c) => {
+                return {
+                    ...c,
+                    calculatedParameters: <CalculatedParametersTab
+                        calculatedParameters={calculatedParameters}
+                        zLevel={zLevel}
+                    />
+                }
+            }
+        )
+
+        setIsLoading(false)
+        toast.success("Reloaded Viewer")
     }
 
     useTauriEvent(
@@ -152,41 +271,7 @@ export function MapViewer(props: MapViewerProps) {
 
     useTauriEvent(
         TauriEvent.UPDATE_LIVE_VIEWER,
-        async () => {
-            console.log("Updating live viewer")
-            setIsLoading(true)
-
-            props.tilesheets.current.clearAll()
-
-            const reloadResponse = await tauriBridge.invoke<unknown, string, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
-
-            if (reloadResponse.type === BackendResponseType.Error) {
-                toast.error(reloadResponse.error)
-                setIsLoading(false)
-                return
-            }
-
-            const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
-
-            if (getSpritesResponse.type === BackendResponseType.Error) {
-                toast.error(getSpritesResponse.error)
-                setIsLoading(false)
-                return
-            }
-
-            const getRepresentationResponse = await tauriBridge.invoke<CellData, string, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
-
-            if (getRepresentationResponse.type === BackendResponseType.Error) {
-                toast.error(getRepresentationResponse.error)
-                setIsLoading(false)
-                return
-            }
-
-            cellRepresentation.current = getRepresentationResponse.data
-
-            setIsLoading(false)
-            toast.success("Reloaded Viewer")
-        },
+        updateLiveViewer,
         [tabs.openedTab]
     )
 
@@ -249,6 +334,14 @@ export function MapViewer(props: MapViewerProps) {
             if (e.key === "PageUp") {
                 zLevel.current += 1
                 props.tilesheets.current.switchZLevel(zLevel.current)
+                props.setSidebarContent(
+                    (c) => {
+                        return {
+                            ...c,
+                            calculatedParameters: getCalculatedParameters()
+                        }
+                    }
+                )
                 props.eventBus.current.dispatchEvent(
                     new ChangeZLevelEvent(
                         LocalEvent.CHANGE_Z_LEVEL,
@@ -258,6 +351,14 @@ export function MapViewer(props: MapViewerProps) {
             } else if (e.key === "PageDown") {
                 zLevel.current -= 1
                 props.tilesheets.current.switchZLevel(zLevel.current)
+                props.setSidebarContent(
+                    (c) => {
+                        return {
+                            ...c,
+                            calculatedParameters: getCalculatedParameters()
+                        }
+                    }
+                )
                 props.eventBus.current.dispatchEvent(
                     new ChangeZLevelEvent(
                         LocalEvent.CHANGE_Z_LEVEL,
@@ -284,8 +385,18 @@ export function MapViewer(props: MapViewerProps) {
             changeThemeHandler
         )
 
+        props.eventBus.current.addEventListener(
+            LocalEvent.UPDATE_VIEWER,
+            updateLiveViewer
+        )
+
         return () => {
             props.canvas.canvasRef.current.removeEventListener("keydown", keydownHandler)
+
+            props.eventBus.current.removeEventListener(
+                LocalEvent.UPDATE_VIEWER,
+                updateLiveViewer
+            )
 
             props.eventBus.current.removeEventListener(
                 LocalEvent.CLOSE_LOCAL_TAB,
@@ -357,15 +468,14 @@ export function MapViewer(props: MapViewerProps) {
     }, [props.isOpen]);
 
     useEffect(() => {
-        if (!props.eventBus.current || !props.spritesheetConfig.current?.tile_info[0]) return;
-        const tileInfo = props.spritesheetConfig.current.tile_info[0]
+        const onMouseDown = async (e: MouseEvent) => {
+            const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
-        const onMouseDown = (e: MouseEvent) => {
             if (e.button === 0) {
                 if (selectedCellPosition?.x === worldMousePosition.current.x && selectedCellPosition?.y === worldMousePosition.current.y) {
                     selectedCellMeshRef.current.visible = false
                     setSelectedCellPosition(null)
-                    props.setSidebarContent({chosenProperties: <></>})
+                    props.setSidebarContent({...props.sidebarContent, chosenProperties: <></>})
                     props.eventBus.current.dispatchEvent(
                         new ChangeSelectedPositionEvent(
                             LocalEvent.CHANGE_SELECTED_POSITION,
@@ -393,18 +503,19 @@ export function MapViewer(props: MapViewerProps) {
                     const selectedMapZ = cellRepresentation.current[zLevel.current]
 
                     if (!selectedMapZ) {
-                        props.setSidebarContent({chosenProperties: <></>})
+                        props.setSidebarContent({...props.sidebarContent, chosenProperties: <></>})
                         return
                     }
 
                     const selectedRepr = selectedMapZ[positionString]
 
                     if (!selectedRepr) {
-                        props.setSidebarContent({chosenProperties: <></>})
+                        props.setSidebarContent({...props.sidebarContent, chosenProperties: <></>})
                         return
                     }
 
                     const newSidebarContent: SidebarContent = {
+                        ...props.sidebarContent,
                         chosenProperties:
                             <div className={"sidebar-chosen-properties"}>
                                 {
@@ -453,7 +564,7 @@ export function MapViewer(props: MapViewerProps) {
         return () => {
             props.canvas.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
-    }, [selectedCellPosition, worldMousePosition]);
+    }, [props.sidebarContent, selectedCellPosition, worldMousePosition]);
 
     return <>
         <div className={clsx("loader-container", isLoading && "visible")}>

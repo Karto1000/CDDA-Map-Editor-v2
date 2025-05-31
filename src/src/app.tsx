@@ -29,6 +29,7 @@ export const ThemeContext = createContext<{ theme: Theme }>({
 
 export type SidebarContent = {
     chosenProperties: React.JSX.Element,
+    calculatedParameters: React.JSX.Element,
 }
 
 export const TabContext = createContext<UseTabsReturn>(null)
@@ -87,13 +88,17 @@ function App() {
     const sideMenuTabs = useMemo(() => {
         return tabs.shouldDisplayCanvas() ? [
             {
-                icon: <Icon name={IconName.SettingsSmall}/>,
+                icon: <Icon name={IconName.InfoMedium}/>,
                 content: <MultiMenu tabs={
                     [
                         {
                             name: "Chosen Properties",
                             content: sidebarContent.chosenProperties
                         },
+                        {
+                            name: "Parameters",
+                            content: sidebarContent.calculatedParameters
+                        }
                     ]}
                 />
             }
@@ -173,6 +178,7 @@ function App() {
                                     isOpen={tabs.getCurrentTab()?.tab_type === TabTypeKind.LiveViewer}
                                     tilesheets={tilesheets}
                                     setSidebarContent={setSidebarContent}
+                                    sidebarContent={sidebarContent}
                                     canvas={{
                                         canvasRef: canvasRef,
                                         canvasContainerRef: canvasContainerRef

@@ -48,7 +48,8 @@ export enum IconName {
     CheckmarkMedium = "checkmark-medium",
     QuestionSmall = "question-small",
     ReloadMedium = "reload-medium",
-    ErrorMedium = "error-medium"
+    ErrorMedium = "error-medium",
+    InfoMedium = "info-medium"
 }
 
 //===================================================================
