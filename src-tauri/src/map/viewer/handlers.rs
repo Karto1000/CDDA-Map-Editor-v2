@@ -38,7 +38,7 @@ use crate::util::GetCurrentProjectError;
 use crate::util::IVec3JsonKey;
 use crate::util::Save;
 use crate::util::UVec2JsonKey;
-use cdda_lib::types::CDDAIdentifier;
+use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
 use cdda_lib::DEFAULT_MAP_HEIGHT;
 use cdda_lib::DEFAULT_MAP_ROWS;
@@ -46,6 +46,7 @@ use comfy_bounded_ints::types::Bound_usize;
 use derive_more::Display;
 use glam::IVec3;
 use glam::UVec2;
+use indexmap::IndexMap;
 use log::debug;
 use log::error;
 use log::info;
@@ -87,6 +88,42 @@ pub async fn get_current_project_data(
     let editor_data_lock = editor_data.lock().await;
     let data = util::get_current_project(&editor_data_lock)?;
     Ok(data.clone())
+}
+
+#[derive(Debug, Error)]
+pub enum GetCalculatedParametersError {
+    #[error(transparent)]
+    ProjectError(#[from] GetCurrentProjectError),
+}
+
+impl_serialize_for_error!(GetCalculatedParametersError);
+
+#[tauri::command]
+pub async fn get_calculated_parameters(
+    editor_data: State<'_, Mutex<EditorData>>,
+) -> Result<
+    HashMap<IVec3JsonKey, IndexMap<ParameterIdentifier, CDDAIdentifier>>,
+    GetCalculatedParametersError,
+> {
+    let editor_data_lock = editor_data.lock().await;
+    let data = util::get_current_project(&editor_data_lock)?;
+
+    let mut calculated_parameters = HashMap::new();
+
+    for (z, z_maps) in data.maps.iter() {
+        for (map_coords, map) in z_maps.maps.iter() {
+            calculated_parameters.insert(
+                IVec3JsonKey(IVec3::new(
+                    map_coords.x as i32,
+                    map_coords.y as i32,
+                    *z,
+                )),
+                map.calculated_parameters.clone(),
+            );
+        }
+    }
+
+    Ok(calculated_parameters)
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

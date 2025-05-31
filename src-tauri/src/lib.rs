@@ -16,9 +16,10 @@ use crate::editor_data::{
     MappedCDDAIdContainer, ProjectType, ZLevel,
 };
 use crate::map::viewer::handlers::{
-    close_project, get_current_project_data, get_project_cell_data,
-    get_sprites, new_nested_mapgen_viewer, new_single_mapgen_viewer,
-    new_special_mapgen_viewer, open_project, reload_project,
+    close_project, get_calculated_parameters, get_current_project_data,
+    get_project_cell_data, get_sprites, new_nested_mapgen_viewer,
+    new_single_mapgen_viewer, new_special_mapgen_viewer, open_project,
+    reload_project,
 };
 use crate::map::viewer::open_viewer;
 use crate::map::CalculateParametersError;
@@ -378,7 +379,8 @@ pub fn run() -> () {
             reload_project,
             new_single_mapgen_viewer,
             new_special_mapgen_viewer,
-            new_nested_mapgen_viewer
+            new_nested_mapgen_viewer,
+            get_calculated_parameters
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
