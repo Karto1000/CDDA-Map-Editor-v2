@@ -1,4 +1,5 @@
 use crate::editor_data::{EditorData, EditorDataSaver};
+use crate::events::EDITOR_DATA_CHANGED;
 use crate::tileset::legacy_tileset::LegacyTilesheet;
 use crate::util::Save;
 use crate::{load_cdda_json_data, load_tilesheet};
@@ -122,8 +123,14 @@ pub async fn tileset_picked(
         TilesetPickedError::NotATileset
     })?;
 
-    app.emit("editor_data_changed", editor_data_lock.clone())
-        .expect("Emit to not fail");
+    let saver = EditorDataSaver {
+        path: editor_data_lock.config.config_path.clone(),
+    };
+
+    saver.save(&editor_data_lock).await.unwrap();
+
+    app.emit(EDITOR_DATA_CHANGED, editor_data_lock.clone())
+        .unwrap();
 
     Ok(())
 }
