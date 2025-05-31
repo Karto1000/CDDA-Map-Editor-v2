@@ -40,8 +40,8 @@ export function Dropdown(
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
     const [subGroupOpenIndex, setSubGroupOpenIndex] = useState<{ group: number, item: number }>(null);
 
-    const dropdownRef = useRef<HTMLDivElement>();
-    const menuRef = useRef<HTMLDivElement>();
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null);
 
     useOutsideAlerter(
         dropdownRef,

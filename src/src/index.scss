@@ -30,6 +30,10 @@
   .file-input {
     background-color: theme-var("darkest-blue");
 
+    &.placeholder {
+      color: theme-var("disabled");
+    }
+
     &:hover {
       background-color: theme-var("dark-blue");
     }
@@ -96,7 +100,7 @@ button, select {
   }
 }
 
-input, button {
+input, button, select {
   user-select: initial;
   -webkit-user-select: initial;
   border: none;

@@ -3,10 +3,11 @@ import GenericWindow from "../generic-window.js";
 import {open} from "@tauri-apps/plugin-dialog";
 import "./main.scss"
 import {getCurrentWindow} from "@tauri-apps/api/window";
-import {MultiMenu} from "../../shared/components/multimenu.js";
 import {OpenViewerData, OpenViewerDataType} from "../../tauri/types/viewer.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {TauriCommand} from "../../tauri/events/types.js";
+import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
+import {clsx} from "clsx";
 
 function OpenMapViewer() {
     const [omFilePaths, setOmFilePaths] = useState<string[]>([])
@@ -114,7 +115,7 @@ function OpenMapViewer() {
                             content: <form onSubmit={onSubmit} className={"map-viewer-form"}>
                                 <div className={"map-viewer-form-terrain"}>
                                     <div className={"form-element"}>
-                                        <label className={"file-input"}>
+                                        <label className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}>
                                             {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select a mapgen File Path"}
                                             <button onClick={onMapFileInputChange}/>
                                         </label>
@@ -153,7 +154,7 @@ function OpenMapViewer() {
                                         </label>
                                     </div>
                                     <div className={"form-element"}>
-                                        <label className={"file-input"}>
+                                        <label className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}>
                                             {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select a mapgen File Path"}
                                             <button onClick={onMapFileInputChange}/>
                                         </label>

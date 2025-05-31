@@ -1,7 +1,7 @@
 import React, {Dispatch, SetStateAction, useEffect, useState} from "react";
-import {IconProps} from "./icon.js";
 import "./sidemenu.scss"
 import {clsx} from "clsx";
+import {IconProps} from "../icon.js";
 
 export type SidemenuTab = {
     icon: React.ReactElement<IconProps>,

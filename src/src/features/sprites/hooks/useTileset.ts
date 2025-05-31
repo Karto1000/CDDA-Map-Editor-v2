@@ -1,4 +1,4 @@
-import {MutableRefObject, useRef} from "react";
+import {MutableRefObject, RefObject, useRef} from "react";
 import {Tilesheets} from "../tilesheets.js";
 import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
@@ -8,13 +8,13 @@ import {Tilesheet} from "../tilesheet.js";
 import {LocalEvent, TilesetLoadedEvent} from "../../../shared/utils/localEvent.js";
 
 export type UseTilesetRet = {
-    tilesheets: MutableRefObject<Tilesheets>,
-    spritesheetConfig: MutableRefObject<SpritesheetConfig>,
+    tilesheets: RefObject<Tilesheets>,
+    spritesheetConfig: RefObject<SpritesheetConfig>,
 }
 
-export function useTileset(eventBus: MutableRefObject<EventTarget>): UseTilesetRet {
-    const tilesheets = useRef<Tilesheets>()
-    const spritesheetConfig = useRef<SpritesheetConfig>()
+export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
+    const tilesheets = useRef<Tilesheets>(null)
+    const spritesheetConfig = useRef<SpritesheetConfig>(null)
 
     useTauriEvent(
         TauriEvent.EDITOR_DATA_CHANGED,

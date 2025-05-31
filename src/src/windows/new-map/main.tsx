@@ -1,7 +1,6 @@
 import React from "react";
 import GenericWindow from "../generic-window.tsx";
 import "./main.scss"
-import {MultiMenu} from "../../shared/components/multimenu.tsx";
 import {SubmitHandler, useForm} from "react-hook-form";
 import {FormError} from "../../shared/components/form-error.js";
 import {save} from "@tauri-apps/plugin-dialog";
@@ -9,6 +8,7 @@ import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import toast from "react-hot-toast";
+import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 
 type SingleMapgenFormInputs = {
     omTerrainName: string

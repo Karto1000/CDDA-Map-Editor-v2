@@ -1,16 +1,16 @@
 import {Mesh, MeshBasicMaterial, PlaneGeometry, Vector3} from "three";
-import {MutableRefObject, useEffect, useRef} from "react";
+import {MutableRefObject, RefObject, useEffect, useRef} from "react";
 import {ThreeConfig} from "../types/three.js";
 import {TileInfo} from "../../../tauri/types/spritesheet.js";
 import {MAX_DEPTH} from "../../sprites/tilesheets.js";
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
 
 export function useMouseCells(
-    threeConfig: MutableRefObject<ThreeConfig>,
+    threeConfig: RefObject<ThreeConfig>,
     tile_info: TileInfo
 ) {
-    const hoveredCellMeshRef = useRef<Mesh>()
-    const selectedCellMeshRef = useRef<Mesh>()
+    const hoveredCellMeshRef = useRef<Mesh>(null)
+    const selectedCellMeshRef = useRef<Mesh>(null)
 
     function regenerate(theme: Theme) {
         const hovered = new PlaneGeometry(tile_info.width, tile_info.height)

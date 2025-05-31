@@ -1,4 +1,4 @@
-import React, {MutableRefObject, useContext, useEffect, useRef, useState} from "react";
+import React, {MutableRefObject, RefObject, useContext, useEffect, useRef, useState} from "react";
 import "./welcomeScreen.scss"
 import {open} from "@tauri-apps/plugin-dialog";
 import Icon, {IconName} from "../icon.js";
@@ -9,7 +9,7 @@ import {EditorData} from "../../../tauri/types/editor.js";
 import {LocalEvent, RemoveLocalTabEvent} from "../../utils/localEvent.js";
 
 export type WelcomeScreenProps = {
-    eventBus: MutableRefObject<EventTarget>
+    eventBus: RefObject<EventTarget>
 }
 
 export function WelcomeScreen(props: WelcomeScreenProps) {
@@ -17,8 +17,7 @@ export function WelcomeScreen(props: WelcomeScreenProps) {
     const [availableTilesets, setAvailableTilesets] = useState<string[]>([])
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
     const [hasPickedCDDADirectory, setHasPickedCDDADirectory] = useState<boolean>(false)
-    const selectRef = useRef<HTMLSelectElement>()
-    const tabs = useContext(TabContext)
+    const selectRef = useRef<HTMLSelectElement>(null)
 
     useEffect(() => {
         if (!hasPickedCDDADirectory) return

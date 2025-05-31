@@ -6,7 +6,6 @@ import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
 import {WelcomeScreen} from "./shared/components/mainScreens/welcomeScreen.js";
 import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
-import {MultiMenu} from "./shared/components/multimenu.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
 import {EditorData} from "./tauri/types/editor.js";
 import {useEditorData} from "./shared/hooks/useEditorData.js";
@@ -21,7 +20,8 @@ import Icon, {IconName} from "./shared/components/icon.js";
 import {useTauriEvent} from "./shared/hooks/useTauriEvent.js";
 import {Panel, PanelGroup, PanelResizer} from "@window-splitter/react";
 import {clsx} from "clsx";
-import {Sidemenu} from "./shared/components/sidemenu.js";
+import {MultiMenu} from "./shared/components/imguilike/multimenu.js";
+import {Sidemenu} from "./shared/components/imguilike/sidemenu.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,

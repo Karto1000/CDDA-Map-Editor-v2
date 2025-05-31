@@ -1,0 +1,37 @@
+@import "../../../theme";
+
+@include themed($themes) {
+  .accordion {
+    .accordion-header {
+      background-color: theme-var("dark-blue");
+    }
+
+    .accordion-body {
+      border-left: 1px solid theme-var("dark");
+      border-bottom: 1px solid theme-var("dark");
+      border-right: 1px solid theme-var("dark");
+    }
+  }
+}
+
+.accordion {
+  width: 100%;
+
+  .accordion-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 8px;
+    width: 100%;
+
+    h2 {
+      font-size: 16px;
+      font-weight: unset;
+      user-select: none;
+      margin: 0;
+    }
+  }
+
+  .accordion-body {
+    padding: 8px;
+  }
+}
