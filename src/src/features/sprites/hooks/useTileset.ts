@@ -97,13 +97,14 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
                 console.log("Loading Tilesheet Sprites")
                 const atlases = await loadFromBackend();
 
-                tilesheets.current = new Tilesheets(atlases.atlases, atlases.fallback, atlases.tileInfo);
+                const localTilesheets = new Tilesheets(atlases.atlases, atlases.fallback, atlases.tileInfo)
                 eventBus.current.dispatchEvent(
                     new TilesetLoadedEvent(
                         LocalEvent.TILESET_LOADED,
-                        {detail: tilesheets.current}
+                        {detail: localTilesheets}
                     )
                 )
+                tilesheets.current = localTilesheets;
             })()
         },
         [eventBus]

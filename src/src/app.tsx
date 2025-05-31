@@ -170,7 +170,6 @@ function App() {
                                     threeConfig={threeConfigRef}
                                     eventBus={eventBus}
                                     spritesheetConfig={spritesheetConfig}
-                                    tileInfo={spritesheetConfig.current?.tile_info[0]}
                                     isOpen={tabs.getCurrentTab()?.tab_type === TabTypeKind.LiveViewer}
                                     tilesheets={tilesheets}
                                     setSidebarContent={setSidebarContent}

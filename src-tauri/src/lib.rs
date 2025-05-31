@@ -298,7 +298,7 @@ fn get_saved_editor_data() -> Result<EditorData, Error> {
     Ok(config)
 }
 
-async fn load_tilesheet(
+pub async fn load_tilesheet(
     editor_data: &EditorData,
 ) -> Result<Option<LegacyTilesheet>, Error> {
     let tileset = match &editor_data.config.selected_tileset {

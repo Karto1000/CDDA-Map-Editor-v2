@@ -1,16 +1,8 @@
 import {Canvas, ThreeConfig} from "../../three/types/three.js";
-import React, {
-    Dispatch,
-    MutableRefObject,
-    RefObject,
-    SetStateAction,
-    useContext,
-    useEffect,
-    useRef,
-    useState
-} from "react";
+import React, {Dispatch, RefObject, SetStateAction, useContext, useEffect, useRef, useState} from "react";
 import {
-    ChangedThemeEvent, ChangeSelectedPositionEvent,
+    ChangedThemeEvent,
+    ChangeSelectedPositionEvent,
     ChangeWorldMousePositionEvent,
     ChangeZLevelEvent,
     CloseLocalTabEvent,
@@ -20,7 +12,7 @@ import {
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
 import {GridHelper, Vector3} from "three";
 import {degToRad} from "three/src/math/MathUtils.js";
-import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
+import {SpritesheetConfig} from "../../../tauri/types/spritesheet.js";
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../../sprites/tilesheets.js";
 import {SidebarContent, TabContext, ThemeContext} from "../../../app.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
@@ -38,7 +30,6 @@ export type MapViewerProps = {
     threeConfig: RefObject<ThreeConfig>
     eventBus: RefObject<EventTarget>,
     spritesheetConfig: RefObject<SpritesheetConfig>,
-    tileInfo: TileInfo | null
     canvas: Canvas,
     isOpen: boolean
     tilesheets: RefObject<Tilesheets>
@@ -47,15 +38,18 @@ export type MapViewerProps = {
 
 export function MapViewer(props: MapViewerProps) {
     const theme = useContext(ThemeContext)
-    const {hoveredCellMeshRef, selectedCellMeshRef, regenerate} = useMouseCells(props.threeConfig, props.tileInfo)
+    const {
+        hoveredCellMeshRef,
+        selectedCellMeshRef,
+        regenerate
+    } = useMouseCells(props.threeConfig, props.spritesheetConfig)
     const [selectedCellPosition, setSelectedCellPosition] = useState<Vector3 | null>(null)
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const zLevel = useRef<number>(0)
     const worldMousePosition = useWorldMousePosition({
         threeConfig: props.threeConfig,
         canvas: props.canvas,
-        tileWidth: props.tileInfo?.width,
-        tileHeight: props.tileInfo?.height,
+        spritesheetConfig: props.spritesheetConfig,
         onWorldMousePositionChange: (newPos) => {
             props.eventBus.current.dispatchEvent(
                 new ChangeWorldMousePositionEvent(
@@ -65,10 +59,15 @@ export function MapViewer(props: MapViewerProps) {
             )
         },
         onMouseMove: (mousePosition) => {
+            if (!hoveredCellMeshRef.current) return;
+            if (!props.spritesheetConfig.current?.tile_info[0]) return;
+
+            const tileInfo = props.spritesheetConfig.current.tile_info[0]
+
             hoveredCellMeshRef.current.position.set(
-                mousePosition.x * props.tileInfo.width,
+                mousePosition.x * tileInfo.width,
                 // Remove one again for three.js since the top left tile is -1 in three.js
-                (-mousePosition.y - 1) * props.tileInfo.height,
+                (-mousePosition.y - 1) * tileInfo.height,
                 MAX_DEPTH + 1
             )
         }
@@ -77,8 +76,6 @@ export function MapViewer(props: MapViewerProps) {
     const cellRepresentation = useRef<CellData>(null)
 
     function setupSceneData(theme: Theme) {
-        if (!props.threeConfig.current || !props.tileInfo) return;
-
         const tile_info = props.spritesheetConfig.current.tile_info[0]
 
         props.threeConfig.current.renderer.setClearColor(getColorFromTheme(theme, "darker"))
@@ -106,13 +103,17 @@ export function MapViewer(props: MapViewerProps) {
     useTauriEvent(
         TauriEvent.PLACE_SPRITES,
         (d) => {
+            if (!props.tilesheets.current || !props.spritesheetConfig.current) return;
+
             console.log("Placing sprites")
             props.tilesheets.current.clearAll()
 
+            const tileInfo = props.spritesheetConfig.current.tile_info[0]
+
             const drawStaticSprites: DrawStaticSprite[] = d.static_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
-                vec2.x *= props.tileInfo.width;
-                vec2.y *= props.tileInfo.height;
+                vec2.x *= tileInfo.width;
+                vec2.y *= tileInfo.height;
 
                 return {
                     ...ds,
@@ -122,8 +123,8 @@ export function MapViewer(props: MapViewerProps) {
 
             const drawAnimatedSprites: DrawAnimatedSprite[] = d.animated_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
-                vec2.x *= props.tileInfo.width;
-                vec2.y *= props.tileInfo.height;
+                vec2.x *= tileInfo.width;
+                vec2.y *= tileInfo.height;
 
                 return {
                     ...ds,
@@ -133,8 +134,8 @@ export function MapViewer(props: MapViewerProps) {
 
             const drawFallbackSprites: DrawStaticSprite[] = d.fallback_sprites.map(ds => {
                 const vec2 = serializedVec2ToVector2(ds.position)
-                vec2.x *= props.tileInfo.width;
-                vec2.y *= props.tileInfo.height;
+                vec2.x *= tileInfo.width;
+                vec2.y *= tileInfo.height;
 
                 return {
                     ...ds,
@@ -148,7 +149,7 @@ export function MapViewer(props: MapViewerProps) {
             props.tilesheets.current.drawStaticSpritesBatched(drawStaticSprites, zLevel.current)
             props.tilesheets.current.drawAnimatedSpritesBatched(drawAnimatedSprites)
         },
-        [props.tilesheets, props.tileInfo],
+        [props.tilesheets, props.spritesheetConfig],
     )
 
     useTauriEvent(
@@ -197,6 +198,19 @@ export function MapViewer(props: MapViewerProps) {
         }
 
         const tilesetLoadedHandler = (e: TilesetLoadedEvent) => {
+            let removedSprites = false
+            // Remove the current tilesheets from the scene
+            if (props.tilesheets.current) {
+                for (const name of Object.keys(props.tilesheets.current.tilesheets)) {
+                    const tilesheet = props.tilesheets.current.tilesheets[name]
+                    console.log(`Removing tilesheet ${name} from scene`)
+                    props.threeConfig.current.scene.remove(tilesheet.mesh)
+                }
+
+                props.threeConfig.current.scene.add(props.tilesheets.current.fallback.mesh)
+                removedSprites = true
+            }
+
             for (const name of Object.keys(e.detail.tilesheets)) {
                 const tilesheet = e.detail.tilesheets[name]
                 console.log(`Adding tilesheet ${name} to scene`)
@@ -204,6 +218,21 @@ export function MapViewer(props: MapViewerProps) {
             }
 
             props.threeConfig.current.scene.add(e.detail.fallback.mesh)
+
+            // We want to regenerate the sprites if we removed them
+            if (removedSprites && props.isOpen) {
+                (async () => {
+                    const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+
+                    if (getSpritesResponse.type === BackendResponseType.Error) {
+                        toast.error(getSpritesResponse.error)
+                        setIsLoading(false)
+                        return
+                    }
+
+                    setupSceneData(theme.theme)
+                })()
+            }
         }
 
         const changeThemeHandler = (e: ChangedThemeEvent) => {
@@ -268,11 +297,14 @@ export function MapViewer(props: MapViewerProps) {
                 changeThemeHandler
             )
         }
-    }, [props.eventBus, props.tilesheets, setupSceneData]);
+    }, [props.eventBus, props.tilesheets, props.isOpen, props.spritesheetConfig, setupSceneData]);
 
     useEffect(() => {
         if (!props.isOpen) return
-        if (!props.threeConfig.current || !props.tileInfo) return;
+        if (!props.threeConfig.current) return;
+
+        console.log("Setting up scene data")
+        setupSceneData(theme.theme)
 
         function initialValueUpdate() {
             const newWidth = props.canvas.canvasContainerRef.current.clientWidth
@@ -319,13 +351,9 @@ export function MapViewer(props: MapViewerProps) {
     }, [props.isOpen, props.threeConfig, props.tilesheets]);
 
     useEffect(() => {
-        if (!props.threeConfig.current || !props.tileInfo) return;
+        if (!props.eventBus.current || !props.spritesheetConfig.current?.tile_info[0]) return;
+        const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
-        console.log("Setting up scene data")
-        setupSceneData(theme.theme)
-    }, [props.threeConfig, props.tileInfo]);
-
-    useEffect(() => {
         const onMouseDown = (e: MouseEvent) => {
             if (e.button === 0) {
                 if (selectedCellPosition?.x === worldMousePosition.current.x && selectedCellPosition?.y === worldMousePosition.current.y) {
@@ -340,8 +368,8 @@ export function MapViewer(props: MapViewerProps) {
                     )
                 } else {
                     selectedCellMeshRef.current.position.set(
-                        worldMousePosition.current.x * props.tileInfo.width,
-                        (-worldMousePosition.current.y - 1) * props.tileInfo.height,
+                        worldMousePosition.current.x * tileInfo.width,
+                        (-worldMousePosition.current.y - 1) * tileInfo.height,
                         MAX_DEPTH + 1
                     )
                     selectedCellMeshRef.current.visible = true
@@ -419,7 +447,7 @@ export function MapViewer(props: MapViewerProps) {
         return () => {
             props.canvas.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
-    }, [props.eventBus, props.tileInfo, selectedCellPosition, worldMousePosition]);
+    }, [props.eventBus, props.spritesheetConfig, selectedCellPosition, worldMousePosition]);
 
     return <>
         <div className={clsx("loader-container", isLoading && "visible")}>
