@@ -1,6 +1,7 @@
 use crate::editor_data::{EditorData, EditorDataSaver};
-use crate::load_cdda_json_data;
+use crate::tileset::legacy_tileset::LegacyTilesheet;
 use crate::util::Save;
+use crate::{load_cdda_json_data, load_tilesheet};
 use log::{error, warn};
 use serde::Serialize;
 use std::fs;
@@ -94,17 +95,19 @@ pub async fn tileset_picked(
     tileset: String,
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
+    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
 ) -> Result<(), TilesetPickedError> {
-    let mut lock = editor_data.lock().await;
+    let mut editor_data_lock = editor_data.lock().await;
+    let mut tilesheet_lock = tilesheet.lock().await;
 
-    let tilesets = match &lock.available_tilesets {
+    let tilesets = match &editor_data_lock.available_tilesets {
         None => return Err(TilesetPickedError::NoCDDADirPicked),
         Some(t) => t,
     };
 
     // This is the default tileset
     if tileset == "None" {
-        lock.config.selected_tileset = None;
+        editor_data_lock.config.selected_tileset = None;
         return Ok(());
     }
 
@@ -113,9 +116,13 @@ pub async fn tileset_picked(
         Some(_) => {},
     }
 
-    lock.config.selected_tileset = Some(tileset.clone());
+    editor_data_lock.config.selected_tileset = Some(tileset.clone());
+    *tilesheet_lock = load_tilesheet(&editor_data_lock).await.map_err(|e| {
+        error!("Failed to load tilesheet, `{0}`", e);
+        TilesetPickedError::NotATileset
+    })?;
 
-    app.emit("editor_data_changed", lock.clone())
+    app.emit("editor_data_changed", editor_data_lock.clone())
         .expect("Emit to not fail");
 
     Ok(())
