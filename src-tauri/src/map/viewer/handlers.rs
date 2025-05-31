@@ -1,42 +1,79 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::{replace_region_setting, TileLayer};
-use crate::editor_data::{
-    get_map_data_collection_live_viewer_data, EditorData, EditorDataSaver,
-    GetLiveViewerDataError, LiveViewerData, MapDataCollection,
-    MappedCDDAIdContainer, Project, ProjectType, ZLevel,
-};
+use crate::cdda_data::replace_region_setting;
+use crate::cdda_data::TileLayer;
+use crate::editor_data::get_map_data_collection_live_viewer_data;
+use crate::editor_data::EditorData;
+use crate::editor_data::EditorDataSaver;
+use crate::editor_data::GetLiveViewerDataError;
+use crate::editor_data::LiveViewerData;
+use crate::editor_data::MapDataCollection;
+use crate::editor_data::MappedCDDAIdContainer;
+use crate::editor_data::Project;
+use crate::editor_data::ProjectType;
+use crate::editor_data::ZLevel;
+use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
-use crate::map::viewer::{open_viewer, OpenViewerData, OpenViewerError};
+use crate::impl_serialize_for_error;
+use crate::map::viewer::open_viewer;
+use crate::map::viewer::OpenViewerData;
+use crate::map::viewer::OpenViewerError;
+use crate::map::CalculateParametersError;
+use crate::map::CellRepresentation;
 use crate::map::Serializer;
-use crate::map::{CalculateParametersError, CellRepresentation};
-use crate::tileset::legacy_tileset::{
-    LegacyTilesheet, MappedCDDAId, MappedCDDAIdsForTile, TilesheetCDDAId,
-};
-use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer, Tilesheet};
-use crate::util::{
-    get_current_project_mut, get_json_data, CDDADataError,
-    GetCurrentProjectError, IVec3JsonKey, Save, UVec2JsonKey,
-};
-use crate::{events, impl_serialize_for_error, tileset, util};
+use crate::map::SPECIAL_EMPTY_CHAR;
+use crate::tileset;
+use crate::tileset::legacy_tileset::LegacyTilesheet;
+use crate::tileset::legacy_tileset::MappedCDDAId;
+use crate::tileset::legacy_tileset::MappedCDDAIdsForTile;
+use crate::tileset::legacy_tileset::TilesheetCDDAId;
+use crate::tileset::AdjacentSprites;
+use crate::tileset::SpriteKind;
+use crate::tileset::SpriteLayer;
+use crate::tileset::Tilesheet;
+use crate::util;
+use crate::util::get_current_project_mut;
+use crate::util::get_json_data;
+use crate::util::CDDADataError;
+use crate::util::GetCurrentProjectError;
+use crate::util::IVec3JsonKey;
+use crate::util::Save;
+use crate::util::UVec2JsonKey;
 use cdda_lib::types::CDDAIdentifier;
-use cdda_lib::{DEFAULT_EMPTY_CHAR_ROW, DEFAULT_MAP_HEIGHT, DEFAULT_MAP_ROWS};
+use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
+use cdda_lib::DEFAULT_MAP_HEIGHT;
+use cdda_lib::DEFAULT_MAP_ROWS;
+use comfy_bounded_ints::types::Bound_usize;
 use derive_more::Display;
-use glam::{IVec3, UVec2};
-use log::{debug, error, info, warn};
-use notify::{PollWatcher, RecommendedWatcher, Watcher};
-use notify_debouncer_full::{new_debouncer, new_debouncer_opt, Debouncer};
+use glam::IVec3;
+use glam::UVec2;
+use log::debug;
+use log::error;
+use log::info;
+use log::warn;
+use notify::PollWatcher;
+use notify::RecommendedWatcher;
+use notify::Watcher;
+use notify_debouncer_full::new_debouncer;
+use notify_debouncer_full::new_debouncer_opt;
+use notify_debouncer_full::Debouncer;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::json;
-use std::collections::{HashMap, HashSet};
-use std::hash::{Hash, Hasher};
-use std::ops::{Deref, DerefMut};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::ops::Deref;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use std::time::Duration;
 use strum::IntoEnumIterator;
 use tauri::async_runtime::Mutex;
-use tauri::{AppHandle, Emitter, State};
+use tauri::AppHandle;
+use tauri::Emitter;
+use tauri::State;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
@@ -292,7 +329,7 @@ pub async fn get_sprites(
     let fallback_sprites = HashSet::new();
 
     macro_rules! insert_sprite_type {
-        ($val: expr) => {
+        ($val:expr) => {
             match $val {
                 SpriteType::Static(s) => {
                     static_sprites.insert(s);
@@ -301,15 +338,19 @@ pub async fn get_sprites(
                     animated_sprites.insert(a);
                 },
                 SpriteType::Fallback(f) => {
-                    // fallback_sprites.insert(f);
+                    // fallback_sprites.
+                    // insert(f);
                 },
             }
         };
     }
 
     for (_, map_collection) in project.maps.iter_mut() {
-        // we need to calculate the parameters for the predecessor here because we cannot borrow
-        // json data as mutable inside the get_mapped_cdda_ids function
+        // we need to calculate the parameters
+        // for the predecessor here because we
+        // cannot borrow json data as
+        // mutable inside the
+        // get_mapped_cdda_ids function
         map_collection.calculate_predecessor_parameters(&mut json_data);
     }
 
@@ -336,9 +377,9 @@ pub async fn get_sprites(
                     && identifier_group.furniture.is_none()
                 {
                     warn!(
-                        "No sprites found for identifier_group {:?} at coordinates {}",
-                        identifier_group,
-                        cell_3d_coords
+                        "No sprites found for identifier_group {:?} at \
+                         coordinates {}",
+                        identifier_group, cell_3d_coords
                     );
 
                     return HashMap::new();
@@ -346,7 +387,8 @@ pub async fn get_sprites(
 
                 let mut layer_map = HashMap::new();
 
-                // Layer is used here so furniture is above terrain
+                // Layer is used here so furniture is
+                // above terrain
                 for (layer, o_id) in [
                     (TileLayer::Terrain, &identifier_group.terrain),
                     (TileLayer::Furniture, &identifier_group.furniture),
@@ -613,12 +655,12 @@ pub async fn close_project(
 }
 
 #[derive(Debug, Error)]
-pub enum NewSingleMapgenViewerError {
+pub enum NewMapgenViewerError {
     #[error(transparent)]
     OpenViewerError(#[from] OpenViewerError),
 }
 
-impl_serialize_for_error!(NewSingleMapgenViewerError);
+impl_serialize_for_error!(NewMapgenViewerError);
 
 #[tauri::command]
 pub async fn new_single_mapgen_viewer(
@@ -628,7 +670,7 @@ pub async fn new_single_mapgen_viewer(
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-) -> Result<(), NewSingleMapgenViewerError> {
+) -> Result<(), NewMapgenViewerError> {
     let data = serde_json::to_string_pretty(&json!(
         [
             {
@@ -668,21 +710,21 @@ pub async fn new_special_mapgen_viewer(
     path: PathBuf,
     om_terrain_name: String,
     project_name: String,
-    special_width: usize,
-    special_height: usize,
+    special_width: Bound_usize<1, { usize::MAX }>,
+    special_height: Bound_usize<1, { usize::MAX }>,
     special_z_from: i32,
     special_z_to: i32,
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-) -> Result<(), NewSingleMapgenViewerError> {
+) -> Result<(), NewMapgenViewerError> {
     let mut data = Vec::new();
 
     let mut overmaps_list = Vec::new();
 
     for z in special_z_from..=special_z_to {
-        for y in 0..special_height {
-            for x in 0..special_width {
+        for y in 0..special_height.get() {
+            for x in 0..special_width.get() {
                 let om_terrain_name =
                     format!("{}_{}_{}_{}", om_terrain_name, x, y, z);
 
@@ -702,13 +744,13 @@ pub async fn new_special_mapgen_viewer(
 
     for z in special_z_from..=special_z_to {
         let mut z_om_terrain_names = Vec::new();
-        z_om_terrain_names.reserve(special_height);
+        z_om_terrain_names.reserve(special_height.get());
 
-        for y in 0..special_height {
+        for y in 0..special_height.get() {
             let mut y_om_terrain_names = Vec::new();
-            y_om_terrain_names.reserve(special_width);
+            y_om_terrain_names.reserve(special_width.get());
 
-            for x in 0..special_width {
+            for x in 0..special_width.get() {
                 let om_terrain_name =
                     format!("{}_{}_{}_{}", om_terrain_name, x, y, z);
                 y_om_terrain_names.push(om_terrain_name.clone());
@@ -719,8 +761,8 @@ pub async fn new_special_mapgen_viewer(
 
         let mut rows = Vec::new();
 
-        for _ in 0..special_height * DEFAULT_MAP_HEIGHT {
-            rows.push(DEFAULT_EMPTY_CHAR_ROW.repeat(special_width));
+        for _ in 0..special_height.get() * DEFAULT_MAP_HEIGHT {
+            rows.push(DEFAULT_EMPTY_CHAR_ROW.repeat(special_width.get()));
         }
 
         data.push(json!({
@@ -743,6 +785,57 @@ pub async fn new_special_mapgen_viewer(
         OpenViewerData::Special {
             mapgen_file_paths: vec![path.clone()],
             om_file_paths: vec![path.clone()],
+            project_name,
+            om_id: CDDAIdentifier(om_terrain_name),
+        },
+        editor_data,
+        json_data,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn new_nested_mapgen_viewer(
+    path: PathBuf,
+    om_terrain_name: String,
+    project_name: String,
+    nested_width: Bound_usize<1, 24>,
+    nested_height: Bound_usize<1, 24>,
+    app: AppHandle,
+    editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<(), NewMapgenViewerError> {
+    let mut rows = Vec::new();
+
+    for _ in 0..nested_height.get() {
+        rows.push(SPECIAL_EMPTY_CHAR.to_string().repeat(nested_width.get()));
+    }
+
+    let data = json!(
+        [
+            {
+            "type": "mapgen",
+            "method": "json",
+            "nested_mapgen_id": om_terrain_name,
+            "object": {
+                    "mapgensize": [nested_width, nested_height],
+                    "fill_ter": "t_region_groundcover",
+                    "rows": rows
+                }
+            }
+        ]
+    );
+
+    let data_ser = serde_json::to_string_pretty(&data).unwrap();
+    let mut file = File::create(&path).await.unwrap();
+    file.write_all(data_ser.as_bytes()).await.unwrap();
+
+    open_viewer(
+        app,
+        OpenViewerData::Terrain {
+            mapgen_file_paths: vec![path.clone()],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
         },

@@ -17,8 +17,8 @@ use crate::editor_data::{
 };
 use crate::map::viewer::handlers::{
     close_project, get_current_project_data, get_project_cell_data,
-    get_sprites, new_single_mapgen_viewer, new_special_mapgen_viewer,
-    open_project, reload_project,
+    get_sprites, new_nested_mapgen_viewer, new_single_mapgen_viewer,
+    new_special_mapgen_viewer, open_project, reload_project,
 };
 use crate::map::viewer::open_viewer;
 use crate::map::CalculateParametersError;
@@ -377,7 +377,8 @@ pub fn run() -> () {
             get_sprites,
             reload_project,
             new_single_mapgen_viewer,
-            new_special_mapgen_viewer
+            new_special_mapgen_viewer,
+            new_nested_mapgen_viewer
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

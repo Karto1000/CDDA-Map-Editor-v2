@@ -667,6 +667,7 @@ dependencies = [
  "async_once",
  "cdda_lib",
  "cdda_macros",
+ "comfy-bounded-ints",
  "derive_more 2.0.1",
  "directories",
  "dotenv",
@@ -823,6 +824,15 @@ checksum = "ba5a308b75df32fe02788e748662718f03fde005016435c444eea572398219fd"
 dependencies = [
  "bytes",
  "memchr",
+]
+
+[[package]]
+name = "comfy-bounded-ints"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b9637e8f783b55e86fca70dedccd98a9228e137a76cdeb3ef3ac21b95f857819"
+dependencies = [
+ "serde",
 ]
 
 [[package]]
