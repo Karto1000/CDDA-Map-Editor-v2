@@ -593,8 +593,20 @@ export function Header(props: Props) {
                     <div className={"indicator-container"}>
                         {
                             zLevelIndicator !== null && selectedPositionIndicator !== null &&
+                            <div className={"selected-chunk-indicator"}>
+                                <span>{Math.floor(selectedPositionIndicator.x / 24)}, {Math.floor(selectedPositionIndicator.y / 24)}</span>
+                            </div>
+                        }
+                        {
+                            zLevelIndicator !== null && selectedPositionIndicator !== null &&
                             <div className={"selected-position-indicator"}>
                                 <span>{selectedPositionIndicator.x}, {selectedPositionIndicator.y}, {zLevelIndicator}</span>
+                            </div>
+                        }
+                        {
+                            zLevelIndicator !== null && mousePositionIndicator !== null &&
+                            <div className={"world-chunk-indicator"}>
+                                <span>{Math.floor(mousePositionIndicator.x / 24)}, {Math.floor(mousePositionIndicator.y / 24)}</span>
                             </div>
                         }
                         {

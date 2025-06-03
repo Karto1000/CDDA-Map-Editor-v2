@@ -59,11 +59,11 @@
         color: theme-var('lightest')
       }
 
-      .world-position-indicator {
+      .world-position-indicator, .world-chunk-indicator {
         background-color: theme-var('darkest-blue');
       }
 
-      .selected-position-indicator {
+      .selected-position-indicator, .selected-chunk-indicator {
         background-color: theme-var('selected');
       }
     }
@@ -186,6 +186,14 @@
       gap: 2px;
 
       .world-position-indicator, .selected-position-indicator {
+        width: 100px;
+      }
+
+      .world-chunk-indicator, .selected-chunk-indicator {
+        width: 50px;
+      }
+
+      .world-position-indicator, .selected-position-indicator, .selected-chunk-indicator, .world-chunk-indicator {
         height: 24px;
         padding: 0 8px;
 

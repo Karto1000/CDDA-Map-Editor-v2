@@ -42,9 +42,24 @@ function CalculatedParametersTab(props: CalculatedParametersTabProps) {
     const [search, setSearch] = useState<string>("")
 
     function getCalculatedParameters(): React.JSX.Element {
-        return <div style={{display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto", }}>
+        return <div style={{display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto",}}>
             {
-                Object.keys(props.calculatedParameters.current).map(k => {
+                Object.keys(props.calculatedParameters.current)
+                    .sort((a, b) => {
+                        const vecA = serializedVec3ToVector3(a);
+                        const vecB = serializedVec3ToVector3(b);
+
+                        if (vecA.y !== vecB.y) {
+                            return vecA.y - vecB.y;
+                        }
+
+                        if (vecA.x !== vecB.x) {
+                            return vecA.x - vecB.x;
+                        }
+                        
+                        return vecA.z - vecB.z;
+                    })
+                    .map(k => {
                     const position = serializedVec3ToVector3(k)
 
                     if (position.z !== props.zLevel.current) return;
@@ -56,16 +71,19 @@ function CalculatedParametersTab(props: CalculatedParametersTabProps) {
                             params[paramName].toLowerCase().includes(search.toLowerCase())
                     })
 
+                    console.log(filtered)
+
                     if (filtered.length === 0) return;
 
                     return (
                         <Accordion title={`Chunk at ${k}`} key={k} defaultCollapsed={true}>
                             {
-                                filtered.map(paramName => {
-                                    return (
-                                        <p>{paramName}: {params[paramName]}</p>
-                                    )
-                                })
+                                filtered
+                                    .map(paramName => {
+                                        return (
+                                            <p key={paramName}>{paramName}: {params[paramName]}</p>
+                                        )
+                                    })
                             }
                         </Accordion>
                     )
@@ -338,7 +356,10 @@ export function MapViewer(props: MapViewerProps) {
                     (c) => {
                         return {
                             ...c,
-                            calculatedParameters: getCalculatedParameters()
+                            calculatedParameters: <CalculatedParametersTab
+                                calculatedParameters={calculatedParameters}
+                                zLevel={zLevel}
+                            />
                         }
                     }
                 )
@@ -355,7 +376,10 @@ export function MapViewer(props: MapViewerProps) {
                     (c) => {
                         return {
                             ...c,
-                            calculatedParameters: getCalculatedParameters()
+                            calculatedParameters: <CalculatedParametersTab
+                                calculatedParameters={calculatedParameters}
+                                zLevel={zLevel}
+                            />
                         }
                     }
                 )
