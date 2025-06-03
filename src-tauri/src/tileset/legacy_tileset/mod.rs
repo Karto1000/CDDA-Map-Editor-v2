@@ -4,8 +4,9 @@ use crate::cdda_data::terrain::CDDATerrain;
 use crate::cdda_data::vehicle_parts::CDDAVehiclePart;
 use crate::tileset::io::{TilesheetConfigLoader, TilesheetLoader};
 use crate::tileset::legacy_tileset::tile_config::{
-    AdditionalTile, AdditionalTileId, LegacyTileConfig, Spritesheet, Tile,
+    AdditionalTile, AdditionalTileType, LegacyTileConfig, Spritesheet, Tile,
 };
+use crate::tileset::MeabyWeightedSprite::Weighted;
 use crate::tileset::{
     ForeBackIds, MeabyWeightedSprite, MultitileSprite, Sprite, SpriteKind,
     Tilesheet, WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
@@ -19,6 +20,7 @@ use rand::distr::Distribution;
 use serde::de::Error as SerdeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::ops::Add;
 use std::ptr::write;
@@ -28,7 +30,7 @@ use tokio::io::AsyncReadExt;
 pub(crate) mod tile_config;
 
 pub type SpriteIndex = u32;
-pub type FinalIds = Option<Vec<WeightedSprite<SpriteIndex>>>;
+pub type FinalIds = Option<Vec<WeightedSprite<Rotates>>>;
 pub type AdditionalTileIds = Option<Vec<WeightedSprite<Rotates>>>;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
@@ -177,7 +179,10 @@ impl TryFrom<Vec<SpriteIndex>> for Rotates {
                     fourth.clone(),
                 )))
             },
-            (_, _, _, _) => Err(anyhow!("Invalid vec supplied for rotation")),
+            (_, _, _, _) => Err(anyhow!(
+                "Invalid vec supplied for rotation for sprite indices {:?}",
+                value
+            )),
         }
     }
 }
@@ -312,7 +317,7 @@ pub struct MappedCDDAIdsForTile {
 }
 
 impl MappedCDDAIdsForTile {
-    pub fn update_override(&mut self, other: MappedCDDAIdsForTile) {
+    pub fn override_none(&mut self, other: MappedCDDAIdsForTile) {
         if other.terrain.is_some() {
             self.terrain = other.terrain;
         }
@@ -332,46 +337,29 @@ impl MappedCDDAIdsForTile {
 }
 
 fn to_weighted_vec(
-    indices: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
-) -> Option<Vec<WeightedSprite<SpriteIndex>>> {
-    indices.map(|fg| fg.map(|mw| mw.weighted()))
-}
-
-fn to_weighted_vec_additional_exception(
-    indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
-) -> Option<Vec<WeightedSprite<SpriteIndex>>> {
-    indices.map(|ids| {
-        ids.map(|mw| {
-            let weighted = mw.weighted();
-            let single = match weighted.sprite.into_single() {
-                None => return None,
-                Some(v) => v,
-            };
-
-            Some(WeightedSprite::new(single, weighted.weight))
-        })
-        .into_iter()
-        .filter_map(|v| {
-            if v.is_none() {
-                return None;
-            }
-            return Some(v.unwrap());
-        })
-        .collect()
-    })
-}
-
-fn to_weighted_vec_additional(
     indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
 ) -> Option<Vec<WeightedSprite<Rotates>>> {
-    indices.map(|fg| {
-        fg.map(|mw| {
-            let weighted = mw.weighted();
-            let rotation =
-                Rotates::try_from(weighted.sprite.into_vec()).unwrap();
-            WeightedSprite::new(rotation, weighted.weight)
-        })
-    })
+    let mut mapped_indices = Vec::new();
+
+    for fg_indices_outer in indices?.into_vec() {
+        let (indices_vec, weight) = match fg_indices_outer {
+            MeabyWeightedSprite::NotWeighted(nw) => (nw.into_vec(), 1),
+            MeabyWeightedSprite::Weighted(w) => (w.sprite.into_vec(), w.weight),
+        };
+
+        match Rotates::try_from(indices_vec) {
+            Ok(v) => {
+                mapped_indices.push(WeightedSprite::new(v, weight));
+            },
+            Err(e) => {
+                // TODO: This happens when the supplied fg or bg is an empty array
+                warn!("{}, this is probably due to an empty array. Ignoring this entry ", e);
+                continue;
+            },
+        }
+    }
+
+    Some(mapped_indices)
 }
 
 fn get_multitile_sprite_from_additional_tiles(
@@ -385,31 +373,21 @@ fn get_multitile_sprite_from_additional_tiles(
 
     for additional_tile in additional_tiles {
         match additional_tile.id {
-            AdditionalTileId::Broken => {
-                let fg = to_weighted_vec_additional_exception(
-                    additional_tile.fg.clone(),
-                );
-                let bg = to_weighted_vec_additional_exception(
-                    additional_tile.bg.clone(),
-                );
+            AdditionalTileType::Broken => {
+                let fg = to_weighted_vec(additional_tile.fg.clone());
+                let bg = to_weighted_vec(additional_tile.bg.clone());
 
                 broken = Some(ForeBackIds::new(fg, bg))
             },
-            AdditionalTileId::Open => {
-                let fg = to_weighted_vec_additional_exception(
-                    additional_tile.fg.clone(),
-                );
-                let bg = to_weighted_vec_additional_exception(
-                    additional_tile.bg.clone(),
-                );
+            AdditionalTileType::Open => {
+                let fg = to_weighted_vec(additional_tile.fg.clone());
+                let bg = to_weighted_vec(additional_tile.bg.clone());
 
                 open = Some(ForeBackIds::new(fg, bg))
             },
             _ => {
-                let fg = to_weighted_vec_additional(additional_tile.fg.clone());
-                let bg = to_weighted_vec_additional_exception(
-                    additional_tile.bg.clone(),
-                );
+                let fg = to_weighted_vec(additional_tile.fg.clone());
+                let bg = to_weighted_vec(additional_tile.bg.clone());
 
                 additional_tile_ids.insert(
                     additional_tile.id.clone(),
@@ -430,13 +408,14 @@ fn get_multitile_sprite_from_additional_tiles(
         ids: ForeBackIds::new(fg, bg),
         rotates: tile.rotates.unwrap_or(false),
         animated: tile.animated.unwrap_or(false),
-        center: additional_tile_ids.remove(&AdditionalTileId::Center),
-        corner: additional_tile_ids.remove(&AdditionalTileId::Corner),
-        edge: additional_tile_ids.remove(&AdditionalTileId::Edge),
+        center: additional_tile_ids.remove(&AdditionalTileType::Center),
+        corner: additional_tile_ids.remove(&AdditionalTileType::Corner),
+        edge: additional_tile_ids.remove(&AdditionalTileType::Edge),
         t_connection: additional_tile_ids
-            .remove(&AdditionalTileId::TConnection),
-        unconnected: additional_tile_ids.remove(&AdditionalTileId::Unconnected),
-        end_piece: additional_tile_ids.remove(&AdditionalTileId::EndPiece),
+            .remove(&AdditionalTileType::TConnection),
+        unconnected: additional_tile_ids
+            .remove(&AdditionalTileType::Unconnected),
+        end_piece: additional_tile_ids.remove(&AdditionalTileType::EndPiece),
         broken: broken.unwrap_or(ForeBackIds::new(None, None)),
         open: open.unwrap_or(ForeBackIds::new(None, None)),
     })

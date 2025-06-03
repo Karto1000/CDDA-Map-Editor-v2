@@ -1,7 +1,7 @@
 use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::cdda_data::TileLayer;
-use crate::tileset::legacy_tileset::tile_config::AdditionalTileId;
-use crate::tileset::legacy_tileset::tile_config::AdditionalTileId::{
+use crate::tileset::legacy_tileset::tile_config::AdditionalTileType;
+use crate::tileset::legacy_tileset::tile_config::AdditionalTileType::{
     Center, Corner, Edge, EndPiece, TConnection, Unconnected,
 };
 use crate::tileset::legacy_tileset::CardinalDirection::{
@@ -145,91 +145,147 @@ impl Sprite {
     }
 
     fn get_random_animated_sprite(
-        id: &MappedCDDAId,
-        ids: &Vec<WeightedSprite<SpriteIndex>>,
+        mapped_id: &MappedCDDAId,
+        tilesheet_ids: &Vec<WeightedSprite<Rotates>>,
         rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
-        if ids.len() == 0 {
+        if tilesheet_ids.len() == 0 {
             return None;
         }
 
-        let animated_sprites =
-            MeabyVec::Vec(ids.to_vec().into_iter().map(|v| v.sprite).collect());
+        let mut indices = Vec::new();
+
+        for rotates_id in tilesheet_ids.to_vec() {
+            let (index, _) = Self::get_sprite_index_from_rotates(
+                mapped_id,
+                rotates_id.sprite,
+                rotates,
+            );
+
+            indices.push(index);
+        }
 
         match rotates {
             true => Some(Rotated {
-                rotation: id.rotation.clone(),
-                data: animated_sprites,
+                rotation: mapped_id.rotation.clone(),
+                data: MeabyVec::Vec(indices),
             }),
-            false => Some(Rotated::none(animated_sprites)),
+            false => Some(Rotated::none(MeabyAnimated::Vec(indices))),
+        }
+    }
+
+    fn get_sprite_index_from_rotates(
+        mapped_id: &MappedCDDAId,
+        rotates: Rotates,
+        does_rotates: bool,
+    ) -> (SpriteIndex, Rotation) {
+        match rotates {
+            Rotates::Auto(i) => match does_rotates {
+                false => (i, Rotation::Deg0),
+                true => (i, mapped_id.rotation.clone()),
+            },
+            Rotates::Pre2((a, b)) => {
+                let chosen_index = match mapped_id.rotation {
+                    // TODO: I don't know if these are actually the same or if this is different
+                    Rotation::Deg0 | Rotation::Deg180 => a,
+                    Rotation::Deg90 | Rotation::Deg270 => b,
+                };
+
+                (chosen_index, Rotation::Deg0)
+            },
+            Rotates::Pre4((a, b, c, d)) => {
+                let chosen_index = match mapped_id.rotation {
+                    Rotation::Deg0 => a,
+                    Rotation::Deg90 => b,
+                    Rotation::Deg180 => c,
+                    Rotation::Deg270 => d,
+                };
+
+                (chosen_index, Rotation::Deg0)
+            },
         }
     }
 
     fn get_random_sprite(
-        id: &MappedCDDAId,
-        ids: &Vec<WeightedSprite<SpriteIndex>>,
+        mapped_id: &MappedCDDAId,
+        tilesheet_ids: &Vec<WeightedSprite<Rotates>>,
         rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
-        if ids.len() == 0 {
+        if tilesheet_ids.len() == 0 {
             return None;
         }
 
-        let random_id = MeabyAnimated::Single(ids.get_random().clone());
-        match rotates {
-            true => Some(Rotated {
-                rotation: id.rotation.clone(),
-                data: random_id,
-            }),
-            false => Some(Rotated::none(random_id)),
-        }
+        let random_id = tilesheet_ids.get_random().clone();
+        let (random_index, rotation) = Self::get_sprite_index_from_rotates(
+            mapped_id,
+            random_id.clone(),
+            rotates,
+        );
+
+        Some(Rotated {
+            rotation,
+            data: MeabyAnimated::Single(random_index),
+        })
     }
 
     fn get_random_additional_tile_sprite(
-        id: &MappedCDDAId,
-        ids: &Vec<WeightedSprite<Rotates>>,
+        mapped_id: &MappedCDDAId,
+        tilesheet_ids: &Vec<WeightedSprite<Rotates>>,
+        additional_ids: &Vec<WeightedSprite<Rotates>>,
         direction: CardinalDirection,
-        tile_id: AdditionalTileId,
-        rotates: bool,
+        additional_tile_type: AdditionalTileType,
+        does_rotate: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
-        if ids.len() == 0 {
+        if additional_ids.len() == 0 {
             return None;
         }
 
-        let rotated = match tile_id {
+        let rotated = match additional_tile_type {
             Center | Unconnected => {
                 let random_id = MeabyAnimated::Single(
-                    ids.get_random().get(&direction).clone(),
+                    additional_ids.get_random().get(&direction).clone(),
                 );
 
-                match rotates {
+                match does_rotate {
                     true => Rotated {
                         data: random_id,
-                        rotation: id.rotation.clone(),
+                        rotation: mapped_id.rotation.clone(),
                     },
                     false => Rotated::none(random_id),
                 }
             },
-            Corner | TConnection | Edge | EndPiece => match ids.get_random() {
-                Rotates::Auto(a) => match rotates {
+            Corner | TConnection | Edge | EndPiece => match additional_ids
+                .get_random()
+            {
+                Rotates::Auto(a) => match does_rotate {
                     true => Rotated {
                         data: MeabyAnimated::Single(a.clone()),
                         rotation: Rotation::from(direction)
-                            + id.rotation.clone(),
+                            + mapped_id.rotation.clone(),
                     },
                     false => Rotated::none(MeabyAnimated::Single(a.clone())),
                 },
-                Rotates::Pre2(p) => match rotates {
+                Rotates::Pre2(p) => match does_rotate {
                     true => match direction {
                         North => Rotated::new(
                             MeabyAnimated::Single(p.0.clone()),
-                            id.rotation.clone(),
+                            mapped_id.rotation.clone(),
                         ),
                         East => Rotated::new(
                             MeabyAnimated::Single(p.1.clone()),
-                            id.rotation.clone(),
+                            mapped_id.rotation.clone(),
                         ),
-                        South => unreachable!(),
-                        West => unreachable!(),
+                        // TODO: Don't know if this is correct
+                        South => Self::get_random_sprite(
+                            mapped_id,
+                            tilesheet_ids,
+                            does_rotate,
+                        )?,
+                        West => Self::get_random_sprite(
+                            mapped_id,
+                            tilesheet_ids,
+                            does_rotate,
+                        )?,
                     },
                     false => match direction {
                         North => {
@@ -238,27 +294,35 @@ impl Sprite {
                         East => {
                             Rotated::none(MeabyAnimated::Single(p.1.clone()))
                         },
-                        South => unreachable!(),
-                        West => unreachable!(),
+                        South => Self::get_random_sprite(
+                            mapped_id,
+                            tilesheet_ids,
+                            does_rotate,
+                        )?,
+                        West => Self::get_random_sprite(
+                            mapped_id,
+                            tilesheet_ids,
+                            does_rotate,
+                        )?,
                     },
                 },
-                Rotates::Pre4(p) => match rotates {
+                Rotates::Pre4(p) => match does_rotate {
                     true => match direction {
                         North => Rotated::new(
                             MeabyAnimated::Single(p.0.clone()),
-                            id.rotation.clone(),
+                            mapped_id.rotation.clone(),
                         ),
                         East => Rotated::new(
                             MeabyAnimated::Single(p.1.clone()),
-                            id.rotation.clone(),
+                            mapped_id.rotation.clone(),
                         ),
                         South => Rotated::new(
                             MeabyAnimated::Single(p.2.clone()),
-                            id.rotation.clone(),
+                            mapped_id.rotation.clone(),
                         ),
                         West => Rotated::new(
                             MeabyAnimated::Single(p.3.clone()),
-                            id.rotation.clone(),
+                            mapped_id.rotation.clone(),
                         ),
                     },
                     false => match direction {
@@ -422,7 +486,7 @@ impl Sprite {
         id: &MappedCDDAId,
         ids: &ForeBackIds<FinalIds, FinalIds>,
         direction: &CardinalDirection,
-        add_id: &AdditionalTileId,
+        add_id: &AdditionalTileType,
         sprite: Option<&MultitileSprite>,
         rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
@@ -433,13 +497,21 @@ impl Sprite {
             },
             Some(sprite) => match &sprite.ids.fg {
                 None => None,
-                Some(fg) => Self::get_random_additional_tile_sprite(
-                    id,
-                    fg,
-                    direction.clone(),
-                    add_id.clone(),
-                    sprite.rotates,
-                ),
+                Some(fg) => {
+                    let fg_ids = match &ids.fg {
+                        None => return None,
+                        Some(fg_ids) => fg_ids,
+                    };
+
+                    Self::get_random_additional_tile_sprite(
+                        id,
+                        fg_ids,
+                        fg,
+                        direction.clone(),
+                        add_id.clone(),
+                        sprite.rotates,
+                    )
+                },
             },
         }
     }

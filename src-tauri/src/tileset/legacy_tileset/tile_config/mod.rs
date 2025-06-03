@@ -80,8 +80,9 @@ pub struct NormalSpritesheet {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Hash, Eq, PartialEq)]
-pub enum AdditionalTileId {
-    #[serde(rename = "center")]
+pub enum AdditionalTileType {
+    // TODO: Is this what is meant with intersection?
+    #[serde(alias = "center", alias = "intersection")]
     Center,
 
     #[serde(rename = "corner")]
@@ -93,7 +94,7 @@ pub enum AdditionalTileId {
     #[serde(rename = "edge")]
     Edge,
 
-    #[serde(rename = "end_piece")]
+    #[serde(alias = "end_piece", alias = "end")]
     EndPiece,
 
     #[serde(rename = "unconnected")]
@@ -113,7 +114,7 @@ pub enum AdditionalTileId {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct AdditionalTile {
-    pub id: AdditionalTileId,
+    pub id: AdditionalTileType,
     pub rotates: Option<bool>,
     pub animated: Option<bool>,
     pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
@@ -123,8 +124,8 @@ pub struct AdditionalTile {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Tile {
     pub id: MeabyVec<CDDAIdentifier>,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<SpriteIndex>>>,
+    pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
+    pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
     pub rotates: Option<bool>,
     pub animated: Option<bool>,
     pub multitile: Option<bool>,
