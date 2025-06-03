@@ -23,8 +23,7 @@ pub enum OvermapTerrainMapgenMethod {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct OvermapTerrainMapgen {
-    pub method: OvermapTerrainMapgenMethod,
-    pub name: CDDAIdentifier,
+    pub builtin: CDDAIdentifier,
 }
 
 #[cdda_entry]

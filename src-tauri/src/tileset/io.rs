@@ -37,10 +37,11 @@ impl TilesheetConfigLoader {
         let legacy_tilesheet =
             <TilesheetConfigLoader as Load<LegacyTileConfig>>::load(self).await;
 
-        if let Ok(val) = legacy_tilesheet {
-            return Ok(serde_json::to_value(val)?);
+        match legacy_tilesheet {
+            Ok(v) => Ok(serde_json::to_value(v)?),
+            Err(e) => {
+                anyhow::bail!(e);
+            },
         }
-
-        anyhow::bail!("Failed to load legacy tileset config");
     }
 }

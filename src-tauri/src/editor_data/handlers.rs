@@ -2,7 +2,7 @@ use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::events::EDITOR_DATA_CHANGED;
 use crate::tileset::legacy_tileset::LegacyTilesheet;
 use crate::util::Save;
-use crate::{load_cdda_json_data, load_tilesheet};
+use crate::{events, load_cdda_json_data, load_tilesheet};
 use log::{error, warn};
 use serde::Serialize;
 use std::fs;
@@ -76,8 +76,7 @@ pub async fn cdda_installation_directory_picked(
         },
     }
 
-    app.emit("editor_data_changed", lock.clone())
-        .expect("Emit to not fail");
+    app.emit(EDITOR_DATA_CHANGED, lock.clone()).unwrap();
 
     Ok(())
 }

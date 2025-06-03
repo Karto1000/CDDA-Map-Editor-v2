@@ -287,10 +287,10 @@ impl MapDataCollection {
                                     .as_str(),
                             )
                         }
-                        Some(omtm) => json_data.map_data.get_mut(&omtm.name).expect(
+                        Some(omtm) => json_data.map_data.get_mut(&omtm.builtin).expect(
                             format!(
                                 "Hardcoded Map data for predecessor {} to exist",
-                                omtm.name
+                                omtm.builtin
                             )
                                 .as_str(),
                         ),

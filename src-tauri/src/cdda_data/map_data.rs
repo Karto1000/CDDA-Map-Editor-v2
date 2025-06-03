@@ -693,8 +693,13 @@ pub struct IdCollection {
     pub nested_mapgen_id: Option<CDDAIdentifier>,
 }
 
+fn default_method() -> String {
+    "json".into()
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMapDataIntermediate {
+    #[serde(default = "default_method")]
     pub method: String,
 
     pub update_mapgen_id: Option<CDDAIdentifier>,

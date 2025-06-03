@@ -117,5 +117,5 @@ pub struct CDDARegionSettings {
     pub default_oter: Vec<String>,
     pub default_groundcover: Vec<Weighted<CDDAIdentifier>>,
     pub region_terrain_and_furniture: RegionTerrainAndFurniture,
-    pub river_scale: f32,
+    pub river_scale: Option<f32>,
 }

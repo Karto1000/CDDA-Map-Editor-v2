@@ -418,10 +418,10 @@ impl MapData {
                         // This terrain is defined in a json file, so we can just search for it
                         json_data.map_data.get(predecessor_id).ok_or(GetMappedCDDAIdsError::MissingMapgenEntryForPredecessor(predecessor_id.0.clone()))?
                     },
-                    Some(omtm) => json_data.map_data.get(&omtm.name).expect(
+                    Some(omtm) => json_data.map_data.get(&omtm.builtin).expect(
                         format!(
                             "Hardcoded Map data for predecessor {} to exist",
-                            omtm.name
+                            omtm.builtin
                         )
                         .as_str(),
                     ),

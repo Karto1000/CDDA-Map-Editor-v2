@@ -1,4 +1,4 @@
-import {MutableRefObject, useState} from "react";
+import {MutableRefObject, RefObject, useState} from "react";
 import {EditorData} from "../../tauri/types/editor.js";
 import {useTauriEvent} from "./useTauriEvent.js";
 import {TauriCommand, TauriEvent} from "../../tauri/events/types.js";
@@ -6,7 +6,7 @@ import {TabTypeKind} from "./useTabs.js";
 import {LocalEvent} from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 
-export function useEditorData(eventBus: MutableRefObject<EventTarget>): EditorData {
+export function useEditorData(eventBus: RefObject<EventTarget>): EditorData {
     const [editorData, setEditorData] = useState<EditorData>()
 
     useTauriEvent(
