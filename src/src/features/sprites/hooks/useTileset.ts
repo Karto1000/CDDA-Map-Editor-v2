@@ -15,6 +15,7 @@ export type UseTilesetRet = {
 export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
     const tilesheets = useRef<Tilesheets>(null)
     const spritesheetConfig = useRef<SpritesheetConfig>(null)
+    const storedObjectURLS = useRef<string[]>([])
 
     useTauriEvent(
         TauriEvent.EDITOR_DATA_CHANGED,
@@ -66,6 +67,8 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
                     const atlases = {}
                     let fallback: Tilesheet;
 
+                    storedObjectURLS.current.forEach(url => URL.revokeObjectURL(url))
+
                     for (let i = 0; i < infoResponse.data["tiles-new"].length; i++) {
                         const response = arrayBuffs[i]
 
@@ -78,6 +81,7 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
 
                         const blob = new Blob([response.data], {type: "image/png"});
                         const url = URL.createObjectURL(blob)
+                        storedObjectURLS.current.push(url)
 
                         if (spritesheetInfo.file === "fallback.png") {
                             fallback = await Tilesheet.fromURL(url, infoResponse.data.tile_info[0], spritesheetInfo)

@@ -1,7 +1,7 @@
 import {AtlasMaterial, AtlasMaterialConfig} from "./atlasMaterial.ts";
 import {
     InstancedMesh,
-    LinearMipMapNearestFilter,
+    LinearMipMapNearestFilter, Material,
     NearestFilter,
     Object3D,
     SRGBColorSpace,
@@ -145,27 +145,6 @@ export class Tilesheet {
         this.mesh.computeBoundingSphere()
     }
 
-    public removeSpriteAtPosition(position: Vector2, layer: number) {
-        let mappedInstance = this.mappedTiles.get(`${position.x}:${position.y}:${layer}`)
-
-        if (!mappedInstance) return
-
-        this.deleteInstance(mappedInstance)
-    }
-
-    public removeSpritesAtPositions(positions: Vector2[], layers: number[]) {
-        const mappedInstances = []
-
-        for (let i = 0; i++; i < positions.length) {
-            const position = positions[i]
-            const layer = layers[i]
-
-            mappedInstances.push(this.mappedTiles.get(`${position.x}:${position.y}:${layer}`))
-        }
-
-        this.deleteInstances(mappedInstances)
-    }
-
     public clear() {
         const tiles = this.mappedTiles
             .keys()
@@ -173,6 +152,11 @@ export class Tilesheet {
             .toArray()
 
         this.deleteInstances([...tiles])
+    }
+
+    public dispose() {
+        this.mesh.dispose()
+        this.material.dispose()
     }
 
     private getCoordinatesFromIndex(index: number): Vector2 {
@@ -185,12 +169,10 @@ export class Tilesheet {
         return new Vector2(x * this.atlasConfig.tileWidth, y * this.atlasConfig.tileHeight)
     }
 
-    private deleteInstance(instance: number) {
-        this.deleteInstances([instance])
-    }
-
     private deleteInstances(instances: number[]) {
         if (instances.length === 0) return
+
+        this.mesh.clear()
 
         const transform = new Object3D()
 

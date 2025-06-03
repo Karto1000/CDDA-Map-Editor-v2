@@ -302,13 +302,7 @@ export function MapViewer(props: MapViewerProps) {
             let removedSprites = false
             // Remove the current tilesheets from the scene
             if (props.tilesheets.current) {
-                for (const name of Object.keys(props.tilesheets.current.tilesheets)) {
-                    const tilesheet = props.tilesheets.current.tilesheets[name]
-                    console.log(`Removing tilesheet ${name} from scene`)
-                    props.threeConfig.current.scene.remove(tilesheet.mesh)
-                }
-
-                props.threeConfig.current.scene.add(props.tilesheets.current.fallback.mesh)
+                props.tilesheets.current.dispose(props.threeConfig)
                 removedSprites = true
             }
 

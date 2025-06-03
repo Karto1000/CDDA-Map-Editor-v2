@@ -1,3 +1,4 @@
+use crate::cdda_data::io::DeserializedCDDAJsonData;
 use crate::editor_data::{EditorData, EditorDataSaver};
 use crate::events::EDITOR_DATA_CHANGED;
 use crate::tileset::legacy_tileset::LegacyTilesheet;
@@ -6,6 +7,7 @@ use crate::{events, load_cdda_json_data, load_tilesheet};
 use log::{error, warn};
 use serde::Serialize;
 use std::fs;
+use std::ops::DerefMut;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -31,6 +33,7 @@ pub async fn cdda_installation_directory_picked(
     path: PathBuf,
     app: AppHandle,
     editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), InstallationPickedError> {
     let gfx_dir = fs::read_dir(&path.join("gfx")).map_err(|_| {
         InstallationPickedError::InvalidCDDADirectory(
@@ -55,18 +58,19 @@ pub async fn cdda_installation_directory_picked(
             .push(entry.file_name().to_string_lossy().into_owned());
     }
 
-    let mut lock = editor_data.lock().await;
-    lock.available_tilesets = Some(available_tilesets);
-    lock.config.cdda_path = Some(path);
+    let mut editor_data_lock = editor_data.lock().await;
+    editor_data_lock.available_tilesets = Some(available_tilesets);
+    editor_data_lock.config.cdda_path = Some(path);
 
     match load_cdda_json_data(
-        &lock.config.cdda_path.clone().unwrap(),
-        &lock.config.json_data_path,
+        &editor_data_lock.config.cdda_path.clone().unwrap(),
+        &editor_data_lock.config.json_data_path,
     )
     .await
     {
         Ok(data) => {
-            app.manage(Mutex::new(data));
+            let mut json_data_lock = json_data.lock().await;
+            json_data_lock.replace(data);
         },
         Err(e) => {
             warn!("{}", e);
@@ -76,7 +80,8 @@ pub async fn cdda_installation_directory_picked(
         },
     }
 
-    app.emit(EDITOR_DATA_CHANGED, lock.clone()).unwrap();
+    app.emit(EDITOR_DATA_CHANGED, editor_data_lock.clone())
+        .unwrap();
 
     Ok(())
 }
@@ -108,19 +113,19 @@ pub async fn tileset_picked(
     // This is the default tileset
     if tileset == "None" {
         editor_data_lock.config.selected_tileset = None;
-        return Ok(());
-    }
+    } else {
+        match tilesets.iter().find(|t| **t == tileset) {
+            None => return Err(TilesetPickedError::NotATileset),
+            Some(_) => {},
+        }
 
-    match tilesets.iter().find(|t| **t == tileset) {
-        None => return Err(TilesetPickedError::NotATileset),
-        Some(_) => {},
+        editor_data_lock.config.selected_tileset = Some(tileset.clone());
+        *tilesheet_lock =
+            load_tilesheet(&editor_data_lock).await.map_err(|e| {
+                error!("Failed to load tilesheet, `{0}`", e);
+                TilesetPickedError::NotATileset
+            })?;
     }
-
-    editor_data_lock.config.selected_tileset = Some(tileset.clone());
-    *tilesheet_lock = load_tilesheet(&editor_data_lock).await.map_err(|e| {
-        error!("Failed to load tilesheet, `{0}`", e);
-        TilesetPickedError::NotATileset
-    })?;
 
     let saver = EditorDataSaver {
         path: editor_data_lock.config.config_path.clone(),

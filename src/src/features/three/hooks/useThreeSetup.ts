@@ -1,4 +1,4 @@
-import {MutableRefObject, useEffect, useRef} from "react";
+import {MutableRefObject, RefObject, useEffect, useRef} from "react";
 import Stats from "stats.js";
 import {AmbientLight, OrthographicCamera, Raycaster, Scene, WebGLRenderer} from "three";
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
@@ -10,13 +10,13 @@ const MAX_ZOOM: number = 0.05;
 export const SHOW_STATS: boolean = false;
 
 export type UseThreeSetupRet = {
-    threeConfigRef: MutableRefObject<ThreeConfig>
+    threeConfigRef: RefObject<ThreeConfig>
     onResize: () => void
 }
 
 export function useThreeSetup(
-    canvasRef: MutableRefObject<HTMLCanvasElement>,
-    canvasContainerRef: MutableRefObject<HTMLDivElement>
+    canvasRef: RefObject<HTMLCanvasElement>,
+    canvasContainerRef: RefObject<HTMLDivElement>
 ): UseThreeSetupRet {
     const threeConfigRef = useRef<ThreeConfig>({
         ambientLight: undefined,
@@ -96,7 +96,7 @@ export function useThreeSetup(
         threeConfigRef.current.renderer = renderer
         threeConfigRef.current.controls = controls
         threeConfigRef.current.ambientLight = ambientLight
-    }, [canvasRef, canvasContainerRef]);
+    }, []);
 
     useEffect(() => {
         window.addEventListener("resize", onResize)
@@ -107,7 +107,7 @@ export function useThreeSetup(
             threeConfigRef.current.scene.remove(threeConfigRef.current.gridHelper)
             window.removeEventListener("resize", onResize)
         }
-    }, [threeConfigRef, canvasRef, canvasContainerRef]);
+    }, []);
 
     return {threeConfigRef, onResize}
 }

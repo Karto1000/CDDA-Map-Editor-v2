@@ -70,6 +70,11 @@ export class AtlasMaterial {
         this.setInstances.add(instance)
     }
 
+    public dispose() {
+        this.material.dispose()
+        this.geometry.dispose()
+    }
+
     public setUVSAt(instances: number[], spritesheetTexturesPos: Vector2[]) {
         for (let i = 0; i < instances.length; i++) {
             const instance = instances[i]

@@ -1,6 +1,8 @@
 import {DrawLocalSprite, Tilesheet} from "./tilesheet.ts";
 import {Vector2, Vector3} from "three";
 import {TileInfo} from "../../tauri/types/spritesheet.js";
+import {RefObject} from "react";
+import {ThreeConfig} from "../three/types/three.js";
 
 export const MAX_DEPTH = 999997
 const MAX_ROW = 1000
@@ -209,6 +211,18 @@ export class Tilesheets {
         this.fallback.drawSpriteLocalIndexBatched(batches[zLevel])
     }
 
+    public dispose(threeConfig: RefObject<ThreeConfig>) {
+        for (const name of Object.keys(this.tilesheets)) {
+            const tilesheet = this.tilesheets[name]
+            console.log(`Removing tilesheet ${name} from scene`)
+            tilesheet.dispose()
+            threeConfig.current.scene.remove(tilesheet.mesh)
+        }
+
+        this.fallback.dispose()
+        threeConfig.current.scene.remove(this.fallback.mesh)
+    }
+
     public clearAll() {
         for (let k of Object.keys(this.tilesheets)) {
             const tilesheet = this.tilesheets[k]
@@ -218,13 +232,6 @@ export class Tilesheets {
         this.cachedStaticBatches = {}
         this.cachedFallbackBatches = {}
         this.animatedSprites = []
-    }
-
-    public removeSprite(position: Vector2, layer: number) {
-        for (let k of Object.keys(this.tilesheets)) {
-            const tilesheet = this.tilesheets[k]
-            tilesheet.removeSpriteAtPosition(position, layer)
-        }
     }
 
     private getLocalDrawSprite(

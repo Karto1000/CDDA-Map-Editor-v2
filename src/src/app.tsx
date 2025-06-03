@@ -50,7 +50,10 @@ function App() {
     const {spritesheetConfig, tilesheets} = useTileset(eventBus)
     const {openMapWindowRef, settingsWindowRef, newMapWindowRef} = useWindows()
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
-    const [sidebarContent, setSidebarContent] = useState<SidebarContent>({chosenProperties: <></>})
+    const [sidebarContent, setSidebarContent] = useState<SidebarContent>({
+        chosenProperties: <></>,
+        calculatedParameters: <></>
+    })
 
     useEffect(() => {
         (async () => {
@@ -82,7 +85,7 @@ function App() {
                 return <></>
         }
 
-        return <NoTabScreen openMapWindowRef={openMapWindowRef}/>
+        return <NoTabScreen openMapWindowRef={openMapWindowRef} newMapWindowRef={newMapWindowRef}/>
     }
 
     const sideMenuTabs = useMemo(() => {
