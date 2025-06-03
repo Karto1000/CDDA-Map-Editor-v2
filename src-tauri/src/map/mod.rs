@@ -533,6 +533,8 @@ impl MapData {
         Ok(local_mapped_cdda_ids)
     }
 
+    /// Transform 2d coordinates based on the rotation of the map
+    /// This is used to rotate nested mapgens as well as vehicles and other tiles which need to be rotated
     fn transform_coordinates(&self, position: &IVec2) -> IVec2 {
         let (map_width, map_height) = (self.map_size.x, self.map_size.y);
 

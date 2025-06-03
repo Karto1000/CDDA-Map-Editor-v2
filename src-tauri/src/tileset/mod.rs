@@ -8,8 +8,8 @@ use crate::tileset::legacy_tileset::CardinalDirection::{
     East, North, South, West,
 };
 use crate::tileset::legacy_tileset::{
-    AdditionalTileIds, CardinalDirection, FinalIds, MappedCDDAId, Rotated,
-    Rotates, Rotation, SpriteIndex, TilesheetCDDAId,
+    CardinalDirection, FinalIds, MappedCDDAId, Rotated, Rotates, Rotation,
+    SpriteIndex, TilesheetCDDAId,
 };
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
 use indexmap::IndexMap;
@@ -92,55 +92,53 @@ const FALLBACK_TILE_MAPPING: &'static [(&'static str, u32)] = &[
 ];
 
 pub trait Tilesheet {
+    fn get_fallback(
+        &self,
+        id: &MappedCDDAId,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> SpriteIndex;
+
     fn get_sprite(
         &self,
         id: &MappedCDDAId,
         json_data: &DeserializedCDDAJsonData,
-    ) -> SpriteKind;
+    ) -> Option<&Sprite>;
 }
 
 #[derive(Debug)]
-pub enum SpriteKind<'a> {
+pub enum SpriteOrFallback<'a> {
     Exists(&'a Sprite),
     Fallback(SpriteIndex),
 }
 
 #[derive(Debug)]
-pub struct MultitileSprite {
-    pub ids: ForeBackIds<AdditionalTileIds, FinalIds>,
-    pub animated: bool,
-    pub rotates: bool,
+pub struct SingleSprite {
+    ids: ForeBackIds<FinalIds, FinalIds>,
+    rotates: bool,
+    animated: bool,
 }
 
 #[derive(Debug)]
 pub enum Sprite {
-    Single {
-        ids: ForeBackIds<FinalIds, FinalIds>,
-        rotates: bool,
-        animated: bool,
-    },
+    Single(SingleSprite),
     Multitile {
-        ids: ForeBackIds<FinalIds, FinalIds>,
-
-        animated: bool,
-        rotates: bool,
-
-        edge: Option<MultitileSprite>,
-        corner: Option<MultitileSprite>,
-        center: Option<MultitileSprite>,
-        t_connection: Option<MultitileSprite>,
-        end_piece: Option<MultitileSprite>,
-        unconnected: Option<MultitileSprite>,
-        broken: ForeBackIds<FinalIds, FinalIds>,
-        open: ForeBackIds<FinalIds, FinalIds>,
+        fallback: SingleSprite,
+        edge: Option<SingleSprite>,
+        corner: Option<SingleSprite>,
+        center: Option<SingleSprite>,
+        t_connection: Option<SingleSprite>,
+        end_piece: Option<SingleSprite>,
+        unconnected: Option<SingleSprite>,
+        broken: Option<SingleSprite>,
+        open: Option<SingleSprite>,
     },
 }
 
 impl Sprite {
     pub fn is_animated(&self) -> bool {
         match self {
-            Sprite::Single { animated, .. } => animated.clone(),
-            Sprite::Multitile { animated, .. } => animated.clone(),
+            Sprite::Single(single) => single.animated.clone(),
+            Sprite::Multitile { fallback, .. } => fallback.animated.clone(),
         }
     }
 
@@ -483,32 +481,32 @@ impl Sprite {
     }
 
     fn get_sprite_from_multitile_sprite(
-        id: &MappedCDDAId,
-        ids: &ForeBackIds<FinalIds, FinalIds>,
+        mapped_id: &MappedCDDAId,
+        fallback_ids: &ForeBackIds<FinalIds, FinalIds>,
         direction: &CardinalDirection,
-        add_id: &AdditionalTileType,
-        sprite: Option<&MultitileSprite>,
-        rotates: bool,
+        additional_tile_type: &AdditionalTileType,
+        multitile_sprite: Option<&SingleSprite>,
+        does_rotate: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
-        match sprite {
-            None => match &ids.fg {
+        match multitile_sprite {
+            None => match &fallback_ids.fg {
                 None => None,
-                Some(fg) => Self::get_random_sprite(id, fg, rotates),
+                Some(fg) => Self::get_random_sprite(mapped_id, fg, does_rotate),
             },
             Some(sprite) => match &sprite.ids.fg {
                 None => None,
                 Some(fg) => {
-                    let fg_ids = match &ids.fg {
+                    let fg_ids = match &fallback_ids.fg {
                         None => return None,
                         Some(fg_ids) => fg_ids,
                     };
 
                     Self::get_random_additional_tile_sprite(
-                        id,
+                        mapped_id,
                         fg_ids,
                         fg,
                         direction.clone(),
-                        add_id.clone(),
+                        additional_tile_type.clone(),
                         sprite.rotates,
                     )
                 },
@@ -524,27 +522,22 @@ impl Sprite {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
-            Sprite::Single {
-                ids,
-                animated,
-                rotates,
-            } => match *animated {
-                true => match &ids.fg {
+            Sprite::Single(s) => match s.animated {
+                true => match &s.ids.fg {
                     None => None,
                     Some(fg) => Self::get_random_animated_sprite(
-                        mapped_id, fg, *rotates,
+                        mapped_id, fg, s.rotates,
                     ),
                 },
-                false => match &ids.fg {
+                false => match &s.ids.fg {
                     None => None,
                     Some(fg) => {
-                        Self::get_random_sprite(mapped_id, fg, *rotates)
+                        Self::get_random_sprite(mapped_id, fg, s.rotates)
                     },
                 },
             },
             Sprite::Multitile {
-                ids,
-                animated,
+                fallback,
                 center,
                 corner,
                 t_connection,
@@ -553,34 +546,51 @@ impl Sprite {
                 end_piece,
                 broken,
                 open,
-                rotates,
-            } => match *animated {
+            } => match fallback.animated {
                 true => todo!(),
                 false => {
                     if mapped_id.is_broken {
-                        return match &broken.fg {
-                            None => match &ids.fg {
-                                None => None,
-                                Some(fg) => Self::get_random_sprite(
-                                    mapped_id, fg, *rotates,
-                                ),
+                        return match broken {
+                            None => {
+                                return None;
                             },
-                            Some(fg) => {
-                                Self::get_random_sprite(mapped_id, fg, *rotates)
+                            Some(broken) => match &broken.ids.fg {
+                                None => match &fallback.ids.fg {
+                                    None => None,
+                                    Some(fg) => Self::get_random_sprite(
+                                        mapped_id,
+                                        fg,
+                                        fallback.rotates,
+                                    ),
+                                },
+                                Some(fg) => Self::get_random_sprite(
+                                    mapped_id,
+                                    fg,
+                                    fallback.rotates,
+                                ),
                             },
                         };
                     }
 
                     if mapped_id.is_open {
-                        return match &open.fg {
-                            None => match &ids.fg {
-                                None => None,
-                                Some(fg) => Self::get_random_sprite(
-                                    mapped_id, fg, *rotates,
-                                ),
+                        return match open {
+                            None => {
+                                return None;
                             },
-                            Some(fg) => {
-                                Self::get_random_sprite(mapped_id, fg, *rotates)
+                            Some(open) => match &open.ids.fg {
+                                None => match &fallback.ids.fg {
+                                    None => None,
+                                    Some(fg) => Self::get_random_sprite(
+                                        mapped_id,
+                                        fg,
+                                        fallback.rotates,
+                                    ),
+                                },
+                                Some(fg) => Self::get_random_sprite(
+                                    mapped_id,
+                                    fg,
+                                    fallback.rotates,
+                                ),
                             },
                         };
                     }
@@ -596,161 +606,161 @@ impl Sprite {
                         (true, true, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &North,
                                 &Center,
                                 center.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, true, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &East,
                                 &TConnection,
                                 t_connection.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, true, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &North,
                                 &TConnection,
                                 t_connection.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, false, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &West,
                                 &TConnection,
                                 t_connection.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, true, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &South,
                                 &TConnection,
                                 t_connection.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, true, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &North,
                                 &Corner,
                                 corner.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, false, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &West,
                                 &Corner,
                                 corner.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, true, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &East,
                                 &Corner,
                                 corner.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, false, true, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &South,
                                 &Corner,
                                 corner.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, false, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &North,
                                 &EndPiece,
                                 end_piece.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, true, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &East,
                                 &EndPiece,
                                 end_piece.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, false, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &South,
                                 &EndPiece,
                                 end_piece.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, false, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &West,
                                 &EndPiece,
                                 end_piece.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, true, false, true) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &East,
                                 &Edge,
                                 edge.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (true, false, true, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &North,
                                 &Edge,
                                 edge.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                         (false, false, false, false) => {
                             Self::get_sprite_from_multitile_sprite(
                                 mapped_id,
-                                ids,
+                                &fallback.ids,
                                 &North,
                                 &Unconnected,
                                 unconnected.as_ref(),
-                                *rotates,
+                                fallback.rotates,
                             )
                         },
                     }
@@ -767,27 +777,24 @@ impl Sprite {
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
-            Sprite::Single {
-                ids,
-                animated,
-                rotates,
-            } => match *animated {
-                true => match &ids.bg {
+            Sprite::Single(single) => match single.animated {
+                true => match &single.ids.bg {
                     None => None,
                     Some(bg) => Self::get_random_animated_sprite(
-                        mapped_id, bg, *rotates,
+                        mapped_id,
+                        bg,
+                        single.rotates,
                     ),
                 },
-                false => match &ids.bg {
+                false => match &single.ids.bg {
                     None => None,
                     Some(bg) => {
-                        Self::get_random_sprite(mapped_id, bg, *rotates)
+                        Self::get_random_sprite(mapped_id, bg, single.rotates)
                     },
                 },
             },
             Sprite::Multitile {
-                ids,
-                animated,
+                fallback,
                 center,
                 corner,
                 t_connection,
@@ -796,34 +803,42 @@ impl Sprite {
                 end_piece,
                 broken,
                 open,
-                rotates,
-            } => match *animated {
+            } => match fallback.animated {
                 true => todo!(),
                 false => {
+                    let random_fallback_sprite = match &fallback.ids.bg {
+                        None => None,
+                        Some(bg) => Self::get_random_sprite(
+                            mapped_id,
+                            bg,
+                            fallback.rotates,
+                        ),
+                    };
+
                     if mapped_id.is_broken {
-                        return match &broken.bg {
-                            None => match &ids.bg {
-                                None => None,
+                        return match broken {
+                            None => return None,
+                            Some(broken) => match &broken.ids.bg {
+                                None => random_fallback_sprite,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
-                            },
-                            Some(bg) => {
-                                Self::get_random_sprite(mapped_id, bg, *rotates)
                             },
                         };
                     }
 
                     if mapped_id.is_open {
-                        return match &open.bg {
-                            None => match &ids.bg {
-                                None => None,
+                        return match open {
+                            None => return None,
+                            Some(open) => match &open.ids.bg {
+                                None => random_fallback_sprite,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
-                            },
-                            Some(bg) => {
-                                Self::get_random_sprite(mapped_id, bg, *rotates)
                             },
                         };
                     }
@@ -837,16 +852,13 @@ impl Sprite {
 
                     match matching_list {
                         (true, true, true, true) => match center {
-                            None => match &ids.bg {
-                                None => None,
-                                Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
-                                ),
-                            },
+                            None => random_fallback_sprite,
                             Some(center) => match &center.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
                             },
                         },
@@ -854,16 +866,13 @@ impl Sprite {
                         | (true, true, false, true)
                         | (true, false, true, true)
                         | (false, true, true, true) => match t_connection {
-                            None => match &ids.bg {
-                                None => None,
-                                Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
-                                ),
-                            },
+                            None => random_fallback_sprite,
                             Some(t_connection) => match &t_connection.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
                             },
                         },
@@ -871,16 +880,13 @@ impl Sprite {
                         | (true, false, false, true)
                         | (false, true, true, false)
                         | (false, false, true, true) => match corner {
-                            None => match &ids.bg {
-                                None => None,
-                                Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
-                                ),
-                            },
+                            None => random_fallback_sprite,
                             Some(corner) => match &corner.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
                             },
                         },
@@ -888,45 +894,36 @@ impl Sprite {
                         | (false, true, false, false)
                         | (false, false, true, false)
                         | (false, false, false, true) => match end_piece {
-                            None => match &ids.bg {
-                                None => None,
-                                Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
-                                ),
-                            },
+                            None => random_fallback_sprite,
                             Some(end_piece) => match &end_piece.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
                             },
                         },
                         (false, true, false, true)
                         | (true, false, true, false) => match edge {
-                            None => match &ids.bg {
-                                None => None,
-                                Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
-                                ),
-                            },
+                            None => random_fallback_sprite,
                             Some(edge) => match &edge.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
                             },
                         },
                         (false, false, false, false) => match unconnected {
-                            None => match &ids.bg {
-                                None => None,
-                                Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
-                                ),
-                            },
+                            None => random_fallback_sprite,
                             Some(unconnected) => match &unconnected.ids.bg {
                                 None => None,
                                 Some(bg) => Self::get_random_sprite(
-                                    mapped_id, bg, *rotates,
+                                    mapped_id,
+                                    bg,
+                                    fallback.rotates,
                                 ),
                             },
                         },

@@ -9,7 +9,7 @@ use crate::map::importing::{
     OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
     SingleMapDataImporterError,
 };
-use crate::map::viewer::handlers::SpriteType;
+use crate::map::viewer::handlers::DisplaySprite;
 use crate::map::{
     CalculateParametersError, CellRepresentation, FurnitureRepresentation,
     GetMappedCDDAIdsError, MapData, DEFAULT_MAP_DATA_SIZE,
@@ -17,7 +17,7 @@ use crate::map::{
 use crate::tileset::legacy_tileset::{
     MappedCDDAId, MappedCDDAIdsForTile, TilesheetCDDAId,
 };
-use crate::tileset::{AdjacentSprites, SpriteKind, SpriteLayer};
+use crate::tileset::{AdjacentSprites, SpriteLayer, SpriteOrFallback};
 use crate::util::{IVec3JsonKey, Load, Save, SaveError, UVec2JsonKey};
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;

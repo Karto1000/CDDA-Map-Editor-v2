@@ -8,7 +8,7 @@ use crate::tileset::legacy_tileset::tile_config::{
 };
 use crate::tileset::MeabyWeightedSprite::Weighted;
 use crate::tileset::{
-    ForeBackIds, MeabyWeightedSprite, MultitileSprite, Sprite, SpriteKind,
+    ForeBackIds, MeabyWeightedSprite, SingleSprite, Sprite, SpriteOrFallback,
     Tilesheet, WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
 };
 use crate::util::Load;
@@ -22,7 +22,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
-use std::ops::Add;
+use std::ops::{Add, BitAndAssign};
 use std::ptr::write;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
@@ -31,7 +31,6 @@ pub(crate) mod tile_config;
 
 pub type SpriteIndex = u32;
 pub type FinalIds = Option<Vec<WeightedSprite<Rotates>>>;
-pub type AdditionalTileIds = Option<Vec<WeightedSprite<Rotates>>>;
 
 #[derive(Debug, Default, Clone, Eq, PartialEq)]
 pub enum Rotation {
@@ -368,8 +367,8 @@ fn get_multitile_sprite_from_additional_tiles(
 ) -> Result<Sprite, Error> {
     let mut additional_tile_ids = HashMap::new();
     // Special cases for open and broken
-    let mut broken: Option<ForeBackIds<FinalIds, FinalIds>> = None;
-    let mut open: Option<ForeBackIds<FinalIds, FinalIds>> = None;
+    let mut broken: Option<SingleSprite> = None;
+    let mut open: Option<SingleSprite> = None;
 
     for additional_tile in additional_tiles {
         match additional_tile.id {
@@ -377,13 +376,21 @@ fn get_multitile_sprite_from_additional_tiles(
                 let fg = to_weighted_vec(additional_tile.fg.clone());
                 let bg = to_weighted_vec(additional_tile.bg.clone());
 
-                broken = Some(ForeBackIds::new(fg, bg))
+                broken = Some(SingleSprite {
+                    ids: ForeBackIds::new(fg, bg),
+                    animated: false,
+                    rotates: false,
+                });
             },
             AdditionalTileType::Open => {
                 let fg = to_weighted_vec(additional_tile.fg.clone());
                 let bg = to_weighted_vec(additional_tile.bg.clone());
 
-                open = Some(ForeBackIds::new(fg, bg))
+                open = Some(SingleSprite {
+                    ids: ForeBackIds::new(fg, bg),
+                    animated: false,
+                    rotates: false,
+                });
             },
             _ => {
                 let fg = to_weighted_vec(additional_tile.fg.clone());
@@ -391,7 +398,7 @@ fn get_multitile_sprite_from_additional_tiles(
 
                 additional_tile_ids.insert(
                     additional_tile.id.clone(),
-                    MultitileSprite {
+                    SingleSprite {
                         ids: ForeBackIds::new(fg, bg),
                         animated: additional_tile.animated.unwrap_or(false),
                         rotates: additional_tile.rotates.unwrap_or(true),
@@ -405,9 +412,11 @@ fn get_multitile_sprite_from_additional_tiles(
     let bg = to_weighted_vec(tile.bg.clone());
 
     Ok(Sprite::Multitile {
-        ids: ForeBackIds::new(fg, bg),
-        rotates: tile.rotates.unwrap_or(false),
-        animated: tile.animated.unwrap_or(false),
+        fallback: SingleSprite {
+            ids: ForeBackIds::new(fg, bg),
+            rotates: tile.rotates.unwrap_or(false),
+            animated: tile.animated.unwrap_or(false),
+        },
         center: additional_tile_ids.remove(&AdditionalTileType::Center),
         corner: additional_tile_ids.remove(&AdditionalTileType::Corner),
         edge: additional_tile_ids.remove(&AdditionalTileType::Edge),
@@ -416,8 +425,8 @@ fn get_multitile_sprite_from_additional_tiles(
         unconnected: additional_tile_ids
             .remove(&AdditionalTileType::Unconnected),
         end_piece: additional_tile_ids.remove(&AdditionalTileType::EndPiece),
-        broken: broken.unwrap_or(ForeBackIds::new(None, None)),
-        open: open.unwrap_or(ForeBackIds::new(None, None)),
+        broken,
+        open,
     })
 }
 
@@ -427,11 +436,56 @@ pub struct LegacyTilesheet {
 }
 
 impl Tilesheet for LegacyTilesheet {
+    fn get_fallback(
+        &self,
+        id: &MappedCDDAId,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> SpriteIndex {
+        match json_data.terrain.get(&id.tilesheet_id.id) {
+            None => {},
+            Some(t) => {
+                return self
+                    .fallback_map
+                    .get(&format!(
+                        "{}_{}",
+                        t.symbol.unwrap_or('?'),
+                        t.color
+                            .clone()
+                            .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                            .into_single()
+                            .unwrap_or("WHITE".to_string())
+                    ))
+                    .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
+                    .clone()
+            },
+        }
+
+        match json_data.furniture.get(&id.tilesheet_id.id) {
+            None => {},
+            Some(f) => {
+                return self
+                    .fallback_map
+                    .get(&format!(
+                        "{}_{}",
+                        f.symbol.unwrap_or('?'),
+                        f.color
+                            .clone()
+                            .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                            .into_single()
+                            .unwrap_or("WHITE".to_string())
+                    ))
+                    .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
+                    .clone()
+            },
+        };
+
+        FALLBACK_TILE_MAPPING.first().unwrap().1
+    }
     fn get_sprite(
         &self,
         id: &MappedCDDAId,
         json_data: &DeserializedCDDAJsonData,
-    ) -> SpriteKind {
+    ) -> Option<&Sprite> {
         match self.id_map.get(&id.tilesheet_id.full()) {
             None => {
                 debug!(
@@ -457,86 +511,14 @@ impl Tilesheet for LegacyTilesheet {
                     },
                 }
 
-                match self.get_looks_like_sprite(
+                self.get_looks_like_sprite(
                     &sliced_postfix.tilesheet_id.id,
                     &json_data,
-                ) {
-                    None => {
-                        debug!(
-                            "Could not find {} in tilesheet ids or looks_like property, using fallback",
-                            sliced_postfix.tilesheet_id.full()
-                        );
-
-                        match json_data.terrain.get(&id.tilesheet_id.id) {
-                            None => {},
-                            Some(t) => {
-                                return SpriteKind::Fallback(
-                                    self.fallback_map
-                                        .get(&format!(
-                                            "{}_{}",
-                                            t.symbol.unwrap_or('?'),
-                                            t.color
-                                                .clone()
-                                                .unwrap_or(MeabyVec::Single(
-                                                    "WHITE".to_string()
-                                                ))
-                                                .into_single()
-                                                .unwrap_or("WHITE".to_string())
-                                        ))
-                                        .unwrap_or(
-                                            &FALLBACK_TILE_MAPPING
-                                                .first()
-                                                .unwrap()
-                                                .1,
-                                        )
-                                        .clone(),
-                                )
-                            },
-                        }
-
-                        match json_data.furniture.get(&id.tilesheet_id.id) {
-                            None => {},
-                            Some(f) => {
-                                return SpriteKind::Fallback(
-                                    self.fallback_map
-                                        .get(&format!(
-                                            "{}_{}",
-                                            f.symbol.unwrap_or('?'),
-                                            f.color
-                                                .clone()
-                                                .unwrap_or(MeabyVec::Single(
-                                                    "WHITE".to_string()
-                                                ))
-                                                .into_single()
-                                                .unwrap_or("WHITE".to_string())
-                                        ))
-                                        .unwrap_or(
-                                            &FALLBACK_TILE_MAPPING
-                                                .first()
-                                                .unwrap()
-                                                .1,
-                                        )
-                                        .clone(),
-                                )
-                            },
-                        };
-
-                        SpriteKind::Fallback(
-                            FALLBACK_TILE_MAPPING.first().unwrap().1,
-                        )
-                    },
-                    Some(s) => {
-                        debug!(
-                            "Found looks like sprite with id {}",
-                            sliced_postfix.tilesheet_id.full()
-                        );
-                        SpriteKind::Exists(s)
-                    },
-                }
+                )
             },
             Some(s) => {
                 debug!("Found sprite with id {}", id.tilesheet_id.full());
-                SpriteKind::Exists(s)
+                Some(s)
             },
         }
     }
@@ -652,11 +634,11 @@ impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
                     tile.id.for_each(|id| {
                         id_map.insert(
                             id.clone(),
-                            Sprite::Single {
+                            Sprite::Single(SingleSprite {
                                 ids: ForeBackIds::new(fg.clone(), bg.clone()),
                                 animated: tile.animated.unwrap_or(false),
                                 rotates: tile.rotates.unwrap_or(false),
-                            },
+                            }),
                         );
                     });
                 }

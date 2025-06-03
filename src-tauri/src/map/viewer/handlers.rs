@@ -26,10 +26,10 @@ use crate::tileset::legacy_tileset::LegacyTilesheet;
 use crate::tileset::legacy_tileset::MappedCDDAId;
 use crate::tileset::legacy_tileset::MappedCDDAIdsForTile;
 use crate::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::tileset::AdjacentSprites;
-use crate::tileset::SpriteKind;
 use crate::tileset::SpriteLayer;
+use crate::tileset::SpriteOrFallback;
 use crate::tileset::Tilesheet;
+use crate::tileset::{AdjacentSprites, Sprite};
 use crate::util;
 use crate::util::get_current_project_mut;
 use crate::util::get_json_data;
@@ -217,108 +217,94 @@ impl PartialEq for FallbackSprite {
 impl Eq for FallbackSprite {}
 
 #[derive(Debug)]
-pub enum SpriteType {
+pub enum DisplaySprite {
     Static(StaticSprite),
     Animated(AnimatedSprite),
     Fallback(FallbackSprite),
 }
 
-impl SpriteType {
-    pub fn get_sprite_type_from_sprite_kind(
-        sprite_kind: &SpriteKind,
+impl DisplaySprite {
+    pub fn get_display_sprite_from_sprite(
+        sprite: &Sprite,
         tile_id: &MappedCDDAId,
         tile_position: IVec3,
         tile_layer: TileLayer,
         adjacent_sprites: &AdjacentSprites,
         json_data: &DeserializedCDDAJsonData,
-    ) -> (Option<SpriteType>, Option<SpriteType>) {
+    ) -> (Option<DisplaySprite>, Option<DisplaySprite>) {
         let position_uvec2 =
             UVec2::new(tile_position.x as u32, tile_position.y as u32);
 
-        match sprite_kind {
-            SpriteKind::Exists(sprite) => {
-                let fg = match sprite.get_fg_id(
-                    &tile_id,
-                    &tile_layer,
-                    adjacent_sprites,
-                    json_data,
-                ) {
-                    None => None,
-                    Some(sprite_id) => match sprite.is_animated() {
-                        true => {
-                            let display_sprite = AnimatedSprite {
-                                position: UVec2JsonKey(position_uvec2),
-                                layer: (tile_layer.clone() as u32) * 2
-                                    + SpriteLayer::Fg as u32,
-                                indices: sprite_id.data.into_vec(),
-                                rotate_deg: sprite_id.rotation.deg()
-                                    + tile_id.rotation.deg(),
-                                z: tile_position.z,
-                            };
+        let fg = match sprite.get_fg_id(
+            &tile_id,
+            &tile_layer,
+            adjacent_sprites,
+            json_data,
+        ) {
+            None => None,
+            Some(sprite_id) => match sprite.is_animated() {
+                true => {
+                    let display_sprite = AnimatedSprite {
+                        position: UVec2JsonKey(position_uvec2),
+                        layer: (tile_layer.clone() as u32) * 2
+                            + SpriteLayer::Fg as u32,
+                        indices: sprite_id.data.into_vec(),
+                        rotate_deg: sprite_id.rotation.deg()
+                            + tile_id.rotation.deg(),
+                        z: tile_position.z,
+                    };
 
-                            Some(SpriteType::Animated(display_sprite))
-                        },
-                        false => {
-                            let display_sprite = StaticSprite {
-                                position: UVec2JsonKey(position_uvec2),
-                                layer: (tile_layer.clone() as u32) * 2
-                                    + SpriteLayer::Fg as u32,
-                                index: sprite_id.data.into_single().unwrap(),
-                                rotate_deg: sprite_id.rotation.deg(),
-                                z: tile_position.z,
-                            };
+                    Some(DisplaySprite::Animated(display_sprite))
+                },
+                false => {
+                    let display_sprite = StaticSprite {
+                        position: UVec2JsonKey(position_uvec2),
+                        layer: (tile_layer.clone() as u32) * 2
+                            + SpriteLayer::Fg as u32,
+                        index: sprite_id.data.into_single().unwrap(),
+                        rotate_deg: sprite_id.rotation.deg(),
+                        z: tile_position.z,
+                    };
 
-                            Some(SpriteType::Static(display_sprite))
-                        },
-                    },
-                };
-
-                let bg = match sprite.get_bg_id(
-                    &tile_id,
-                    &tile_layer,
-                    adjacent_sprites,
-                    json_data,
-                ) {
-                    None => None,
-                    Some(id) => match sprite.is_animated() {
-                        true => {
-                            let display_sprite = AnimatedSprite {
-                                position: UVec2JsonKey(position_uvec2),
-                                layer: (tile_layer as u32) * 2
-                                    + SpriteLayer::Bg as u32,
-                                indices: id.data.into_vec(),
-                                rotate_deg: id.rotation.deg(),
-                                z: tile_position.z,
-                            };
-
-                            Some(SpriteType::Animated(display_sprite))
-                        },
-                        false => {
-                            let display_sprite = StaticSprite {
-                                position: UVec2JsonKey(position_uvec2),
-                                layer: (tile_layer as u32) * 2
-                                    + SpriteLayer::Bg as u32,
-                                index: id.data.into_single().unwrap(),
-                                rotate_deg: id.rotation.deg(),
-                                z: tile_position.z,
-                            };
-
-                            Some(SpriteType::Static(display_sprite))
-                        },
-                    },
-                };
-
-                (fg, bg)
+                    Some(DisplaySprite::Static(display_sprite))
+                },
             },
-            SpriteKind::Fallback(sprite_index) => (
-                Some(SpriteType::Fallback(FallbackSprite {
-                    position: UVec2JsonKey(position_uvec2),
-                    index: *sprite_index,
-                    z: tile_position.z,
-                })),
-                None,
-            ),
-        }
+        };
+
+        let bg = match sprite.get_bg_id(
+            &tile_id,
+            &tile_layer,
+            adjacent_sprites,
+            json_data,
+        ) {
+            None => None,
+            Some(id) => match sprite.is_animated() {
+                true => {
+                    let display_sprite = AnimatedSprite {
+                        position: UVec2JsonKey(position_uvec2),
+                        layer: (tile_layer as u32) * 2 + SpriteLayer::Bg as u32,
+                        indices: id.data.into_vec(),
+                        rotate_deg: id.rotation.deg(),
+                        z: tile_position.z,
+                    };
+
+                    Some(DisplaySprite::Animated(display_sprite))
+                },
+                false => {
+                    let display_sprite = StaticSprite {
+                        position: UVec2JsonKey(position_uvec2),
+                        layer: (tile_layer as u32) * 2 + SpriteLayer::Bg as u32,
+                        index: id.data.into_single().unwrap(),
+                        rotate_deg: id.rotation.deg(),
+                        z: tile_position.z,
+                    };
+
+                    Some(DisplaySprite::Static(display_sprite))
+                },
+            },
+        };
+
+        (fg, bg)
     }
 }
 
@@ -368,13 +354,13 @@ pub async fn get_sprites(
     macro_rules! insert_sprite_type {
         ($val:expr) => {
             match $val {
-                SpriteType::Static(s) => {
+                DisplaySprite::Static(s) => {
                     static_sprites.insert(s);
                 },
-                SpriteType::Animated(a) => {
+                DisplaySprite::Animated(a) => {
                     animated_sprites.insert(a);
                 },
-                SpriteType::Fallback(f) => {
+                DisplaySprite::Fallback(f) => {
                     // fallback_sprites.
                     // insert(f);
                 },
@@ -383,11 +369,8 @@ pub async fn get_sprites(
     }
 
     for (_, map_collection) in project.maps.iter_mut() {
-        // we need to calculate the parameters
-        // for the predecessor here because we
-        // cannot borrow json data as
-        // mutable inside the
-        // get_mapped_cdda_ids function
+        // we need to calculate the parameters for the predecessor here because we
+        // cannot borrow json data as mutable inside the get_mapped_cdda_ids function
         map_collection.calculate_predecessor_parameters(&mut json_data);
     }
 
@@ -403,12 +386,12 @@ pub async fn get_sprites(
             map_collection.get_mapped_cdda_ids(json_data, *z).unwrap();
 
         let tile_map: Vec<
-            HashMap<TileLayer, (Option<SpriteType>, Option<SpriteType>)>,
+            HashMap<TileLayer, (Option<DisplaySprite>, Option<DisplaySprite>)>,
         > = local_mapped_cdda_ids
             .ids
             .par_iter()
             .map(|(p, identifier_group)| {
-                let cell_3d_coords = IVec3::new(p.x, p.y, *z);
+                let tile_3d_coords = IVec3::new(p.x, p.y, *z);
 
                 if identifier_group.terrain.is_none()
                     && identifier_group.furniture.is_none()
@@ -416,7 +399,7 @@ pub async fn get_sprites(
                     warn!(
                         "No sprites found for identifier_group {:?} at \
                          coordinates {}",
-                        identifier_group, cell_3d_coords
+                        identifier_group, tile_3d_coords
                     );
 
                     return HashMap::new();
@@ -451,19 +434,40 @@ pub async fn get_sprites(
                         },
                     };
 
-                    let sprite_kind = tilesheet.get_sprite(&id, &json_data);
+                    let sprite = tilesheet.get_sprite(&id, &json_data);
 
                     let adjacent_idents = local_mapped_cdda_ids
-                        .get_adjacent_identifiers(cell_3d_coords, &layer);
+                        .get_adjacent_identifiers(tile_3d_coords, &layer);
 
-                    let (fg, bg) = SpriteType::get_sprite_type_from_sprite_kind(
-                        &sprite_kind,
-                        &id,
-                        cell_3d_coords.clone(),
-                        layer.clone(),
-                        &adjacent_idents,
-                        json_data,
-                    );
+                    let (fg, bg) = match sprite {
+                        None => {
+                            let fallback =
+                                tilesheet.get_fallback(&id, &json_data);
+                            let position_uvec2 = UVec2::new(
+                                tile_3d_coords.x as u32,
+                                tile_3d_coords.y as u32,
+                            );
+
+                            (
+                                Some(DisplaySprite::Fallback(FallbackSprite {
+                                    position: UVec2JsonKey(position_uvec2),
+                                    index: fallback,
+                                    z: tile_3d_coords.z,
+                                })),
+                                None,
+                            )
+                        },
+                        Some(sprite) => {
+                            DisplaySprite::get_display_sprite_from_sprite(
+                                &sprite,
+                                &id,
+                                tile_3d_coords.clone(),
+                                layer.clone(),
+                                &adjacent_idents,
+                                json_data,
+                            )
+                        },
+                    };
 
                     layer_map.insert(layer.clone(), (fg, bg));
                 }
