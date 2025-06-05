@@ -88,7 +88,7 @@ pub(super) struct Tile {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub(super) struct FallbackSpritesheet {
+pub struct FallbackSpritesheet {
     pub file: String,
 
     // TODO: Idk what this is for
@@ -98,19 +98,40 @@ pub(super) struct FallbackSpritesheet {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub(super) struct AsciiCharGroup {
+pub struct AsciiCharGroup {
     pub offset: i32,
     pub bold: bool,
     pub color: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub(super) struct TileInfo {
-    pub pixelscale: u32,
+pub struct TileInfo {
+    pub pixelscale: Option<u32>,
     pub width: u32,
     pub height: u32,
-    pub zlevel_height: u32,
-    pub iso: bool,
-    pub retract_dist_min: f32,
-    pub retract_dist_max: f32,
+    pub zlevel_height: Option<u32>,
+    pub iso: Option<bool>,
+    pub retract_dist_min: Option<f32>,
+    pub retract_dist_max: Option<f32>,
+}
+
+#[cfg(test)]
+mod tests {
+    use cdda_lib::types::Weighted;
+    use serde_json::json;
+
+    #[test]
+    pub fn test_deserialize() {
+        let data = json!(
+          [
+            { "weight": 8, "sprite": 1410 },
+            { "weight": 8, "sprite": 1411 },
+            { "weight": 8, "sprite": 1412 },
+            { "weight": 8, "sprite": 1413 }
+          ]
+        );
+
+        let tile: Vec<Weighted<u32>> = serde_json::from_value(data).unwrap();
+        dbg!(tile);
+    }
 }

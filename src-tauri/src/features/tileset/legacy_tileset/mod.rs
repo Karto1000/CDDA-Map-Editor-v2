@@ -18,6 +18,7 @@ use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
 mod data;
+pub mod fallback;
 pub mod io;
 
 pub type SpriteIndex = u32;
@@ -255,40 +256,68 @@ impl Tilesheet for LegacyTilesheet {
         match json_data.terrain.get(&id.tilesheet_id.id) {
             None => {},
             Some(t) => {
+                // TODO: _LIGHT and _DARK should be handled, but right now i don't fully understand how they work
+
+                let color = t
+                    .color
+                    .clone()
+                    .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                    .into_single()
+                    .unwrap_or("WHITE".to_string())
+                    .to_uppercase()
+                    .replace("LIGHT_", "")
+                    .replace("DARK_", "");
+
+                let fallback_id =
+                    format!("{}_{}", t.symbol.unwrap_or('?'), color);
+
+                match self.fallback_map.get(&fallback_id).clone() {
+                    None => {
+                        warn!("No fallback for {} found", fallback_id);
+                    },
+                    Some(_) => {},
+                }
+
                 return self
                     .fallback_map
-                    .get(&format!(
-                        "{}_{}",
-                        t.symbol.unwrap_or('?'),
-                        t.color
-                            .clone()
-                            .unwrap_or(MeabyVec::Single("WHITE".to_string()))
-                            .into_single()
-                            .unwrap_or("WHITE".to_string())
-                    ))
+                    .get(&fallback_id)
                     .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
-                    .clone()
+                    .clone();
             },
         }
 
         match json_data.furniture.get(&id.tilesheet_id.id) {
             None => {},
-            Some(f) => {
+            Some(t) => {
+                // TODO: _LIGHT and _DARK should be handled, but right now i don't fully understand how they work
+
+                let color = t
+                    .color
+                    .clone()
+                    .unwrap_or(MeabyVec::Single("WHITE".to_string()))
+                    .into_single()
+                    .unwrap_or("WHITE".to_string())
+                    .to_uppercase()
+                    .replace("LIGHT_", "")
+                    .replace("DARK_", "");
+
+                let fallback_id =
+                    format!("{}_{}", t.symbol.unwrap_or('?'), color);
+
+                match self.fallback_map.get(&fallback_id).clone() {
+                    None => {
+                        warn!("No fallback for {} found", fallback_id);
+                    },
+                    Some(_) => {},
+                }
+
                 return self
                     .fallback_map
-                    .get(&format!(
-                        "{}_{}",
-                        f.symbol.unwrap_or('?'),
-                        f.color
-                            .clone()
-                            .unwrap_or(MeabyVec::Single("WHITE".to_string()))
-                            .into_single()
-                            .unwrap_or("WHITE".to_string())
-                    ))
+                    .get(&fallback_id)
                     .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
-                    .clone()
+                    .clone();
             },
-        };
+        }
 
         FALLBACK_TILE_MAPPING.first().unwrap().1
     }

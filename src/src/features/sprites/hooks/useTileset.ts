@@ -20,8 +20,6 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
     useTauriEvent(
         TauriEvent.EDITOR_DATA_CHANGED,
         (editorData) => {
-            if (!editorData.config.selected_tileset) return
-
             (async () => {
                 console.log("Loading Tileset")
 

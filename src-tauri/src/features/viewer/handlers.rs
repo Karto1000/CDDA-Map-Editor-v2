@@ -59,6 +59,7 @@ use std::hash::Hasher;
 use std::ops::Deref;
 use std::ops::DerefMut;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use strum::IntoEnumIterator;
 use tauri::async_runtime::Mutex;
@@ -68,6 +69,7 @@ use tauri::State;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
+use tokio::sync::MutexGuard;
 use tokio_test::block_on;
 
 #[tauri::command]
@@ -120,6 +122,7 @@ pub async fn get_sprites(
     name: String,
     app: AppHandle,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
+    fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     mapped_cdda_ids: State<
@@ -148,15 +151,9 @@ pub async fn get_sprites(
         Some(d) => d,
     };
 
-    let tilesheet_lock = tilesheet.lock().await;
-    let tilesheet = match tilesheet_lock.as_ref() {
-        None => return Err(()),
-        Some(t) => t,
-    };
-
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
-    let fallback_sprites = HashSet::new();
+    let mut fallback_sprites = HashSet::new();
 
     macro_rules! insert_sprite_type {
         ($val:expr) => {
@@ -168,12 +165,13 @@ pub async fn get_sprites(
                     animated_sprites.insert(a);
                 },
                 DisplaySprite::Fallback(f) => {
-                    // fallback_sprites.
-                    // insert(f);
+                    fallback_sprites.insert(f);
                 },
             }
         };
     }
+
+    let tilesheet_lock = tilesheet.lock().await;
 
     for (_, map_collection) in project.maps.iter_mut() {
         // we need to calculate the parameters for the predecessor here because we
@@ -241,42 +239,62 @@ pub async fn get_sprites(
                         },
                     };
 
-                    let sprite = tilesheet.get_sprite(&id, &json_data);
-
-                    let adjacent_idents = local_mapped_cdda_ids
-                        .get_adjacent_identifiers(tile_3d_coords, &layer);
-
-                    let (fg, bg) = match sprite {
+                    match tilesheet_lock.deref() {
                         None => {
-                            let fallback =
-                                tilesheet.get_fallback(&id, &json_data);
+                            let sprite = fallback_tilesheet.get_fallback(&id, &json_data);
+
                             let position_uvec2 = UVec2::new(
                                 tile_3d_coords.x as u32,
                                 tile_3d_coords.y as u32,
                             );
 
-                            (
-                                Some(DisplaySprite::Fallback(FallbackSprite {
-                                    position: UVec2JsonKey(position_uvec2),
-                                    index: fallback,
-                                    z: tile_3d_coords.z,
-                                })),
-                                None,
-                            )
-                        },
-                        Some(sprite) => {
-                            DisplaySprite::get_display_sprite_from_sprite(
-                                &sprite,
-                                &id,
-                                tile_3d_coords.clone(),
-                                layer.clone(),
-                                &adjacent_idents,
-                                json_data,
-                            )
-                        },
-                    };
+                            let fallback_sprite = DisplaySprite::Fallback(FallbackSprite {
+                                position: UVec2JsonKey(position_uvec2),
+                                index: sprite,
+                                z: tile_3d_coords.z,
+                            });
 
-                    layer_map.insert(layer.clone(), (fg, bg));
+                            layer_map.insert(layer.clone(), (Some(fallback_sprite), None));
+                        }
+                        Some(tilesheet) => {
+                            let sprite = tilesheet.get_sprite(&id, &json_data);
+
+                            let adjacent_idents = local_mapped_cdda_ids
+                                .get_adjacent_identifiers(tile_3d_coords, &layer);
+
+                            let (fg, bg) = match sprite {
+                                None => {
+                                    let fallback =
+                                        tilesheet.get_fallback(&id, &json_data);
+                                    let position_uvec2 = UVec2::new(
+                                        tile_3d_coords.x as u32,
+                                        tile_3d_coords.y as u32,
+                                    );
+
+                                    (
+                                        Some(DisplaySprite::Fallback(FallbackSprite {
+                                            position: UVec2JsonKey(position_uvec2),
+                                            index: fallback,
+                                            z: tile_3d_coords.z,
+                                        })),
+                                        None,
+                                    )
+                                }
+                                Some(sprite) => {
+                                    DisplaySprite::get_display_sprite_from_sprite(
+                                        &sprite,
+                                        &id,
+                                        tile_3d_coords.clone(),
+                                        layer.clone(),
+                                        &adjacent_idents,
+                                        json_data,
+                                    )
+                                }
+                            };
+
+                            layer_map.insert(layer.clone(), (fg, bg));
+                        }
+                    }
                 }
 
                 layer_map

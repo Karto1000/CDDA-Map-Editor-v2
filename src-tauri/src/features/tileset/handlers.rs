@@ -1,6 +1,9 @@
 use crate::features::program_data::{
     CDDAPathError, EditorData, SelectedTilesetError,
 };
+use crate::features::tileset::legacy_tileset::fallback::{
+    get_fallback_config, FALLBACK_TILESHEET_IMAGE,
+};
 use crate::features::tileset::legacy_tileset::io::LegacyTilesheetConfigLoader;
 use log::info;
 use serde::Serialize;
@@ -23,7 +26,14 @@ pub async fn get_info_of_current_tileset(
 ) -> Result<Value, GetSpritesheetsError> {
     let lock = editor_data.lock().await;
 
-    let selected_tileset = lock.config.get_selected_tileset()?;
+    let selected_tileset = match lock.config.get_selected_tileset() {
+        Ok(s) => s,
+        Err(_) => {
+            let config = get_fallback_config();
+            return Ok(serde_json::to_value(config).unwrap());
+        },
+    };
+
     let cdda_path = lock.config.get_cdda_path()?;
 
     let tileset_path = cdda_path.join("gfx").join(selected_tileset);
@@ -52,7 +62,9 @@ pub async fn download_spritesheet(
 
     let lock = editor_data.lock().await;
     let selected_tileset = match &lock.config.selected_tileset {
-        None => return Err(DownloadSpritesheetError::NoSpritesheetSelected),
+        None => {
+            return Ok(Response::new(FALLBACK_TILESHEET_IMAGE.to_vec()));
+        },
         Some(s) => s.clone(),
     };
 

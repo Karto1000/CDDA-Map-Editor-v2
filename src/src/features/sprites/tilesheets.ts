@@ -186,22 +186,13 @@ export class Tilesheets {
         for (const drawSprite of staticSprites) {
             const index = drawSprite.index
 
-            const worldY = drawSprite.position.y / this.tileInfo.width
-            const worldX = drawSprite.position.x / this.tileInfo.height
-
-            const newPosition = new Vector3(
-                drawSprite.position.x,
-                drawSprite.position.y,
-                // + 1 to always add an offset because if we didn't, a few sprites would not show up
-                (MAX_DEPTH - MAX_ROW * (worldY + 1)) + worldX + drawSprite.layer
+            const drawLocalSprite = this.getLocalDrawSprite(
+                index,
+                drawSprite.position,
+                drawSprite.layer,
+                this.fallback,
+                drawSprite.rotate_deg
             )
-
-            const drawLocalSprite: DrawLocalSprite = {
-                index: index,
-                layer: drawSprite.layer,
-                position: newPosition,
-                rotation: drawSprite.rotate_deg
-            }
 
             if (!batches[drawSprite.z]) batches[drawSprite.z] = []
             batches[drawSprite.z].push(drawLocalSprite)
@@ -229,6 +220,8 @@ export class Tilesheets {
             tilesheet.clear()
         }
 
+        this.fallback.clear()
+
         this.cachedStaticBatches = {}
         this.cachedFallbackBatches = {}
         this.animatedSprites = []
@@ -254,7 +247,7 @@ export class Tilesheets {
         )
 
         return {
-            index: index - tilesheet.range[0],
+            index: index - (tilesheet.range ? tilesheet.range[0] : 0),
             layer: layer,
             position: newPosition,
             rotation

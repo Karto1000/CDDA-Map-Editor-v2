@@ -1,6 +1,4 @@
-use crate::features::tileset::data::{
-    FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
-};
+use crate::features::tileset::data::FALLBACK_TILE_MAPPING;
 use crate::features::tileset::legacy_tileset::data::{
     LegacyTileConfig, Spritesheet,
 };
@@ -19,7 +17,7 @@ use tokio::fs;
 use tokio::io::AsyncReadExt;
 
 pub struct LegacyTilesheetLoader {
-    pub config: LegacyTileConfig,
+    config: LegacyTileConfig,
 }
 
 impl LegacyTilesheetLoader {
@@ -109,7 +107,7 @@ impl Load<LegacyTilesheet> for LegacyTilesheetLoader {
             for (character, offset) in FALLBACK_TILE_MAPPING {
                 fallback_map.insert(
                     format!("{}_{}", character, ascii_group.color),
-                    (offset / FALLBACK_TILE_ROW_SIZE as u32) + offset,
+                    ascii_group.offset as u32 + offset,
                 );
             }
         }

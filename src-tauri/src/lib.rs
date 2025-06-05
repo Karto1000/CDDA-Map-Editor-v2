@@ -3,9 +3,7 @@ mod events;
 mod features;
 mod util;
 
-use crate::data::io::{
-    load_cdda_json_data, DeserializedCDDAJsonData,
-};
+use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data,
     tileset_picked,
@@ -17,6 +15,7 @@ use crate::features::program_data::{
 use crate::features::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
 };
+use crate::features::tileset::legacy_tileset::fallback::get_fallback_tilesheet;
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::viewer::handlers::{
     close_project, get_calculated_parameters, get_current_project_data,
@@ -33,6 +32,7 @@ use lazy_static::lazy_static;
 use log::{info, warn, LevelFilter};
 use std::collections::HashMap;
 use std::ops::Deref;
+use std::sync::Arc;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
@@ -182,6 +182,10 @@ pub fn run() -> () {
             info!("Loading Editor data config");
             let editor_data = io::get_saved_editor_data()?;
 
+            info!("Getting fallback tilesheet");
+            let fallback_tilesheet = get_fallback_tilesheet();
+
+            app.manage(Arc::new(fallback_tilesheet));
             app.manage(Mutex::new(editor_data));
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(
                 None,

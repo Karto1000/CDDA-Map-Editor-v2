@@ -71,8 +71,6 @@ function CalculatedParametersTab(props: CalculatedParametersTabProps) {
                             params[paramName].toLowerCase().includes(search.toLowerCase())
                     })
 
-                    console.log(filtered)
-
                     if (filtered.length === 0) return;
 
                     return (

@@ -1,0 +1,96 @@
+{
+  "tile_info": [
+    {
+      "height": 10,
+      "width": 10
+    }
+  ],
+  "tiles-new": [
+    {
+      "file": "fallback.png",
+      "tiles": [],
+      "ascii": [
+        {
+          "offset": 0,
+          "bold": false,
+          "color": "WHITE"
+        },
+        {
+          "offset": 256,
+          "bold": false,
+          "color": "GRAY"
+        },
+        {
+          "offset": 512,
+          "bold": true,
+          "color": "GRAY"
+        },
+        {
+          "offset": 768,
+          "bold": false,
+          "color": "BLACK"
+        },
+        {
+          "offset": 1024,
+          "bold": true,
+          "color": "RED"
+        },
+        {
+          "offset": 1280,
+          "bold": false,
+          "color": "RED"
+        },
+        {
+          "offset": 1536,
+          "bold": true,
+          "color": "YELLOW"
+        },
+        {
+          "offset": 1792,
+          "bold": false,
+          "color": "BROWN"
+        },
+        {
+          "offset": 2048,
+          "bold": true,
+          "color": "GREEN"
+        },
+        {
+          "offset": 2304,
+          "bold": false,
+          "color": "GREEN"
+        },
+        {
+          "offset": 2560,
+          "bold": true,
+          "color": "CYAN"
+        },
+        {
+          "offset": 2816,
+          "bold": false,
+          "color": "CYAN"
+        },
+        {
+          "offset": 3072,
+          "bold": true,
+          "color": "BLUE"
+        },
+        {
+          "offset": 3328,
+          "bold": false,
+          "color": "BLUE"
+        },
+        {
+          "offset": 3584,
+          "bold": true,
+          "color": "MAGENTA"
+        },
+        {
+          "offset": 3840,
+          "bold": false,
+          "color": "MAGENTA"
+        }
+      ]
+    }
+  ]
+}

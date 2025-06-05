@@ -172,7 +172,6 @@ impl<T: Clone> MeabyVec<T> {
 
 #[derive(Debug, Eq, PartialEq, Clone, Serialize)]
 pub struct Weighted<T> {
-    #[serde(alias = "data", alias = "sprite")]
     pub data: T,
     pub weight: i32,
 }
@@ -194,7 +193,7 @@ where
     where
         D: Deserializer<'de>,
     {
-        // Create a visitor to help with the deserialization process
+        // Helper visitor to handle both array and object formats
         struct WeightedVisitor<T> {
             _marker: std::marker::PhantomData<T>,
         }
@@ -207,15 +206,15 @@ where
 
             fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
                 formatter.write_str(
-                    "[T, i32] where T is the data and i32 is the weight",
+                    "expected [T, i32] or { \"weight\": i32, \"sprite\": T }",
                 )
             }
 
+            // Handle the sequence format: [data, weight]
             fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
             where
                 A: serde::de::SeqAccess<'de>,
             {
-                // Extract the elements from the sequence (which should have two items)
                 let data: T = seq
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(0, &self))?;
@@ -223,13 +222,44 @@ where
                     .next_element()?
                     .ok_or_else(|| de::Error::invalid_length(1, &self))?;
 
-                // Create the Weighted struct
+                Ok(Weighted { data, weight })
+            }
+
+            // Handle the map format: { "weight": ..., "sprite": ... }
+            fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+            where
+                M: serde::de::MapAccess<'de>,
+            {
+                let mut data: Option<T> = None;
+                let mut weight: Option<i32> = None;
+
+                while let Some(key) = map.next_key::<String>()? {
+                    match key.as_str() {
+                        "sprite" => {
+                            data = Some(map.next_value()?);
+                        },
+                        "weight" => {
+                            weight = Some(map.next_value()?);
+                        },
+                        _ => {
+                            return Err(serde::de::Error::unknown_field(
+                                &key,
+                                &["sprite", "weight"],
+                            ))
+                        },
+                    }
+                }
+
+                let data = data
+                    .ok_or_else(|| serde::de::Error::missing_field("sprite"))?;
+                let weight = weight
+                    .ok_or_else(|| serde::de::Error::missing_field("weight"))?;
+
                 Ok(Weighted { data, weight })
             }
         }
 
-        // Deserialize using the custom visitor
-        deserializer.deserialize_seq(WeightedVisitor {
+        deserializer.deserialize_any(WeightedVisitor {
             _marker: std::marker::PhantomData,
         })
     }

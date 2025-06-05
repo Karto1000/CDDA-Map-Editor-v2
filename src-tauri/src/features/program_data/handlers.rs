@@ -113,6 +113,7 @@ pub async fn tileset_picked(
     // This is the default tileset
     if tileset == "None" {
         editor_data_lock.config.selected_tileset = None;
+        tilesheet_lock.take();
     } else {
         match tilesets.iter().find(|t| **t == tileset) {
             None => return Err(TilesetPickedError::NotATileset),
