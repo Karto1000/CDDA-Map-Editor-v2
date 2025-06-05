@@ -1,5 +1,7 @@
-use crate::editor_data::{CDDAPathError, EditorData, SelectedTilesetError};
-use crate::tileset::io::TilesheetConfigLoader;
+use crate::features::program_data::{
+    CDDAPathError, EditorData, SelectedTilesetError,
+};
+use crate::features::tileset::legacy_tileset::io::LegacyTilesheetConfigLoader;
 use image::{ImageFormat, ImageReader};
 use log::info;
 use serde::Serialize;
@@ -30,7 +32,7 @@ pub async fn get_info_of_current_tileset(
 
     let tileset_path = cdda_path.join("gfx").join(selected_tileset);
 
-    let mut config_reader = TilesheetConfigLoader::new(tileset_path);
+    let mut config_reader = LegacyTilesheetConfigLoader::new(tileset_path);
     let info = config_reader.load_value().await.unwrap();
 
     Ok(info)

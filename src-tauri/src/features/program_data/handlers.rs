@@ -1,9 +1,11 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::editor_data::{EditorData, EditorDataSaver};
+use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
+use crate::events;
 use crate::events::EDITOR_DATA_CHANGED;
-use crate::tileset::legacy_tileset::LegacyTilesheet;
+use crate::features::program_data::{EditorData, EditorDataSaver};
+use crate::features::tileset::legacy_tileset::{
+    load_tilesheet, LegacyTilesheet,
+};
 use crate::util::Save;
-use crate::{events, load_cdda_json_data, load_tilesheet};
 use log::{error, warn};
 use serde::Serialize;
 use std::fs;

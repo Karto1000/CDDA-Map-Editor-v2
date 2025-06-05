@@ -1,12 +1,19 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::editor_data::{EditorData, MapDataCollection, Project, ZLevel};
-use crate::map::DEFAULT_MAP_DATA_SIZE;
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::features::map::DEFAULT_MAP_DATA_SIZE;
+use crate::features::program_data::{
+    EditorData, MapDataCollection, Project, ZLevel,
+};
+use cdda_lib::types::Weighted;
 use derive_more::with_trait::Display;
 use glam::{IVec3, UVec2};
+use indexmap::IndexMap;
+use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
+use rand::rng;
+use serde::de::Error as SerdeError;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-use std::ops::Deref;
+use std::ops::{Add, Deref};
 use thiserror::Error;
 use tokio::sync::MutexGuard;
 
@@ -284,4 +291,134 @@ pub fn get_json_data<'a>(
         None => Err(CDDADataError::NotLoaded),
         Some(d) => Ok(d),
     }
+}
+
+pub trait GetRandom<T> {
+    fn get_random(&self) -> &T;
+}
+
+impl<T> GetRandom<T> for Vec<Weighted<T>> {
+    fn get_random(&self) -> &T {
+        let mut weights = vec![];
+        self.iter().for_each(|v| weights.push(v.weight));
+
+        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+
+        let mut rng = rng();
+        //let mut rng = RANDOM.write().unwrap();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+
+        &self.get(chosen_index).unwrap().data
+    }
+}
+
+impl<T> GetRandom<T> for IndexMap<T, i32> {
+    fn get_random(&self) -> &T {
+        let mut weights = vec![];
+
+        let mut vec = self.iter().collect::<Vec<(&T, &i32)>>();
+        vec.iter().for_each(|(_, w)| weights.push(**w));
+
+        let weighted_index = WeightedIndex::new(weights).expect("No Error");
+
+        let mut rng = rng();
+        //let mut rng = RANDOM.write().unwrap();
+
+        let chosen_index = weighted_index.sample(&mut rng);
+        let item = vec.remove(chosen_index);
+
+        &item.0
+    }
+}
+
+#[derive(Debug, Default, Clone, Eq, PartialEq)]
+pub enum Rotation {
+    #[default]
+    Deg0,
+    Deg90,
+    Deg180,
+    Deg270,
+}
+
+impl Serialize for Rotation {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        self.clone().deg().serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Rotation {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let deg = u32::deserialize(deserializer)? % 360;
+
+        match deg {
+            0 => Ok(Rotation::Deg0),
+            90 => Ok(Rotation::Deg90),
+            180 => Ok(Rotation::Deg180),
+            270 => Ok(Rotation::Deg270),
+            _ => Err(SerdeError::custom(format!(
+                "Invalid rotation value {}",
+                deg
+            ))),
+        }
+    }
+}
+
+impl Add<Rotation> for Rotation {
+    type Output = Rotation;
+
+    fn add(self, rhs: Rotation) -> Self::Output {
+        let value = self.deg() + rhs.deg();
+        Self::from(value)
+    }
+}
+
+impl From<i32> for Rotation {
+    fn from(value: i32) -> Self {
+        let value = value % 360;
+
+        match value {
+            0..90 => Self::Deg0,
+            90..180 => Self::Deg90,
+            180..270 => Self::Deg180,
+            270..360 => Self::Deg270,
+            _ => unreachable!(),
+        }
+    }
+}
+
+impl Rotation {
+    pub fn deg(&self) -> i32 {
+        match self {
+            Rotation::Deg0 => 0,
+            Rotation::Deg90 => 90,
+            Rotation::Deg180 => 180,
+            Rotation::Deg270 => 270,
+        }
+    }
+}
+
+impl From<CardinalDirection> for Rotation {
+    fn from(value: CardinalDirection) -> Self {
+        match value {
+            CardinalDirection::North => Self::Deg0,
+            CardinalDirection::East => Self::Deg90,
+            CardinalDirection::South => Self::Deg180,
+            CardinalDirection::West => Self::Deg270,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub enum CardinalDirection {
+    North = 0,
+    East = 1,
+    South = 2,
+    West = 3,
 }

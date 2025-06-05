@@ -1,24 +1,24 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::item::CDDAItemGroupInPlace;
-use crate::cdda_data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
-use crate::cdda_data::palettes::Parameter;
-use crate::editor_data::{MapCoordinates, MapDataCollection};
-use crate::map::map_properties::ComputersProperty;
-use crate::map::map_properties::CorpsesProperty;
-use crate::map::map_properties::ToiletsProperty;
-use crate::map::map_properties::TrapsProperty;
-use crate::map::map_properties::VehiclesProperty;
-use crate::map::map_properties::{
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::item::CDDAItemGroupInPlace;
+use crate::data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
+use crate::data::palettes::Parameter;
+use crate::features::map::map_properties::ComputersProperty;
+use crate::features::map::map_properties::CorpsesProperty;
+use crate::features::map::map_properties::ToiletsProperty;
+use crate::features::map::map_properties::TrapsProperty;
+use crate::features::map::map_properties::VehiclesProperty;
+use crate::features::map::map_properties::{
     FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty,
     SignsProperty, TerrainProperty,
 };
-use crate::map::map_properties::{GaspumpsProperty, ItemsProperty};
-use crate::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
-use crate::map::SetTile;
-use crate::map::DEFAULT_MAP_DATA_SIZE;
-use crate::map::{
+use crate::features::map::map_properties::{GaspumpsProperty, ItemsProperty};
+use crate::features::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
+use crate::features::map::SetTile;
+use crate::features::map::DEFAULT_MAP_DATA_SIZE;
+use crate::features::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, Property,
 };
+use crate::features::program_data::{MapCoordinates, MapDataCollection};
 use cdda_lib::types::{
     CDDAIdentifier, CDDAString, DistributionInner, MapGenValue, MeabyVec,
     MeabyWeighted, NumberOrRange, ParameterIdentifier, Weighted,

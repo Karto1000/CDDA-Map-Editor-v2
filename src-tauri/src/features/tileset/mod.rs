@@ -1,97 +1,27 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::TileLayer;
-use crate::tileset::legacy_tileset::tile_config::AdditionalTileType;
-use crate::tileset::legacy_tileset::tile_config::AdditionalTileType::{
+mod data;
+pub mod handlers;
+pub mod legacy_tileset;
+
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::TileLayer;
+use crate::features::map::MappedCDDAId;
+use crate::features::program_data::AdjacentSprites;
+use crate::features::tileset::data::AdditionalTileType;
+use crate::features::tileset::data::AdditionalTileType::{
     Center, Corner, Edge, EndPiece, TConnection, Unconnected,
 };
-use crate::tileset::legacy_tileset::CardinalDirection::{
-    East, North, South, West,
+use crate::features::tileset::legacy_tileset::{
+    FinalIds, Rotated, Rotates, SpriteIndex, TilesheetCDDAId,
 };
-use crate::tileset::legacy_tileset::{
-    CardinalDirection, FinalIds, MappedCDDAId, Rotated, Rotates, Rotation,
-    SpriteIndex, TilesheetCDDAId,
-};
+use crate::util::CardinalDirection::{East, North, South, West};
+use crate::util::{CardinalDirection, GetRandom, Rotation};
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
-use indexmap::IndexMap;
-use rand::distr::weighted::WeightedIndex;
+use data::MeabyAnimated;
 use rand::distr::Distribution;
-use rand::rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
-pub(crate) mod handlers;
-pub(crate) mod io;
-pub(crate) mod legacy_tileset;
-
-pub type MeabyAnimated<T> = MeabyVec<T>;
-
-const FALLBACK_TILE_ROW_SIZE: usize = 16;
-const FALLBACK_TILE_WIDTH: usize = 32;
-const FALLBACK_TILE_MAPPING: &'static [(&'static str, u32)] = &[
-    // Ignore some textures at the start and end of each color
-    ("!", 33),
-    ("#", 35),
-    ("$", 36),
-    ("%", 37),
-    ("&", 38),
-    ("(", 40),
-    (")", 41),
-    ("*", 42),
-    ("+", 43),
-    ("0", 48),
-    ("1", 49),
-    ("2", 50),
-    ("3", 51),
-    ("4", 52),
-    ("5", 53),
-    ("6", 54),
-    ("7", 55),
-    ("8", 56),
-    ("9", 57),
-    (":", 58),
-    (";", 59),
-    ("<", 60),
-    ("=", 61),
-    ("?", 62),
-    ("@", 63),
-    ("A", 64),
-    ("B", 65),
-    ("C", 66),
-    ("D", 67),
-    ("E", 68),
-    ("F", 69),
-    ("G", 70),
-    ("H", 71),
-    ("I", 72),
-    ("J", 73),
-    ("K", 74),
-    ("L", 75),
-    ("M", 76),
-    ("N", 77),
-    ("O", 78),
-    ("P", 79),
-    ("Q", 80),
-    ("R", 81),
-    ("S", 82),
-    ("T", 83),
-    ("U", 84),
-    ("V", 85),
-    ("W", 86),
-    ("X", 87),
-    ("Y", 88),
-    ("Z", 89),
-    ("[", 90),
-    (r"\", 91),
-    ("]", 92),
-    ("^", 93),
-    ("_", 94),
-    ("`", 95),
-    ("{", 122),
-    ("}", 124),
-    ("|", 178),
-];
-
-pub trait Tilesheet {
+pub(super) trait Tilesheet {
     fn get_fallback(
         &self,
         id: &MappedCDDAId,
@@ -106,20 +36,14 @@ pub trait Tilesheet {
 }
 
 #[derive(Debug)]
-pub enum SpriteOrFallback<'a> {
-    Exists(&'a Sprite),
-    Fallback(SpriteIndex),
-}
-
-#[derive(Debug)]
-pub struct SingleSprite {
+pub(super) struct SingleSprite {
     ids: ForeBackIds<FinalIds, FinalIds>,
     rotates: bool,
     animated: bool,
 }
 
 #[derive(Debug)]
-pub enum Sprite {
+pub(super) enum Sprite {
     Single(SingleSprite),
     Multitile {
         fallback: SingleSprite,
@@ -144,7 +68,7 @@ impl Sprite {
 
     fn get_random_animated_sprite(
         mapped_id: &MappedCDDAId,
-        tilesheet_ids: &Vec<WeightedSprite<Rotates>>,
+        tilesheet_ids: &Vec<Weighted<Rotates>>,
         rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if tilesheet_ids.len() == 0 {
@@ -156,7 +80,7 @@ impl Sprite {
         for rotates_id in tilesheet_ids.to_vec() {
             let (index, _) = Self::get_sprite_index_from_rotates(
                 mapped_id,
-                rotates_id.sprite,
+                rotates_id.data,
                 rotates,
             );
 
@@ -206,7 +130,7 @@ impl Sprite {
 
     fn get_random_sprite(
         mapped_id: &MappedCDDAId,
-        tilesheet_ids: &Vec<WeightedSprite<Rotates>>,
+        tilesheet_ids: &Vec<Weighted<Rotates>>,
         rotates: bool,
     ) -> Option<Rotated<MeabyAnimated<SpriteIndex>>> {
         if tilesheet_ids.len() == 0 {
@@ -228,8 +152,8 @@ impl Sprite {
 
     fn get_random_additional_tile_sprite(
         mapped_id: &MappedCDDAId,
-        tilesheet_ids: &Vec<WeightedSprite<Rotates>>,
-        additional_ids: &Vec<WeightedSprite<Rotates>>,
+        tilesheet_ids: &Vec<Weighted<Rotates>>,
+        additional_ids: &Vec<Weighted<Rotates>>,
         direction: CardinalDirection,
         additional_tile_type: AdditionalTileType,
         does_rotate: bool,
@@ -935,7 +859,7 @@ impl Sprite {
 }
 
 #[derive(Debug)]
-pub struct ForeBackIds<FG, BG> {
+pub(super) struct ForeBackIds<FG, BG> {
     pub fg: FG,
     pub bg: BG,
 }
@@ -946,119 +870,8 @@ impl<FG, BG> ForeBackIds<FG, BG> {
     }
 }
 
-pub trait GetRandom<T> {
-    fn get_random(&self) -> &T;
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct WeightedSprite<T> {
-    pub sprite: T,
-    pub weight: i32,
-}
-
-impl<T> WeightedSprite<T> {
-    pub fn new(sprite: T, weight: i32) -> Self {
-        Self { sprite, weight }
-    }
-}
-
-impl<T> GetRandom<T> for Vec<WeightedSprite<T>> {
-    fn get_random(&self) -> &T {
-        let mut weights = vec![];
-        self.iter().for_each(|v| weights.push(v.weight));
-
-        let weighted_index = WeightedIndex::new(weights).expect("No Error");
-
-        let mut rng = rng();
-        //let mut rng = RANDOM.write().unwrap();
-
-        let chosen_index = weighted_index.sample(&mut rng);
-
-        &self.get(chosen_index).unwrap().sprite
-    }
-}
-
-impl<T> GetRandom<T> for Vec<Weighted<T>> {
-    fn get_random(&self) -> &T {
-        let mut weights = vec![];
-        self.iter().for_each(|v| weights.push(v.weight));
-
-        let weighted_index = WeightedIndex::new(weights).expect("No Error");
-
-        let mut rng = rng();
-        //let mut rng = RANDOM.write().unwrap();
-
-        let chosen_index = weighted_index.sample(&mut rng);
-
-        &self.get(chosen_index).unwrap().data
-    }
-}
-
-impl<T> GetRandom<T> for IndexMap<T, i32> {
-    fn get_random(&self) -> &T {
-        let mut weights = vec![];
-
-        let mut vec = self.iter().collect::<Vec<(&T, &i32)>>();
-        vec.iter().for_each(|(_, w)| weights.push(**w));
-
-        let weighted_index = WeightedIndex::new(weights).expect("No Error");
-
-        let mut rng = rng();
-        //let mut rng = RANDOM.write().unwrap();
-
-        let chosen_index = weighted_index.sample(&mut rng);
-        let item = vec.remove(chosen_index);
-
-        &item.0
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(untagged)]
-pub enum MeabyWeightedSprite<T> {
-    NotWeighted(T),
-    Weighted(WeightedSprite<T>),
-}
-
-impl<T> MeabyWeightedSprite<T> {
-    pub fn map<F, R>(self, fun: F) -> R
-    where
-        F: Fn(T) -> R,
-    {
-        match self {
-            MeabyWeightedSprite::NotWeighted(nw) => fun(nw),
-            MeabyWeightedSprite::Weighted(w) => fun(w.sprite),
-        }
-    }
-
-    pub fn data(self) -> T {
-        match self {
-            MeabyWeightedSprite::NotWeighted(nw) => nw,
-            MeabyWeightedSprite::Weighted(w) => w.sprite,
-        }
-    }
-
-    pub fn weighted(self) -> WeightedSprite<T> {
-        match self {
-            MeabyWeightedSprite::NotWeighted(d) => WeightedSprite {
-                sprite: d,
-                weight: 1,
-            },
-            MeabyWeightedSprite::Weighted(w) => w,
-        }
-    }
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum SpriteLayer {
+pub(super) enum SpriteLayer {
     Bg = 0,
     Fg = 1,
-}
-
-#[derive(Debug)]
-pub struct AdjacentSprites {
-    pub top: Option<CDDAIdentifier>,
-    pub right: Option<CDDAIdentifier>,
-    pub bottom: Option<CDDAIdentifier>,
-    pub left: Option<CDDAIdentifier>,
 }

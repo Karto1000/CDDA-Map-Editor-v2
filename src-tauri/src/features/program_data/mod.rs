@@ -1,23 +1,20 @@
 pub(crate) mod handlers;
 
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::palettes::Palettes;
-use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::{replace_region_setting, TileLayer};
-use crate::impl_serialize_for_error;
-use crate::map::importing::{
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::palettes::Palettes;
+use crate::data::region_settings::CDDARegionSettings;
+use crate::data::{replace_region_setting, TileLayer};
+use crate::features::map::importing::{
     OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
     SingleMapDataImporterError,
 };
-use crate::map::viewer::handlers::DisplaySprite;
-use crate::map::{
+use crate::features::map::{
     CalculateParametersError, CellRepresentation, FurnitureRepresentation,
-    GetMappedCDDAIdsError, MapData, DEFAULT_MAP_DATA_SIZE,
+    GetMappedCDDAIdsError, MapData, MappedCDDAId, MappedCDDAIdsForTile,
+    DEFAULT_MAP_DATA_SIZE,
 };
-use crate::tileset::legacy_tileset::{
-    MappedCDDAId, MappedCDDAIdsForTile, TilesheetCDDAId,
-};
-use crate::tileset::{AdjacentSprites, SpriteLayer, SpriteOrFallback};
+use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
+use crate::impl_serialize_for_error;
 use crate::util::{IVec3JsonKey, Load, Save, SaveError, UVec2JsonKey};
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
@@ -423,4 +420,24 @@ impl Save<EditorData> for EditorDataSaver {
         info!("Saved EditorData to {}", self.path.display());
         Ok(())
     }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum TabType {
+    MapEditor,
+    LiveViewer,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct Tab {
+    pub name: String,
+    pub tab_type: TabType,
+}
+
+#[derive(Debug)]
+pub struct AdjacentSprites {
+    pub top: Option<CDDAIdentifier>,
+    pub right: Option<CDDAIdentifier>,
+    pub bottom: Option<CDDAIdentifier>,
+    pub left: Option<CDDAIdentifier>,
 }

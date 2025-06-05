@@ -12,20 +12,20 @@ pub mod terrain;
 pub mod vehicle_parts;
 pub mod vehicles;
 
-use crate::cdda_data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
-use crate::cdda_data::item::CDDAItemGroupIntermediate;
-use crate::cdda_data::map_data::CDDAMapDataIntermediate;
-use crate::cdda_data::monster_group::CDDAMonsterGroupIntermediate;
-use crate::cdda_data::overmap::{
+use crate::data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
+use crate::data::item::CDDAItemGroupIntermediate;
+use crate::data::map_data::CDDAMapDataIntermediate;
+use crate::data::monster_group::CDDAMonsterGroupIntermediate;
+use crate::data::overmap::{
     CDDAOvermapLocationIntermediate, CDDAOvermapSpecialIntermediate,
     CDDAOvermapTerrainIntermediate,
 };
-use crate::cdda_data::palettes::CDDAPaletteIntermediate;
-use crate::cdda_data::region_settings::{CDDARegionSettings, RegionIdentifier};
-use crate::cdda_data::terrain::{CDDATerrain, CDDATerrainIntermediate};
-use crate::cdda_data::vehicle_parts::CDDAVehiclePartIntermediate;
-use crate::cdda_data::vehicles::CDDAVehicleIntermediate;
-use crate::tileset::GetRandom;
+use crate::data::palettes::CDDAPaletteIntermediate;
+use crate::data::region_settings::{CDDARegionSettings, RegionIdentifier};
+use crate::data::terrain::{CDDATerrain, CDDATerrainIntermediate};
+use crate::data::vehicle_parts::CDDAVehiclePartIntermediate;
+use crate::data::vehicles::CDDAVehicleIntermediate;
+use crate::util::GetRandom;
 use cdda_lib::types::{
     CDDADistributionInner, CDDAIdentifier, DistributionInner, IdOrAbstract,
     MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier,

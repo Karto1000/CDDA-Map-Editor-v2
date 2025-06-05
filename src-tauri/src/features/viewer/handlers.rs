@@ -1,43 +1,43 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::replace_region_setting;
-use crate::cdda_data::TileLayer;
-use crate::editor_data::get_map_data_collection_live_viewer_data;
-use crate::editor_data::EditorData;
-use crate::editor_data::EditorDataSaver;
-use crate::editor_data::GetLiveViewerDataError;
-use crate::editor_data::LiveViewerData;
-use crate::editor_data::MapDataCollection;
-use crate::editor_data::MappedCDDAIdContainer;
-use crate::editor_data::Project;
-use crate::editor_data::ProjectType;
-use crate::editor_data::ZLevel;
+use super::data::PlaceSpritesEvent;
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::replace_region_setting;
+use crate::data::TileLayer;
 use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
+use crate::features::map::importing::{
+    OvermapSpecialImporter, SingleMapDataImporter,
+};
+use crate::features::map::CellRepresentation;
+use crate::features::map::MappedCDDAId;
+use crate::features::map::MappedCDDAIdsForTile;
+use crate::features::map::SPECIAL_EMPTY_CHAR;
+use crate::features::map::{CalculateParametersError, DEFAULT_MAP_DATA_SIZE};
+use crate::features::program_data::EditorData;
+use crate::features::program_data::EditorDataSaver;
+use crate::features::program_data::GetLiveViewerDataError;
+use crate::features::program_data::LiveViewerData;
+use crate::features::program_data::MapDataCollection;
+use crate::features::program_data::MappedCDDAIdContainer;
+use crate::features::program_data::Project;
+use crate::features::program_data::ProjectType;
+use crate::features::program_data::ZLevel;
+use crate::features::program_data::{
+    get_map_data_collection_live_viewer_data, Tab, TabType,
+};
+use crate::features::tileset;
+use crate::features::tileset::legacy_tileset::LegacyTilesheet;
+use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
+use crate::features::tileset::Tilesheet;
+use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
 use crate::impl_serialize_for_error;
-use crate::map::viewer::open_viewer;
-use crate::map::viewer::OpenViewerData;
-use crate::map::viewer::OpenViewerError;
-use crate::map::CalculateParametersError;
-use crate::map::CellRepresentation;
-use crate::map::Serializer;
-use crate::map::SPECIAL_EMPTY_CHAR;
-use crate::tileset;
-use crate::tileset::legacy_tileset::LegacyTilesheet;
-use crate::tileset::legacy_tileset::MappedCDDAId;
-use crate::tileset::legacy_tileset::MappedCDDAIdsForTile;
-use crate::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::tileset::SpriteLayer;
-use crate::tileset::SpriteOrFallback;
-use crate::tileset::Tilesheet;
-use crate::tileset::{AdjacentSprites, Sprite};
 use crate::util;
-use crate::util::get_current_project_mut;
 use crate::util::get_json_data;
 use crate::util::CDDADataError;
 use crate::util::GetCurrentProjectError;
 use crate::util::IVec3JsonKey;
 use crate::util::Save;
 use crate::util::UVec2JsonKey;
+use crate::util::{get_current_project_mut, get_size, Load};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
 use cdda_lib::DEFAULT_MAP_HEIGHT;
@@ -61,6 +61,7 @@ use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
+use serde::Serializer;
 use serde_json::json;
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -124,188 +125,6 @@ pub async fn get_calculated_parameters(
     }
 
     Ok(calculated_parameters)
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct PlaceSpritesEvent {
-    static_sprites: HashSet<StaticSprite>,
-    animated_sprites: HashSet<AnimatedSprite>,
-    fallback_sprites: HashSet<FallbackSprite>,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct CreateMapData {
-    name: String,
-    size: UVec2JsonKey,
-    ty: ProjectType,
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct StaticSprite {
-    pub position: UVec2JsonKey,
-    pub index: u32,
-    pub layer: u32,
-    pub z: i32,
-    pub rotate_deg: i32,
-}
-
-impl Hash for StaticSprite {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.position.hash(state);
-        self.layer.hash(state);
-        self.z.hash(state);
-    }
-}
-
-impl PartialEq<Self> for StaticSprite {
-    fn eq(&self, other: &Self) -> bool {
-        self.position.eq(&other.position)
-            && self.layer.eq(&other.layer)
-            && self.z.eq(&other.z)
-    }
-}
-
-impl Eq for StaticSprite {}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct AnimatedSprite {
-    pub position: UVec2JsonKey,
-    pub indices: Vec<u32>,
-    pub layer: u32,
-    pub z: i32,
-    pub rotate_deg: i32,
-}
-
-impl Hash for AnimatedSprite {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.position.hash(state);
-        self.layer.hash(state);
-        self.z.hash(state);
-    }
-}
-
-impl PartialEq for AnimatedSprite {
-    fn eq(&self, other: &Self) -> bool {
-        self.position.eq(&other.position)
-            && self.layer.eq(&other.layer)
-            && self.z.eq(&other.z)
-    }
-}
-
-impl Eq for AnimatedSprite {}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct FallbackSprite {
-    pub position: UVec2JsonKey,
-    pub index: u32,
-    pub z: i32,
-}
-
-impl Hash for FallbackSprite {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.position.hash(state);
-        self.z.hash(state);
-    }
-}
-
-impl PartialEq for FallbackSprite {
-    fn eq(&self, other: &Self) -> bool {
-        self.position.eq(&other.position) && self.z.eq(&other.z)
-    }
-}
-
-impl Eq for FallbackSprite {}
-
-#[derive(Debug)]
-pub enum DisplaySprite {
-    Static(StaticSprite),
-    Animated(AnimatedSprite),
-    Fallback(FallbackSprite),
-}
-
-impl DisplaySprite {
-    pub fn get_display_sprite_from_sprite(
-        sprite: &Sprite,
-        tile_id: &MappedCDDAId,
-        tile_position: IVec3,
-        tile_layer: TileLayer,
-        adjacent_sprites: &AdjacentSprites,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> (Option<DisplaySprite>, Option<DisplaySprite>) {
-        let position_uvec2 =
-            UVec2::new(tile_position.x as u32, tile_position.y as u32);
-
-        let fg = match sprite.get_fg_id(
-            &tile_id,
-            &tile_layer,
-            adjacent_sprites,
-            json_data,
-        ) {
-            None => None,
-            Some(sprite_id) => match sprite.is_animated() {
-                true => {
-                    let display_sprite = AnimatedSprite {
-                        position: UVec2JsonKey(position_uvec2),
-                        layer: (tile_layer.clone() as u32) * 2
-                            + SpriteLayer::Fg as u32,
-                        indices: sprite_id.data.into_vec(),
-                        rotate_deg: sprite_id.rotation.deg()
-                            + tile_id.rotation.deg(),
-                        z: tile_position.z,
-                    };
-
-                    Some(DisplaySprite::Animated(display_sprite))
-                },
-                false => {
-                    let display_sprite = StaticSprite {
-                        position: UVec2JsonKey(position_uvec2),
-                        layer: (tile_layer.clone() as u32) * 2
-                            + SpriteLayer::Fg as u32,
-                        index: sprite_id.data.into_single().unwrap(),
-                        rotate_deg: sprite_id.rotation.deg(),
-                        z: tile_position.z,
-                    };
-
-                    Some(DisplaySprite::Static(display_sprite))
-                },
-            },
-        };
-
-        let bg = match sprite.get_bg_id(
-            &tile_id,
-            &tile_layer,
-            adjacent_sprites,
-            json_data,
-        ) {
-            None => None,
-            Some(id) => match sprite.is_animated() {
-                true => {
-                    let display_sprite = AnimatedSprite {
-                        position: UVec2JsonKey(position_uvec2),
-                        layer: (tile_layer as u32) * 2 + SpriteLayer::Bg as u32,
-                        indices: id.data.into_vec(),
-                        rotate_deg: id.rotation.deg(),
-                        z: tile_position.z,
-                    };
-
-                    Some(DisplaySprite::Animated(display_sprite))
-                },
-                false => {
-                    let display_sprite = StaticSprite {
-                        position: UVec2JsonKey(position_uvec2),
-                        layer: (tile_layer as u32) * 2 + SpriteLayer::Bg as u32,
-                        index: id.data.into_single().unwrap(),
-                        rotate_deg: id.rotation.deg(),
-                        z: tile_position.z,
-                    };
-
-                    Some(DisplaySprite::Static(display_sprite))
-                },
-            },
-        };
-
-        (fg, bg)
-    }
 }
 
 #[tauri::command]
@@ -884,6 +703,161 @@ pub async fn new_nested_mapgen_viewer(
         json_data,
     )
     .await?;
+
+    Ok(())
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase",
+    tag = "type"
+)]
+pub enum OpenViewerData {
+    Terrain {
+        mapgen_file_paths: Vec<PathBuf>,
+        project_name: String,
+        om_id: CDDAIdentifier,
+    },
+    Special {
+        mapgen_file_paths: Vec<PathBuf>,
+        om_file_paths: Vec<PathBuf>,
+        project_name: String,
+        om_id: CDDAIdentifier,
+    },
+}
+
+#[derive(Debug, Error)]
+pub enum OpenViewerError {
+    #[error(transparent)]
+    CDDADataError(#[from] CDDADataError),
+
+    #[error(transparent)]
+    TauriError(#[from] tauri::Error),
+
+    #[error("Another project with the same name already exists")]
+    ProjectAlreadyExists,
+
+    #[error(transparent)]
+    CalculateParametersError(#[from] CalculateParametersError),
+}
+impl_serialize_for_error!(OpenViewerError);
+
+#[tauri::command]
+pub async fn open_viewer(
+    app: AppHandle,
+    data: OpenViewerData,
+    editor_data: State<'_, Mutex<EditorData>>,
+    json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+) -> Result<(), OpenViewerError> {
+    info!("Opening Live viewer");
+
+    let mut editor_data_lock = editor_data.lock().await;
+    let json_data_lock = json_data.lock().await;
+    let json_data = get_json_data(&json_data_lock)?;
+
+    match data {
+        OpenViewerData::Terrain {
+            project_name,
+            mapgen_file_paths,
+            om_id,
+        } => {
+            if editor_data_lock
+                .projects
+                .iter()
+                .find(|p| p.name == project_name)
+                .is_some()
+            {
+                return Err(OpenViewerError::ProjectAlreadyExists);
+            }
+
+            let mut overmap_terrain_importer = SingleMapDataImporter {
+                om_terrain: om_id.clone(),
+                paths: mapgen_file_paths.clone(),
+            };
+
+            let mut collection = overmap_terrain_importer.load().await.unwrap();
+            collection.calculate_parameters(&json_data.palettes)?;
+
+            let mut new_project = Project::new(
+                project_name.clone(),
+                DEFAULT_MAP_DATA_SIZE,
+                ProjectType::LiveViewer(LiveViewerData::Terrain {
+                    mapgen_file_paths,
+                    project_name: project_name.clone(),
+                    om_id,
+                }),
+            );
+
+            new_project.maps.insert(0, collection);
+            editor_data_lock.projects.push(new_project);
+
+            editor_data_lock.opened_project = Some(project_name.clone());
+            app.emit(
+                events::TAB_CREATED,
+                Tab {
+                    name: project_name.clone(),
+                    tab_type: TabType::LiveViewer,
+                },
+            )?;
+        },
+        OpenViewerData::Special {
+            project_name,
+            mapgen_file_paths,
+            om_file_paths,
+            om_id,
+        } => {
+            if editor_data_lock
+                .projects
+                .iter()
+                .find(|p| p.name == project_name)
+                .is_some()
+            {
+                return Err(OpenViewerError::ProjectAlreadyExists);
+            }
+
+            let mut overmap_special_importer = OvermapSpecialImporter {
+                om_special_id: om_id.clone(),
+                overmap_special_paths: om_file_paths.clone(),
+                mapgen_entry_paths: mapgen_file_paths.clone(),
+            };
+
+            let mut maps = overmap_special_importer.load().await.unwrap();
+
+            for (_, m) in maps.iter_mut() {
+                m.calculate_parameters(&json_data.palettes)?
+            }
+
+            let mut new_project = Project::new(
+                project_name.clone(),
+                get_size(&maps),
+                ProjectType::LiveViewer(LiveViewerData::Special {
+                    mapgen_file_paths,
+                    om_file_paths,
+                    project_name: project_name.clone(),
+                    om_id,
+                }),
+            );
+
+            new_project.maps = maps;
+            editor_data_lock.projects.push(new_project);
+
+            editor_data_lock.opened_project = Some(project_name.clone());
+            app.emit(
+                events::TAB_CREATED,
+                Tab {
+                    name: project_name.clone(),
+                    tab_type: TabType::LiveViewer,
+                },
+            )?;
+        },
+    }
+
+    let saver = EditorDataSaver {
+        path: editor_data_lock.config.config_path.clone(),
+    };
+
+    saver.save(editor_data_lock.deref()).await.unwrap();
 
     Ok(())
 }

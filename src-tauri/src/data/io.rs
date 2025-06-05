@@ -1,19 +1,19 @@
-use crate::cdda_data::furniture::CDDAFurniture;
-use crate::cdda_data::item::CDDAItemGroup;
-use crate::cdda_data::map_data::OmTerrain;
-use crate::cdda_data::monster::CDDAMonster;
-use crate::cdda_data::monster_group::CDDAMonsterGroup;
-use crate::cdda_data::overmap::{
+use crate::data::furniture::CDDAFurniture;
+use crate::data::item::CDDAItemGroup;
+use crate::data::map_data::OmTerrain;
+use crate::data::monster::CDDAMonster;
+use crate::data::monster_group::CDDAMonsterGroup;
+use crate::data::overmap::{
     CDDAOvermapLocation, CDDAOvermapSpecial, CDDAOvermapTerrain,
 };
-use crate::cdda_data::palettes::CDDAPalette;
-use crate::cdda_data::region_settings::CDDARegionSettings;
-use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::vehicle_parts::CDDAVehiclePart;
-use crate::cdda_data::vehicles::CDDAVehicle;
-use crate::cdda_data::{CDDAJsonEntry, TileLayer};
-use crate::editor_data::MapDataCollection;
-use crate::map::MapData;
+use crate::data::palettes::CDDAPalette;
+use crate::data::region_settings::CDDARegionSettings;
+use crate::data::terrain::CDDATerrain;
+use crate::data::vehicle_parts::CDDAVehiclePart;
+use crate::data::vehicles::CDDAVehicle;
+use crate::data::{CDDAJsonEntry, TileLayer};
+use crate::features::map::MapData;
+use crate::features::program_data::{EditorData, MapDataCollection};
 use crate::util::Load;
 use anyhow::Error;
 use async_walkdir::WalkDir;
@@ -21,12 +21,14 @@ use cdda_lib::types::{
     CDDAExtendOp, CDDAIdentifier, DistributionInner, ImportCDDAObject, MeabyVec,
 };
 use cdda_lib::{NULL_FURNITURE, NULL_TERRAIN};
+use directories::ProjectDirs;
 use futures_lite::stream::StreamExt;
 use glam::UVec2;
 use log::kv::Source;
 use log::{debug, error, info, warn};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
+use std::fs;
 use std::fs::File;
 use std::io::BufReader;
 use std::path::PathBuf;
@@ -673,4 +675,104 @@ mod tests {
             data_loader.load().await.expect("Loading to not fail");
         })
     }
+}
+
+pub async fn load_cdda_json_data(
+    cdda_path: impl Into<PathBuf>,
+    json_data_path: impl Into<PathBuf>,
+) -> Result<DeserializedCDDAJsonData, anyhow::Error> {
+    let mut data_loader = CDDADataLoader {
+        json_path: cdda_path.into().join(json_data_path.into()),
+    };
+
+    data_loader.load().await
+}
+
+pub fn get_saved_editor_data() -> Result<EditorData, Error> {
+    let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
+
+    let directory_path = match project_dir {
+        None => {
+            warn!("No valid project directory found, creating data folder application directory instead");
+            let app_dir = match std::env::current_dir() {
+                Ok(d) => d,
+                Err(e) => {
+                    error!("{}", e);
+                    panic!()
+                },
+            };
+
+            app_dir
+        },
+        Some(dir) => {
+            let local_dir = dir.config_local_dir();
+            info!(
+                "Got Path for CDDA-Map-Editor config directory at {:?}",
+                local_dir
+            );
+            local_dir.to_path_buf()
+        },
+    };
+
+    if !fs::exists(&directory_path).expect("IO Error to not occur") {
+        info!(
+            "Created CDDA-Map-Editor config directory at {:?}",
+            directory_path
+        );
+        fs::create_dir_all(&directory_path)?;
+    }
+
+    let config_file_path = directory_path.join("config.json");
+    let config_exists =
+        fs::exists(&config_file_path).expect("IO Error to not occur");
+    let config = match config_exists {
+        true => {
+            info!("Reading config.json file");
+            let contents = fs::read_to_string(&config_file_path)
+                .expect("File to be valid UTF-8");
+
+            let data =
+                match serde_json::from_str::<EditorData>(contents.as_str()) {
+                    Ok(d) => {
+                        info!("config.json file successfully read and parsed");
+                        d
+                    },
+                    Err(e) => {
+                        error!("{}", e.to_string());
+                        info!(
+                        "Error while reading config.json file, recreating file"
+                    );
+
+                        let mut default_editor_data = EditorData::default();
+                        default_editor_data.config.config_path =
+                            directory_path.clone();
+
+                        let serialized =
+                            serde_json::to_string_pretty(&default_editor_data)
+                                .expect("Serialization to not fail");
+                        fs::write(&config_file_path, serialized).expect(
+                            "Directory path to config to have been created",
+                        );
+                        default_editor_data
+                    },
+                };
+
+            data
+        },
+        false => {
+            info!("config.json file does not exist");
+            info!("Creating config.json file with default data");
+
+            let mut default_editor_data = EditorData::default();
+            default_editor_data.config.config_path = directory_path.clone();
+
+            let serialized = serde_json::to_string_pretty(&default_editor_data)
+                .expect("Serialization to not fail");
+            fs::write(&config_file_path, serialized)
+                .expect("Directory path to config to have been created");
+            default_editor_data
+        },
+    };
+
+    Ok(config)
 }

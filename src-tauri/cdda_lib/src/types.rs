@@ -172,6 +172,7 @@ impl<T: Clone> MeabyVec<T> {
 
 #[derive(Debug, Eq, PartialEq, Clone, Serialize)]
 pub struct Weighted<T> {
+    #[serde(alias = "data", alias = "sprite")]
     pub data: T,
     pub weight: i32,
 }

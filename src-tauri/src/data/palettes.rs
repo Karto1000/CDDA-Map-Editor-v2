@@ -1,12 +1,12 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::map_data::{MapGenItem, MapGenMonsters};
-use crate::cdda_data::GetIdentifier;
-use crate::cdda_data::KnownCataVariant;
-use crate::map::map_properties::ItemsProperty;
-use crate::map::map_properties::{
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::map_data::{MapGenItem, MapGenMonsters};
+use crate::data::GetIdentifier;
+use crate::data::KnownCataVariant;
+use crate::features::map::map_properties::ItemsProperty;
+use crate::features::map::map_properties::{
     FurnitureProperty, MonstersProperty, TerrainProperty,
 };
-use crate::map::{
+use crate::features::map::{
     CalculateParametersError, MapData, MappingKind, Property, SetTile,
 };
 use cdda_lib::types::{

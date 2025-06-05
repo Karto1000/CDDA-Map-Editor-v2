@@ -1,38 +1,42 @@
-mod cdda_data;
-mod editor_data;
+mod data;
 mod events;
-mod map;
-mod tab;
-mod tileset;
+mod features;
 mod util;
 
-use crate::cdda_data::io::{CDDADataLoader, DeserializedCDDAJsonData};
-use crate::editor_data::handlers::{
+use crate::data::io::{
+    load_cdda_json_data, CDDADataLoader, DeserializedCDDAJsonData,
+};
+use crate::features::map::CalculateParametersError;
+use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data,
     tileset_picked,
 };
-use crate::editor_data::{
+use crate::features::program_data::{
     get_map_data_collection_live_viewer_data, EditorData,
     MappedCDDAIdContainer, ProjectType, ZLevel,
 };
-use crate::map::viewer::handlers::{
+use crate::features::tileset::handlers::{
+    download_spritesheet, get_info_of_current_tileset,
+};
+use crate::features::tileset::legacy_tileset::LegacyTilesheet;
+use crate::features::viewer::handlers::{
     close_project, get_calculated_parameters, get_current_project_data,
     get_project_cell_data, get_sprites, new_nested_mapgen_viewer,
     new_single_mapgen_viewer, new_special_mapgen_viewer, open_project,
-    reload_project,
+    open_viewer, reload_project,
 };
-use crate::map::viewer::open_viewer;
-use crate::map::CalculateParametersError;
-use crate::tab::{Tab, TabType};
-use crate::tileset::handlers::{
-    download_spritesheet, get_info_of_current_tileset,
-};
-use crate::tileset::io::{TileConfigLoader, TilesheetLoader};
-use crate::tileset::legacy_tileset::{LegacyTilesheet, MappedCDDAIdsForTile};
 use crate::util::Load;
 use anyhow::Error;
 use async_once::AsyncOnce;
+use data::io;
 use directories::ProjectDirs;
+use features::map::MappedCDDAIdsForTile;
+use features::program_data::{Tab, TabType};
+use features::tileset::legacy_tileset;
+use features::tileset::legacy_tileset::io::{
+    LegacyTilesheetLoader, TileConfigLoader,
+};
+use features::toast::ToastMessage;
 use glam::IVec3;
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
@@ -49,11 +53,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
 use tokio::task::JoinHandle;
 
-pub static RANDOM_SEED: u64 = 1;
-
 lazy_static! {
-    pub static ref RANDOM: Arc<RwLock<StdRng>> =
-        Arc::new(RwLock::new(StdRng::seed_from_u64(RANDOM_SEED)));
     static ref TEST_CDDA_DATA: AsyncOnce<DeserializedCDDAJsonData> =
         AsyncOnce::new(async {
             dotenv::dotenv().unwrap();
@@ -76,36 +76,6 @@ lazy_static! {
         });
 }
 
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-enum ToastType {
-    Success,
-    Error,
-}
-
-#[derive(Debug, Clone, Serialize)]
-struct ToastMessage {
-    #[serde(rename = "type")]
-    ty: ToastType,
-    message: String,
-}
-
-impl ToastMessage {
-    pub fn success(message: impl Into<String>) -> Self {
-        Self {
-            ty: ToastType::Success,
-            message: message.into(),
-        }
-    }
-
-    pub fn error(message: impl Into<String>) -> Self {
-        Self {
-            ty: ToastType::Error,
-            message: message.into(),
-        }
-    }
-}
-
 #[tauri::command]
 async fn frontend_ready(
     app: AppHandle,
@@ -124,7 +94,7 @@ async fn frontend_ready(
             },
             Some(cdda_path) => {
                 info!("trying to load CDDA Json Data");
-                match load_cdda_json_data(
+                match io::load_cdda_json_data(
                     cdda_path,
                     &editor_data_lock.config.json_data_path,
                 )
@@ -201,140 +171,15 @@ async fn frontend_ready(
 
     info!("Sent initial editor data change");
     app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
-        .expect("Emit to not fail");
+        .unwrap();
 
     info!("Loading tilesheet");
-    let tilesheet = load_tilesheet(&editor_data_lock).await.map_err(|e| {})?;
+    let tilesheet = legacy_tileset::load_tilesheet(&editor_data_lock)
+        .await
+        .map_err(|e| {})?;
     *tilesheet_lock = tilesheet;
 
     Ok(())
-}
-
-fn get_saved_editor_data() -> Result<EditorData, Error> {
-    let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
-
-    let directory_path = match project_dir {
-        None => {
-            warn!("No valid project directory found, creating data folder application directory instead");
-            let app_dir = match std::env::current_dir() {
-                Ok(d) => d,
-                Err(e) => {
-                    error!("{}", e);
-                    panic!()
-                },
-            };
-
-            app_dir
-        },
-        Some(dir) => {
-            let local_dir = dir.config_local_dir();
-            info!(
-                "Got Path for CDDA-Map-Editor config directory at {:?}",
-                local_dir
-            );
-            local_dir.to_path_buf()
-        },
-    };
-
-    if !fs::exists(&directory_path).expect("IO Error to not occur") {
-        info!(
-            "Created CDDA-Map-Editor config directory at {:?}",
-            directory_path
-        );
-        fs::create_dir_all(&directory_path)?;
-    }
-
-    let config_file_path = directory_path.join("config.json");
-    let config_exists =
-        fs::exists(&config_file_path).expect("IO Error to not occur");
-    let config = match config_exists {
-        true => {
-            info!("Reading config.json file");
-            let contents = fs::read_to_string(&config_file_path)
-                .expect("File to be valid UTF-8");
-
-            let data =
-                match serde_json::from_str::<EditorData>(contents.as_str()) {
-                    Ok(d) => {
-                        info!("config.json file successfully read and parsed");
-                        d
-                    },
-                    Err(e) => {
-                        error!("{}", e.to_string());
-                        info!(
-                        "Error while reading config.json file, recreating file"
-                    );
-
-                        let mut default_editor_data = EditorData::default();
-                        default_editor_data.config.config_path =
-                            directory_path.clone();
-
-                        let serialized =
-                            serde_json::to_string_pretty(&default_editor_data)
-                                .expect("Serialization to not fail");
-                        fs::write(&config_file_path, serialized).expect(
-                            "Directory path to config to have been created",
-                        );
-                        default_editor_data
-                    },
-                };
-
-            data
-        },
-        false => {
-            info!("config.json file does not exist");
-            info!("Creating config.json file with default data");
-
-            let mut default_editor_data = EditorData::default();
-            default_editor_data.config.config_path = directory_path.clone();
-
-            let serialized = serde_json::to_string_pretty(&default_editor_data)
-                .expect("Serialization to not fail");
-            fs::write(&config_file_path, serialized)
-                .expect("Directory path to config to have been created");
-            default_editor_data
-        },
-    };
-
-    Ok(config)
-}
-
-pub async fn load_tilesheet(
-    editor_data: &EditorData,
-) -> Result<Option<LegacyTilesheet>, Error> {
-    let tileset = match &editor_data.config.selected_tileset {
-        None => return Ok(None),
-        Some(t) => t.clone(),
-    };
-
-    let cdda_path = match &editor_data.config.cdda_path {
-        None => return Ok(None),
-        Some(p) => p.clone(),
-    };
-
-    let config_path = cdda_path
-        .join("gfx")
-        .join(&tileset)
-        .join("tile_config.json");
-
-    let mut tile_config_loader = TileConfigLoader::new(config_path);
-    let config = tile_config_loader.load().await?;
-
-    let mut tilesheet_loader = TilesheetLoader::new(config);
-    let tilesheet = tilesheet_loader.load().await?;
-
-    Ok(Some(tilesheet))
-}
-
-pub async fn load_cdda_json_data(
-    cdda_path: impl Into<PathBuf>,
-    json_data_path: impl Into<PathBuf>,
-) -> Result<DeserializedCDDAJsonData, anyhow::Error> {
-    let mut data_loader = CDDADataLoader {
-        json_path: cdda_path.into().join(json_data_path.into()),
-    };
-
-    data_loader.load().await
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -350,7 +195,7 @@ pub fn run() -> () {
         )
         .setup(|app| {
             info!("Loading Editor data config");
-            let editor_data = get_saved_editor_data()?;
+            let editor_data = io::get_saved_editor_data()?;
 
             app.manage(Mutex::new(editor_data));
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(

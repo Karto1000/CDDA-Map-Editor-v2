@@ -1,14 +1,12 @@
-use crate::cdda_data::map_data::{
+use crate::data::map_data::{
     MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonsters,
     MapGenSign, MapGenTrap, PlaceInnerComputers, PlaceInnerFields,
     PlaceInnerFurniture, PlaceInnerGaspumps, PlaceInnerItems,
     PlaceInnerMonster, PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain,
     PlaceInnerToilets, PlaceInnerTraps, PlaceInnerVehicles,
 };
-use crate::cdda_data::map_data::{
-    MapGenCorpse, MapGenVehicle, PlaceInnerCorpses,
-};
-use crate::map::MapGenNested;
+use crate::data::map_data::{MapGenCorpse, MapGenVehicle, PlaceInnerCorpses};
+use crate::features::map::MapGenNested;
 use cdda_lib::types::MapGenValue;
 use cdda_lib::types::Weighted;
 

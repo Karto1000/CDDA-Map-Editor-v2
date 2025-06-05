@@ -1,14 +1,10 @@
-use crate::tileset::io::TileConfigLoader;
-use crate::tileset::legacy_tileset::SpriteIndex;
-use crate::tileset::MeabyWeightedSprite;
-use crate::util::Load;
-use cdda_lib::types::{CDDAIdentifier, MeabyVec};
+use crate::features::tileset::data::AdditionalTileType;
+use crate::features::tileset::legacy_tileset::SpriteIndex;
+use cdda_lib::types::{CDDAIdentifier, MeabyVec, MeabyWeighted};
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::fs::File;
-use std::io::BufReader;
 
-pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
+fn deserialize_range_comment<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<(u32, u32), D::Error> {
     let s = String::deserialize(deserializer)?;
@@ -41,16 +37,8 @@ pub fn deserialize_range_comment<'de, D: Deserializer<'de>>(
     Ok((from, to))
 }
 
-impl Load<LegacyTileConfig> for TileConfigLoader {
-    async fn load(&mut self) -> Result<LegacyTileConfig, anyhow::Error> {
-        let file = File::open(&self.path)?;
-        let reader = BufReader::new(file);
-        serde_json::from_reader(reader).map_err(|e| anyhow::anyhow!(e))
-    }
-}
-
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LegacyTileConfig {
+pub(super) struct LegacyTileConfig {
     pub tile_info: Vec<TileInfo>,
 
     #[serde(rename = "tiles-new")]
@@ -59,13 +47,13 @@ pub struct LegacyTileConfig {
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum Spritesheet {
+pub(super) enum Spritesheet {
     Normal(NormalSpritesheet),
     Fallback(FallbackSpritesheet),
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct NormalSpritesheet {
+pub(super) struct NormalSpritesheet {
     pub file: String,
 
     pub sprite_width: Option<u32>,
@@ -79,53 +67,20 @@ pub struct NormalSpritesheet {
     pub tiles: Vec<Tile>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Hash, Eq, PartialEq)]
-pub enum AdditionalTileType {
-    // TODO: Is this what is meant with intersection?
-    #[serde(alias = "center", alias = "intersection")]
-    Center,
-
-    #[serde(rename = "corner")]
-    Corner,
-
-    #[serde(rename = "t_connection")]
-    TConnection,
-
-    #[serde(rename = "edge")]
-    Edge,
-
-    #[serde(alias = "end_piece", alias = "end")]
-    EndPiece,
-
-    #[serde(rename = "unconnected")]
-    Unconnected,
-
-    #[serde(rename = "broken")]
-    Broken,
-
-    #[serde(rename = "open")]
-    Open,
-
-    // ???
-    // BrownLikeBears -> tile_config.json -> Line 5688
-    #[serde(rename = "h")]
-    H,
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct AdditionalTile {
+pub(super) struct AdditionalTile {
     pub id: AdditionalTileType,
     pub rotates: Option<bool>,
     pub animated: Option<bool>,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
+    pub fg: Option<MeabyVec<MeabyWeighted<MeabyVec<SpriteIndex>>>>,
+    pub bg: Option<MeabyVec<MeabyWeighted<MeabyVec<SpriteIndex>>>>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct Tile {
+pub(super) struct Tile {
     pub id: MeabyVec<CDDAIdentifier>,
-    pub fg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
-    pub bg: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
+    pub fg: Option<MeabyVec<MeabyWeighted<MeabyVec<SpriteIndex>>>>,
+    pub bg: Option<MeabyVec<MeabyWeighted<MeabyVec<SpriteIndex>>>>,
     pub rotates: Option<bool>,
     pub animated: Option<bool>,
     pub multitile: Option<bool>,
@@ -133,7 +88,7 @@ pub struct Tile {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct FallbackSpritesheet {
+pub(super) struct FallbackSpritesheet {
     pub file: String,
 
     // TODO: Idk what this is for
@@ -143,14 +98,14 @@ pub struct FallbackSpritesheet {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct AsciiCharGroup {
+pub(super) struct AsciiCharGroup {
     pub offset: i32,
     pub bold: bool,
     pub color: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TileInfo {
+pub(super) struct TileInfo {
     pub pixelscale: u32,
     pub width: u32,
     pub height: u32,

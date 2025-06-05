@@ -1,17 +1,17 @@
-use crate::cdda_data::item::{ItemEntry, ItemGroupSubtype};
-use crate::cdda_data::map_data::{
+use crate::data::item::{ItemEntry, ItemGroupSubtype};
+use crate::data::map_data::{
     MapGenGaspumpFuelType, ReferenceOrInPlace, VehicleStatus,
 };
-use crate::cdda_data::vehicle_parts::{CDDAVehiclePart, Location};
-use crate::cdda_data::vehicles::{CDDAVehicle, VehiclePart};
-use crate::map::map_properties::{
+use crate::data::vehicle_parts::{CDDAVehiclePart, Location};
+use crate::data::vehicles::{CDDAVehicle, VehiclePart};
+use crate::features::map::map_properties::{
     ComputersProperty, CorpsesProperty, FieldsProperty, FurnitureProperty,
     GaspumpsProperty, ItemsProperty, MonstersProperty, NestedProperty,
     SignsProperty, TerrainProperty, ToiletsProperty, TrapsProperty,
     VehiclesProperty,
 };
-use crate::map::*;
-use crate::tileset::GetRandom;
+use crate::features::map::*;
+use crate::util::GetRandom;
 use cdda_lib::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use log::error;
 use num_traits::real::Real;

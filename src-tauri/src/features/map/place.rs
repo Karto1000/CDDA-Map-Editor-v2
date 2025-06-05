@@ -1,8 +1,8 @@
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::map::map_properties::{
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::features::map::map_properties::{
     FurnitureProperty, NestedProperty, TerrainProperty,
 };
-use crate::map::{MapData, Place, Property, SetTile};
+use crate::features::map::{MapData, Place, Property, SetTile};
 use glam::IVec2;
 
 #[derive(Debug, Clone)]

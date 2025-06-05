@@ -1,22 +1,20 @@
 pub(crate) mod importing;
 pub(crate) mod map_properties;
 pub(crate) mod place;
-pub(crate) mod viewer;
 
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::map_data::{
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::map_data::{
     MapGenMonsterType, NeighborDirection, OmTerrainMatch, PlaceOuter,
 };
-use crate::cdda_data::palettes::{CDDAPalette, Parameter};
-use crate::cdda_data::{
+use crate::data::palettes::{CDDAPalette, Parameter};
+use crate::data::{
     replace_region_setting, GetIdentifier, GetIdentifierError, GetRandomError,
     TileLayer,
 };
-use crate::editor_data::ZLevel;
-use crate::tileset::legacy_tileset::{
-    MappedCDDAId, MappedCDDAIdsForTile, Rotation, TilesheetCDDAId,
-};
-use crate::tileset::Tilesheet;
+use crate::features::program_data::ZLevel;
+use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
+use crate::features::tileset::Tilesheet;
+use crate::util::Rotation;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,
@@ -762,9 +760,9 @@ pub struct SetSquare {
 
 #[cfg(test)]
 mod tests {
-    use crate::map::importing::SingleMapDataImporter;
-    use crate::map::map_properties::TerrainProperty;
-    use crate::map::MappingKind;
+    use crate::features::map::importing::SingleMapDataImporter;
+    use crate::features::map::map_properties::TerrainProperty;
+    use crate::features::map::MappingKind;
     use crate::util::Load;
     use crate::TEST_CDDA_DATA;
     use cdda_lib::types::{
@@ -1053,6 +1051,95 @@ mod tests {
             };
 
             assert_eq!(terrain_property.mapgen_value, to_eq);
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedCDDAId {
+    pub tilesheet_id: TilesheetCDDAId,
+    pub rotation: Rotation,
+    pub is_broken: bool,
+    pub is_open: bool,
+}
+
+impl MappedCDDAId {
+    pub fn simple(id: impl Into<TilesheetCDDAId>) -> Self {
+        Self {
+            tilesheet_id: id.into(),
+            rotation: Default::default(),
+            is_broken: false,
+            is_open: false,
+        }
+    }
+
+    ///
+    /// Some parts can have multiple variants; each variant can define the symbols and broken symbols,
+    /// also each variant is a tileset sprite, if the tileset defines one for the variant.
+    //
+    // If a part has variants, the specific variant can be specified in the vehicle prototype by
+    // appending the variant to the part id after a # symbol. Thus, "frame#cross" is the "cross" variant of the "frame" part.
+    //
+    // Variants perform a mini-lookup chain by slicing variant string until the next _ from the
+    // right until a match is found. For example the tileset lookups for seat_leather#windshield_left are as follows:
+    //
+    //     vp_seat_leather_windshield_left
+    //
+    //     vp_seat_leather_windshield
+    //
+    // ( At this point variant is completely gone and default tile is looked for: )
+    //
+    //     vp_seat_leather
+    //
+    // ( If still no match is found then the looks_like field of vp_seat_leather is used and tileset looks for: )
+    //
+    //     vp_seat
+    ///
+    ///
+    pub fn slice_right(&self) -> MappedCDDAId {
+        let new_postfix = self
+            .tilesheet_id
+            .postfix
+            .clone()
+            .map(|p| p.rsplit_once('_').map(|(s, _)| s.to_string()));
+
+        MappedCDDAId {
+            tilesheet_id: TilesheetCDDAId {
+                id: self.tilesheet_id.id.clone(),
+                prefix: self.tilesheet_id.prefix.clone(),
+                postfix: new_postfix.flatten(),
+            },
+            rotation: self.rotation.clone(),
+            is_broken: self.is_broken.clone(),
+            is_open: self.is_open.clone(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default)]
+pub struct MappedCDDAIdsForTile {
+    pub terrain: Option<MappedCDDAId>,
+    pub furniture: Option<MappedCDDAId>,
+    pub monster: Option<MappedCDDAId>,
+    pub field: Option<MappedCDDAId>,
+}
+
+impl MappedCDDAIdsForTile {
+    pub fn override_none(&mut self, other: MappedCDDAIdsForTile) {
+        if other.terrain.is_some() {
+            self.terrain = other.terrain;
+        }
+
+        if other.furniture.is_some() {
+            self.furniture = other.furniture;
+        }
+
+        if other.monster.is_some() {
+            self.monster = other.monster;
+        }
+
+        if other.field.is_some() {
+            self.field = other.field;
         }
     }
 }

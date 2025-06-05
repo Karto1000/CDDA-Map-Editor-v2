@@ -1,119 +1,39 @@
-use crate::cdda_data::furniture::CDDAFurniture;
-use crate::cdda_data::io::DeserializedCDDAJsonData;
-use crate::cdda_data::terrain::CDDATerrain;
-use crate::cdda_data::vehicle_parts::CDDAVehiclePart;
-use crate::tileset::io::{TilesheetConfigLoader, TilesheetLoader};
-use crate::tileset::legacy_tileset::tile_config::{
-    AdditionalTile, AdditionalTileType, LegacyTileConfig, Spritesheet, Tile,
+use crate::data::furniture::CDDAFurniture;
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::terrain::CDDATerrain;
+use crate::data::vehicle_parts::CDDAVehiclePart;
+use crate::features::map::MappedCDDAId;
+use crate::features::program_data::EditorData;
+use crate::features::tileset::data::{
+    AdditionalTileType, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
 };
-use crate::tileset::MeabyWeightedSprite::Weighted;
-use crate::tileset::{
-    ForeBackIds, MeabyWeightedSprite, SingleSprite, Sprite, SpriteOrFallback,
-    Tilesheet, WeightedSprite, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
-};
-use crate::util::Load;
+use crate::features::tileset::legacy_tileset::io::TileConfigLoader;
+use crate::features::tileset::{ForeBackIds, SingleSprite, Sprite, Tilesheet};
+use crate::util::{CardinalDirection, Load, Rotation};
 use anyhow::{anyhow, Error};
-use cdda_lib::types::{CDDAIdentifier, MeabyVec};
+use cdda_lib::types::{CDDAIdentifier, MeabyVec, MeabyWeighted, Weighted};
+use data::{AdditionalTile, LegacyTileConfig, Spritesheet, Tile};
 use derive_more::Display;
+use io::LegacyTilesheetLoader;
 use log::{debug, info, warn};
 use rand::distr::Distribution;
 use serde::de::Error as SerdeError;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, BitAndAssign};
+use std::path::PathBuf;
 use std::ptr::write;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;
 
-pub(crate) mod tile_config;
+mod data;
+pub mod io;
 
 pub type SpriteIndex = u32;
-pub type FinalIds = Option<Vec<WeightedSprite<Rotates>>>;
-
-#[derive(Debug, Default, Clone, Eq, PartialEq)]
-pub enum Rotation {
-    #[default]
-    Deg0,
-    Deg90,
-    Deg180,
-    Deg270,
-}
-
-impl Serialize for Rotation {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        self.clone().deg().serialize(serializer)
-    }
-}
-
-impl<'de> Deserialize<'de> for Rotation {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let deg = u32::deserialize(deserializer)? % 360;
-
-        match deg {
-            0 => Ok(Rotation::Deg0),
-            90 => Ok(Rotation::Deg90),
-            180 => Ok(Rotation::Deg180),
-            270 => Ok(Rotation::Deg270),
-            _ => Err(SerdeError::custom(format!(
-                "Invalid rotation value {}",
-                deg
-            ))),
-        }
-    }
-}
-
-impl Add<Rotation> for Rotation {
-    type Output = Rotation;
-
-    fn add(self, rhs: Rotation) -> Self::Output {
-        let value = self.deg() + rhs.deg();
-        Self::from(value)
-    }
-}
-
-impl From<i32> for Rotation {
-    fn from(value: i32) -> Self {
-        let value = value % 360;
-
-        match value {
-            0..90 => Self::Deg0,
-            90..180 => Self::Deg90,
-            180..270 => Self::Deg180,
-            270..360 => Self::Deg270,
-            _ => unreachable!(),
-        }
-    }
-}
-
-impl Rotation {
-    pub fn deg(&self) -> i32 {
-        match self {
-            Rotation::Deg0 => 0,
-            Rotation::Deg90 => 90,
-            Rotation::Deg180 => 180,
-            Rotation::Deg270 => 270,
-        }
-    }
-}
-
-impl From<CardinalDirection> for Rotation {
-    fn from(value: CardinalDirection) -> Self {
-        match value {
-            CardinalDirection::North => Self::Deg0,
-            CardinalDirection::East => Self::Deg90,
-            CardinalDirection::South => Self::Deg180,
-            CardinalDirection::West => Self::Deg270,
-        }
-    }
-}
+pub type FinalIds = Option<Vec<Weighted<Rotates>>>;
 
 #[derive(Debug, Clone)]
 pub struct Rotated<T> {
@@ -186,14 +106,6 @@ impl TryFrom<Vec<SpriteIndex>> for Rotates {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-pub enum CardinalDirection {
-    North = 0,
-    East = 1,
-    South = 2,
-    West = 3,
-}
-
 #[derive(Clone, Debug, Deserialize, Serialize, Default, Eq, PartialEq)]
 pub struct TilesheetCDDAId {
     pub id: CDDAIdentifier,
@@ -246,109 +158,20 @@ impl TilesheetCDDAId {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedCDDAId {
-    pub tilesheet_id: TilesheetCDDAId,
-    pub rotation: Rotation,
-    pub is_broken: bool,
-    pub is_open: bool,
-}
-
-impl MappedCDDAId {
-    pub fn simple(id: impl Into<TilesheetCDDAId>) -> Self {
-        Self {
-            tilesheet_id: id.into(),
-            rotation: Default::default(),
-            is_broken: false,
-            is_open: false,
-        }
-    }
-
-    ///
-    /// Some parts can have multiple variants; each variant can define the symbols and broken symbols,
-    /// also each variant is a tileset sprite, if the tileset defines one for the variant.
-    //
-    // If a part has variants, the specific variant can be specified in the vehicle prototype by
-    // appending the variant to the part id after a # symbol. Thus, "frame#cross" is the "cross" variant of the "frame" part.
-    //
-    // Variants perform a mini-lookup chain by slicing variant string until the next _ from the
-    // right until a match is found. For example the tileset lookups for seat_leather#windshield_left are as follows:
-    //
-    //     vp_seat_leather_windshield_left
-    //
-    //     vp_seat_leather_windshield
-    //
-    // ( At this point variant is completely gone and default tile is looked for: )
-    //
-    //     vp_seat_leather
-    //
-    // ( If still no match is found then the looks_like field of vp_seat_leather is used and tileset looks for: )
-    //
-    //     vp_seat
-    ///
-    ///
-    pub fn slice_right(&self) -> MappedCDDAId {
-        let new_postfix = self
-            .tilesheet_id
-            .postfix
-            .clone()
-            .map(|p| p.rsplit_once('_').map(|(s, _)| s.to_string()));
-
-        MappedCDDAId {
-            tilesheet_id: TilesheetCDDAId {
-                id: self.tilesheet_id.id.clone(),
-                prefix: self.tilesheet_id.prefix.clone(),
-                postfix: new_postfix.flatten(),
-            },
-            rotation: self.rotation.clone(),
-            is_broken: self.is_broken.clone(),
-            is_open: self.is_open.clone(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedCDDAIdsForTile {
-    pub terrain: Option<MappedCDDAId>,
-    pub furniture: Option<MappedCDDAId>,
-    pub monster: Option<MappedCDDAId>,
-    pub field: Option<MappedCDDAId>,
-}
-
-impl MappedCDDAIdsForTile {
-    pub fn override_none(&mut self, other: MappedCDDAIdsForTile) {
-        if other.terrain.is_some() {
-            self.terrain = other.terrain;
-        }
-
-        if other.furniture.is_some() {
-            self.furniture = other.furniture;
-        }
-
-        if other.monster.is_some() {
-            self.monster = other.monster;
-        }
-
-        if other.field.is_some() {
-            self.field = other.field;
-        }
-    }
-}
-
 fn to_weighted_vec(
-    indices: Option<MeabyVec<MeabyWeightedSprite<MeabyVec<SpriteIndex>>>>,
-) -> Option<Vec<WeightedSprite<Rotates>>> {
+    indices: Option<MeabyVec<MeabyWeighted<MeabyVec<SpriteIndex>>>>,
+) -> Option<Vec<Weighted<Rotates>>> {
     let mut mapped_indices = Vec::new();
 
     for fg_indices_outer in indices?.into_vec() {
         let (indices_vec, weight) = match fg_indices_outer {
-            MeabyWeightedSprite::NotWeighted(nw) => (nw.into_vec(), 1),
-            MeabyWeightedSprite::Weighted(w) => (w.sprite.into_vec(), w.weight),
+            MeabyWeighted::NotWeighted(nw) => (nw.into_vec(), 1),
+            MeabyWeighted::Weighted(w) => (w.data.into_vec(), w.weight),
         };
 
         match Rotates::try_from(indices_vec) {
             Ok(v) => {
-                mapped_indices.push(WeightedSprite::new(v, weight));
+                mapped_indices.push(Weighted::new(v, weight));
             },
             Err(e) => {
                 // TODO: This happens when the supplied fg or bg is an empty array
@@ -431,8 +254,8 @@ fn get_multitile_sprite_from_additional_tiles(
 }
 
 pub struct LegacyTilesheet {
-    pub id_map: HashMap<CDDAIdentifier, Sprite>,
-    pub fallback_map: HashMap<String, SpriteIndex>,
+    id_map: HashMap<CDDAIdentifier, Sprite>,
+    fallback_map: HashMap<String, SpriteIndex>,
 }
 
 impl Tilesheet for LegacyTilesheet {
@@ -607,92 +430,29 @@ impl LegacyTilesheet {
     }
 }
 
-impl Load<LegacyTilesheet> for TilesheetLoader<LegacyTileConfig> {
-    async fn load(&mut self) -> Result<LegacyTilesheet, Error> {
-        let mut id_map = HashMap::new();
-        let mut fallback_map = HashMap::new();
+pub async fn load_tilesheet(
+    editor_data: &EditorData,
+) -> Result<Option<LegacyTilesheet>, Error> {
+    let tileset = match &editor_data.config.selected_tileset {
+        None => return Ok(None),
+        Some(t) => t.clone(),
+    };
 
-        let mut normal_spritesheets = vec![];
-        let mut fallback_spritesheet = None;
+    let cdda_path = match &editor_data.config.cdda_path {
+        None => return Ok(None),
+        Some(p) => p.clone(),
+    };
 
-        for spritesheet in self.config.spritesheets.iter() {
-            match spritesheet {
-                Spritesheet::Normal(n) => normal_spritesheets.push(n),
-                Spritesheet::Fallback(f) => fallback_spritesheet = Some(f),
-            }
-        }
+    let config_path = cdda_path
+        .join("gfx")
+        .join(&tileset)
+        .join("tile_config.json");
 
-        for spritesheet in normal_spritesheets {
-            for tile in spritesheet.tiles.iter() {
-                let is_multitile = tile.multitile.unwrap_or_else(|| false)
-                    && tile.additional_tiles.is_some();
+    let mut tile_config_loader = TileConfigLoader::new(config_path);
+    let config = tile_config_loader.load().await?;
 
-                if !is_multitile {
-                    let fg = to_weighted_vec(tile.fg.clone());
-                    let bg = to_weighted_vec(tile.bg.clone());
+    let mut tilesheet_loader = LegacyTilesheetLoader::new(config);
+    let tilesheet = tilesheet_loader.load().await?;
 
-                    tile.id.for_each(|id| {
-                        id_map.insert(
-                            id.clone(),
-                            Sprite::Single(SingleSprite {
-                                ids: ForeBackIds::new(fg.clone(), bg.clone()),
-                                animated: tile.animated.unwrap_or(false),
-                                rotates: tile.rotates.unwrap_or(false),
-                            }),
-                        );
-                    });
-                }
-
-                if is_multitile {
-                    let additional_tiles = match &tile.additional_tiles {
-                        None => unreachable!(),
-                        Some(t) => t,
-                    };
-
-                    tile.id.for_each(|id| {
-                        id_map.insert(
-                            id.clone(),
-                            get_multitile_sprite_from_additional_tiles(
-                                tile,
-                                additional_tiles,
-                            )
-                            .unwrap(),
-                        );
-                    });
-                }
-            }
-        }
-
-        let fallback_spritesheet =
-            fallback_spritesheet.expect("Fallback spritesheet to exist");
-
-        for ascii_group in fallback_spritesheet.ascii.iter() {
-            for (character, offset) in FALLBACK_TILE_MAPPING {
-                fallback_map.insert(
-                    format!("{}_{}", character, ascii_group.color),
-                    (offset / FALLBACK_TILE_ROW_SIZE as u32) + offset,
-                );
-            }
-        }
-
-        Ok(LegacyTilesheet {
-            id_map,
-            fallback_map,
-        })
-    }
-}
-
-impl Load<LegacyTileConfig> for TilesheetConfigLoader {
-    async fn load(&mut self) -> Result<LegacyTileConfig, Error> {
-        let config_path = self.tileset_path.join("tile_config.json");
-
-        let mut buffer = vec![];
-        File::open(config_path)
-            .await?
-            .read_to_end(&mut buffer)
-            .await?;
-
-        Ok(serde_json::from_slice::<LegacyTileConfig>(&buffer)
-            .map_err(|e| anyhow!("{:?}", e))?)
-    }
+    Ok(Some(tilesheet))
 }

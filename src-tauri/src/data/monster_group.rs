@@ -1,4 +1,4 @@
-use crate::cdda_data::{GetIdentifier, GetIdentifierError, WeightedIndexError};
+use crate::data::{GetIdentifier, GetIdentifierError, WeightedIndexError};
 use cdda_lib::types::{CDDAIdentifier, NumberOrRange, ParameterIdentifier};
 use cdda_macros::cdda_entry;
 use indexmap::IndexMap;

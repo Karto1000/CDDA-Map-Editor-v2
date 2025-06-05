@@ -1,13 +1,13 @@
-use crate::cdda_data::map_data::{
+use crate::data::map_data::{
     CDDAMapDataIntermediate, IdCollection, IntoMapDataCollectionError,
     OmTerrain,
 };
-use crate::cdda_data::overmap::{
+use crate::data::overmap::{
     CDDAOvermapSpecial, CDDAOvermapSpecialIntermediate, OvermapSpecialOvermap,
     OvermapSpecialSubType,
 };
-use crate::editor_data::{MapDataCollection, ZLevel};
-use crate::map::{MapData, MapDataRotation};
+use crate::features::map::{MapData, MapDataRotation};
+use crate::features::program_data::{MapDataCollection, ZLevel};
 use crate::util::Load;
 use anyhow::{anyhow, Error};
 use cdda_lib::types::{CDDAIdentifier, IdOrAbstract};
