@@ -9,14 +9,12 @@ use crate::data::overmap::{
 use crate::features::map::{MapData, MapDataRotation};
 use crate::features::program_data::{MapDataCollection, ZLevel};
 use crate::util::Load;
-use anyhow::{anyhow, Error};
-use cdda_lib::types::{CDDAIdentifier, IdOrAbstract};
+use cdda_lib::types::CDDAIdentifier;
 use glam::UVec2;
 use log::warn;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use tauri::utils::config::parse::does_supported_file_name_exist;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncReadExt;

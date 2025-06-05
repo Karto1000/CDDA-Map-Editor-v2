@@ -1,33 +1,21 @@
-use crate::data::furniture::CDDAFurniture;
 use crate::data::io::DeserializedCDDAJsonData;
-use crate::data::terrain::CDDATerrain;
-use crate::data::vehicle_parts::CDDAVehiclePart;
 use crate::features::map::MappedCDDAId;
 use crate::features::program_data::EditorData;
 use crate::features::tileset::data::{
-    AdditionalTileType, FALLBACK_TILE_MAPPING, FALLBACK_TILE_ROW_SIZE,
+    AdditionalTileType, FALLBACK_TILE_MAPPING,
 };
 use crate::features::tileset::legacy_tileset::io::TileConfigLoader;
 use crate::features::tileset::{ForeBackIds, SingleSprite, Sprite, Tilesheet};
 use crate::util::{CardinalDirection, Load, Rotation};
 use anyhow::{anyhow, Error};
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, MeabyWeighted, Weighted};
-use data::{AdditionalTile, LegacyTileConfig, Spritesheet, Tile};
-use derive_more::Display;
+use data::{AdditionalTile, Tile};
 use io::LegacyTilesheetLoader;
-use log::{debug, info, warn};
+use log::{debug, warn};
 use rand::distr::Distribution;
-use serde::de::Error as SerdeError;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::convert::Infallible;
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, BitAndAssign};
-use std::path::PathBuf;
-use std::ptr::write;
-use tokio::fs::File;
-use tokio::io::AsyncReadExt;
 
 mod data;
 pub mod io;

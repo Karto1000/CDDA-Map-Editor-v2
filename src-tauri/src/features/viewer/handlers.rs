@@ -7,16 +7,13 @@ use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::map::importing::{
     OvermapSpecialImporter, SingleMapDataImporter,
 };
-use crate::features::map::CellRepresentation;
 use crate::features::map::MappedCDDAId;
-use crate::features::map::MappedCDDAIdsForTile;
 use crate::features::map::SPECIAL_EMPTY_CHAR;
 use crate::features::map::{CalculateParametersError, DEFAULT_MAP_DATA_SIZE};
 use crate::features::program_data::EditorData;
 use crate::features::program_data::EditorDataSaver;
 use crate::features::program_data::GetLiveViewerDataError;
 use crate::features::program_data::LiveViewerData;
-use crate::features::program_data::MapDataCollection;
 use crate::features::program_data::MappedCDDAIdContainer;
 use crate::features::program_data::Project;
 use crate::features::program_data::ProjectType;
@@ -24,7 +21,6 @@ use crate::features::program_data::ZLevel;
 use crate::features::program_data::{
     get_map_data_collection_live_viewer_data, Tab, TabType,
 };
-use crate::features::tileset;
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::features::tileset::Tilesheet;
@@ -43,20 +39,14 @@ use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
 use cdda_lib::DEFAULT_MAP_HEIGHT;
 use cdda_lib::DEFAULT_MAP_ROWS;
 use comfy_bounded_ints::types::Bound_usize;
-use derive_more::Display;
 use glam::IVec3;
 use glam::UVec2;
 use indexmap::IndexMap;
-use log::debug;
 use log::error;
 use log::info;
 use log::warn;
-use notify::PollWatcher;
-use notify::RecommendedWatcher;
 use notify::Watcher;
 use notify_debouncer_full::new_debouncer;
-use notify_debouncer_full::new_debouncer_opt;
-use notify_debouncer_full::Debouncer;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
@@ -65,7 +55,6 @@ use serde::Serializer;
 use serde_json::json;
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::hash::Hash;
 use std::hash::Hasher;
 use std::ops::Deref;
 use std::ops::DerefMut;
@@ -79,7 +68,6 @@ use tauri::State;
 use thiserror::Error;
 use tokio::fs::File;
 use tokio::io::AsyncWriteExt;
-use tokio::time::Instant;
 use tokio_test::block_on;
 
 #[tauri::command]

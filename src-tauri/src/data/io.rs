@@ -18,7 +18,7 @@ use crate::util::Load;
 use anyhow::Error;
 use async_walkdir::WalkDir;
 use cdda_lib::types::{
-    CDDAExtendOp, CDDAIdentifier, DistributionInner, ImportCDDAObject, MeabyVec,
+    CDDAIdentifier, DistributionInner, ImportCDDAObject, MeabyVec,
 };
 use cdda_lib::{NULL_FURNITURE, NULL_TERRAIN};
 use directories::ProjectDirs;

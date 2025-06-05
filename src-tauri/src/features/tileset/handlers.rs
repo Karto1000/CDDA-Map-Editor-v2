@@ -2,13 +2,9 @@ use crate::features::program_data::{
     CDDAPathError, EditorData, SelectedTilesetError,
 };
 use crate::features::tileset::legacy_tileset::io::LegacyTilesheetConfigLoader;
-use image::{ImageFormat, ImageReader};
 use log::info;
 use serde::Serialize;
 use serde_json::Value;
-use std::ascii::escape_default;
-use std::io::Cursor;
-use std::path::PathBuf;
 use tauri::ipc::Response;
 use tauri::State;
 use tokio::sync::Mutex;

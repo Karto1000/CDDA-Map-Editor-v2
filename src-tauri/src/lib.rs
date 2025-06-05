@@ -4,9 +4,8 @@ mod features;
 mod util;
 
 use crate::data::io::{
-    load_cdda_json_data, CDDADataLoader, DeserializedCDDAJsonData,
+    load_cdda_json_data, DeserializedCDDAJsonData,
 };
-use crate::features::map::CalculateParametersError;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, get_editor_data, save_editor_data,
     tileset_picked,
@@ -25,29 +24,15 @@ use crate::features::viewer::handlers::{
     new_single_mapgen_viewer, new_special_mapgen_viewer, open_project,
     open_viewer, reload_project,
 };
-use crate::util::Load;
-use anyhow::Error;
 use async_once::AsyncOnce;
 use data::io;
-use directories::ProjectDirs;
-use features::map::MappedCDDAIdsForTile;
 use features::program_data::{Tab, TabType};
 use features::tileset::legacy_tileset;
-use features::tileset::legacy_tileset::io::{
-    LegacyTilesheetLoader, TileConfigLoader,
-};
 use features::toast::ToastMessage;
-use glam::IVec3;
 use lazy_static::lazy_static;
-use log::{error, info, warn, LevelFilter};
-use rand::prelude::StdRng;
-use rand::SeedableRng;
-use serde::Serialize;
+use log::{info, warn, LevelFilter};
 use std::collections::HashMap;
-use std::fs;
 use std::ops::Deref;
-use std::path::PathBuf;
-use std::sync::{Arc, RwLock};
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};

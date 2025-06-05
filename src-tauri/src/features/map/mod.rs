@@ -13,7 +13,6 @@ use crate::data::{
 };
 use crate::features::program_data::ZLevel;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::features::tileset::Tilesheet;
 use crate::util::Rotation;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,

@@ -1,8 +1,7 @@
 use cdda_lib::types::CDDAIdentifier;
 use cdda_lib::types::CDDAString;
 use cdda_macros::cdda_entry;
-use serde::{Deserialize, Deserializer, Serialize};
-use std::str::FromStr;
+use serde::{Deserialize, Serialize};
 use strum_macros::EnumString;
 
 #[derive(Debug, Default, EnumString, Clone, Serialize, Deserialize)]

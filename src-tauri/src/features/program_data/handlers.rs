@@ -1,5 +1,4 @@
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
-use crate::events;
 use crate::events::EDITOR_DATA_CHANGED;
 use crate::features::program_data::{EditorData, EditorDataSaver};
 use crate::features::tileset::legacy_tileset::{
@@ -9,7 +8,6 @@ use crate::util::Save;
 use log::{error, warn};
 use serde::Serialize;
 use std::fs;
-use std::ops::DerefMut;
 use std::path::PathBuf;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};

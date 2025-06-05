@@ -1,9 +1,9 @@
 use crate::data::item::{ItemEntry, ItemGroupSubtype};
 use crate::data::map_data::{
-    MapGenGaspumpFuelType, ReferenceOrInPlace, VehicleStatus,
+    MapGenGaspumpFuelType, VehicleStatus,
 };
 use crate::data::vehicle_parts::{CDDAVehiclePart, Location};
-use crate::data::vehicles::{CDDAVehicle, VehiclePart};
+use crate::data::vehicles::VehiclePart;
 use crate::features::map::map_properties::{
     ComputersProperty, CorpsesProperty, FieldsProperty, FurnitureProperty,
     GaspumpsProperty, ItemsProperty, MonstersProperty, NestedProperty,
@@ -18,7 +18,6 @@ use num_traits::real::Real;
 use rand::prelude::IndexedRandom;
 use rand::random_range;
 use std::fmt::{Display, Formatter};
-use std::ops::Add;
 use std::str::FromStr;
 
 impl Property for TerrainProperty {
