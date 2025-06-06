@@ -1,4 +1,5 @@
 use crate::data::io::DeserializedCDDAJsonData;
+use crate::data::vehicle_parts::CDDAVehiclePart;
 use crate::features::map::MappedCDDAId;
 use crate::features::program_data::EditorData;
 use crate::features::tileset::data::{
@@ -11,9 +12,11 @@ use anyhow::{anyhow, Error};
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, MeabyWeighted, Weighted};
 use data::{AdditionalTile, Tile};
 use io::LegacyTilesheetLoader;
-use log::{debug, warn};
+use log::{debug, info, warn};
+use paste::paste;
 use rand::distr::Distribution;
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 
@@ -164,7 +167,7 @@ fn to_weighted_vec(
             },
             Err(e) => {
                 // TODO: This happens when the supplied fg or bg is an empty array
-                warn!("{}, this is probably due to an empty array. Ignoring this entry ", e);
+                info!("{}, this is probably due to an empty array. Ignoring this entry ", e);
                 continue;
             },
         }
@@ -273,7 +276,7 @@ impl Tilesheet for LegacyTilesheet {
 
                 match self.fallback_map.get(&fallback_id).clone() {
                     None => {
-                        warn!("No fallback for {} found", fallback_id);
+                        info!("No fallback for {} found", fallback_id);
                     },
                     Some(_) => {},
                 }
@@ -306,7 +309,7 @@ impl Tilesheet for LegacyTilesheet {
 
                 match self.fallback_map.get(&fallback_id).clone() {
                     None => {
-                        warn!("No fallback for {} found", fallback_id);
+                        info!("No fallback for {} found", fallback_id);
                     },
                     Some(_) => {},
                 }
@@ -376,74 +379,56 @@ impl LegacyTilesheet {
         // a throne will be displayed using the chair tile if tiles for throne and big_chair do not exist.
         // If a tileset can't find a tile for any item in the looks_like chain, it will default to the ascii symbol.
 
-        // The tiles with this property do not have a corresponding entry in the tilesheet which
-        // means that we have to check this here dynamically
-        match json_data.terrain.get(&id) {
-            None => {},
-            Some(s) => {
-                return match &s.looks_like {
-                    None => None,
-                    Some(ident) => {
-                        // "looks_like entries are implicitly chained"
-                        if ident == id {
-                            return self.id_map.get(ident);
-                        }
+        macro_rules! get_looks_like_sprite {
+            (
+                $path: ident.$name: ident
+            ) => {
+                // The tiles with this property do not have a corresponding entry in the tilesheet which
+                // means that we have to check this here dynamically
+                match $path.$name.get(&id) {
+                    None => {},
+                    Some(s) => {
+                        return match &s.looks_like {
+                            None => None,
+                            Some(ident) => {
+                                // Stop stackoverflow when object "looks_like" itself
+                                if ident == id {
+                                    return self.id_map.get(ident);
+                                }
 
-                        match self.id_map.get(ident) {
-                            None => {
-                                self.get_looks_like_sprite(ident, json_data)
+                                // Check for a reference chain where an entry "a" looks like an entry "b" property
+                                // and the entry "b" looks like the entry "a"
+
+                                // TODO: Meaby try and detect every chain with any number of looks_like
+                                // entries chained together
+                                match $path.$name.get(&ident) {
+                                    None => {},
+                                    Some(v) => {
+                                        if v.looks_like == Some(id.clone()) {
+                                            return self.id_map.get(ident);
+                                        }
+                                    },
+                                }
+
+                                // "Looks like entries are implicitly chained"
+                                match self.id_map.get(ident) {
+                                    None => {
+                                        self.get_looks_like_sprite(ident, json_data)
+                                    },
+                                    Some(s) => Some(s),
+                                }
                             },
-                            Some(s) => Some(s),
-                        }
+                        };
                     },
                 };
-            },
-        };
-
-        // Do again with furniture
-        match json_data.furniture.get(&id) {
-            None => {},
-            Some(s) => {
-                return match &s.looks_like {
-                    None => None,
-                    Some(ident) => {
-                        if ident == id {
-                            return self.id_map.get(ident);
-                        }
-
-                        match self.id_map.get(ident) {
-                            None => {
-                                self.get_looks_like_sprite(ident, json_data)
-                            },
-                            Some(s) => Some(s),
-                        }
-                    },
-                }
-            },
+            };
         }
 
-        match json_data.vehicle_parts.get(&id) {
-            None => None,
-            Some(s) => match &s.looks_like {
-                None => None,
-                Some(ident) => {
-                    debug!("Looking for looks like {} for {}", ident, id);
+        get_looks_like_sprite!(json_data.terrain);
+        get_looks_like_sprite!(json_data.furniture);
+        get_looks_like_sprite!(json_data.vehicle_parts);
 
-                    // Stop stackoverflow when object "looks_like" itself
-                    if ident == id {
-                        return self.id_map.get(ident);
-                    }
-
-                    match self
-                        .id_map
-                        .get(&CDDAIdentifier(format!("vp_{}", ident)))
-                    {
-                        None => self.get_looks_like_sprite(ident, json_data),
-                        Some(s) => Some(s),
-                    }
-                },
-            },
-        }
+        None
     }
 }
 
