@@ -72,7 +72,8 @@
     gap: 4px;
 
     &.sub {
-      top: 0
+      top: -4px;
+      padding-top: 0;
     }
 
     .dropdown-items {

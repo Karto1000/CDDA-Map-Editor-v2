@@ -116,6 +116,7 @@ export interface TauriCommandMap {
 
 export enum TauriEvent {
     EDITOR_DATA_CHANGED = "editor_data_changed",
+    TILESET_CHANGED = "tileset_changed",
     PLACE_SPRITES = "place_sprites",
     TAB_CREATED = "tab_created",
     TAB_REMOVED = "tab_removed",
@@ -149,4 +150,5 @@ export interface TauriEventMap {
         type: ToastType,
         message: string
     }
+    [TauriEvent.TILESET_CHANGED]: {}
 }

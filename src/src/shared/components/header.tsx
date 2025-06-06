@@ -47,10 +47,12 @@ export function Header(props: Props) {
         props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
     }
 
-    function onOpen() {}
+    function onOpen() {
+        alert("Not Implemented")
+    }
 
     function onSave() {
-        console.log("Save")
+        alert("Not Implemented")
     }
 
     function onClose() {
@@ -67,7 +69,7 @@ export function Header(props: Props) {
     }
 
     function onExport() {
-
+        alert("Not Implemented")
     }
 
     function onSettingsOpen() {
@@ -546,32 +548,6 @@ export function Header(props: Props) {
                                     }
                                 }
                             ],
-                            [
-                                {
-                                    name: "Tileset",
-                                    expandable: true,
-                                    onClick: () => {
-                                    },
-                                    subGroups: [
-                                        [
-                                            {
-                                                name: "UndeadPeopleTileset",
-                                                isToggleable: true,
-                                                toggled: false,
-                                                onClick: () => {
-                                                }
-                                            }
-                                        ],
-                                        [
-                                            {
-                                                name: "Select New",
-                                                onClick: () => {
-                                                }
-                                            }
-                                        ]
-                                    ]
-                                }
-                            ]
                         ]}/>
                         <Dropdown name={"Help"} groups={[
                             [
@@ -592,7 +568,7 @@ export function Header(props: Props) {
                                 {
                                     name: "About",
                                     onClick: () => {
-                                        alert("TBD");
+                                        alert("Not Implemented")
                                     }
                                 }
                             ]

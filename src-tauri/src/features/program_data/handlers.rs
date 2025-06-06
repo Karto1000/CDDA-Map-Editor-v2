@@ -143,9 +143,7 @@ pub async fn tileset_picked(
     };
 
     saver.save(&editor_data_lock).await.unwrap();
-
-    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
-        .unwrap();
+    app.emit(events::TILESET_CHANGED, ()).unwrap();
 
     Ok(())
 }

@@ -165,6 +165,8 @@ async fn frontend_ready(
         .map_err(|e| {})?;
     *tilesheet_lock = tilesheet;
 
+    app.emit(events::TILESET_CHANGED, ()).unwrap();
+
     Ok(())
 }
 

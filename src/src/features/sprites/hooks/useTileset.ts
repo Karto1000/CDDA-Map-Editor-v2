@@ -18,8 +18,8 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
     const storedObjectURLS = useRef<string[]>([])
 
     useTauriEvent(
-        TauriEvent.EDITOR_DATA_CHANGED,
-        (editorData) => {
+        TauriEvent.TILESET_CHANGED,
+        () => {
             (async () => {
                 console.log("Loading Tileset")
 
