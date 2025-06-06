@@ -47,14 +47,15 @@ export enum TauriCommand {
     OPEN_PROJECT = "open_project",
     CLOSE_PROJECT = "close_project",
     GET_PROJECT_CELL_DATA = "get_project_cell_data",
-    OPEN_VIEWER = "open_viewer",
+    CREATE_VIEWER = "create_viewer",
     GET_INFO_OF_CURRENT_TILESET = "get_info_of_current_tileset",
     DOWNLOAD_SPRITESHEET = "download_spritesheet",
     FRONTEND_READY = "frontend_ready",
     NEW_SINGLE_MAPGEN_VIEWER = "new_single_mapgen_viewer",
     NEW_SPECIAL_MAPGEN_VIEWER = "new_special_mapgen_viewer",
     NEW_NESTED_MAPGEN_VIEWER = "new_nested_mapgen_viewer",
-    GET_CALCULATED_PARAMETERS = "get_calculated_parameters"
+    GET_CALCULATED_PARAMETERS = "get_calculated_parameters",
+    OPEN_RECENT_PROJECT = "open_recent_project",
 }
 
 export interface TauriCommandMap {
@@ -78,7 +79,7 @@ export interface TauriCommandMap {
         name: string
     };
     [TauriCommand.GET_PROJECT_CELL_DATA]: {};
-    [TauriCommand.OPEN_VIEWER]: {
+    [TauriCommand.CREATE_VIEWER]: {
         data: OpenViewerData
     };
     [TauriCommand.GET_INFO_OF_CURRENT_TILESET]: {};
@@ -107,7 +108,10 @@ export interface TauriCommandMap {
         nestedWidth: number,
         nestedHeight: number,
     },
-    [TauriCommand.GET_CALCULATED_PARAMETERS]: {}
+    [TauriCommand.GET_CALCULATED_PARAMETERS]: {},
+    [TauriCommand.OPEN_RECENT_PROJECT]: {
+        name: string
+    }
 }
 
 export enum TauriEvent {

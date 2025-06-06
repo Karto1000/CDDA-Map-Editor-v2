@@ -38,7 +38,7 @@ function OpenMapViewer() {
         }
 
         await tauriBridge.invoke(
-            TauriCommand.OPEN_VIEWER,
+            TauriCommand.CREATE_VIEWER,
             {
                 data
             }
@@ -99,6 +99,8 @@ function OpenMapViewer() {
     return (
         <div className={"map-viewer-body"}>
             <p>
+                Import a Mapgen File or a Overmap Special as a Map Viewer.
+
                 A map viewer is ideal if you don't want to actually use the map editor to create a map,
                 but still want to see what the map looks like without having to open the main game.
                 The map will be automatically reloaded once it detects a change to the map file which is
@@ -137,7 +139,7 @@ function OpenMapViewer() {
                                         </label>
                                     </div>
                                 </div>
-                                <button type={"submit"}>Open</button>
+                                <button type={"submit"}>Import</button>
                             </form>
                         },
                         {
@@ -181,7 +183,7 @@ function OpenMapViewer() {
                                         </label>
                                     </div>
                                 </div>
-                                <button type={"submit"}>Open</button>
+                                <button type={"submit"}>Import</button>
                             </form>
                         }
                     ]
@@ -192,15 +194,15 @@ function OpenMapViewer() {
 
 function Main() {
     return (
-        <GenericWindow title={"Open Map"}>
+        <GenericWindow title={"Import Map"}>
             <MultiMenu tabs={[
                 {
-                    name: "Open Map Editor Map",
+                    name: "Map Editor",
                     content: <></>,
                     isDisabled: true
                 },
                 {
-                    name: "Open Map Viewer",
+                    name: "Map Viewer",
                     content: <OpenMapViewer/>,
                 }
             ]}/>

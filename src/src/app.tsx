@@ -32,8 +32,8 @@ export type SidebarContent = {
     calculatedParameters: React.JSX.Element,
 }
 
-export const TabContext = createContext<UseTabsReturn>(null)
-export const EditorDataContext = createContext<EditorData>(null)
+export const TabContext = createContext<UseTabsReturn | null>(null)
+export const EditorDataContext = createContext<EditorData | null>(null)
 
 function App() {
     const eventBus = useRef<EventTarget>(new EventTarget())
@@ -48,12 +48,19 @@ function App() {
     const editorData = useEditorData(eventBus)
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus)
-    const {openMapWindowRef, settingsWindowRef, newMapWindowRef} = useWindows()
+    const {importMapWindowRef, settingsWindowRef, newMapWindowRef} = useWindows()
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
     const [sidebarContent, setSidebarContent] = useState<SidebarContent>({
         chosenProperties: <></>,
         calculatedParameters: <></>
     })
+
+    useTauriEvent(
+        TauriEvent.EDITOR_DATA_CHANGED,
+        (e) => {
+            console.log("AWDAWD", e)
+        },
+    )
 
     useEffect(() => {
         (async () => {
@@ -85,7 +92,7 @@ function App() {
                 return <></>
         }
 
-        return <NoTabScreen openMapWindowRef={openMapWindowRef} newMapWindowRef={newMapWindowRef}/>
+        return <NoTabScreen openMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>
     }
 
     const sideMenuTabs = useMemo(() => {
@@ -147,7 +154,7 @@ function App() {
                 <ThemeContext.Provider value={{theme}}>
                     <TabContext.Provider value={tabs}>
                         <Header
-                            openMapWindowRef={openMapWindowRef}
+                            importMapWindowRef={importMapWindowRef}
                             settingsWindowRef={settingsWindowRef}
                             eventBus={eventBus}
                             newMapWindowRef={newMapWindowRef}

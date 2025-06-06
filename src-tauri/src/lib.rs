@@ -5,11 +5,11 @@ mod util;
 
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::features::program_data::handlers::{
-    cdda_installation_directory_picked, get_editor_data, save_editor_data,
-    tileset_picked,
+    cdda_installation_directory_picked, close_project, get_editor_data,
+    open_project, open_recent_project, save_editor_data, tileset_picked,
 };
 use crate::features::program_data::{
-    get_map_data_collection_live_viewer_data, EditorData,
+    get_map_data_collection_from_live_viewer_data, EditorData,
     MappedCDDAIdContainer, ProjectType, ZLevel,
 };
 use crate::features::tileset::handlers::{
@@ -18,10 +18,9 @@ use crate::features::tileset::handlers::{
 use crate::features::tileset::legacy_tileset::fallback::get_fallback_tilesheet;
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::viewer::handlers::{
-    close_project, get_calculated_parameters, get_current_project_data,
+    create_viewer, get_calculated_parameters, get_current_project_data,
     get_project_cell_data, get_sprites, new_nested_mapgen_viewer,
-    new_single_mapgen_viewer, new_special_mapgen_viewer, open_project,
-    open_viewer, reload_project,
+    new_single_mapgen_viewer, new_special_mapgen_viewer, reload_project,
 };
 use async_once::AsyncOnce;
 use data::io;
@@ -79,7 +78,7 @@ async fn frontend_ready(
             },
             Some(cdda_path) => {
                 info!("trying to load CDDA Json Data");
-                match io::load_cdda_json_data(
+                match load_cdda_json_data(
                     cdda_path,
                     &editor_data_lock.config.json_data_path,
                 )
@@ -100,7 +99,7 @@ async fn frontend_ready(
     match json_data_lock.deref() {
         None => {},
         Some(json_data) => {
-            for project in editor_data_lock.projects.iter_mut() {
+            for project in editor_data_lock.loaded_projects.iter_mut() {
                 info!("Loading Project {}", &project.name);
 
                 match &project.ty {
@@ -109,8 +108,10 @@ async fn frontend_ready(
                         info!("Opening Live viewer",);
 
                         let mut map_data_collection =
-                            match get_map_data_collection_live_viewer_data(lvd)
-                                .await
+                            match get_map_data_collection_from_live_viewer_data(
+                                lvd,
+                            )
+                            .await
                             {
                                 Ok(v) => v,
                                 Err(e) => {
@@ -208,13 +209,14 @@ pub fn run() -> () {
             frontend_ready,
             open_project,
             close_project,
-            open_viewer,
+            create_viewer,
             get_sprites,
             reload_project,
             new_single_mapgen_viewer,
             new_special_mapgen_viewer,
             new_nested_mapgen_viewer,
-            get_calculated_parameters
+            get_calculated_parameters,
+            open_recent_project
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

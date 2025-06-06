@@ -1,4 +1,5 @@
-pub(crate) mod handlers;
+pub mod handlers;
+pub mod io;
 
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::palettes::Palettes;
@@ -8,9 +9,8 @@ use crate::features::map::importing::{
     SingleMapDataImporterError,
 };
 use crate::features::map::{
-    CalculateParametersError,
-    GetMappedCDDAIdsError, MapData, MappedCDDAIdsForTile,
-    DEFAULT_MAP_DATA_SIZE,
+    CalculateParametersError, GetMappedCDDAIdsError, MapData,
+    MappedCDDAIdsForTile, DEFAULT_MAP_DATA_SIZE,
 };
 use crate::impl_serialize_for_error;
 use crate::util::{IVec3JsonKey, Load, Save, SaveError};
@@ -31,6 +31,7 @@ pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 
 pub type ZLevel = i32;
 pub type MapCoordinates = UVec2;
+pub type ProjectName = String;
 
 #[derive(Debug, Error)]
 pub enum GetLiveViewerDataError {
@@ -43,7 +44,7 @@ pub enum GetLiveViewerDataError {
 
 impl_serialize_for_error!(GetLiveViewerDataError);
 
-pub async fn get_map_data_collection_live_viewer_data(
+pub async fn get_map_data_collection_from_live_viewer_data(
     data: &LiveViewerData,
 ) -> Result<HashMap<ZLevel, MapDataCollection>, GetLiveViewerDataError> {
     info!("Opening Live viewer");
@@ -186,7 +187,7 @@ pub enum ProjectSaveState {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Project {
-    pub name: String,
+    pub name: ProjectName,
 
     #[serde(skip)]
     pub maps: HashMap<ZLevel, MapDataCollection>,
@@ -396,26 +397,24 @@ impl Default for EditorConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecentProject {
+    pub path: PathBuf,
+    pub name: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EditorData {
     pub config: EditorConfig,
-    pub projects: Vec<Project>,
-    pub opened_project: Option<String>,
+
+    #[serde(skip)]
+    pub loaded_projects: Vec<Project>,
+
+    pub openable_projects: Vec<ProjectName>,
+    pub opened_project: Option<ProjectName>,
+    pub recent_projects: Vec<RecentProject>,
+
     pub available_tilesets: Option<Vec<String>>,
-}
-
-pub struct EditorDataSaver {
-    pub path: PathBuf,
-}
-
-impl Save<EditorData> for EditorDataSaver {
-    async fn save(&self, data: &EditorData) -> Result<(), SaveError> {
-        let serialized = serde_json::to_string_pretty(data)
-            .expect("Serialization to not fail");
-        fs::write(self.path.join("config.json"), serialized)?;
-        info!("Saved EditorData to {}", self.path.display());
-        Ok(())
-    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

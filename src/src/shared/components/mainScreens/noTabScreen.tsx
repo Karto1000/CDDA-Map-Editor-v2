@@ -13,7 +13,7 @@ export function NoTabScreen(props: Props) {
     const {theme} = useContext(ThemeContext)
 
     function onOpenClicked() {
-        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
+        props.openMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
     }
 
     function onCreateClicked() {

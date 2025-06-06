@@ -22,6 +22,7 @@ export function useTauriEvent<K extends keyof TauriEventMap>(
         });
 
         return () => {
+            console.log("Unsubscribing from event: ", event)
             unsubscribe.then(f => f())
         };
     }, [event, ...deps]);

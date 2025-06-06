@@ -11,8 +11,7 @@ export function useEditorData(eventBus: RefObject<EventTarget>): EditorData {
 
     useTauriEvent(
         TauriEvent.EDITOR_DATA_CHANGED,
-        async (editorData) => {
-            console.log("Received editor data changed event: ", editorData, "")
+        (editorData) => {
             setEditorData(editorData)
 
             if (!editorData.config.cdda_path) {
@@ -38,7 +37,7 @@ export function useEditorData(eventBus: RefObject<EventTarget>): EditorData {
                 )
             }
         },
-        [eventBus]
+        []
     )
 
     return editorData

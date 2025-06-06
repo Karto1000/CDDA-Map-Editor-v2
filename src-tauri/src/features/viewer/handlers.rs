@@ -10,8 +10,7 @@ use crate::features::map::importing::{
 use crate::features::map::MappedCDDAId;
 use crate::features::map::SPECIAL_EMPTY_CHAR;
 use crate::features::map::{CalculateParametersError, DEFAULT_MAP_DATA_SIZE};
-use crate::features::program_data::EditorData;
-use crate::features::program_data::EditorDataSaver;
+use crate::features::program_data::io::ProgramDataSaver;
 use crate::features::program_data::GetLiveViewerDataError;
 use crate::features::program_data::LiveViewerData;
 use crate::features::program_data::MappedCDDAIdContainer;
@@ -19,8 +18,9 @@ use crate::features::program_data::Project;
 use crate::features::program_data::ProjectType;
 use crate::features::program_data::ZLevel;
 use crate::features::program_data::{
-    get_map_data_collection_live_viewer_data, Tab, TabType,
+    get_map_data_collection_from_live_viewer_data, Tab, TabType,
 };
+use crate::features::program_data::{EditorData, RecentProject};
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::features::tileset::Tilesheet;
@@ -45,7 +45,7 @@ use indexmap::IndexMap;
 use log::error;
 use log::info;
 use log::warn;
-use notify::Watcher;
+use notify::{recommended_watcher, Watcher};
 use notify_debouncer_full::new_debouncer;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
@@ -140,7 +140,7 @@ pub async fn get_sprites(
     let mut editor_data_lock = editor_data.lock().await;
 
     let project = match editor_data_lock
-        .projects
+        .loaded_projects
         .iter_mut()
         .find(|p| p.name == name)
     {
@@ -367,91 +367,13 @@ pub async fn reload_project(
         ProjectType::MapEditor(_) => unimplemented!(),
         ProjectType::LiveViewer(lvd) => {
             let mut map_data_collection =
-                get_map_data_collection_live_viewer_data(lvd).await?;
+                get_map_data_collection_from_live_viewer_data(lvd).await?;
 
             for (_, map_data) in map_data_collection.iter_mut() {
                 map_data.calculate_parameters(&json_data.palettes)?
             }
 
             project.maps = map_data_collection;
-        },
-    }
-
-    Ok(())
-}
-
-#[tauri::command]
-pub async fn open_project(
-    name: String,
-    app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
-    file_watcher: State<'_, Mutex<Option<tokio::task::JoinHandle<()>>>>,
-) -> Result<(), ()> {
-    let mut file_watcher_lock = file_watcher.lock().await;
-    match file_watcher_lock.deref() {
-        None => {},
-        Some(s) => s.abort(),
-    }
-
-    let mut editor_data_lock = editor_data.lock().await;
-    editor_data_lock.opened_project = Some(name.clone());
-
-    let project = match editor_data_lock
-        .projects
-        .iter_mut()
-        .find(|p| p.name == name)
-    {
-        None => {
-            warn!("Could not find project with name {}", name);
-            return Err(());
-        },
-        Some(d) => d,
-    };
-
-    match &project.ty {
-        ProjectType::MapEditor(_) => {},
-        ProjectType::LiveViewer(lvd) => {
-            app.emit(UPDATE_LIVE_VIEWER, {}).unwrap();
-
-            let lvd_clone = lvd.clone();
-
-            let join_handle = tokio::spawn(async move {
-                info!("Spawning File Watcher for Live Viewer");
-
-                let (tx, mut rx) = tokio::sync::mpsc::channel(1);
-
-                // Thx -> https://github.com/notify-rs/notify/blob/d7e22791faffb7bd9bd10f031c260ae019d7f474/examples/async_monitor.rs
-                // And -> https://docs.rs/notify-debouncer-full/latest/notify_debouncer_full/
-                let mut debouncer = new_debouncer(
-                    Duration::from_millis(100),
-                    None,
-                    move |res| {
-                        block_on(async { tx.send(res).await.unwrap() });
-                    },
-                )
-                .unwrap();
-
-                let mapgen_paths = match lvd_clone {
-                    LiveViewerData::Terrain {
-                        mapgen_file_paths, ..
-                    } => mapgen_file_paths,
-                    LiveViewerData::Special {
-                        mapgen_file_paths, ..
-                    } => mapgen_file_paths,
-                };
-
-                for path in mapgen_paths.iter() {
-                    debouncer
-                        .watch(path, notify::RecursiveMode::NonRecursive)
-                        .unwrap();
-                }
-
-                while let Some(Ok(_)) = rx.recv().await {
-                    info!("Reloading Project");
-                    app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
-                }
-            });
-            file_watcher_lock.replace(join_handle);
         },
     }
 
@@ -484,40 +406,6 @@ pub async fn get_project_cell_data(
     };
 
     Ok(mapped_cdda_ids.clone())
-}
-
-#[tauri::command]
-pub async fn close_project(
-    app: AppHandle,
-    name: String,
-    editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<(), ()> {
-    let mut editor_data_lock = editor_data.lock().await;
-
-    match editor_data_lock.opened_project.clone() {
-        None => {},
-        Some(name) => {
-            app.emit(events::TAB_REMOVED, name).unwrap();
-        },
-    }
-
-    editor_data_lock.opened_project = None;
-
-    let project_index = editor_data_lock
-        .projects
-        .iter()
-        .position(|p| p.name == name)
-        .unwrap();
-
-    editor_data_lock.projects.remove(project_index);
-
-    let saver = EditorDataSaver {
-        path: editor_data_lock.config.config_path.clone(),
-    };
-
-    saver.save(&editor_data_lock).await.unwrap();
-
-    Ok(())
 }
 
 #[derive(Debug, Error)]
@@ -556,7 +444,7 @@ pub async fn new_single_mapgen_viewer(
 
     file.write_all(data.as_bytes()).await.unwrap();
 
-    open_viewer(
+    create_viewer(
         app,
         OpenViewerData::Terrain {
             mapgen_file_paths: vec![path],
@@ -646,7 +534,7 @@ pub async fn new_special_mapgen_viewer(
     let mut file = File::create(&path).await.unwrap();
     file.write_all(data_ser.as_bytes()).await.unwrap();
 
-    open_viewer(
+    create_viewer(
         app,
         OpenViewerData::Special {
             mapgen_file_paths: vec![path.clone()],
@@ -698,7 +586,7 @@ pub async fn new_nested_mapgen_viewer(
     let mut file = File::create(&path).await.unwrap();
     file.write_all(data_ser.as_bytes()).await.unwrap();
 
-    open_viewer(
+    create_viewer(
         app,
         OpenViewerData::Terrain {
             mapgen_file_paths: vec![path.clone()],
@@ -750,13 +638,13 @@ pub enum OpenViewerError {
 impl_serialize_for_error!(OpenViewerError);
 
 #[tauri::command]
-pub async fn open_viewer(
+pub async fn create_viewer(
     app: AppHandle,
     data: OpenViewerData,
     editor_data: State<'_, Mutex<EditorData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), OpenViewerError> {
-    info!("Opening Live viewer");
+    info!("Creating Live viewer");
 
     let mut editor_data_lock = editor_data.lock().await;
     let json_data_lock = json_data.lock().await;
@@ -769,7 +657,7 @@ pub async fn open_viewer(
             om_id,
         } => {
             if editor_data_lock
-                .projects
+                .loaded_projects
                 .iter()
                 .find(|p| p.name == project_name)
                 .is_some()
@@ -796,9 +684,18 @@ pub async fn open_viewer(
             );
 
             new_project.maps.insert(0, collection);
-            editor_data_lock.projects.push(new_project);
-
+            editor_data_lock.loaded_projects.push(new_project);
             editor_data_lock.opened_project = Some(project_name.clone());
+            editor_data_lock
+                .openable_projects
+                .push(project_name.clone());
+
+            let recent_project = RecentProject {
+                path: editor_data_lock.config.config_path.clone(),
+                name: project_name.clone(),
+            };
+            editor_data_lock.recent_projects.push(recent_project);
+
             app.emit(
                 events::TAB_CREATED,
                 Tab {
@@ -814,7 +711,7 @@ pub async fn open_viewer(
             om_id,
         } => {
             if editor_data_lock
-                .projects
+                .loaded_projects
                 .iter()
                 .find(|p| p.name == project_name)
                 .is_some()
@@ -846,7 +743,16 @@ pub async fn open_viewer(
             );
 
             new_project.maps = maps;
-            editor_data_lock.projects.push(new_project);
+            editor_data_lock.loaded_projects.push(new_project);
+            editor_data_lock
+                .openable_projects
+                .push(project_name.clone());
+
+            let recent_project = RecentProject {
+                path: editor_data_lock.config.config_path.clone(),
+                name: project_name.clone(),
+            };
+            editor_data_lock.recent_projects.push(recent_project);
 
             editor_data_lock.opened_project = Some(project_name.clone());
             app.emit(
@@ -859,11 +765,13 @@ pub async fn open_viewer(
         },
     }
 
-    let saver = EditorDataSaver {
+    let saver = ProgramDataSaver {
         path: editor_data_lock.config.config_path.clone(),
     };
 
     saver.save(editor_data_lock.deref()).await.unwrap();
+
+    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())?;
 
     Ok(())
 }

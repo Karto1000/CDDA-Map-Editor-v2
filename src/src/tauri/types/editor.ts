@@ -23,13 +23,8 @@ export type EditorConfig = {
 }
 export type EditorData = {
     config: EditorConfig
-    projects: Project[],
+    openable_projects: string[],
     available_tilesets: string[] | null,
+    recent_projects: {name: string, path: string}[],
     opened_project: number | null
-}
-
-export type Project = {
-    name: string,
-    size: [number, number],
-    ty: ProjectType
 }

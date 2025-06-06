@@ -245,7 +245,7 @@ pub fn get_current_project<'a>(
     };
 
     let data = match editor_data
-        .projects
+        .loaded_projects
         .iter()
         .find(|p| *p.name == *project_name)
     {
@@ -269,7 +269,7 @@ pub fn get_current_project_mut<'a>(
     };
 
     let data = match editor_data
-        .projects
+        .loaded_projects
         .iter_mut()
         .find(|p| p.name == *project_name)
     {

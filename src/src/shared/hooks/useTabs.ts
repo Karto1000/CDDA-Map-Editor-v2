@@ -1,4 +1,4 @@
-import {MutableRefObject, useEffect, useState} from "react";
+import {MutableRefObject, RefObject, useEffect, useState} from "react";
 import {useTauriEvent} from "./useTauriEvent.js";
 import {TauriEvent} from "../../tauri/events/types.js";
 import {
@@ -28,7 +28,7 @@ export type UseTabsReturn = {
 }
 
 
-export function useTabs(eventBus: MutableRefObject<EventTarget>): UseTabsReturn {
+export function useTabs(eventBus: RefObject<EventTarget>): UseTabsReturn {
     const [tabs, setTabs] = useState<{ [name: string]: Tab }>({})
     const [openedTab, setOpenedTab] = useState<string | null>(null)
 

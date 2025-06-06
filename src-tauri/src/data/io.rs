@@ -13,6 +13,7 @@ use crate::data::vehicle_parts::CDDAVehiclePart;
 use crate::data::vehicles::CDDAVehicle;
 use crate::data::{CDDAJsonEntry, TileLayer};
 use crate::features::map::MapData;
+use crate::features::program_data::io::ProgramDataLoader;
 use crate::features::program_data::{EditorData, MapDataCollection};
 use crate::util::Load;
 use anyhow::Error;
@@ -705,7 +706,7 @@ pub fn get_saved_editor_data() -> Result<EditorData, Error> {
             app_dir
         },
         Some(dir) => {
-            let local_dir = dir.config_local_dir();
+            let local_dir = dir.data_local_dir();
             info!(
                 "Got Path for CDDA-Map-Editor config directory at {:?}",
                 local_dir
@@ -725,37 +726,38 @@ pub fn get_saved_editor_data() -> Result<EditorData, Error> {
     let config_file_path = directory_path.join("config.json");
     let config_exists =
         fs::exists(&config_file_path).expect("IO Error to not occur");
+
     let config = match config_exists {
         true => {
             info!("Reading config.json file");
-            let contents = fs::read_to_string(&config_file_path)
-                .expect("File to be valid UTF-8");
+            let mut editor_data_loader = ProgramDataLoader {
+                path: directory_path.clone(),
+            };
 
-            let data =
-                match serde_json::from_str::<EditorData>(contents.as_str()) {
-                    Ok(d) => {
-                        info!("config.json file successfully read and parsed");
-                        d
-                    },
-                    Err(e) => {
-                        error!("{}", e.to_string());
-                        info!(
+            let data = match editor_data_loader.load() {
+                Ok(d) => {
+                    info!("config.json file successfully read and parsed");
+                    d
+                },
+                Err(e) => {
+                    error!("{}", e.to_string());
+                    info!(
                         "Error while reading config.json file, recreating file"
                     );
 
-                        let mut default_editor_data = EditorData::default();
-                        default_editor_data.config.config_path =
-                            directory_path.clone();
+                    let mut default_editor_data = EditorData::default();
+                    default_editor_data.config.config_path =
+                        directory_path.clone();
 
-                        let serialized =
-                            serde_json::to_string_pretty(&default_editor_data)
-                                .expect("Serialization to not fail");
-                        fs::write(&config_file_path, serialized).expect(
-                            "Directory path to config to have been created",
-                        );
-                        default_editor_data
-                    },
-                };
+                    let serialized =
+                        serde_json::to_string_pretty(&default_editor_data)
+                            .expect("Serialization to not fail");
+                    fs::write(&config_file_path, serialized).expect(
+                        "Directory path to config to have been created",
+                    );
+                    default_editor_data
+                },
+            };
 
             data
         },

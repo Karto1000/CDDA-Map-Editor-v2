@@ -1,4 +1,4 @@
-import React, {MutableRefObject, RefObject, useContext, useEffect} from "react";
+import React, {RefObject, useContext, useEffect} from "react";
 import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
@@ -6,7 +6,7 @@ import {Dropdown} from "./dropdown.tsx";
 import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {TabContext, ThemeContext} from "../../app.js";
+import {EditorDataContext, TabContext, ThemeContext} from "../../app.js";
 import {
     ChangedThemeEvent,
     ChangeSelectedPositionEvent,
@@ -14,21 +14,20 @@ import {
     ChangeZLevelEvent,
     CloseLocalTabEvent,
     LocalEvent,
-    OpenLocalTabEvent, UpdateViewerEvent
+    OpenLocalTabEvent,
+    UpdateViewerEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
+import {TauriCommand} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {Theme} from "../hooks/useTheme.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
-import toast from "react-hot-toast";
-import {CellData} from "../../tauri/types/map_data.js";
 import {useKeybindings} from "../hooks/useKeybindings.js";
 
 type Props = {
     eventBus: RefObject<EventTarget>
 
-    openMapWindowRef: RefObject<WebviewWindow>
+    importMapWindowRef: RefObject<WebviewWindow>
     newMapWindowRef: RefObject<WebviewWindow>
     settingsWindowRef: RefObject<WebviewWindow>
 }
@@ -39,6 +38,7 @@ export function Header(props: Props) {
     const tabs = useContext(TabContext)
     const [settingsWindow, setSettingsWindow] = React.useState<WebviewWindow | null>(null)
 
+    const editorData = useContext(EditorDataContext)
     const [zLevelIndicator, setZLevelIndicator] = React.useState<number | null>(null)
     const [mousePositionIndicator, setMousePositionIndicator] = React.useState<{ x: number, y: number } | null>(null)
     const [selectedPositionIndicator, setSelectedPositionIndicator] = React.useState<{ x: number, y: number }>(null)
@@ -47,9 +47,7 @@ export function Header(props: Props) {
         props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
     }
 
-    function onOpenClicked() {
-        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
-    }
+    function onOpen() {}
 
     function onSave() {
         console.log("Save")
@@ -64,6 +62,7 @@ export function Header(props: Props) {
     }
 
     function onImport() {
+        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
 
     }
 
@@ -86,7 +85,7 @@ export function Header(props: Props) {
             {
                 key: "o",
                 withCtrl: true,
-                action: onOpenClicked
+                action: onOpen
             },
             {
                 key: "s",
@@ -223,7 +222,7 @@ export function Header(props: Props) {
     }
 
     function onTabCreate() {
-        props.openMapWindowRef.current = openWindow(WindowLabel.OpenMap, theme)
+        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
     }
 
     async function onTabOpen(name: string) {
@@ -249,6 +248,10 @@ export function Header(props: Props) {
                 }
             )
         }
+    }
+
+    async function onRecentProjectOpen(name: string) {
+        await tauriBridge.invoke(TauriCommand.OPEN_RECENT_PROJECT, {name: name})
     }
 
     async function onWindowClose() {
@@ -349,7 +352,7 @@ export function Header(props: Props) {
                                     name: "Open",
                                     shortcut: "Ctrl+o",
                                     onClick: (ref) => {
-                                        onOpenClicked()
+                                        onOpen()
                                         ref.current.closeMenu()
                                     }
                                 },
@@ -359,13 +362,18 @@ export function Header(props: Props) {
                                     onClick: () => {
                                     },
                                     subGroups: [
-                                        [
-                                            {
-                                                name: "house_01",
-                                                onClick: () => {
+                                        editorData ?
+                                            editorData.recent_projects.map(p => {
+                                                return {
+                                                    name: p.name,
+                                                    onClick: async (ref) => {
+                                                        ref.current.closeMenu()
+                                                        await onRecentProjectOpen(p.name)
+                                                        await onTabOpen(p.name)
+                                                    }
                                                 }
-                                            }
-                                        ]
+                                            })
+                                            : []
                                     ]
                                 }
                             ],

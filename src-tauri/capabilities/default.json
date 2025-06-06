@@ -4,7 +4,7 @@
   "description": "Capability for the main window",
   "windows": [
     "main",
-    "open-map",
+    "import-map",
     "new-map",
     "settings"
   ],

@@ -4,7 +4,7 @@ import {Theme} from "@tauri-apps/api/window";
 export enum WindowLabel {
     Main = "main",
     Settings = "settings",
-    OpenMap = "open-map",
+    ImportMap = "import-map",
     NewMap = "new-map"
 }
 
