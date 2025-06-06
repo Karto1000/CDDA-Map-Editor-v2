@@ -188,15 +188,8 @@ pub async fn close_project(
     }
 
     editor_data_lock.opened_project = None;
-
-    let project_index = editor_data_lock
-        .loaded_projects
-        .iter()
-        .position(|p| p.name == name)
-        .unwrap();
-
-    editor_data_lock.loaded_projects.remove(project_index);
-    editor_data_lock.openable_projects.remove(project_index);
+    editor_data_lock.loaded_projects.remove(&name);
+    editor_data_lock.openable_projects.remove(&name);
 
     let saver = ProgramDataSaver {
         path: editor_data_lock.config.config_path.clone(),
@@ -254,10 +247,7 @@ pub async fn open_recent_project(
                 {
                     Ok(v) => v,
                     Err(e) => {
-                        warn!(
-                            "Failed to load map data for project {}: {}",
-                            &project.name, e
-                        );
+                        warn!("Failed to load map data for project; {}", e);
                         return Err(OpenProjectError::InvalidContent);
                     },
                 };
@@ -284,8 +274,11 @@ pub async fn open_recent_project(
 
             editor_data_lock
                 .openable_projects
-                .push(project.name.clone());
-            editor_data_lock.loaded_projects.push(project);
+                .insert(project.name.clone());
+
+            editor_data_lock
+                .loaded_projects
+                .insert(project.name.clone(), project);
 
             let saver = ProgramDataSaver {
                 path: editor_data_lock.config.config_path.clone(),
@@ -320,11 +313,7 @@ pub async fn open_project(
     app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
         .unwrap();
 
-    let project = match editor_data_lock
-        .loaded_projects
-        .iter_mut()
-        .find(|p| p.name == name)
-    {
+    let project = match editor_data_lock.loaded_projects.get(&name) {
         None => {
             warn!("Could not find project with name {}", name);
             return Err(());

@@ -55,12 +55,16 @@ export function Header(props: Props) {
         alert("Not Implemented")
     }
 
-    function onClose() {
+    async function onClose() {
+        if (!tabs.openedTab) return
 
+        await onTabClose(tabs.openedTab)
     }
 
-    function onCloseAll() {
-
+    async function onCloseAll() {
+        for (const tab of Object.keys(tabs.tabs)) {
+            await onTabClose(tab)
+        }
     }
 
     function onImport() {
@@ -121,7 +125,8 @@ export function Header(props: Props) {
                 withAlt: true,
                 action: onSettingsOpen
             }
-        ]
+        ],
+        [tabs]
     )
 
     useEffect(() => {
@@ -204,11 +209,8 @@ export function Header(props: Props) {
         }
     }, []);
 
-    async function onTabClose(e: React.MouseEvent<HTMLDivElement>, name: string) {
+    async function onTabClose(name: string) {
         console.log(`Closed tab ${name}`)
-
-        e.preventDefault()
-        e.stopPropagation()
 
         props.eventBus.current.dispatchEvent(
             new CloseLocalTabEvent(
@@ -309,7 +311,12 @@ export function Header(props: Props) {
                                             </div>
                                         }
                                         <p>{t.name}</p>
-                                        <div onClick={e => onTabClose(e, t.name)} className={"close-tab-button"}>
+                                        <div onClick={async (e) => {
+                                            e.preventDefault()
+                                            e.stopPropagation()
+                                            await onTabClose(t.name)
+                                        }
+                                        } className={"close-tab-button"}>
                                             <Icon name={IconName.CloseSmall} width={12} height={12}/>
                                         </div>
                                     </div>
@@ -391,16 +398,16 @@ export function Header(props: Props) {
                                 {
                                     name: "Close",
                                     shortcut: "Ctr+w",
-                                    onClick: (ref) => {
-                                        onClose()
+                                    onClick: async (ref) => {
+                                        await onClose()
                                         ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Close All",
-                                    shortcut: "Ctr+Shift+w",
-                                    onClick: (ref) => {
-                                        onCloseAll()
+                                    shortcut: "Ctr+Alt+w",
+                                    onClick: async (ref) => {
+                                        await onCloseAll()
                                         ref.current.closeMenu()
                                     }
                                 }

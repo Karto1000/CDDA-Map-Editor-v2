@@ -13,14 +13,14 @@ impl Save<EditorData> for ProgramDataSaver {
     async fn save(&self, data: &EditorData) -> Result<(), SaveError> {
         let serialized_data = serde_json::to_string_pretty(data)?;
 
-        for project in data.loaded_projects.iter() {
+        for (name, project) in data.loaded_projects.iter() {
             let serialized_project = serde_json::to_string_pretty(project)?;
 
             fs::write(
-                self.path.join(format!("{}.json", project.name)),
+                self.path.join(format!("{}.json", name)),
                 serialized_project,
             )?;
-            info!("Saved project {} to {}", project.name, self.path.display());
+            info!("Saved project {} to {}", name, self.path.display());
         }
 
         fs::write(self.path.join("config.json"), serialized_data)?;
@@ -52,7 +52,9 @@ impl ProgramDataLoader {
             };
 
             let project: Project = serde_json::from_str(&data)?;
-            editor_data.loaded_projects.push(project);
+            editor_data
+                .loaded_projects
+                .insert(project.name.clone(), project);
         }
 
         Ok(editor_data)

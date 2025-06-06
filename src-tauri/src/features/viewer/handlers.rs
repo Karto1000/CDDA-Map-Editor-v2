@@ -139,11 +139,7 @@ pub async fn get_sprites(
 
     let mut editor_data_lock = editor_data.lock().await;
 
-    let project = match editor_data_lock
-        .loaded_projects
-        .iter_mut()
-        .find(|p| p.name == name)
-    {
+    let project = match editor_data_lock.loaded_projects.get_mut(&name) {
         None => {
             warn!("Could not find project with name {}", name);
             return Err(());
@@ -658,8 +654,7 @@ pub async fn create_viewer(
         } => {
             if editor_data_lock
                 .loaded_projects
-                .iter()
-                .find(|p| p.name == project_name)
+                .get(&project_name)
                 .is_some()
             {
                 return Err(OpenViewerError::ProjectAlreadyExists);
@@ -684,17 +679,19 @@ pub async fn create_viewer(
             );
 
             new_project.maps.insert(0, collection);
-            editor_data_lock.loaded_projects.push(new_project);
+            editor_data_lock
+                .loaded_projects
+                .insert(project_name.clone(), new_project);
             editor_data_lock.opened_project = Some(project_name.clone());
             editor_data_lock
                 .openable_projects
-                .push(project_name.clone());
+                .insert(project_name.clone());
 
             let recent_project = RecentProject {
                 path: editor_data_lock.config.config_path.clone(),
                 name: project_name.clone(),
             };
-            editor_data_lock.recent_projects.push(recent_project);
+            editor_data_lock.recent_projects.insert(recent_project);
 
             app.emit(
                 events::TAB_CREATED,
@@ -712,8 +709,7 @@ pub async fn create_viewer(
         } => {
             if editor_data_lock
                 .loaded_projects
-                .iter()
-                .find(|p| p.name == project_name)
+                .get(&project_name)
                 .is_some()
             {
                 return Err(OpenViewerError::ProjectAlreadyExists);
@@ -743,16 +739,18 @@ pub async fn create_viewer(
             );
 
             new_project.maps = maps;
-            editor_data_lock.loaded_projects.push(new_project);
+            editor_data_lock
+                .loaded_projects
+                .insert(project_name.clone(), new_project);
             editor_data_lock
                 .openable_projects
-                .push(project_name.clone());
+                .insert(project_name.clone());
 
             let recent_project = RecentProject {
                 path: editor_data_lock.config.config_path.clone(),
                 name: project_name.clone(),
             };
-            editor_data_lock.recent_projects.push(recent_project);
+            editor_data_lock.recent_projects.insert(recent_project);
 
             editor_data_lock.opened_project = Some(project_name.clone());
             app.emit(

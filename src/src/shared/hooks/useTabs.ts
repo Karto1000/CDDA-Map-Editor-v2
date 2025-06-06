@@ -1,4 +1,4 @@
-import {MutableRefObject, RefObject, useEffect, useState} from "react";
+import {RefObject, useEffect, useState} from "react";
 import {useTauriEvent} from "./useTauriEvent.js";
 import {TauriEvent} from "../../tauri/events/types.js";
 import {
@@ -36,20 +36,22 @@ export function useTabs(eventBus: RefObject<EventTarget>): UseTabsReturn {
         const addLocalTabHandler = (
             data: CustomEvent<LocalEventsMap[LocalEvent.ADD_LOCAL_TAB]>
         ) => {
-            setTabs({...tabs, [data.detail.name]: data.detail})
+            setTabs((t) => {
+                return {...t, [data.detail.name]: data.detail}
+            })
         }
 
         const removeLocalTabHandler = (
             data: CustomEvent<LocalEventsMap[LocalEvent.REMOVE_LOCAL_TAB]>
         ) => {
-            if (data.detail.name === openedTab) {
-                setOpenedTab(null)
-            }
+            setOpenedTab(() => {
+                setTabs(tabs => {
+                    const newTabs = {...tabs}
+                    delete newTabs[data.detail.name]
+                    return newTabs
+                })
 
-            setTabs(tabs => {
-                const newTabs = {...tabs}
-                delete newTabs[data.detail.name]
-                return newTabs
+                return null
             })
         }
 
@@ -58,14 +60,14 @@ export function useTabs(eventBus: RefObject<EventTarget>): UseTabsReturn {
         ) => {
             if (!tabs[data.detail.name]) return
 
-            setOpenedTab(data.detail.name)
+            setOpenedTab(() => data.detail.name)
         }
 
         const closeLocalTabHandler = (
             data: CustomEvent<LocalEventsMap[LocalEvent.CLOSE_LOCAL_TAB]>
         ) => {
             if (!tabs[data.detail.name]) return
-            setOpenedTab(null)
+            setOpenedTab(() => null)
         }
 
         eventBus.current.addEventListener(
@@ -109,7 +111,7 @@ export function useTabs(eventBus: RefObject<EventTarget>): UseTabsReturn {
                 closeLocalTabHandler
             )
         }
-    }, [tabs, openedTab, eventBus]);
+    }, [tabs]);
 
     useTauriEvent(
         TauriEvent.TAB_CREATED,
@@ -121,7 +123,7 @@ export function useTabs(eventBus: RefObject<EventTarget>): UseTabsReturn {
                 )
             )
         },
-        [eventBus]
+        []
     )
 
     useTauriEvent(

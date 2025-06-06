@@ -99,8 +99,8 @@ async fn frontend_ready(
     match json_data_lock.deref() {
         None => {},
         Some(json_data) => {
-            for project in editor_data_lock.loaded_projects.iter_mut() {
-                info!("Loading Project {}", &project.name);
+            for (name, project) in editor_data_lock.loaded_projects.iter_mut() {
+                info!("Loading Project {}", name);
 
                 match &project.ty {
                     ProjectType::MapEditor(me) => unimplemented!(),

@@ -21,8 +21,9 @@ use log::info;
 use serde::ser::SerializeMap;
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::Hash;
 use std::path::PathBuf;
 use tauri::Theme;
 use thiserror::Error;
@@ -187,7 +188,7 @@ pub enum ProjectSaveState {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Project {
-    pub name: ProjectName,
+    pub name: String,
 
     #[serde(skip)]
     pub maps: HashMap<ZLevel, MapDataCollection>,
@@ -218,7 +219,7 @@ impl Default for Project {
         maps.insert(0, map_collection);
 
         Self {
-            name: "Unnamed".to_string(),
+            name: "New Project".to_string(),
             maps,
             size: DEFAULT_MAP_DATA_SIZE,
             ty: ProjectType::MapEditor(ProjectSaveState::Unsaved),
@@ -403,16 +404,30 @@ pub struct RecentProject {
     pub name: String,
 }
 
+impl Hash for RecentProject {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state);
+    }
+}
+
+impl PartialEq<Self> for RecentProject {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for RecentProject {}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EditorData {
     pub config: EditorConfig,
 
     #[serde(skip)]
-    pub loaded_projects: Vec<Project>,
+    pub loaded_projects: HashMap<ProjectName, Project>,
 
-    pub openable_projects: Vec<ProjectName>,
+    pub openable_projects: HashSet<ProjectName>,
     pub opened_project: Option<ProjectName>,
-    pub recent_projects: Vec<RecentProject>,
+    pub recent_projects: HashSet<RecentProject>,
 
     pub available_tilesets: Option<Vec<String>>,
 }

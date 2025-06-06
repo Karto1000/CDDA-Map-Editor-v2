@@ -244,11 +244,7 @@ pub fn get_current_project<'a>(
         Some(i) => i,
     };
 
-    let data = match editor_data
-        .loaded_projects
-        .iter()
-        .find(|p| *p.name == *project_name)
-    {
+    let data = match editor_data.loaded_projects.get(project_name) {
         None => {
             return Err(GetCurrentProjectError::InvalidProjectName(
                 project_name.clone(),
@@ -268,11 +264,7 @@ pub fn get_current_project_mut<'a>(
         Some(i) => i,
     };
 
-    let data = match editor_data
-        .loaded_projects
-        .iter_mut()
-        .find(|p| p.name == *project_name)
-    {
+    let data = match editor_data.loaded_projects.get_mut(&project_name) {
         None => {
             return Err(GetCurrentProjectError::InvalidProjectName(
                 project_name.clone(),

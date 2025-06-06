@@ -11,7 +11,7 @@ export type KeyListener = {
 }
 
 
-export function useKeybindings(ctx: HTMLElement | Window, keybindings: KeyListener[]): UseKeybindingsRet {
+export function useKeybindings(ctx: HTMLElement | Window, keybindings: KeyListener[], deps: any[] = []): UseKeybindingsRet {
     useEffect(() => {
         const localListeners = []
 
@@ -34,7 +34,7 @@ export function useKeybindings(ctx: HTMLElement | Window, keybindings: KeyListen
         return () => {
             localListeners.forEach(l => ctx.removeEventListener("keydown", l))
         }
-    }, [ctx]);
+    }, [...deps, ctx]);
 
     return {}
 }

@@ -55,13 +55,6 @@ function App() {
         calculatedParameters: <></>
     })
 
-    useTauriEvent(
-        TauriEvent.EDITOR_DATA_CHANGED,
-        (e) => {
-            console.log("AWDAWD", e)
-        },
-    )
-
     useEffect(() => {
         (async () => {
             await tauriBridge.invoke(TauriCommand.FRONTEND_READY, {})
