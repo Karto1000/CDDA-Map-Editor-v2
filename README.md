@@ -14,20 +14,19 @@ the selected map when you save the file.
 > As of right now, this program only supports the Mapgen Viewer.
 > The map editor has not been implemented and is currently in the works.
 > If you still want to use a map editor,
-> the best alternative as of right now is
-> the [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
+> the best alternative as of right now is the
+> [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
 > Editor, which makes map editing easier, without having to read the CDDA Game directory.
 
 ## What can this Map Editor do?
 
-### What is supported?
+### What properties are supported?
 
 This editor currently supports the following mapgen file object properties including their `place` counterparts:
 
 - terrain
 - furniture
 - monsters
-- items
 - nested
 - toilets
 - fields
@@ -39,7 +38,7 @@ This editor currently supports the following mapgen file object properties inclu
 - corpses
 - monster
 
-### What is not supported?
+### What properties are not supported?
 
 The following properties are not supported yet:
 
@@ -50,6 +49,7 @@ The following properties are not supported yet:
 - liquids
 - remove_vehicles
 - graffiti
+- items
 
 > [!IMPORTANT]
 > Please keep in mind that the editor does not represent the map perfectly as it will be shown ingame.
@@ -57,6 +57,21 @@ The following properties are not supported yet:
 > If you find any inconsistencies, please head over to
 > the [Issues](https://github.com/Karto1000/CDDA-Map-Editor-v2/issues) Page and submit a new issue after checking the
 > [Known Problems](#known-problems).
+
+### What tilesets are supported?
+
+This editor should support most non-iso tilesets, including but not limited to:
+
+- Altica
+- BrownLikeBears
+- ChibiUltica
+- Cuteclysm
+- GiantDays
+- LarwichOvermap
+- MshockXotto+
+- NeoDaysTileset
+- RetroDaysTileset
+- MSX++UnDeadPeopleEdition
 
 ### Known Problems
 
@@ -67,6 +82,8 @@ Here is a list of known limitations, which may or may not be fixed in the future
 - Mutable overmap terrain entries are not supported
 - Isometric tilesets are not supported
 - `rotates_to` is not supported
+- Some non-iso tilesets do not work
+- No Background color for fallback ascii sprites
 
 ## Installation
 
