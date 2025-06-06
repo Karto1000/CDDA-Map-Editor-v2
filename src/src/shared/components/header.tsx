@@ -1,4 +1,4 @@
-import React, {RefObject, useContext, useEffect} from "react";
+import React, {Dispatch, RefObject, SetStateAction, useContext, useEffect} from "react";
 import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
@@ -26,6 +26,9 @@ import {useKeybindings} from "../hooks/useKeybindings.js";
 
 type Props = {
     eventBus: RefObject<EventTarget>
+
+    showGrid: boolean
+    setShowGrid: Dispatch<SetStateAction<boolean>>
 
     importMapWindowRef: RefObject<WebviewWindow>
     newMapWindowRef: RefObject<WebviewWindow>
@@ -453,12 +456,14 @@ export function Header(props: Props) {
                                     name: "Undo",
                                     shortcut: "Ctrl+z",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Redo",
                                     shortcut: "Ctrl+y",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 }
                             ],
@@ -467,12 +472,14 @@ export function Header(props: Props) {
                                     name: "Copy",
                                     shortcut: "Ctr+c",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Paste",
                                     shortcut: "Ctr+v",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 }
                             ],
@@ -489,6 +496,7 @@ export function Header(props: Props) {
                                                 isToggleable: true,
                                                 toggled: false,
                                                 onClick: () => {
+                                                    alert("Not Implemented")
                                                 }
                                             },
                                             {
@@ -496,6 +504,7 @@ export function Header(props: Props) {
                                                 isToggleable: true,
                                                 toggled: false,
                                                 onClick: () => {
+                                                    alert("Not Implemented")
                                                 }
                                             }
                                         ]
@@ -505,18 +514,21 @@ export function Header(props: Props) {
                                     name: "Draw",
                                     shortcut: "d",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Fill",
                                     shortcut: "f",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Erase",
                                     shortcut: "e",
                                     onClick: () => {
+                                        alert("Not Implemented")
                                     }
                                 },
                                 {
@@ -531,6 +543,7 @@ export function Header(props: Props) {
                                                 isToggleable: true,
                                                 toggled: false,
                                                 onClick: () => {
+                                                    alert("Not Implemented")
                                                 }
                                             },
                                             {
@@ -538,6 +551,7 @@ export function Header(props: Props) {
                                                 isToggleable: true,
                                                 toggled: false,
                                                 onClick: () => {
+                                                    alert("Not Implemented")
                                                 }
                                             }
                                         ]
@@ -550,8 +564,10 @@ export function Header(props: Props) {
                                 {
                                     name: "Show Grid",
                                     isToggleable: true,
-                                    toggled: true,
-                                    onClick: () => {
+                                    toggled: props.showGrid,
+                                    onClick: (ref) => {
+                                        props.setShowGrid(!props.showGrid)
+                                        ref.current.closeMenu()
                                     }
                                 }
                             ],
@@ -560,22 +576,25 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "GitHub",
-                                    onClick: async () => {
+                                    onClick: async (ref) => {
                                         await open("https://github.com/Karto1000/CDDA-Map-Editor-v2")
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "CDDA",
-                                    onClick: async () => {
+                                    onClick: async (ref) => {
                                         await open("https://github.com/CleverRaven/Cataclysm-DDA");
+                                        ref.current.closeMenu()
                                     }
                                 }
                             ],
                             [
                                 {
                                     name: "About",
-                                    onClick: () => {
+                                    onClick: (ref) => {
                                         alert("Not Implemented")
+                                        ref.current.closeMenu()
                                     }
                                 }
                             ]

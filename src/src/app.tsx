@@ -22,6 +22,7 @@ import {Panel, PanelGroup, PanelResizer} from "@window-splitter/react";
 import {clsx} from "clsx";
 import {MultiMenu} from "./shared/components/imguilike/multimenu.js";
 import {Sidemenu} from "./shared/components/imguilike/sidemenu.js";
+import {show} from "@tauri-apps/api/app";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -54,6 +55,7 @@ function App() {
         chosenProperties: <></>,
         calculatedParameters: <></>
     })
+    const [isGridShowing, setIsGridShowing] = useState<boolean>(true)
 
     useEffect(() => {
         (async () => {
@@ -151,6 +153,8 @@ function App() {
                             settingsWindowRef={settingsWindowRef}
                             eventBus={eventBus}
                             newMapWindowRef={newMapWindowRef}
+                            showGrid={isGridShowing}
+                            setShowGrid={setIsGridShowing}
                         />
 
                         <PanelGroup>
@@ -182,6 +186,7 @@ function App() {
                                     tilesheets={tilesheets}
                                     setSidebarContent={setSidebarContent}
                                     sidebarContent={sidebarContent}
+                                    showGrid={isGridShowing}
                                     canvas={{
                                         canvasRef: canvasRef,
                                         canvasContainerRef: canvasContainerRef

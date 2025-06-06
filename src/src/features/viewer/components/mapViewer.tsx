@@ -56,36 +56,36 @@ function CalculatedParametersTab(props: CalculatedParametersTabProps) {
                         if (vecA.x !== vecB.x) {
                             return vecA.x - vecB.x;
                         }
-                        
+
                         return vecA.z - vecB.z;
                     })
                     .map(k => {
-                    const position = serializedVec3ToVector3(k)
+                        const position = serializedVec3ToVector3(k)
 
-                    if (position.z !== props.zLevel.current) return;
+                        if (position.z !== props.zLevel.current) return;
 
-                    const params = props.calculatedParameters.current[k]
+                        const params = props.calculatedParameters.current[k]
 
-                    const filtered = Object.keys(params).filter(paramName => {
-                        return paramName.toLowerCase().includes(search.toLowerCase()) ||
-                            params[paramName].toLowerCase().includes(search.toLowerCase())
+                        const filtered = Object.keys(params).filter(paramName => {
+                            return paramName.toLowerCase().includes(search.toLowerCase()) ||
+                                params[paramName].toLowerCase().includes(search.toLowerCase())
+                        })
+
+                        if (filtered.length === 0) return;
+
+                        return (
+                            <Accordion title={`Chunk at ${k}`} key={k} defaultCollapsed={true}>
+                                {
+                                    filtered
+                                        .map(paramName => {
+                                            return (
+                                                <p key={paramName}>{paramName}: {params[paramName]}</p>
+                                            )
+                                        })
+                                }
+                            </Accordion>
+                        )
                     })
-
-                    if (filtered.length === 0) return;
-
-                    return (
-                        <Accordion title={`Chunk at ${k}`} key={k} defaultCollapsed={true}>
-                            {
-                                filtered
-                                    .map(paramName => {
-                                        return (
-                                            <p key={paramName}>{paramName}: {params[paramName]}</p>
-                                        )
-                                    })
-                            }
-                        </Accordion>
-                    )
-                })
 
             }
         </div>
@@ -108,6 +108,7 @@ export type MapViewerProps = {
     tilesheets: RefObject<Tilesheets>
     setSidebarContent: Dispatch<SetStateAction<SidebarContent>>
     sidebarContent: SidebarContent
+    showGrid: boolean
 }
 
 type CalculatedParameters = { [coords: string]: { [parameterIdentifier: string]: string } }
@@ -157,22 +158,28 @@ export function MapViewer(props: MapViewerProps) {
 
         regenerate(theme)
 
-        const gridHelper = new GridHelper(
-            1,
-            16 * 8 * tileInfo.width * 24 / tileInfo.height,
-            getColorFromTheme(theme, "disabled"), getColorFromTheme(theme, "light")
-        )
-        gridHelper.scale.x = 16 * 8 * tileInfo.width * 24
-        gridHelper.scale.z = 16 * 8 * tileInfo.height * 24
+        if (props.showGrid) {
+            const gridHelper = new GridHelper(
+                1,
+                16 * 8 * tileInfo.width * 24 / tileInfo.height,
+                getColorFromTheme(theme, "disabled"), getColorFromTheme(theme, "light")
+            )
+            gridHelper.scale.x = 16 * 8 * tileInfo.width * 24
+            gridHelper.scale.z = 16 * 8 * tileInfo.height * 24
 
-        gridHelper.position.x -= tileInfo.width / 2
-        gridHelper.position.y -= tileInfo.height / 2
+            gridHelper.position.x -= tileInfo.width / 2
+            gridHelper.position.y -= tileInfo.height / 2
 
-        gridHelper.rotateX(degToRad(90))
+            gridHelper.rotateX(degToRad(90))
 
-        props.threeConfig.current.scene.remove(props.threeConfig.current.gridHelper)
-        props.threeConfig.current.scene.add(gridHelper)
-        props.threeConfig.current.gridHelper = gridHelper
+            if (props.threeConfig.current.gridHelper) {
+                props.threeConfig.current.scene.remove(props.threeConfig.current.gridHelper)
+                props.threeConfig.current.gridHelper.dispose()
+            }
+
+            props.threeConfig.current.scene.add(gridHelper)
+            props.threeConfig.current.gridHelper = gridHelper
+        }
     }
 
     async function updateLiveViewer() {
@@ -290,6 +297,20 @@ export function MapViewer(props: MapViewerProps) {
         updateLiveViewer,
         [tabs.openedTab]
     )
+
+    useEffect(() => {
+        if (!props.showGrid) {
+            if (!props.threeConfig.current.gridHelper) return
+
+            props.threeConfig.current.scene.remove(props.threeConfig.current.gridHelper)
+            props.threeConfig.current.gridHelper.dispose()
+            props.threeConfig.current.gridHelper = null
+        } else {
+            if (!props.spritesheetConfig.current?.tile_info[0]) return;
+
+            setupSceneData(props.spritesheetConfig.current.tile_info[0], theme.theme)
+        }
+    }, [props.showGrid]);
 
     useEffect(() => {
         const closeLocalTabHandler = async (t: CloseLocalTabEvent) => {

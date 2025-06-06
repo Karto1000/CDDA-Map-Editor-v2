@@ -58,8 +58,8 @@ export function Dropdown(
         ref,
         () => {
             return {
-                closeMenu: () => setIsDropdownOpen(false),
-                openMenu: () => setIsDropdownOpen(true),
+                closeMenu: () => {setIsDropdownOpen(false); setSubGroupOpenIndex(null)},
+                openMenu: () => {setIsDropdownOpen(true); setSubGroupOpenIndex(null)},
             }
         },
         []
