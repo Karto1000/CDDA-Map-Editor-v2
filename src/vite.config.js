@@ -28,6 +28,7 @@ export default defineConfig(async () => ({
                 settings: resolve( __dirname , "src/windows/settings/window.html"),
                 about: resolve( __dirname , "src/windows/about/window.html")
             }
-        }
+        },
+        publicDir: resolve(__dirname, "public"),
     }
 }));

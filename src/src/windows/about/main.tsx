@@ -22,7 +22,7 @@ function Main() {
     return (
         <GenericWindow title={"About"}>
             <div className={"about-body"}>
-                <img src={"../../../public/icons/icon.ico"} alt={"CDDA Map Editor Logo"}/>
+                <img src={"/icons/icon.ico"} alt={"CDDA Map Editor Logo"}/>
                 {
                     aboutInfo &&
                     <div>
