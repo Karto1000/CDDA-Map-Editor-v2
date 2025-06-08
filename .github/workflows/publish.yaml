@@ -40,7 +40,16 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-darwin,x86_64-apple-darwin
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      # TODO: Apparently the "targets" property of the dtolnay/rust-toolchain does not work since it only installs the aarch64 but not the x86_64
+      # failed to build app: Target x86_64-apple-darwin is not installed (installed targets: aarch64-apple-darwin). Please run `rustup target add x86_64-apple-darwin`.
+      # Error failed to build app: Target x86_64-apple-darwin is not installed (installed targets: aarch64-apple-darwin). Please run `rustup target add x86_64-apple-darwin`.
+      - name: Install x86_64 for apple
+        run: rustup install x86_64-apple-darwin
+
+      - name: Install aarch64 for apple
+        run: rustup install aarch64-apple-darwin
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
