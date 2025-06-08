@@ -588,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "cdda-map-editor-2"
-version = "1.0.0-beta.1"
+version = "1.0.0-1"
 dependencies = [
  "anyhow",
  "async-walkdir",
