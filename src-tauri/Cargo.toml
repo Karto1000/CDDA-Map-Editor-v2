@@ -1,6 +1,6 @@
 [package]
 name = "cdda-map-editor-2"
-version = "1.0.0-beta.1"
+version = "1.0.0-1"
 description = "The CDDA Map Editor is a map editor for the Open-Source roguelike Cataclysm: Dark Days Ahead. It allows you to edit the Maps in an easy-to-use interface and receive instant feedback without having to reload the game or touch the underlying JSON Files."
 authors = ["kartoffelbauer1000"]
 edition = "2024"
