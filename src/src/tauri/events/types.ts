@@ -56,6 +56,13 @@ export enum TauriCommand {
     NEW_NESTED_MAPGEN_VIEWER = "new_nested_mapgen_viewer",
     GET_CALCULATED_PARAMETERS = "get_calculated_parameters",
     OPEN_RECENT_PROJECT = "open_recent_project",
+    ABOUT = "about"
+}
+
+export type AboutInfo = {
+    version: string,
+    contributors: string,
+    description: string,
 }
 
 export interface TauriCommandMap {
@@ -111,7 +118,8 @@ export interface TauriCommandMap {
     [TauriCommand.GET_CALCULATED_PARAMETERS]: {},
     [TauriCommand.OPEN_RECENT_PROJECT]: {
         name: string
-    }
+    },
+    [TauriCommand.ABOUT]: {};
 }
 
 export enum TauriEvent {

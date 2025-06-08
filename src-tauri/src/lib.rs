@@ -9,8 +9,8 @@ use crate::features::program_data::handlers::{
     open_project, open_recent_project, save_editor_data, tileset_picked,
 };
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, EditorData,
-    MappedCDDAIdContainer, ProjectType, ZLevel,
+    get_map_data_collection_from_live_viewer_data, EditorData, MappedCDDAIdContainer, ProjectType,
+    ZLevel,
 };
 use crate::features::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
@@ -29,6 +29,7 @@ use features::tileset::legacy_tileset;
 use features::toast::ToastMessage;
 use lazy_static::lazy_static;
 use log::{info, warn, LevelFilter};
+use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -58,6 +59,26 @@ lazy_static! {
 
             json_data
         });
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct AboutInfo {
+    pub version: &'static str,
+    pub contributors: &'static str,
+    pub description: &'static str,
+}
+
+#[tauri::command]
+async fn about() -> AboutInfo {
+    let version = env!("CARGO_PKG_VERSION");
+    let contributors = env!("CARGO_PKG_AUTHORS");
+    let description = env!("CARGO_PKG_DESCRIPTION");
+
+    AboutInfo {
+        version,
+        contributors,
+        description,
+    }
 }
 
 #[tauri::command]
@@ -120,7 +141,10 @@ async fn frontend_ready(
                                         ToastMessage::error(e.to_string()),
                                     )
                                     .unwrap();
-                                    warn!("Failed to load map data for project {}: {}", &project.name, e);
+                                    warn!(
+                                        "Failed to load map data for project {}: {}",
+                                        &project.name, e
+                                    );
                                     continue;
                                 },
                             };
@@ -218,7 +242,8 @@ pub fn run() -> () {
             new_special_mapgen_viewer,
             new_nested_mapgen_viewer,
             get_calculated_parameters,
-            open_recent_project
+            open_recent_project,
+            about
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

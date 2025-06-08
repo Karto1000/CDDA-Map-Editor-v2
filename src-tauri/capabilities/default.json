@@ -6,7 +6,8 @@
     "main",
     "import-map",
     "new-map",
-    "settings"
+    "settings",
+    "about"
   ],
   "permissions": [
     "core:window:default",

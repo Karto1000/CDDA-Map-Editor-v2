@@ -5,7 +5,8 @@ export enum WindowLabel {
     Main = "main",
     Settings = "settings",
     ImportMap = "import-map",
-    NewMap = "new-map"
+    NewMap = "new-map",
+    About = "about"
 }
 
 export function openWindow(label: WindowLabel, theme: Theme): WebviewWindow {

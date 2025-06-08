@@ -33,6 +33,7 @@ type Props = {
     importMapWindowRef: RefObject<WebviewWindow>
     newMapWindowRef: RefObject<WebviewWindow>
     settingsWindowRef: RefObject<WebviewWindow>
+    aboutWindowRef: RefObject<WebviewWindow>
 }
 
 export function Header(props: Props) {
@@ -45,6 +46,10 @@ export function Header(props: Props) {
     const [zLevelIndicator, setZLevelIndicator] = React.useState<number | null>(null)
     const [mousePositionIndicator, setMousePositionIndicator] = React.useState<{ x: number, y: number } | null>(null)
     const [selectedPositionIndicator, setSelectedPositionIndicator] = React.useState<{ x: number, y: number }>(null)
+
+    function onAboutClicked() {
+        props.aboutWindowRef.current = openWindow(WindowLabel.About, theme)
+    }
 
     function onNewClicked() {
         props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
@@ -593,7 +598,7 @@ export function Header(props: Props) {
                                 {
                                     name: "About",
                                     onClick: (ref) => {
-                                        alert("Not Implemented")
+                                        onAboutClicked()
                                         ref.current.closeMenu()
                                     }
                                 }

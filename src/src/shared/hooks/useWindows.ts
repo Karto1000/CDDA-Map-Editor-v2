@@ -5,6 +5,7 @@ export type UseWindowsRet = {
     newMapWindowRef: RefObject<Webview>,
     importMapWindowRef: RefObject<Webview>,
     settingsWindowRef: RefObject<Webview>,
+    aboutWindowRef: RefObject<Webview>,
 }
 
 export function useWindows(): UseWindowsRet {
@@ -12,10 +13,12 @@ export function useWindows(): UseWindowsRet {
     const importMapWindowRef = useRef<Webview>(null)
     const settingsWindowRef = useRef<Webview>(null)
     const newMapWindowRef = useRef<Webview>(null)
+    const aboutWindowRef = useRef<Webview>(null)
 
     return {
         newMapWindowRef,
         importMapWindowRef,
         settingsWindowRef,
+        aboutWindowRef,
     }
 }

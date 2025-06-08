@@ -1,0 +1,12 @@
+@import "../../theme.scss";
+
+.about-body {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+
+  img {
+    width: 128px;
+    height: 128px;
+  }
+}

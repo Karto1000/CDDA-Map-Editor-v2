@@ -1,2 +1,0 @@
-Add missing values to documentation type of square set in mapgen
-=> https://github.com/CleverRaven/Cataclysm-DDA/blob/master/doc/JSON/MAPGEN.md#set-things-in-a-square

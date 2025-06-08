@@ -49,7 +49,7 @@ function App() {
     const editorData = useEditorData(eventBus)
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus)
-    const {importMapWindowRef, settingsWindowRef, newMapWindowRef} = useWindows()
+    const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef} = useWindows()
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
     const [sidebarContent, setSidebarContent] = useState<SidebarContent>({
         chosenProperties: <></>,
@@ -155,6 +155,7 @@ function App() {
                             newMapWindowRef={newMapWindowRef}
                             showGrid={isGridShowing}
                             setShowGrid={setIsGridShowing}
+                            aboutWindowRef={aboutWindowRef}
                         />
 
                         <PanelGroup>
