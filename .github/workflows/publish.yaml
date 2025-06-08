@@ -46,10 +46,10 @@ jobs:
       # failed to build app: Target x86_64-apple-darwin is not installed (installed targets: aarch64-apple-darwin). Please run `rustup target add x86_64-apple-darwin`.
       # Error failed to build app: Target x86_64-apple-darwin is not installed (installed targets: aarch64-apple-darwin). Please run `rustup target add x86_64-apple-darwin`.
       - name: Install x86_64 for apple
-        run: rustup install x86_64-apple-darwin
+        run: rustup target add x86_64-apple-darwin
 
       - name: Install aarch64 for apple
-        run: rustup install aarch64-apple-darwin
+        run: rustup target add aarch64-apple-darwin
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
