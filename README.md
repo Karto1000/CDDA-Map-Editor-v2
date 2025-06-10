@@ -18,6 +18,9 @@ the selected map when you save the file.
 > [Hostile Architect](https://discourse.cataclysmdda.org/t/hostile-architect-location-builder-tool-extra-locations-mod/26351)
 > Editor, which makes map editing easier, without having to read the CDDA Game directory.
 
+> Related Posts
+> - https://discourse.cataclysmdda.org/t/overmap-special-mapgen-viewer/29718
+> - https://discourse.cataclysmdda.org/t/feature-suggestion-for-a-custom-map-editor/29600
 ## What can this Map Editor do?
 
 ### What properties are supported?
