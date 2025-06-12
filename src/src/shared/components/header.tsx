@@ -632,7 +632,7 @@ export function Header(props: Props) {
                         }
                         {
                             tabs.shouldDisplayCanvas() &&
-                            <button onClick={onReloadClicked}>
+                            <button onClick={onReloadClicked} className={"reload-button"}>
                                 <Icon name={IconName.ReloadMedium} pointerEvents={"none"}/>
                             </button>
                         }

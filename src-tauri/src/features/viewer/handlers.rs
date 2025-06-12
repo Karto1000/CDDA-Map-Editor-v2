@@ -1,4 +1,4 @@
-use super::data::PlaceSpritesEvent;
+use super::data::Sprites;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::replace_region_setting;
 use crate::data::TileLayer;
@@ -27,12 +27,12 @@ use crate::features::tileset::Tilesheet;
 use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
 use crate::impl_serialize_for_error;
 use crate::util;
-use crate::util::get_json_data;
 use crate::util::CDDADataError;
 use crate::util::GetCurrentProjectError;
 use crate::util::IVec3JsonKey;
 use crate::util::Save;
 use crate::util::UVec2JsonKey;
+use crate::util::{get_current_project, get_json_data, get_json_data_mut};
 use crate::util::{get_current_project_mut, get_size, Load};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
@@ -117,10 +117,19 @@ pub async fn get_calculated_parameters(
     Ok(calculated_parameters)
 }
 
+#[derive(Debug, Error)]
+pub enum GetSpritesError {
+    #[error(transparent)]
+    CDDADataError(#[from] CDDADataError),
+
+    #[error(transparent)]
+    GetCurrentProjectError(#[from] GetCurrentProjectError),
+}
+
+impl_serialize_for_error!(GetSpritesError);
+
 #[tauri::command]
 pub async fn get_sprites(
-    name: String,
-    app: AppHandle,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
     editor_data: State<'_, Mutex<EditorData>>,
@@ -129,23 +138,12 @@ pub async fn get_sprites(
         '_,
         Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>,
     >,
-) -> Result<(), ()> {
+) -> Result<Sprites, GetSpritesError> {
     let mut json_data_lock = json_data.lock().await;
-
-    let mut json_data = match json_data_lock.deref_mut() {
-        None => return Err(()),
-        Some(d) => d,
-    };
+    let json_data = get_json_data_mut(&mut json_data_lock)?;
 
     let mut editor_data_lock = editor_data.lock().await;
-
-    let project = match editor_data_lock.loaded_projects.get_mut(&name) {
-        None => {
-            warn!("Could not find project with name {}", name);
-            return Err(());
-        },
-        Some(d) => d,
-    };
+    let project = get_current_project_mut(&mut editor_data_lock)?;
 
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
@@ -172,7 +170,7 @@ pub async fn get_sprites(
     for (_, map_collection) in project.maps.iter_mut() {
         // we need to calculate the parameters for the predecessor here because we
         // cannot borrow json data as mutable inside the get_mapped_cdda_ids function
-        map_collection.calculate_predecessor_parameters(&mut json_data);
+        map_collection.calculate_predecessor_parameters(json_data);
     }
 
     let region_settings = json_data
@@ -319,17 +317,11 @@ pub async fn get_sprites(
     let mut mapped_cdda_ids_lock = mapped_cdda_ids.lock().await;
     mapped_cdda_ids_lock.replace(saved_cdda_ids);
 
-    app.emit(
-        events::PLACE_SPRITES,
-        PlaceSpritesEvent {
-            static_sprites,
-            animated_sprites,
-            fallback_sprites,
-        },
-    )
-    .unwrap();
-
-    Ok(())
+    Ok(Sprites {
+        static_sprites,
+        animated_sprites,
+        fallback_sprites,
+    })
 }
 
 #[derive(Debug, Error)]

@@ -3,6 +3,7 @@ import {Vector2, Vector3} from "three";
 import {TileInfo} from "../../tauri/types/spritesheet.js";
 import {RefObject} from "react";
 import {ThreeConfig} from "../three/types/three.js";
+import {logDeletion} from "../../shared/utils/log.js";
 
 export const MAX_DEPTH = 999997
 const MAX_ROW = 1000
@@ -205,7 +206,7 @@ export class Tilesheets {
     public dispose(threeConfig: RefObject<ThreeConfig>) {
         for (const name of Object.keys(this.tilesheets)) {
             const tilesheet = this.tilesheets[name]
-            console.log(`Removing tilesheet ${name} from scene`)
+            logDeletion(`[RENDERING] Removing tilesheet ${name} from scene`)
             tilesheet.dispose()
             threeConfig.current.scene.remove(tilesheet.mesh)
         }

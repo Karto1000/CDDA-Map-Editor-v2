@@ -9,6 +9,8 @@ class TauriBridge {
         event: K,
         callback: (data: TauriEventMap[K]) => void
     ): Promise<UnlistenFn> {
+        console.log("%c[TAURI] [EVENT] Listening to event: " + event, 'color: #add8e6')
+
         const unlisten = await listen(event, (event) => {
             callback(event.payload as TauriEventMap[K]);
         });
@@ -24,12 +26,13 @@ class TauriBridge {
         args: TauriCommandMap[K]
     ): Promise<BackendResponse<R, E>> {
         try {
-            console.log("Invoking command: ", command)
+            console.log("%c[TAURI] [INVOKE] Invoking command: " + command, 'color: #FFD580')
             return {
                 type: BackendResponseType.Success,
                 data: await invoke(command, args)
             };
         } catch (error) {
+            console.error("%c[TAURI] [INVOKE] Error invoking command: " + command, 'color: #FFD580')
             return {
                 type: BackendResponseType.Error,
                 error

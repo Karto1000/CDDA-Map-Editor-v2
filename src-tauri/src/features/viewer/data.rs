@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub(super) struct PlaceSpritesEvent {
+pub struct Sprites {
     pub static_sprites: HashSet<StaticSprite>,
     pub animated_sprites: HashSet<AnimatedSprite>,
     pub fallback_sprites: HashSet<FallbackSprite>,

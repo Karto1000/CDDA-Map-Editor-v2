@@ -185,6 +185,10 @@
       display: flex;
       gap: 2px;
 
+      .reload-button {
+        height: 24px;
+      }
+
       .world-position-indicator, .selected-position-indicator {
         width: 100px;
       }

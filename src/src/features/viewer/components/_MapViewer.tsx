@@ -113,7 +113,7 @@ export type MapViewerProps = {
 
 type CalculatedParameters = { [coords: string]: { [parameterIdentifier: string]: string } }
 
-export function MapViewer(props: MapViewerProps) {
+export function _MapViewer(props: MapViewerProps) {
     const theme = useContext(ThemeContext)
     const {
         hoveredCellMeshRef,

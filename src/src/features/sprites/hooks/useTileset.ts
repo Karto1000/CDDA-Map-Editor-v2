@@ -1,27 +1,55 @@
-import {MutableRefObject, RefObject, useRef} from "react";
+import {RefObject, useRef} from "react";
 import {Tilesheets} from "../tilesheets.js";
 import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
 import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {BackendResponse, BackendResponseType, TauriCommand, TauriEvent} from "../../../tauri/events/types.js";
 import {Tilesheet} from "../tilesheet.js";
+import {ThreeConfig} from "../../three/types/three.js";
+import {logDeletion, logError, logRender} from "../../../shared/utils/log.js";
 import {LocalEvent, TilesetLoadedEvent} from "../../../shared/utils/localEvent.js";
 
 export type UseTilesetRet = {
-    tilesheets: RefObject<Tilesheets>,
-    spritesheetConfig: RefObject<SpritesheetConfig>,
+    tilesheets: RefObject<Tilesheets | null>,
+    spritesheetConfig: RefObject<SpritesheetConfig | null>,
 }
 
-export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
+export function useTileset(eventBus: RefObject<EventTarget>, threeConfig: RefObject<ThreeConfig>): UseTilesetRet {
     const tilesheets = useRef<Tilesheets>(null)
     const spritesheetConfig = useRef<SpritesheetConfig>(null)
     const storedObjectURLS = useRef<string[]>([])
+
+    function addTilesheets() {
+        for (const tilesheetKey of Object.keys(tilesheets.current.tilesheets)) {
+            logRender(`Adding ${tilesheetKey} to scene`)
+
+            const tilesheet = tilesheets.current.tilesheets[tilesheetKey]
+            threeConfig.current.scene.add(tilesheet.mesh)
+        }
+
+        logRender("Adding fallback to scene")
+        threeConfig.current.scene.add(tilesheets.current.fallback.mesh)
+    }
+
+    function removeTilesheets() {
+        for (const objectURL of storedObjectURLS.current) {
+            logDeletion(`[RENDERING] Revoking URL for tilesheet ${objectURL}`)
+            URL.revokeObjectURL(objectURL)
+        }
+
+        tilesheets.current.fallback.dispose()
+        tilesheets.current.dispose(threeConfig)
+        tilesheets.current = null
+        storedObjectURLS.current = []
+    }
 
     useTauriEvent(
         TauriEvent.TILESET_CHANGED,
         () => {
             (async () => {
-                console.log("Loading Tileset")
+                logRender("Loading Tileset")
+
+                if (tilesheets.current) removeTilesheets()
 
                 const infoResponse = await tauriBridge.invoke<
                     SpritesheetConfig,
@@ -37,7 +65,7 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
                     return
                 }
 
-                spritesheetConfig.current = infoResponse.data;
+                spritesheetConfig.current = infoResponse.data
 
                 const loadFromBackend = async (): Promise<{
                     atlases: { [key: string]: Tilesheet },
@@ -47,7 +75,7 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
                     const downloadPromises: Promise<BackendResponse<ArrayBuffer, unknown>>[] = []
 
                     for (let tileInfo of infoResponse.data["tiles-new"]) {
-                        console.log(`Loading ${tileInfo.file}`)
+                        logRender(`Loading ${tileInfo.file}`)
 
                         const promise = tauriBridge.invoke<
                             ArrayBuffer,
@@ -71,7 +99,7 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
                         const response = arrayBuffs[i]
 
                         if (response.type === BackendResponseType.Error) {
-                            console.log(`Failed to load Tileset ${response.error}`)
+                            logError(`%c[RENDERING] Failed to load Tileset ${response.error}`)
                             return
                         }
 
@@ -96,20 +124,24 @@ export function useTileset(eventBus: RefObject<EventTarget>): UseTilesetRet {
                     return {atlases, fallback, tileInfo: infoResponse.data.tile_info[0]}
                 }
 
-                console.log("Loading Tilesheet Sprites")
+                logRender("Loading Tilesheet Sprites")
                 const atlases = await loadFromBackend();
+                tilesheets.current = new Tilesheets(atlases.atlases, atlases.fallback, atlases.tileInfo)
 
-                const localTilesheets = new Tilesheets(atlases.atlases, atlases.fallback, atlases.tileInfo)
+                addTilesheets()
+
                 eventBus.current.dispatchEvent(
                     new TilesetLoadedEvent(
                         LocalEvent.TILESET_LOADED,
-                        {detail: localTilesheets}
+                        {detail: tilesheets.current}
                     )
                 )
-                tilesheets.current = localTilesheets;
-            })()
+            })();
+
+            return () => {
+            }
         },
-        [eventBus]
+        []
     )
 
     return {tilesheets, spritesheetConfig}

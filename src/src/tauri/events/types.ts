@@ -76,7 +76,6 @@ export interface TauriCommandMap {
     [TauriCommand.SAVE_EDITOR_DATA]: {};
     [TauriCommand.GET_CURRENT_PROJECT_DATA]: {};
     [TauriCommand.GET_SPRITES]: {
-        name: string
     };
     [TauriCommand.RELOAD_PROJECT]: {};
     [TauriCommand.OPEN_PROJECT]: {
@@ -125,7 +124,6 @@ export interface TauriCommandMap {
 export enum TauriEvent {
     EDITOR_DATA_CHANGED = "editor_data_changed",
     TILESET_CHANGED = "tileset_changed",
-    PLACE_SPRITES = "place_sprites",
     TAB_CREATED = "tab_created",
     TAB_REMOVED = "tab_removed",
     UPDATE_LIVE_VIEWER = "update_live_viewer",
@@ -138,13 +136,14 @@ export enum ToastType {
     Error = "error"
 }
 
+export type Sprites = {
+    static_sprites: StaticSprite[];
+    animated_sprites: AnimatedSprite[];
+    fallback_sprites: FallbackSprite[];
+}
+
 export interface TauriEventMap {
     [TauriEvent.EDITOR_DATA_CHANGED]: EditorData;
-    [TauriEvent.PLACE_SPRITES]: {
-        static_sprites: StaticSprite[];
-        animated_sprites: AnimatedSprite[];
-        fallback_sprites: FallbackSprite[];
-    };
     [TauriEvent.TAB_CREATED]: {
         name: string,
         tab_type: TabTypeKind,
