@@ -13,7 +13,8 @@ export enum LocalEvent {
     CHANGE_Z_LEVEL = "change-z-level",
     CHANGE_WORLD_MOUSE_POSITION = "change-world-mouse-position",
     CHANGE_SELECTED_POSITION = "change-selected-position",
-    UPDATE_VIEWER = "update-viewer"
+    UPDATE_VIEWER = "update-viewer",
+    TOGGLE_GRID = "toggle-grid",
 }
 
 export interface LocalEventsMap {
@@ -27,7 +28,8 @@ export interface LocalEventsMap {
     [LocalEvent.CHANGE_Z_LEVEL]: { zLevel: number }
     [LocalEvent.CHANGE_WORLD_MOUSE_POSITION]: { position: { x: number, y: number } }
     [LocalEvent.CHANGE_SELECTED_POSITION]: { position?: { x: number, y: number } }
-    [LocalEvent.UPDATE_VIEWER]: {  }
+    [LocalEvent.UPDATE_VIEWER]: {  },
+    [LocalEvent.TOGGLE_GRID]: { state: boolean }
 }
 
 export class ChangedThemeEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGED_THEME]> {
@@ -59,3 +61,4 @@ export class ChangeWorldMousePositionEvent extends CustomEvent<LocalEventsMap[Lo
 export class ChangeSelectedPositionEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_SELECTED_POSITION]> {
 }
 export class UpdateViewerEvent extends CustomEvent<LocalEventsMap[LocalEvent.UPDATE_VIEWER]> {}
+export class ToggleGridEvent extends CustomEvent<LocalEventsMap[LocalEvent.TOGGLE_GRID]> {}

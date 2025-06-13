@@ -1,8 +1,8 @@
-import {DrawAnimatedSprite, DrawStaticSprite, Tilesheets} from "../sprites/tilesheets.js";
-import React, {RefObject, useContext, useEffect, useRef} from "react";
+import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../sprites/tilesheets.js";
+import React, {RefObject, useContext, useEffect, useRef, useState} from "react";
 import {SHOW_STATS} from "../three/hooks/useThreeSetup.js";
 import {Canvas, ThreeConfig} from "../three/types/three.ts";
-import {GridHelper} from "three";
+import {GridHelper, Vector3} from "three";
 import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
 import {degToRad} from "three/src/math/MathUtils.js";
 import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
@@ -10,7 +10,7 @@ import {TabContext, ThemeContext} from "../../app.js";
 import Icon, {IconName} from "../../shared/components/icon.js";
 import {SideMenuRef} from "../../shared/components/imguilike/sideMenu.js";
 import {logRender} from "../../shared/utils/log.js";
-import {LocalEvent} from "../../shared/utils/localEvent.js";
+import {LocalEvent, ToggleGridEvent} from "../../shared/utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {
     BackendResponseType,
@@ -23,7 +23,8 @@ import toast from "react-hot-toast";
 import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
 import "./mapViewer.scss"
 import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
-import {useMousePosition} from "../../shared/hooks/useMousePosition.js";
+import {useMouseCells} from "../three/hooks/useMouseCells.js";
+import {clsx} from "clsx";
 
 export type MapViewerProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -32,6 +33,7 @@ export type MapViewerProps = {
     canvas: Canvas
     sideMenuRef: RefObject<SideMenuRef>
     eventBus: RefObject<EventTarget>
+    showGridRef: RefObject<boolean>
 }
 
 export enum MapViewerTab {
@@ -47,11 +49,29 @@ export function MapViewer(props: MapViewerProps) {
     const {theme} = useContext(ThemeContext)
     const tabs = useContext(TabContext)
 
-    const worldMousePosition = useWorldMousePosition({
-        spritesheetConfig: props.spritesheetConfig,
-        threeConfig: props.threeConfig,
-        canvas: props.canvas,
-    })
+    const {
+        hoveredCellMeshRef,
+        selectedCellMeshRef,
+        updateCellSize
+    } = useMouseCells(props.threeConfig, props.spritesheetConfig, theme)
+    const worldMousePosition = useWorldMousePosition(
+        {
+            spritesheetConfig: props.spritesheetConfig,
+            threeConfig: props.threeConfig,
+            canvas: props.canvas,
+            onMouseMove: (mousePosition) => {
+                const tileInfo = getTileInfo(props.spritesheetConfig.current)
+
+                hoveredCellMeshRef.current.position.set(
+                    mousePosition.x * tileInfo.width,
+                    -mousePosition.y * tileInfo.height - tileInfo.height,
+                    MAX_DEPTH + 1
+                )
+            }
+        }
+    )
+    const [selectedMousePosition, setSelectedMousePosition] = useState<Vector3 | null>(null)
+    const [isLoading, setIsLoading] = useState<boolean>(false)
 
     async function clearAndLoadSprites() {
         const tileInfo = getTileInfo(props.spritesheetConfig.current)
@@ -106,8 +126,13 @@ export function MapViewer(props: MapViewerProps) {
     }
 
     async function onReload() {
+        setIsLoading(true)
+
         await tauriBridge.invoke<unknown, string>(TauriCommand.RELOAD_PROJECT, {})
         await clearAndLoadSprites()
+        toast.success("Reloaded viewer")
+
+        setIsLoading(false)
     }
 
     // We receive this event any time the files the current project is linked to change
@@ -120,6 +145,38 @@ export function MapViewer(props: MapViewerProps) {
         },
         []
     )
+
+    useEffect(() => {
+        function onMouseDown(e: MouseEvent) {
+            if (e.button !== 0) return;
+
+            if (selectedMousePosition) {
+                const selectedSamePosition = selectedMousePosition.x === worldMousePosition.x && selectedMousePosition.y === worldMousePosition.y
+                if (selectedSamePosition) {
+                    setSelectedMousePosition(null)
+                    selectedCellMeshRef.current.visible = false
+                    return
+                }
+            }
+
+            const tileInfo = getTileInfo(props.spritesheetConfig.current)
+
+            selectedCellMeshRef.current.position.set(
+                worldMousePosition.x * tileInfo.width,
+                -worldMousePosition.y * tileInfo.height - tileInfo.height,
+                MAX_DEPTH + 1
+            )
+            selectedCellMeshRef.current.visible = true
+
+            setSelectedMousePosition(worldMousePosition)
+        }
+
+        props.canvas.canvasRef.current.addEventListener("mousedown", onMouseDown)
+
+        return () => {
+            props.canvas.canvasRef.current.removeEventListener("mousedown", onMouseDown)
+        }
+    }, [worldMousePosition, selectedMousePosition]);
 
     // Main Draw Loop
     useEffect(() => {
@@ -168,6 +225,8 @@ export function MapViewer(props: MapViewerProps) {
 
             props.threeConfig.current.scene.add(gridHelper)
             grid.current = gridHelper
+            console.log(props.showGridRef.current)
+            grid.current.visible = props.showGridRef.current
         }
 
         function setupSideMenuTabs() {
@@ -187,17 +246,39 @@ export function MapViewer(props: MapViewerProps) {
         setColors(theme)
         setupSideMenuTabs()
 
-        async function tilesetLoaded() {
+        async function onTilesetLoaded() {
+            setIsLoading(true)
+
             setupGrid(theme)
             await clearAndLoadSprites()
+            updateCellSize()
+
+            setIsLoading(false)
+        }
+
+        function onToggleGrid(e: ToggleGridEvent) {
+            grid.current.visible = e.detail.state
         }
 
         props.eventBus.current.addEventListener(
             LocalEvent.TILESET_LOADED,
-            tilesetLoaded,
+            onTilesetLoaded,
         )
 
-        if (props.tilesheets) clearAndLoadSprites()
+        props.eventBus.current.addEventListener(
+            LocalEvent.TOGGLE_GRID,
+            onToggleGrid,
+        )
+
+        if (props.tilesheets) {
+            (async () => {
+                setIsLoading(true)
+
+                await clearAndLoadSprites()
+
+                setIsLoading(false)
+            })()
+        }
 
         function loop() {
             if (SHOW_STATS) props.threeConfig.current.stats.begin()
@@ -220,45 +301,58 @@ export function MapViewer(props: MapViewerProps) {
             grid.current.dispose()
 
             props.sideMenuRef.current.removeTab(MapViewerTab.MapInfo)
+
             props.eventBus.current.removeEventListener(
                 LocalEvent.TILESET_LOADED,
-                tilesetLoaded,
+                onTilesetLoaded,
+            )
+
+            props.eventBus.current.removeEventListener(
+                LocalEvent.TOGGLE_GRID,
+                onToggleGrid,
             )
         }
     }, [tabs.openedTab, theme])
 
     return (
-        <div className={"top-right-objects"}>
-            {/*{*/}
-            {/*    selectedPositionIndicator !== null &&*/}
-            {/*    <div className={"selected-chunk-indicator"}>*/}
-            {/*        <span>{Math.floor(selectedPositionIndicator.x / 24)}, {Math.floor(selectedPositionIndicator.y / 24)}</span>*/}
-            {/*    </div>*/}
-            {/*}*/}
-            {/*{*/}
-            {/*    selectedPositionIndicator !== null &&*/}
-            {/*    <div className={"selected-position-indicator"}>*/}
-            {/*        <span>{selectedPositionIndicator.x}, {selectedPositionIndicator.y}, {zLevelIndicator}</span>*/}
-            {/*    </div>*/}
-            {/*}*/}
-            {
-                worldMousePosition !== null &&
-                <div className={"world-chunk-indicator"}>
-                    <span>{Math.floor(worldMousePosition.x / CHUNK_SIZE)}, {Math.floor(worldMousePosition.y / CHUNK_SIZE)}</span>
-                </div>
-            }
-            {
-                worldMousePosition !== null &&
-                <div className={"world-position-indicator"}>
-                    <span>{worldMousePosition.x}, {worldMousePosition.y}, {zLevel.current}</span>
-                </div>
-            }
-            {
-                tabs.shouldDisplayCanvas() &&
-                <button onClick={onReload} className={"reload-button"}>
-                    <Icon name={IconName.ReloadMedium} pointerEvents={"none"}/>
-                </button>
-            }
-        </div>
+        <>
+            <div className={clsx("loader-container", isLoading && "visible")}>
+                <div className={"loader"}/>
+                <span>Loading Map Data</span>
+            </div>
+            <div className={"top-right-objects"}>
+                {
+                    selectedMousePosition !== null &&
+                    <div className={"selected-chunk-indicator"}>
+                        <span>{Math.floor(selectedMousePosition.x / CHUNK_SIZE)}, {Math.floor(selectedMousePosition.y / CHUNK_SIZE)}</span>
+                    </div>
+                }
+                {
+                    selectedMousePosition !== null &&
+                    <div className={"selected-position-indicator"}>
+                        <span>{selectedMousePosition.x}, {selectedMousePosition.y}, {zLevel.current}</span>
+                    </div>
+                }
+                {
+                    worldMousePosition !== null &&
+                    <div className={"world-chunk-indicator"}>
+                        <span>{Math.floor(worldMousePosition.x / CHUNK_SIZE)}, {Math.floor(worldMousePosition.y / CHUNK_SIZE)}</span>
+                    </div>
+                }
+                {
+                    worldMousePosition !== null &&
+                    <div className={"world-position-indicator"}>
+                        <span>{worldMousePosition.x}, {worldMousePosition.y}, {zLevel.current}</span>
+                    </div>
+                }
+                {
+                    tabs.shouldDisplayCanvas() &&
+                    <button onClick={onReload} className={"reload-button"}>
+                        <Icon name={IconName.ReloadMedium} pointerEvents={"none"}/>
+                    </button>
+                }
+            </div>
+        </>
+
     )
 }

@@ -48,8 +48,8 @@ function App() {
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
     const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef} = useWindows()
-    const [isGridShowing, setIsGridShowing] = useState<boolean>(true)
     const sideMenuRef = useRef<SideMenuRef>(null)
+    const showGridRef = useRef<boolean>(true)
 
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false)
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
@@ -89,6 +89,7 @@ function App() {
         if (tabs.openedTab !== null) {
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
                 return <MapViewer
+                    showGridRef={showGridRef}
                     eventBus={eventBus}
                     sideMenuRef={sideMenuRef}
                     tilesheets={tilesheets}
@@ -138,12 +139,11 @@ function App() {
                 <ThemeContext.Provider value={{theme}}>
                     <TabContext.Provider value={tabs}>
                         <Header
+                            showGrid={showGridRef}
                             importMapWindowRef={importMapWindowRef}
                             settingsWindowRef={settingsWindowRef}
                             eventBus={eventBus}
                             newMapWindowRef={newMapWindowRef}
-                            showGrid={isGridShowing}
-                            setShowGrid={setIsGridShowing}
                             aboutWindowRef={aboutWindowRef}
                         />
 
