@@ -188,7 +188,7 @@ export function _MapViewer(props: MapViewerProps) {
 
         props.tilesheets.current.clearAll()
 
-        const reloadResponse = await tauriBridge.invoke<unknown, string, TauriCommand.RELOAD_PROJECT>(TauriCommand.RELOAD_PROJECT, {})
+        const reloadResponse = await tauriBridge.invoke<unknown, string>(TauriCommand.RELOAD_PROJECT, {})
 
         if (reloadResponse.type === BackendResponseType.Error) {
             toast.error(reloadResponse.error)
@@ -196,7 +196,7 @@ export function _MapViewer(props: MapViewerProps) {
             return
         }
 
-        const getSpritesResponse = await tauriBridge.invoke<unknown, string, TauriCommand.GET_SPRITES>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
+        const getSpritesResponse = await tauriBridge.invoke<unknown, string>(TauriCommand.GET_SPRITES, {name: tabs.openedTab});
 
         if (getSpritesResponse.type === BackendResponseType.Error) {
             toast.error(getSpritesResponse.error)
@@ -204,7 +204,7 @@ export function _MapViewer(props: MapViewerProps) {
             return
         }
 
-        const getRepresentationResponse = await tauriBridge.invoke<CellData, string, TauriCommand.GET_PROJECT_CELL_DATA>(TauriCommand.GET_PROJECT_CELL_DATA, {})
+        const getRepresentationResponse = await tauriBridge.invoke<CellData, string>(TauriCommand.GET_PROJECT_CELL_DATA, {})
 
         if (getRepresentationResponse.type === BackendResponseType.Error) {
             toast.error(getRepresentationResponse.error)
@@ -214,7 +214,7 @@ export function _MapViewer(props: MapViewerProps) {
 
         cellRepresentation.current = getRepresentationResponse.data
 
-        const getCalculatedParametersResponse = await tauriBridge.invoke<CalculatedParameters, string, TauriCommand.GET_CALCULATED_PARAMETERS>(TauriCommand.GET_CALCULATED_PARAMETERS, {})
+        const getCalculatedParametersResponse = await tauriBridge.invoke<CalculatedParameters, string>(TauriCommand.GET_CALCULATED_PARAMETERS, {})
 
         if (getCalculatedParametersResponse.type === BackendResponseType.Error) {
             toast.error(getCalculatedParametersResponse.error)

@@ -3,8 +3,8 @@ use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::program_data::io::ProgramDataSaver;
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, EditorData, LiveViewerData,
-    Project, ProjectName, ProjectType, Tab, TabType,
+    get_map_data_collection_from_live_viewer_data, EditorData, LiveViewerData, Project, ProjectName, ProjectType,
+    Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     load_tilesheet, LegacyTilesheet,
@@ -324,8 +324,6 @@ pub async fn open_project(
     match &project.ty {
         ProjectType::MapEditor(_) => {},
         ProjectType::LiveViewer(lvd) => {
-            app.emit(UPDATE_LIVE_VIEWER, {}).unwrap();
-
             let lvd_clone = lvd.clone();
 
             let join_handle = tokio::spawn(async move {

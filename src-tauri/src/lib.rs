@@ -194,6 +194,15 @@ async fn frontend_ready(
     Ok(())
 }
 
+#[tauri::command]
+async fn close_app(app: AppHandle) {
+    let windows = app.webview_windows();
+
+    for (_, window) in windows {
+        window.close().unwrap();
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> () {
     tauri::Builder::default()
@@ -243,7 +252,8 @@ pub fn run() -> () {
             new_nested_mapgen_viewer,
             get_calculated_parameters,
             open_recent_project,
-            about
+            about,
+            close_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

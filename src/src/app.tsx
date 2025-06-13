@@ -3,7 +3,6 @@ import React, {createContext, useEffect, useRef, useState} from 'react';
 import "./app.scss"
 import {TauriCommand, TauriEvent, ToastType} from "./tauri/events/types.js";
 import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
-import {WelcomeScreen} from "./shared/components/mainScreens/welcomeScreen.js";
 import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
@@ -21,6 +20,7 @@ import {Panel, PanelGroup, PanelResizer} from "@window-splitter/react";
 import {clsx} from "clsx";
 import {MapViewer} from "./features/viewer/mapViewer.js";
 import {SideMenu, SideMenuRef} from "./shared/components/imguilike/sideMenu.js";
+import {openWindow, WindowLabel} from "./windows/lib.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -44,7 +44,7 @@ function App() {
     )
 
     const [theme] = useTheme(eventBus);
-    const editorData = useEditorData(eventBus)
+    const editorData = useEditorData()
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
     const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef} = useWindows()
@@ -52,12 +52,24 @@ function App() {
     const sideMenuRef = useRef<SideMenuRef>(null)
 
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false)
+    const [isAppReady, setIsAppReady] = useState<boolean>(false)
 
     useEffect(() => {
         (async () => {
             await tauriBridge.invoke(TauriCommand.FRONTEND_READY, {})
         })()
     }, []);
+
+    useEffect(() => {
+        if (!editorData) return;
+
+        if (!editorData.config.cdda_path) {
+            openWindow(WindowLabel.Welcome, theme, {defaultWidth: 760, defaultHeight: 600})
+            return
+        }
+
+        setIsAppReady(true)
+    }, [editorData]);
 
     useTauriEvent(
         TauriEvent.EMIT_TOAST_MESSAGE,
@@ -75,15 +87,12 @@ function App() {
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
-            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.Welcome)
-                return <WelcomeScreen eventBus={eventBus}/>
-
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
                 return <MapViewer
                     eventBus={eventBus}
                     sideMenuRef={sideMenuRef}
                     tilesheets={tilesheets}
-                    tileInfo={spritesheetConfig.current.tile_info[0]}
+                    spritesheetConfig={spritesheetConfig}
                     threeConfig={threeConfigRef}
                     canvas={{
                         canvasRef,
@@ -97,6 +106,9 @@ function App() {
 
     return (
         <div className={`app ${theme}-theme`}>
+            {!isAppReady && <div className={"loading-screen"}>
+                <div className={"loader"}/>
+            </div>}
             <Toaster
                 position={"bottom-right"}
                 toastOptions={{

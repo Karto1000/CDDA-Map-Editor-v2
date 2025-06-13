@@ -19,3 +19,7 @@ export type SpritesheetConfig = {
     'tiles-new': TileNew[];
     tile_info: TileInfo[];
 };
+
+export function getTileInfo(spritesheetConfig: SpritesheetConfig) {
+    return spritesheetConfig.tile_info[0]
+}

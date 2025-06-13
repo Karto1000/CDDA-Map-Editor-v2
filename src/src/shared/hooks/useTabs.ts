@@ -10,7 +10,6 @@ import {
 } from "../utils/localEvent.js";
 
 export enum TabTypeKind {
-    Welcome = "Welcome",
     MapEditor = "MapEditor",
     LiveViewer = "LiveViewer"
 }

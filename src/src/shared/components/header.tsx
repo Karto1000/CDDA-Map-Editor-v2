@@ -280,15 +280,6 @@ export function Header(props: Props) {
         await tauriWindow.close();
     }
 
-    async function onReloadClicked() {
-        props.eventBus.current.dispatchEvent(
-            new UpdateViewerEvent(
-                LocalEvent.UPDATE_VIEWER,
-                {}
-            )
-        )
-    }
-
     return (
         <header>
             <div className={`header-container`}>
@@ -629,12 +620,6 @@ export function Header(props: Props) {
                             <div className={"world-position-indicator"}>
                                 <span>{mousePositionIndicator.x}, {mousePositionIndicator.y}, {zLevelIndicator}</span>
                             </div>
-                        }
-                        {
-                            tabs.shouldDisplayCanvas() &&
-                            <button onClick={onReloadClicked} className={"reload-button"}>
-                                <Icon name={IconName.ReloadMedium} pointerEvents={"none"}/>
-                            </button>
                         }
                     </div>
                 </div>

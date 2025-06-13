@@ -51,11 +51,7 @@ export function useTileset(eventBus: RefObject<EventTarget>, threeConfig: RefObj
 
                 if (tilesheets.current) removeTilesheets()
 
-                const infoResponse = await tauriBridge.invoke<
-                    SpritesheetConfig,
-                    unknown,
-                    TauriCommand.GET_INFO_OF_CURRENT_TILESET
-                >(
+                const infoResponse = await tauriBridge.invoke<SpritesheetConfig, unknown>(
                     TauriCommand.GET_INFO_OF_CURRENT_TILESET,
                     {}
                 )
@@ -77,11 +73,7 @@ export function useTileset(eventBus: RefObject<EventTarget>, threeConfig: RefObj
                     for (let tileInfo of infoResponse.data["tiles-new"]) {
                         logRender(`Loading ${tileInfo.file}`)
 
-                        const promise = tauriBridge.invoke<
-                            ArrayBuffer,
-                            unknown,
-                            TauriCommand.DOWNLOAD_SPRITESHEET
-                        >(
+                        const promise = tauriBridge.invoke<ArrayBuffer, unknown>(
                             TauriCommand.DOWNLOAD_SPRITESHEET,
                             {name: tileInfo.file},
                         )

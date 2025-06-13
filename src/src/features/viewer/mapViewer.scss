@@ -1,0 +1,40 @@
+@import '../../theme';
+
+@include themed($themes) {
+  .top-right-objects {
+
+    .reload-button {
+    }
+
+    .world-chunk-indicator, .world-position-indicator {
+      background-color: theme-var("darkest-blue");
+    }
+
+    .world-position-indicator {
+    }
+  }
+}
+
+.top-right-objects {
+  display: flex;
+  position: absolute;
+  top: 54px;
+  right: 2px;
+  gap: 2px;
+
+  .world-chunk-indicator, .world-position-indicator {
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+  }
+
+  .world-chunk-indicator {
+    width: 50px;
+  }
+
+  .world-position-indicator {
+    width: 100px;
+  }
+}

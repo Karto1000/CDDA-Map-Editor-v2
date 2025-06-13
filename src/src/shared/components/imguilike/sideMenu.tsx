@@ -52,8 +52,6 @@ export function SideMenu(props: SidemenuProps) {
                     })
                 },
                 removeTab: (tag) => {
-                    if (!tabs[tag]) throw new Error(`Tried to remove tab ${tag} that does not exist`)
-
                     const newTabs = {...tabs}
                     delete newTabs[tag]
                     setTabs(newTabs)

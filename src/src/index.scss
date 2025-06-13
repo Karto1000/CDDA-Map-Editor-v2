@@ -25,6 +25,14 @@
     &:hover {
       background-color: theme-var("light-blue");
     }
+
+    &:disabled {
+      background-color: red;
+
+      &:hover {
+        background-color: theme-var("disabled");
+      }
+    }
   }
 
   .file-input {
