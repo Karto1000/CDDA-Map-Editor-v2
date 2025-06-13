@@ -21,17 +21,17 @@ export type SideMenuRef = {
 }
 
 export function SideMenu(props: SidemenuProps) {
-    const [selectedMenu, setSelectedMenu] = useState<number>(null)
+    const [selectedMenu, setSelectedMenu] = useState<string>(null)
     const [isCollapsed, setIsCollapsed] = useState<boolean>(true)
     const [tabs, setTabs] = useState<{ [tag: string]: SidemenuTab }>({})
 
-    function onMenuSelect(i: number) {
-        if (i === selectedMenu) {
+    function onMenuSelect(tag: string) {
+        if (tag === selectedMenu) {
             setSelectedMenu(null)
             setIsCollapsed(true)
             if (props.onStateChange) props.onStateChange(false)
         } else {
-            setSelectedMenu(i)
+            setSelectedMenu(tag)
             setIsCollapsed(false)
             if (props.onStateChange) props.onStateChange(true)
         }
@@ -75,8 +75,8 @@ export function SideMenu(props: SidemenuProps) {
                         const t = tabs[tag]
 
                         return (
-                            <button className={clsx(selectedMenu === i && "selected")}
-                                    onClick={() => onMenuSelect(i)} key={`side-button-${i}`}>
+                            <button className={clsx(selectedMenu === tag && "selected")}
+                                    onClick={() => onMenuSelect(tag)} key={`side-button-${i}`}>
                                 {t.icon}
                             </button>
                         )

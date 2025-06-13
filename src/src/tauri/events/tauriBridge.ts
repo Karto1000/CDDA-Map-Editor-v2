@@ -9,8 +9,6 @@ class TauriBridge {
         event: K,
         callback: (data: TauriEventMap[K]) => void
     ): Promise<UnlistenFn> {
-        console.log("%c[TAURI] [EVENT] Listening to event: " + event, 'color: #add8e6')
-
         const unlisten = await listen(event, (event) => {
             callback(event.payload as TauriEventMap[K]);
         });

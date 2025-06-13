@@ -100,6 +100,7 @@ export function useTileset(eventBus: RefObject<EventTarget>, threeConfig: RefObj
                         const blob = new Blob([response.data], {type: "image/png"});
                         const url = URL.createObjectURL(blob)
                         storedObjectURLS.current.push(url)
+                        logRender(`[RENDERING] Created URL for ${spritesheetInfo.file}: ${url}`)
 
                         if (spritesheetInfo.file === "fallback.png") {
                             fallback = await Tilesheet.fromURL(url, infoResponse.data.tile_info[0], spritesheetInfo)

@@ -31,6 +31,7 @@ export class Tilesheet {
     public readonly material: AtlasMaterial
     public readonly yLayer: number
     public readonly spritesheetInfo: TileNew
+    public readonly objectURL: string
     public mappedTiles: Map<string, InstanceNumber>
     public mesh: InstancedMesh
     private atlasConfig: AtlasMaterialConfig
@@ -38,8 +39,11 @@ export class Tilesheet {
     constructor(
         texture: Texture,
         tilesetInfo: TileInfo,
-        spritesheetInfo: TileNew
+        spritesheetInfo: TileNew,
+        objectUrl: string
     ) {
+        this.objectURL = objectUrl
+
         const maxInstances = 200_000
 
         const tileWidth = spritesheetInfo.sprite_width || tilesetInfo.width
@@ -99,7 +103,8 @@ export class Tilesheet {
         return new Tilesheet(
             texture,
             tilesetInfo,
-            spritesheetInfo
+            spritesheetInfo,
+            url
         )
     }
 

@@ -25,6 +25,7 @@ import "./mapViewer.scss"
 import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../three/hooks/useMouseCells.js";
 import {clsx} from "clsx";
+import {TilesheetSprite} from "../../shared/components/tilesheetSprite.js";
 
 export type MapViewerProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -225,7 +226,6 @@ export function MapViewer(props: MapViewerProps) {
 
             props.threeConfig.current.scene.add(gridHelper)
             grid.current = gridHelper
-            console.log(props.showGridRef.current)
             grid.current.visible = props.showGridRef.current
         }
 
@@ -235,7 +235,7 @@ export function MapViewer(props: MapViewerProps) {
                 {
                     icon: <Icon name={IconName.InfoMedium}/>,
                     content: <div>
-                        Test
+
                     </div>
                 }
             )
