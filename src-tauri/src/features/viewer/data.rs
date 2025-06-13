@@ -100,7 +100,7 @@ impl PartialEq for FallbackSprite {
 impl Eq for FallbackSprite {}
 
 #[derive(Debug)]
-pub(super) enum DisplaySprite {
+pub enum DisplaySprite {
     Static(StaticSprite),
     Animated(AnimatedSprite),
     Fallback(FallbackSprite),

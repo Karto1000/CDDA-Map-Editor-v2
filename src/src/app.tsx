@@ -3,7 +3,7 @@ import React, {createContext, useEffect, useRef, useState} from 'react';
 import "./app.scss"
 import {TauriCommand, TauriEvent, ToastType} from "./tauri/events/types.js";
 import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
-import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
+import {NoTabScreen} from "./shared/components/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
 import {EditorData} from "./tauri/types/editor.js";
@@ -102,7 +102,7 @@ function App() {
                 />
         }
 
-        return <NoTabScreen openMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>
+        return <NoTabScreen importMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>
     }
 
     return (
