@@ -1,12 +1,11 @@
 import React, {useEffect, useRef, useState} from "react";
 import GenericWindow from "../generic-window.js";
 import "./main.scss"
-import {AboutInfo, BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
+import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
+import {getCurrentWindow} from "@tauri-apps/api/window";
 import {open} from "@tauri-apps/plugin-dialog";
 import {EditorData} from "../../tauri/types/editor.js";
-import {LocalEvent, RemoveLocalTabEvent} from "../../shared/utils/localEvent.js";
 import Icon, {IconName} from "../../shared/components/icon.js";
 
 function Main() {
@@ -14,6 +13,7 @@ function Main() {
     const [availableTilesets, setAvailableTilesets] = useState<string[]>([])
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
     const [hasPickedCDDADirectory, setHasPickedCDDADirectory] = useState<boolean>(false)
+    const [isLoadingData, setIsLoadingData] = useState<boolean>(false)
     const selectRef = useRef<HTMLSelectElement>(null)
 
     useEffect(() => {
@@ -42,6 +42,8 @@ function Main() {
 
         if (!path) return;
 
+        setIsLoadingData(true)
+
         await tauriBridge.invoke(
             TauriCommand.CDDA_INSTALLATION_DIRECTORY_PICKED,
             {
@@ -59,6 +61,7 @@ function Main() {
 
         setAvailableTilesets(response.data.available_tilesets)
         setHasPickedCDDADirectory(true)
+        setIsLoadingData(false)
     }
 
     async function onSaveAndCloseClick() {
@@ -77,16 +80,22 @@ function Main() {
         <GenericWindow title={"Welcome to the CDDA Map Editor!"} onCloseClicked={onCloseClicked}>
             <main id={"welcome-main"}>
                 <div id={"introduction-container"}>
-                    <h1>Welcome to the CDDA Map Editor!</h1>
+                    <h1>Welcome to the CDDA Map Editor / Viewer!</h1>
                     <p>This application is still in development and is expected to still contain bugs that the developer
-                        hasn't
-                        bothered to fix yet.</p>
-                    <p>First, please select the CDDA game installation directory</p>
+                        hasn't bothered to fix yet.</p>
+                    <p>First, please select the root of the CDDA game installation directory.
+                        This application requires access to the json data of CDDA to display Nested Mapgen entries among
+                        other things.</p>
                     <button
-                        onClick={onCDDAGameSelectClick}>{cddaInstallDirectory ? cddaInstallDirectory : "Select your CDDA game Installation directory"}</button>
+                        onClick={onCDDAGameSelectClick}>{cddaInstallDirectory ?
+                        cddaInstallDirectory :
+                        isLoadingData ?
+                            "Loading..." :
+                            "Select your CDDA game Installation directory"}
+                    </button>
                     <div>
                         <p>Select a tileset if you want a graphical representation of your map. If you do not select
-                            one, the tiles will be displayed as the characters they are mapped to</p>
+                            one, the tiles will be displayed using a fallback ascii tileset</p>
                         <select value={selectedTilset}
                                 onChange={() => {
                                     if (selectRef.current.selectedIndex === 0) setSelectedTileset("None")
@@ -100,14 +109,18 @@ function Main() {
                         </select>
                     </div>
                     <p>
-                        To get started with creating maps, click on the <span><Icon name={IconName.AddSmall}/></span> Icon
-                        next to the "Welcome to the CDDA Map Editor" Tab to create a new Map</p>
+                        To get started with creating or viewing maps, click on the <span><Icon
+                        name={IconName.AddSmall}/></span> Icon next to the application title to create a new Map.
+                        Alternatively you can use the dropdown menu in the top left to create or import a map under
+                        File &gt; Create or File &gt; Import
+                    </p>
                     <p>
                         The previously selected settings can be changed anytime under the File {">"} Settings dropdown
                     </p>
                     {
                         hasPickedCDDADirectory &&
-                        <button id={"tab-close-button"} onClick={onSaveAndCloseClick}>Save and close this window</button>
+                        <button id={"tab-close-button"} onClick={onSaveAndCloseClick}>Save and close this
+                            window</button>
                     }
                 </div>
             </main>

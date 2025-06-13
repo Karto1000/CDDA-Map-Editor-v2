@@ -1,5 +1,5 @@
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../sprites/tilesheets.js";
-import React, {RefObject, useContext, useEffect, useRef, useState} from "react";
+import React, {RefObject, useContext, useEffect, useReducer, useRef, useState} from "react";
 import {SHOW_STATS} from "../three/hooks/useThreeSetup.js";
 import {Canvas, ThreeConfig} from "../three/types/three.ts";
 import {GridHelper, Vector3} from "three";
@@ -25,7 +25,6 @@ import "./mapViewer.scss"
 import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../three/hooks/useMouseCells.js";
 import {clsx} from "clsx";
-import {TilesheetSprite} from "../../shared/components/tilesheetSprite.js";
 
 export type MapViewerProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -44,6 +43,7 @@ export enum MapViewerTab {
 const CHUNK_SIZE = 24
 
 export function MapViewer(props: MapViewerProps) {
+    const [, forceUpdate] = useReducer(x => x + 1, 0);
     const grid = useRef<GridHelper>(null)
     const zLevel = useRef<number>(0)
 
@@ -172,9 +172,23 @@ export function MapViewer(props: MapViewerProps) {
             setSelectedMousePosition(worldMousePosition)
         }
 
+        async function onKeyDown(e: KeyboardEvent) {
+            if (e.key === "PageUp") {
+                zLevel.current += 1
+                props.tilesheets.current.switchZLevel(zLevel.current)
+                forceUpdate()
+            } else if (e.key === "PageDown") {
+                zLevel.current -= 1
+                props.tilesheets.current.switchZLevel(zLevel.current)
+                forceUpdate()
+            }
+        }
+
+        props.canvas.canvasRef.current.addEventListener("keydown", onKeyDown)
         props.canvas.canvasRef.current.addEventListener("mousedown", onMouseDown)
 
         return () => {
+            props.canvas.canvasRef.current.removeEventListener("keydown", onKeyDown)
             props.canvas.canvasRef.current.removeEventListener("mousedown", onMouseDown)
         }
     }, [worldMousePosition, selectedMousePosition]);

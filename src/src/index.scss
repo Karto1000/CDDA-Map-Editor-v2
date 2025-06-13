@@ -148,6 +148,10 @@ form {
 
   label {
     flex: 1;
+    white-space: wrap;
+  }
+
+  .file-input {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
