@@ -1,14 +1,14 @@
 import React, {useEffect, useRef, useState} from "react";
 import GenericWindow from "../generic-window.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
-import {Accordion} from "../../shared/components/imguilike/accordion.js";
 import "./main.scss"
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {EditorData} from "../../tauri/types/editor.js";
+import {EditorData, getKeybindingText, Keybind} from "../../tauri/types/editor.js";
 import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 import {open} from "@tauri-apps/plugin-dialog";
-import { DEFAULT_TILESET } from "../../features/editor/index.ts";
+import {DEFAULT_TILESET} from "../../features/editor/index.ts";
+import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
@@ -17,11 +17,7 @@ function Main() {
     const selectRef = useRef<HTMLSelectElement>(null)
 
     async function getAndSetEditorData() {
-        const response = await tauriBridge.invoke<
-            EditorData,
-            unknown,
-            TauriCommand.GET_EDITOR_DATA
-        >(
+        const response = await tauriBridge.invoke<EditorData, unknown>(
             TauriCommand.GET_EDITOR_DATA,
             {}
         )
@@ -103,37 +99,56 @@ function Main() {
     return (
         <GenericWindow title={"Settings"}>
             <div className={"settings-body"}>
-                <Accordion title={"General"}>
-                    <div className={"general-settings"}>
-                        <div className={"form-element"}>
-                            <label className={clsx("file-input", !cddaDirectoryPath && "placeholder")}>
-                                {cddaDirectoryPath ? cddaDirectoryPath : "Select your CDDA Game directory"}
-                                <button onClick={onCDDAInputChange}/>
-                            </label>
-                            <label>Change your CDDA Game directory</label>
-                        </div>
-                        <div className={"form-element"}>
-                            <button onClick={onThemeChange}>Change Theme</button>
-                            <label>Change your theme to dark or light</label>
-                        </div>
-                    </div>
-                </Accordion>
-                <Accordion title={"Graphics"}>
-                    <div className={"form-element"}>
-                        <select
-                            value={selectedTilset}
-                            onChange={onTilesetSelect}
-                            ref={selectRef}
-                            defaultValue={"None"}
-                        >
-                            <option>None</option>
-                            {
-                                editorData?.available_tilesets.map(t => <option key={t}>{t}</option>)
-                            }
-                        </select>
-                        <label>Select your tileset here</label>
-                    </div>
-                </Accordion>
+                <MultiMenu tabs={
+                    [
+                        {
+                            name: "General",
+                            content: <div className={"general-settings"}>
+                                <div className={"form-element"}>
+                                    <label className={clsx("file-input", !cddaDirectoryPath && "placeholder")}>
+                                        {cddaDirectoryPath ? cddaDirectoryPath : "Select your CDDA Game directory"}
+                                        <button onClick={onCDDAInputChange}/>
+                                    </label>
+                                    <label>Change your CDDA Game directory</label>
+                                </div>
+                                <div className={"form-element"}>
+                                    <button onClick={onThemeChange}>Change Theme</button>
+                                    <label>Change your theme to dark or light</label>
+                                </div>
+                            </div>
+                        },
+                        {
+                            name: "Graphics",
+                            content: <div className={"form-element"}>
+                                <select
+                                    value={selectedTilset}
+                                    onChange={onTilesetSelect}
+                                    ref={selectRef}
+                                    defaultValue={"None"}
+                                >
+                                    <option>None</option>
+                                    {
+                                        editorData?.available_tilesets.map(t => <option key={t}>{t}</option>)
+                                    }
+                                </select>
+                                <label>Select your tileset here</label>
+                            </div>
+                        },
+                        {
+                            name: "Keybinds",
+                            content: <div className={"keybindings-container"}>
+                                {
+                                    editorData?.config.keybinds.map(kb => (
+                                        <div className={"keybinding"}>
+                                            <span>{getKeybindingText(kb)}</span>
+                                            <span>{kb.action}</span>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        }
+                    ]
+                }/>
             </div>
         </GenericWindow>
     );

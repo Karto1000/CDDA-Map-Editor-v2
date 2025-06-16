@@ -19,7 +19,8 @@ import {TauriCommand} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {Theme} from "../hooks/useTheme.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
-import {useKeybindings} from "../hooks/useKeybindings.js";
+import {useKeybindActionEvent} from "../hooks/useKeybindings.js";
+import {getKeybindingText, KeybindAction} from "../../tauri/types/editor.js";
 
 type Props = {
     eventBus: RefObject<EventTarget>
@@ -38,6 +39,62 @@ export function Header(props: Props) {
     const [showGrid, setShowGrid] = useState<boolean>(true)
 
     const editorData = useContext(EditorDataContext)
+
+    useKeybindActionEvent(
+        KeybindAction.OpenProject,
+        onOpen,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.NewProject,
+        onNewClicked,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.SaveProject,
+        onSave,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.CloseTab,
+        onClose,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.CloseAllTabs,
+        onCloseAll,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.ImportMap,
+        onImport,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.ExportMap,
+        onExport,
+        props.eventBus,
+        []
+    )
+
+    useKeybindActionEvent(
+        KeybindAction.OpenSettings,
+        onSettingsOpen,
+        props.eventBus,
+        []
+    )
 
     function onAboutClicked() {
         props.aboutWindowRef.current = openWindow(WindowLabel.About, theme)
@@ -78,55 +135,6 @@ export function Header(props: Props) {
     function onSettingsOpen() {
         setSettingsWindow(openWindow(WindowLabel.Settings, theme))
     }
-
-    useKeybindings(
-        window,
-        [
-            {
-                key: "n",
-                withCtrl: true,
-                action: onNewClicked
-            },
-            {
-                key: "o",
-                withCtrl: true,
-                action: onOpen
-            },
-            {
-                key: "s",
-                withCtrl: true,
-                action: onSave,
-            },
-            {
-                key: "w",
-                withCtrl: true,
-                action: onClose
-            },
-            {
-                key: "w",
-                withCtrl: true,
-                withAlt: true,
-                action: onCloseAll
-            },
-            {
-                key: "i",
-                withCtrl: true,
-                action: onImport
-            },
-            {
-                key: "e",
-                withCtrl: true,
-                action: onExport
-            },
-            {
-                key: "s",
-                withCtrl: true,
-                withAlt: true,
-                action: onSettingsOpen
-            }
-        ],
-        [tabs]
-    )
 
     useEffect(() => {
         props.settingsWindowRef.current = settingsWindow
@@ -210,6 +218,14 @@ export function Header(props: Props) {
         await tauriWindow.close();
     }
 
+    function getKeyboardShortcutForAction(action: KeybindAction | null) {
+        const found = editorData?.config.keybinds.find(kb => kb.action === action)
+
+        if (!found) return null
+
+        return getKeybindingText(found)
+    }
+
     return (
         <header>
             <div className={`header-container`}>
@@ -280,7 +296,7 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "New",
-                                    shortcut: "Ctrl+n",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.NewProject),
                                     onClick: (ref) => {
                                         onNewClicked()
                                         ref.current.closeMenu()
@@ -288,7 +304,7 @@ export function Header(props: Props) {
                                 },
                                 {
                                     name: "Open",
-                                    shortcut: "Ctrl+o",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.OpenProject),
                                     onClick: (ref) => {
                                         onOpen()
                                         ref.current.closeMenu()
@@ -318,7 +334,7 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "Save",
-                                    shortcut: "Ctrl+s",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.SaveProject),
                                     onClick: (ref) => {
                                         onSave()
                                         ref.current.closeMenu()
@@ -326,7 +342,7 @@ export function Header(props: Props) {
                                 },
                                 {
                                     name: "Close",
-                                    shortcut: "Ctr+w",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.CloseTab),
                                     onClick: async (ref) => {
                                         await onClose()
                                         ref.current.closeMenu()
@@ -334,7 +350,7 @@ export function Header(props: Props) {
                                 },
                                 {
                                     name: "Close All",
-                                    shortcut: "Ctr+Alt+w",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.CloseAllTabs),
                                     onClick: async (ref) => {
                                         await onCloseAll()
                                         ref.current.closeMenu()
@@ -344,7 +360,7 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "Import",
-                                    shortcut: "Ctrl+i",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.ImportMap),
                                     onClick: (ref) => {
                                         onImport()
                                         ref.current.closeMenu()
@@ -352,7 +368,7 @@ export function Header(props: Props) {
                                 },
                                 {
                                     name: "Export",
-                                    shortcut: "Ctrl+e",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.ExportMap),
                                     onClick: (ref) => {
                                         onExport()
                                         ref.current.closeMenu()
@@ -362,7 +378,7 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "Settings",
-                                    shortcut: "Ctrl+Alt+s",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.OpenSettings),
                                     onClick: (ref) => {
                                         onSettingsOpen()
                                         ref.current.closeMenu()
@@ -380,14 +396,14 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "Undo",
-                                    shortcut: "Ctrl+z",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Undo),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Redo",
-                                    shortcut: "Ctrl+y",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Redo),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
@@ -396,14 +412,14 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "Copy",
-                                    shortcut: "Ctr+c",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Copy),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Paste",
-                                    shortcut: "Ctr+v",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Paste),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
@@ -438,21 +454,21 @@ export function Header(props: Props) {
                                 },
                                 {
                                     name: "Draw",
-                                    shortcut: "d",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Draw),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Fill",
-                                    shortcut: "f",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Fill),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
                                 },
                                 {
                                     name: "Erase",
-                                    shortcut: "e",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.Erase),
                                     onClick: () => {
                                         alert("Not Implemented")
                                     }
