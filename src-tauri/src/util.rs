@@ -13,7 +13,7 @@ use rand::rng;
 use serde::de::Error as SerdeError;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
-use std::ops::{Add, Deref};
+use std::ops::{Add, Deref, DerefMut};
 use thiserror::Error;
 use tokio::sync::MutexGuard;
 
@@ -248,7 +248,7 @@ pub fn get_current_project<'a>(
         None => {
             return Err(GetCurrentProjectError::InvalidProjectName(
                 project_name.clone(),
-            ))
+            ));
         },
         Some(d) => d,
     };
@@ -268,7 +268,7 @@ pub fn get_current_project_mut<'a>(
         None => {
             return Err(GetCurrentProjectError::InvalidProjectName(
                 project_name.clone(),
-            ))
+            ));
         },
         Some(d) => d,
     };
@@ -280,6 +280,15 @@ pub fn get_json_data<'a>(
     lock: &'a MutexGuard<Option<DeserializedCDDAJsonData>>,
 ) -> Result<&'a DeserializedCDDAJsonData, CDDADataError> {
     match lock.deref() {
+        None => Err(CDDADataError::NotLoaded),
+        Some(d) => Ok(d),
+    }
+}
+
+pub fn get_json_data_mut<'a>(
+    lock: &'a mut MutexGuard<Option<DeserializedCDDAJsonData>>,
+) -> Result<&'a mut DeserializedCDDAJsonData, CDDADataError> {
+    match lock.deref_mut() {
         None => Err(CDDADataError::NotLoaded),
         Some(d) => Ok(d),
     }

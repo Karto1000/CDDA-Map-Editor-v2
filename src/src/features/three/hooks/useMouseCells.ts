@@ -1,18 +1,24 @@
-import {Mesh, MeshBasicMaterial, PlaneGeometry, Vector3} from "three";
-import {MutableRefObject, RefObject, useEffect, useRef} from "react";
+import {Mesh, MeshBasicMaterial, PlaneGeometry} from "three";
+import {RefObject, useEffect, useRef, useState} from "react";
 import {ThreeConfig} from "../types/three.js";
-import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
-import {MAX_DEPTH} from "../../sprites/tilesheets.js";
+import {SpritesheetConfig} from "../../../tauri/types/spritesheet.js";
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
+import {logRender} from "../../../shared/utils/log.js";
 
 export function useMouseCells(
     threeConfig: RefObject<ThreeConfig>,
     spritesheetConfig: RefObject<SpritesheetConfig>,
-) {
+    theme: Theme,
+): {
+    hoveredCellMeshRef: RefObject<Mesh>,
+    selectedCellMeshRef: RefObject<Mesh>,
+    updateCellSize: () => void
+} {
     const hoveredCellMeshRef = useRef<Mesh>(null)
     const selectedCellMeshRef = useRef<Mesh>(null)
+    const [updateCellMeshes, setUpdateCellMeshes] = useState<boolean>(false)
 
-    function regenerate(theme: Theme) {
+    useEffect(() => {
         const tileInfo = spritesheetConfig.current.tile_info[0]
 
         const hovered = new PlaneGeometry(tileInfo.width, tileInfo.height)
@@ -30,15 +36,28 @@ export function useMouseCells(
 
         const highlightedMesh = new Mesh(hovered, hoveredMaterial)
 
-        threeConfig.current.scene.remove(selectedCellMeshRef.current)
-        threeConfig.current.scene.remove(hoveredCellMeshRef.current)
-
         selectedCellMeshRef.current = selectedMesh
         threeConfig.current.scene.add(selectedMesh)
 
         hoveredCellMeshRef.current = highlightedMesh
         threeConfig.current.scene.add(highlightedMesh)
+
+        return () => {
+            threeConfig.current.scene.remove(selectedCellMeshRef.current)
+            threeConfig.current.scene.remove(hoveredCellMeshRef.current)
+
+            selectedCellMeshRef.current.geometry.dispose()
+            hoveredCellMeshRef.current.geometry.dispose()
+
+            selectedCellMeshRef.current = null
+            hoveredCellMeshRef.current = null
+        }
+    }, [theme, updateCellMeshes]);
+
+    function updateCellSize() {
+        logRender("Updating cell size")
+        setUpdateCellMeshes((v) => !v)
     }
 
-    return {hoveredCellMeshRef, selectedCellMeshRef, regenerate}
+    return {hoveredCellMeshRef, selectedCellMeshRef, updateCellSize}
 }

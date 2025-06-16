@@ -118,7 +118,7 @@ function OpenMapViewer() {
                                 <div className={"map-viewer-form-terrain"}>
                                     <div className={"form-element"}>
                                         <label className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}>
-                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select a mapgen File Path"}
+                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select one or more mapgen File Paths"}
                                             <button onClick={onMapFileInputChange}/>
                                         </label>
                                         <label>
@@ -148,7 +148,7 @@ function OpenMapViewer() {
                                 <div className={"map-viewer-form-special"}>
                                     <div className={"form-element"}>
                                         <label className={clsx("file-input", omFilePaths.length === 0 && "placeholder")}>
-                                            {omFilePaths.length > 0 ? omFilePaths : "Select a Overmap special File Path"}
+                                            {omFilePaths.length > 0 ? omFilePaths : "Select one or more Overmap special File Paths"}
                                             <button onClick={onOmFileInputChange}/>
                                         </label>
                                         <label>
@@ -157,7 +157,7 @@ function OpenMapViewer() {
                                     </div>
                                     <div className={"form-element"}>
                                         <label className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}>
-                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select a mapgen File Path"}
+                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select one or more mapgen File Paths"}
                                             <button onClick={onMapFileInputChange}/>
                                         </label>
                                         <label>

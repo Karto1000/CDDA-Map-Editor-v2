@@ -1,4 +1,4 @@
-import React, {Dispatch, RefObject, SetStateAction, useContext, useEffect} from "react";
+import React, {RefObject, useContext, useEffect, useState} from "react";
 import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
@@ -9,13 +9,10 @@ import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {EditorDataContext, TabContext, ThemeContext} from "../../app.js";
 import {
     ChangedThemeEvent,
-    ChangeSelectedPositionEvent,
-    ChangeWorldMousePositionEvent,
-    ChangeZLevelEvent,
     CloseLocalTabEvent,
     LocalEvent,
     OpenLocalTabEvent,
-    UpdateViewerEvent
+    ToggleGridEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {TauriCommand} from "../../tauri/events/types.js";
@@ -26,26 +23,21 @@ import {useKeybindings} from "../hooks/useKeybindings.js";
 
 type Props = {
     eventBus: RefObject<EventTarget>
-
-    showGrid: boolean
-    setShowGrid: Dispatch<SetStateAction<boolean>>
-
     importMapWindowRef: RefObject<WebviewWindow>
     newMapWindowRef: RefObject<WebviewWindow>
     settingsWindowRef: RefObject<WebviewWindow>
     aboutWindowRef: RefObject<WebviewWindow>
+    showGrid: RefObject<boolean>
 }
 
 export function Header(props: Props) {
     const tauriWindow = getCurrentWindow();
     const {theme} = useContext(ThemeContext)
     const tabs = useContext(TabContext)
-    const [settingsWindow, setSettingsWindow] = React.useState<WebviewWindow | null>(null)
+    const [settingsWindow, setSettingsWindow] = useState<WebviewWindow | null>(null)
+    const [showGrid, setShowGrid] = useState<boolean>(true)
 
     const editorData = useContext(EditorDataContext)
-    const [zLevelIndicator, setZLevelIndicator] = React.useState<number | null>(null)
-    const [mousePositionIndicator, setMousePositionIndicator] = React.useState<{ x: number, y: number } | null>(null)
-    const [selectedPositionIndicator, setSelectedPositionIndicator] = React.useState<{ x: number, y: number }>(null)
 
     function onAboutClicked() {
         props.aboutWindowRef.current = openWindow(WindowLabel.About, theme)
@@ -77,7 +69,6 @@ export function Header(props: Props) {
 
     function onImport() {
         props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
-
     }
 
     function onExport() {
@@ -156,67 +147,6 @@ export function Header(props: Props) {
         }
     }, [settingsWindow, theme]);
 
-    useEffect(() => {
-        const handleChangeZLevel = (e: ChangeZLevelEvent) => {
-            setZLevelIndicator(() => e.detail.zLevel)
-        }
-
-        const handleCloseLocalTab = () => {
-            setZLevelIndicator(() => null)
-            setMousePositionIndicator(() => null)
-        }
-
-        const handleChangeWorldMousePosition = (e: ChangeWorldMousePositionEvent) => {
-            setMousePositionIndicator(() => e.detail.position)
-        }
-
-        const handleChangeSelectedPosition = (e: ChangeSelectedPositionEvent) => {
-            setSelectedPositionIndicator(() => e.detail.position)
-        }
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
-            handleChangeWorldMousePosition
-        )
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.CHANGE_SELECTED_POSITION,
-            handleChangeSelectedPosition
-        )
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.CLOSE_LOCAL_TAB,
-            handleCloseLocalTab
-        )
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.CHANGE_Z_LEVEL,
-            handleChangeZLevel
-        )
-
-        return () => {
-            props.eventBus.current.removeEventListener(
-                LocalEvent.CHANGE_SELECTED_POSITION,
-                handleChangeSelectedPosition
-            )
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.CHANGE_WORLD_MOUSE_POSITION,
-                handleChangeWorldMousePosition
-            )
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.CLOSE_LOCAL_TAB,
-                handleCloseLocalTab
-            )
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.CHANGE_Z_LEVEL,
-                handleChangeZLevel
-            )
-        }
-    }, []);
-
     async function onTabClose(name: string) {
         console.log(`Closed tab ${name}`)
 
@@ -278,15 +208,6 @@ export function Header(props: Props) {
         }
 
         await tauriWindow.close();
-    }
-
-    async function onReloadClicked() {
-        props.eventBus.current.dispatchEvent(
-            new UpdateViewerEvent(
-                LocalEvent.UPDATE_VIEWER,
-                {}
-            )
-        )
     }
 
     return (
@@ -569,9 +490,18 @@ export function Header(props: Props) {
                                 {
                                     name: "Show Grid",
                                     isToggleable: true,
-                                    toggled: props.showGrid,
+                                    toggled: showGrid,
                                     onClick: (ref) => {
-                                        props.setShowGrid(!props.showGrid)
+                                        setShowGrid(!showGrid)
+
+                                        props.showGrid.current = !showGrid
+                                        props.eventBus.current.dispatchEvent(
+                                            new ToggleGridEvent(
+                                                LocalEvent.TOGGLE_GRID,
+                                                {detail: {state: !showGrid}}
+                                            )
+                                        )
+
                                         ref.current.closeMenu()
                                     }
                                 }
@@ -605,38 +535,6 @@ export function Header(props: Props) {
                             ]
                         ]}/>
                     </DropdownGroup>
-                    <div className={"indicator-container"}>
-                        {
-                            zLevelIndicator !== null && selectedPositionIndicator !== null &&
-                            <div className={"selected-chunk-indicator"}>
-                                <span>{Math.floor(selectedPositionIndicator.x / 24)}, {Math.floor(selectedPositionIndicator.y / 24)}</span>
-                            </div>
-                        }
-                        {
-                            zLevelIndicator !== null && selectedPositionIndicator !== null &&
-                            <div className={"selected-position-indicator"}>
-                                <span>{selectedPositionIndicator.x}, {selectedPositionIndicator.y}, {zLevelIndicator}</span>
-                            </div>
-                        }
-                        {
-                            zLevelIndicator !== null && mousePositionIndicator !== null &&
-                            <div className={"world-chunk-indicator"}>
-                                <span>{Math.floor(mousePositionIndicator.x / 24)}, {Math.floor(mousePositionIndicator.y / 24)}</span>
-                            </div>
-                        }
-                        {
-                            zLevelIndicator !== null && mousePositionIndicator !== null &&
-                            <div className={"world-position-indicator"}>
-                                <span>{mousePositionIndicator.x}, {mousePositionIndicator.y}, {zLevelIndicator}</span>
-                            </div>
-                        }
-                        {
-                            tabs.shouldDisplayCanvas() &&
-                            <button onClick={onReloadClicked}>
-                                <Icon name={IconName.ReloadMedium} pointerEvents={"none"}/>
-                            </button>
-                        }
-                    </div>
                 </div>
             </div>
         </header>

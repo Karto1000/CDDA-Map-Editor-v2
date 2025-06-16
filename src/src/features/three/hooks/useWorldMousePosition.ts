@@ -1,4 +1,4 @@
-import {MutableRefObject, RefObject, useEffect, useRef} from "react";
+import {RefObject, useEffect, useState} from "react";
 import {Vector3} from "three";
 import {Canvas, ThreeConfig} from "../types/three.js";
 import {useMousePosition} from "../../../shared/hooks/useMousePosition.js";
@@ -12,9 +12,9 @@ export type UseWorldMousePositionProps = {
     onWorldMousePositionChange?: (newPosition: Vector3) => void
 }
 
-export function useWorldMousePosition(props: UseWorldMousePositionProps): RefObject<Vector3> {
+export function useWorldMousePosition(props: UseWorldMousePositionProps): Vector3 {
     const mousePosition = useMousePosition(props.canvas.canvasRef)
-    const worldMousePosition = useRef<Vector3>(new Vector3(0, 0, 0))
+    const [worldMousePosition, setWorldMousePosition] = useState<Vector3>(new Vector3(0, 0, 0))
 
     useEffect(() => {
         function onMouseMove() {
@@ -37,12 +37,12 @@ export function useWorldMousePosition(props: UseWorldMousePositionProps): RefObj
             // Additionally, we need to remove 1 since the top left tile starts at +1
             newWorldMousePosition.y = -newWorldMousePosition.y - 1
 
-            if (!newWorldMousePosition.equals(worldMousePosition.current)) {
+            if (!newWorldMousePosition.equals(worldMousePosition)) {
                 if (props.onWorldMousePositionChange) props.onWorldMousePositionChange(newWorldMousePosition)
             }
 
-            worldMousePosition.current = newWorldMousePosition
-            if (props.onMouseMove) props.onMouseMove(worldMousePosition.current)
+            setWorldMousePosition(newWorldMousePosition)
+            if (props.onMouseMove) props.onMouseMove(newWorldMousePosition)
         }
 
         props.canvas.canvasRef.current.addEventListener("mousemove", onMouseMove)
@@ -50,7 +50,7 @@ export function useWorldMousePosition(props: UseWorldMousePositionProps): RefObj
         return () => {
             props.canvas.canvasRef.current.removeEventListener("mousemove", onMouseMove)
         }
-    }, [props.spritesheetConfig, props.threeConfig, props.canvas, mousePosition, props.onMouseMove, props.onWorldMousePositionChange]);
+    }, [props.spritesheetConfig, props.threeConfig, props.canvas, mousePosition, worldMousePosition, props.onMouseMove, props.onWorldMousePositionChange]);
 
     return worldMousePosition
 }

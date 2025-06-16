@@ -1,10 +1,9 @@
-import React, {createContext, useEffect, useMemo, useRef, useState} from 'react';
+import React, {createContext, useEffect, useRef, useState} from 'react';
 
 import "./app.scss"
 import {TauriCommand, TauriEvent, ToastType} from "./tauri/events/types.js";
 import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
-import {WelcomeScreen} from "./shared/components/mainScreens/welcomeScreen.js";
-import {NoTabScreen} from "./shared/components/mainScreens/noTabScreen.js";
+import {NoTabScreen} from "./shared/components/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
 import {EditorData} from "./tauri/types/editor.js";
@@ -13,16 +12,15 @@ import {MainCanvas} from "./shared/components/mainCanvas.js";
 import {useWindows} from "./shared/hooks/useWindows.js";
 import {tauriBridge} from "./tauri/events/tauriBridge.js";
 import {useThreeSetup} from "./features/three/hooks/useThreeSetup.js";
-import {MapViewer} from "./features/viewer/components/mapViewer.js";
 import {useTileset} from "./features/sprites/hooks/useTileset.js";
 import toast, {ToastBar, Toaster} from "react-hot-toast";
 import Icon, {IconName} from "./shared/components/icon.js";
 import {useTauriEvent} from "./shared/hooks/useTauriEvent.js";
 import {Panel, PanelGroup, PanelResizer} from "@window-splitter/react";
 import {clsx} from "clsx";
-import {MultiMenu} from "./shared/components/imguilike/multimenu.js";
-import {Sidemenu} from "./shared/components/imguilike/sidemenu.js";
-import {show} from "@tauri-apps/api/app";
+import {MapViewer} from "./features/viewer/mapViewer.js";
+import {SideMenu, SideMenuRef} from "./shared/components/imguilike/sideMenu.js";
+import {openWindow, WindowLabel} from "./windows/lib.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -46,22 +44,32 @@ function App() {
     )
 
     const [theme] = useTheme(eventBus);
-    const editorData = useEditorData(eventBus)
+    const editorData = useEditorData()
     const tabs = useTabs(eventBus)
-    const {spritesheetConfig, tilesheets} = useTileset(eventBus)
+    const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
     const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef} = useWindows()
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState<boolean>(true);
-    const [sidebarContent, setSidebarContent] = useState<SidebarContent>({
-        chosenProperties: <></>,
-        calculatedParameters: <></>
-    })
-    const [isGridShowing, setIsGridShowing] = useState<boolean>(true)
+    const sideMenuRef = useRef<SideMenuRef>(null)
+    const showGridRef = useRef<boolean>(true)
+
+    const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false)
+    const [isAppReady, setIsAppReady] = useState<boolean>(false)
 
     useEffect(() => {
         (async () => {
             await tauriBridge.invoke(TauriCommand.FRONTEND_READY, {})
         })()
     }, []);
+
+    useEffect(() => {
+        if (!editorData) return;
+
+        if (!editorData.config.cdda_path) {
+            openWindow(WindowLabel.Welcome, theme, {defaultWidth: 760, defaultHeight: 600})
+            return
+        }
+
+        setIsAppReady(true)
+    }, [editorData]);
 
     useTauriEvent(
         TauriEvent.EMIT_TOAST_MESSAGE,
@@ -79,47 +87,29 @@ function App() {
 
     function getMainBasedOnTab(): React.JSX.Element {
         if (tabs.openedTab !== null) {
-            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.Welcome)
-                return <WelcomeScreen eventBus={eventBus}/>
-
-            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor ||
-                tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
-                return <></>
+            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
+                return <MapViewer
+                    showGridRef={showGridRef}
+                    eventBus={eventBus}
+                    sideMenuRef={sideMenuRef}
+                    tilesheets={tilesheets}
+                    spritesheetConfig={spritesheetConfig}
+                    threeConfig={threeConfigRef}
+                    canvas={{
+                        canvasRef,
+                        canvasContainerRef
+                    }}
+                />
         }
 
-        return <NoTabScreen openMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>
+        return <NoTabScreen importMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>
     }
-
-    const sideMenuTabs = useMemo(() => {
-        return tabs.shouldDisplayCanvas() ? [
-            {
-                icon: <Icon name={IconName.InfoMedium}/>,
-                content: <MultiMenu tabs={
-                    [
-                        {
-                            name: "Chosen Properties",
-                            content: sidebarContent.chosenProperties
-                        },
-                        {
-                            name: "Parameters",
-                            content: sidebarContent.calculatedParameters
-                        }
-                    ]}
-                />
-            }
-        ] : [
-            {
-                icon: <Icon name={IconName.QuestionSmall} pointerEvents={"none"}/>,
-                content: <div>
-                    <h2>What is this?</h2>
-                    <p>This is the panel where you will be able to see different properties of tiles you select</p>
-                </div>
-            }
-        ]
-    }, [sidebarContent, tabs.openedTab])
 
     return (
         <div className={`app ${theme}-theme`}>
+            {!isAppReady && <div className={"loading-screen"}>
+                <div className={"loader"}/>
+            </div>}
             <Toaster
                 position={"bottom-right"}
                 toastOptions={{
@@ -149,50 +139,32 @@ function App() {
                 <ThemeContext.Provider value={{theme}}>
                     <TabContext.Provider value={tabs}>
                         <Header
+                            showGrid={showGridRef}
                             importMapWindowRef={importMapWindowRef}
                             settingsWindowRef={settingsWindowRef}
                             eventBus={eventBus}
                             newMapWindowRef={newMapWindowRef}
-                            showGrid={isGridShowing}
-                            setShowGrid={setIsGridShowing}
                             aboutWindowRef={aboutWindowRef}
                         />
 
                         <PanelGroup>
                             <Panel
                                 collapsible
-                                collapsed={isSidebarCollapsed}
-                                onCollapseChange={v => setIsSidebarCollapsed(v)}
+                                collapsed={!isSidebarOpen}
+                                onCollapseChange={collapsed => collapsed ? sideMenuRef.current?.collapse() : sideMenuRef.current?.expand()}
                                 collapsedSize={"32px"}
                                 min={"100px"}
                                 max={"1000px"}
                                 onResize={onResize}>
-                                <div className={clsx("side-panel", isSidebarCollapsed && "collapsed")}>
+                                <div className={clsx("side-panel", isSidebarOpen && "collapsed")}>
                                     {
-                                        <Sidemenu
-                                            setIsCollapsed={setIsSidebarCollapsed}
-                                            isCollapsed={isSidebarCollapsed}
-                                            tabs={sideMenuTabs}
-                                        />
+                                        <SideMenu ref={sideMenuRef} onStateChange={state => setIsSidebarOpen(state)}/>
                                     }
                                 </div>
                             </Panel>
-                            <PanelResizer className={clsx("resize-handle")} disabled={isSidebarCollapsed} size={"5px"}/>
+                            <PanelResizer className={clsx("resize-handle")} disabled={!isSidebarOpen}
+                                          size={"5px"}/>
                             <Panel>
-                                <MapViewer
-                                    threeConfig={threeConfigRef}
-                                    eventBus={eventBus}
-                                    spritesheetConfig={spritesheetConfig}
-                                    isOpen={tabs.getCurrentTab()?.tab_type === TabTypeKind.LiveViewer}
-                                    tilesheets={tilesheets}
-                                    setSidebarContent={setSidebarContent}
-                                    sidebarContent={sidebarContent}
-                                    showGrid={isGridShowing}
-                                    canvas={{
-                                        canvasRef: canvasRef,
-                                        canvasContainerRef: canvasContainerRef
-                                    }}
-                                />
                                 <MainCanvas
                                     canvasRef={canvasRef}
                                     canvasContainerRef={canvasContainerRef}

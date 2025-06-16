@@ -1,6 +1,6 @@
 import {listen, UnlistenFn} from '@tauri-apps/api/event';
 import {invoke} from "@tauri-apps/api/core";
-import {BackendResponse, BackendResponseType, TauriCommandMap, TauriEventMap} from './types.ts';
+import {BackendResponse, BackendResponseType, TauriCommand, TauriCommandMap, TauriEventMap} from './types.ts';
 
 class TauriBridge {
     private listeners: Map<string, UnlistenFn[]> = new Map();
@@ -19,17 +19,18 @@ class TauriBridge {
         return unlisten;
     }
 
-    async invoke<R, E, K extends keyof TauriCommandMap>(
-        command: K,
-        args: TauriCommandMap[K]
+    async invoke<R, E>(
+        command: TauriCommand,
+        args: TauriCommandMap[typeof command]
     ): Promise<BackendResponse<R, E>> {
         try {
-            console.log("Invoking command: ", command)
+            console.log("%c[TAURI] [INVOKE] Invoking command: " + command, 'color: #FFD580')
             return {
                 type: BackendResponseType.Success,
                 data: await invoke(command, args)
             };
         } catch (error) {
+            console.error("%c[TAURI] [INVOKE] Error invoking command: " + command, 'color: #FFD580')
             return {
                 type: BackendResponseType.Error,
                 error

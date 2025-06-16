@@ -26,7 +26,8 @@ export default defineConfig(async () => ({
                 new_map: resolve( __dirname , "src/windows/new-map/window.html"),
                 import_map: resolve( __dirname , "src/windows/import-map/window.html"),
                 settings: resolve( __dirname , "src/windows/settings/window.html"),
-                about: resolve( __dirname , "src/windows/about/window.html")
+                about: resolve( __dirname , "src/windows/about/window.html"),
+                welcome: resolve( __dirname , "src/windows/welcome/window.html"),
             }
         },
         publicDir: resolve(__dirname, "public"),

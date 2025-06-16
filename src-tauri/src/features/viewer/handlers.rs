@@ -1,4 +1,4 @@
-use super::data::PlaceSpritesEvent;
+use super::data::Sprites;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::replace_region_setting;
 use crate::data::TileLayer;
@@ -27,12 +27,12 @@ use crate::features::tileset::Tilesheet;
 use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
 use crate::impl_serialize_for_error;
 use crate::util;
-use crate::util::get_json_data;
 use crate::util::CDDADataError;
 use crate::util::GetCurrentProjectError;
 use crate::util::IVec3JsonKey;
 use crate::util::Save;
 use crate::util::UVec2JsonKey;
+use crate::util::{get_current_project, get_json_data, get_json_data_mut};
 use crate::util::{get_current_project_mut, get_size, Load};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
@@ -117,10 +117,19 @@ pub async fn get_calculated_parameters(
     Ok(calculated_parameters)
 }
 
+#[derive(Debug, Error)]
+pub enum GetSpritesError {
+    #[error(transparent)]
+    CDDADataError(#[from] CDDADataError),
+
+    #[error(transparent)]
+    GetCurrentProjectError(#[from] GetCurrentProjectError),
+}
+
+impl_serialize_for_error!(GetSpritesError);
+
 #[tauri::command]
 pub async fn get_sprites(
-    name: String,
-    app: AppHandle,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
     editor_data: State<'_, Mutex<EditorData>>,
@@ -129,23 +138,12 @@ pub async fn get_sprites(
         '_,
         Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>,
     >,
-) -> Result<(), ()> {
+) -> Result<Sprites, GetSpritesError> {
     let mut json_data_lock = json_data.lock().await;
-
-    let mut json_data = match json_data_lock.deref_mut() {
-        None => return Err(()),
-        Some(d) => d,
-    };
+    let json_data = get_json_data_mut(&mut json_data_lock)?;
 
     let mut editor_data_lock = editor_data.lock().await;
-
-    let project = match editor_data_lock.loaded_projects.get_mut(&name) {
-        None => {
-            warn!("Could not find project with name {}", name);
-            return Err(());
-        },
-        Some(d) => d,
-    };
+    let project = get_current_project_mut(&mut editor_data_lock)?;
 
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
@@ -172,7 +170,7 @@ pub async fn get_sprites(
     for (_, map_collection) in project.maps.iter_mut() {
         // we need to calculate the parameters for the predecessor here because we
         // cannot borrow json data as mutable inside the get_mapped_cdda_ids function
-        map_collection.calculate_predecessor_parameters(&mut json_data);
+        map_collection.calculate_predecessor_parameters(json_data);
     }
 
     let region_settings = json_data
@@ -180,156 +178,158 @@ pub async fn get_sprites(
         .get(&CDDAIdentifier("default".into()))
         .expect("Region settings to exist");
 
-    let mut saved_cdda_ids = HashMap::new();
+    let saved_cdda_ids = project
+        .maps
+        .par_iter()
+        .flat_map(|(z, map_collection)| {
+            let local_mapped_cdda_ids =
+                map_collection.get_mapped_cdda_ids(json_data, *z).unwrap();
 
-    for (z, map_collection) in project.maps.iter() {
-        let local_mapped_cdda_ids =
-            map_collection.get_mapped_cdda_ids(json_data, *z).unwrap();
+            let mut ids = HashMap::new();
+            ids.insert(*z, local_mapped_cdda_ids);
+            ids
+        })
+        .collect::<HashMap<ZLevel, MappedCDDAIdContainer>>();
 
-        let tile_map: Vec<
-            HashMap<TileLayer, (Option<DisplaySprite>, Option<DisplaySprite>)>,
-        > = local_mapped_cdda_ids
-            .ids
-            .par_iter()
-            .map(|(p, identifier_group)| {
-                let tile_3d_coords = IVec3::new(p.x, p.y, *z);
+    let tile_map: Vec<HashMap<TileLayer, (Option<DisplaySprite>, Option<DisplaySprite>)>> = saved_cdda_ids.par_iter()
+        .flat_map(
+            |(z, mapped_cdda_ids)| {
+                mapped_cdda_ids
+                    .ids
+                    .par_iter()
+                    .map(|(p, identifier_group)| {
+                        let tile_3d_coords = IVec3::new(p.x, p.y, *z);
 
-                if identifier_group.terrain.is_none()
-                    && identifier_group.furniture.is_none()
-                {
-                    warn!(
+                        if identifier_group.terrain.is_none()
+                            && identifier_group.furniture.is_none()
+                        {
+                            warn!(
                         "No sprites found for identifier_group {:?} at \
                          coordinates {}",
                         identifier_group, tile_3d_coords
                     );
 
-                    return HashMap::new();
-                }
-
-                let mut layer_map = HashMap::new();
-
-                // Layer is used here so furniture is
-                // above terrain
-                for (layer, o_id) in [
-                    (TileLayer::Terrain, &identifier_group.terrain),
-                    (TileLayer::Furniture, &identifier_group.furniture),
-                    (TileLayer::Monster, &identifier_group.monster),
-                    (TileLayer::Field, &identifier_group.field),
-                ] {
-                    let id = match o_id {
-                        None => continue,
-                        Some(mapped_id) => MappedCDDAId {
-                            tilesheet_id: TilesheetCDDAId {
-                                id: replace_region_setting(
-                                    &mapped_id.tilesheet_id.id,
-                                    region_settings,
-                                    &json_data.terrain,
-                                    &json_data.furniture,
-                                ),
-                                prefix: mapped_id.tilesheet_id.prefix.clone(),
-                                postfix: mapped_id.tilesheet_id.postfix.clone(),
-                            },
-                            rotation: mapped_id.rotation.clone(),
-                            is_broken: mapped_id.is_broken,
-                            is_open: mapped_id.is_open,
-                        },
-                    };
-
-                    match tilesheet_lock.deref() {
-                        None => {
-                            let sprite = fallback_tilesheet.get_fallback(&id, &json_data);
-
-                            let position_uvec2 = UVec2::new(
-                                tile_3d_coords.x as u32,
-                                tile_3d_coords.y as u32,
-                            );
-
-                            let fallback_sprite = DisplaySprite::Fallback(FallbackSprite {
-                                position: UVec2JsonKey(position_uvec2),
-                                index: sprite,
-                                z: tile_3d_coords.z,
-                            });
-
-                            layer_map.insert(layer.clone(), (Some(fallback_sprite), None));
+                            return HashMap::new();
                         }
-                        Some(tilesheet) => {
-                            let sprite = tilesheet.get_sprite(&id, &json_data);
 
-                            let adjacent_idents = local_mapped_cdda_ids
-                                .get_adjacent_identifiers(tile_3d_coords, &layer);
+                        let mut layer_map = HashMap::new();
 
-                            let (fg, bg) = match sprite {
+                        // Layer is used here so furniture is
+                        // above terrain
+                        for (layer, o_id) in [
+                            (TileLayer::Terrain, &identifier_group.terrain),
+                            (TileLayer::Furniture, &identifier_group.furniture),
+                            (TileLayer::Monster, &identifier_group.monster),
+                            (TileLayer::Field, &identifier_group.field),
+                        ] {
+                            let id = match o_id {
+                                None => continue,
+                                Some(mapped_id) => MappedCDDAId {
+                                    tilesheet_id: TilesheetCDDAId {
+                                        id: replace_region_setting(
+                                            &mapped_id.tilesheet_id.id,
+                                            region_settings,
+                                            &json_data.terrain,
+                                            &json_data.furniture,
+                                        ),
+                                        prefix: mapped_id.tilesheet_id.prefix.clone(),
+                                        postfix: mapped_id.tilesheet_id.postfix.clone(),
+                                    },
+                                    rotation: mapped_id.rotation.clone(),
+                                    is_broken: mapped_id.is_broken,
+                                    is_open: mapped_id.is_open,
+                                },
+                            };
+
+                            match tilesheet_lock.deref() {
                                 None => {
-                                    let fallback =
-                                        tilesheet.get_fallback(&id, &json_data);
+                                    let sprite = fallback_tilesheet.get_fallback(&id, &json_data);
+
                                     let position_uvec2 = UVec2::new(
                                         tile_3d_coords.x as u32,
                                         tile_3d_coords.y as u32,
                                     );
 
-                                    (
-                                        Some(DisplaySprite::Fallback(FallbackSprite {
-                                            position: UVec2JsonKey(position_uvec2),
-                                            index: fallback,
-                                            z: tile_3d_coords.z,
-                                        })),
-                                        None,
-                                    )
+                                    let fallback_sprite = DisplaySprite::Fallback(FallbackSprite {
+                                        position: UVec2JsonKey(position_uvec2),
+                                        index: sprite,
+                                        z: tile_3d_coords.z,
+                                    });
+
+                                    layer_map.insert(layer.clone(), (Some(fallback_sprite), None));
                                 }
-                                Some(sprite) => {
-                                    DisplaySprite::get_display_sprite_from_sprite(
-                                        &sprite,
-                                        &id,
-                                        tile_3d_coords.clone(),
-                                        layer.clone(),
-                                        &adjacent_idents,
-                                        json_data,
-                                    )
+                                Some(tilesheet) => {
+                                    let sprite = tilesheet.get_sprite(&id, &json_data);
+
+                                    let adjacent_idents = mapped_cdda_ids
+                                        .get_adjacent_identifiers(tile_3d_coords, &layer);
+
+                                    let (fg, bg) = match sprite {
+                                        None => {
+                                            let fallback =
+                                                tilesheet.get_fallback(&id, &json_data);
+                                            let position_uvec2 = UVec2::new(
+                                                tile_3d_coords.x as u32,
+                                                tile_3d_coords.y as u32,
+                                            );
+
+                                            (
+                                                Some(DisplaySprite::Fallback(FallbackSprite {
+                                                    position: UVec2JsonKey(position_uvec2),
+                                                    index: fallback,
+                                                    z: tile_3d_coords.z,
+                                                })),
+                                                None,
+                                            )
+                                        }
+                                        Some(sprite) => {
+                                            DisplaySprite::get_display_sprite_from_sprite(
+                                                &sprite,
+                                                &id,
+                                                tile_3d_coords.clone(),
+                                                layer.clone(),
+                                                &adjacent_idents,
+                                                json_data,
+                                            )
+                                        }
+                                    };
+
+                                    layer_map.insert(layer.clone(), (fg, bg));
                                 }
-                            };
-
-                            layer_map.insert(layer.clone(), (fg, bg));
+                            }
                         }
-                    }
-                }
 
-                layer_map
-            })
-            .collect();
-
-        tile_map.into_iter().for_each(|mut layer_map| {
-            for tile_layer in TileLayer::iter() {
-                match layer_map.remove(&tile_layer) {
-                    None => {},
-                    Some((fg, bg)) => {
-                        if let Some(fg) = fg {
-                            insert_sprite_type!(fg);
-                        }
-                        if let Some(bg) = bg {
-                            insert_sprite_type!(bg);
-                        }
-                    },
-                }
+                        layer_map
+                    })
+                    .collect::<Vec<HashMap<TileLayer, (Option<DisplaySprite>, Option<DisplaySprite>)>>>()
             }
-        });
+        )
+        .collect();
 
-        saved_cdda_ids.insert(*z, local_mapped_cdda_ids);
-    }
+    tile_map.into_iter().for_each(|mut layer_map| {
+        for tile_layer in TileLayer::iter() {
+            match layer_map.remove(&tile_layer) {
+                None => {},
+                Some((fg, bg)) => {
+                    if let Some(fg) = fg {
+                        insert_sprite_type!(fg);
+                    }
+                    if let Some(bg) = bg {
+                        insert_sprite_type!(bg);
+                    }
+                },
+            }
+        }
+    });
 
     let mut mapped_cdda_ids_lock = mapped_cdda_ids.lock().await;
     mapped_cdda_ids_lock.replace(saved_cdda_ids);
 
-    app.emit(
-        events::PLACE_SPRITES,
-        PlaceSpritesEvent {
-            static_sprites,
-            animated_sprites,
-            fallback_sprites,
-        },
-    )
-    .unwrap();
-
-    Ok(())
+    Ok(Sprites {
+        static_sprites,
+        animated_sprites,
+        fallback_sprites,
+    })
 }
 
 #[derive(Debug, Error)]
