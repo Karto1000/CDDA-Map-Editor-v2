@@ -321,6 +321,8 @@ export function MapViewer(props: MapViewerProps) {
 
         return () => {
             cancelAnimationFrame(handler)
+
+            props.threeConfig.current.scene.remove(grid.current)
             grid.current.dispose()
 
             props.sideMenuRef.current.removeTab(MapViewerTab.MapInfo)
