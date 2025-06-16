@@ -1,40 +1,70 @@
-import {useEffect} from "react";
+import {RefObject, useEffect} from "react";
+import {EditorData, KeybindAction} from "../../tauri/types/editor.js";
 
 export type UseKeybindingsRet = {}
 
-export type KeyListener = {
-    key: string
-    withAlt?: boolean
-    withShift?: boolean
-    withCtrl?: boolean
-    action: () => void
-}
-
-
-export function useKeybindings(ctx: HTMLElement | Window, keybindings: KeyListener[], deps: any[] = []): UseKeybindingsRet {
+export function useKeybindings(
+    ctx: HTMLElement | Window,
+    eventBus: RefObject<EventTarget>,
+    editorData: EditorData,
+    deps: any[] = []
+): UseKeybindingsRet {
     useEffect(() => {
-        const localListeners = []
+        if (!ctx) return;
 
-        keybindings.forEach(k => {
-            const fn = (e: KeyboardEvent) => {
-                if (e.key !== k.key) return;
+        function onKeyDown(e: KeyboardEvent) {
+            // Sort keybinds by specificity (number of modifiers)
+            const sortedKeybinds = [...editorData.config.keybinds].sort((a, b) => {
+                const aModifiers = Number(a.withAlt) + Number(a.withCtrl) + Number(a.withShift);
+                const bModifiers = Number(b.withAlt) + Number(b.withCtrl) + Number(b.withShift);
+                return bModifiers - aModifiers;
+            });
 
-                if (k.withAlt && !e.altKey) return;
-                if (k.withShift && !e.shiftKey) return;
-                if (k.withCtrl && !e.ctrlKey) return;
+            for (const keybinding of sortedKeybinds) {
+                if (e.key !== keybinding.key) continue;
 
-                k.action()
+                if (keybinding.withAlt && !e.altKey) continue;
+                if (keybinding.withShift && !e.shiftKey) continue;
+                if (keybinding.withCtrl && !e.ctrlKey) continue;
+
+                if (!keybinding.withAlt && e.altKey) continue;
+                if (!keybinding.withShift && e.shiftKey) continue;
+                if (!keybinding.withCtrl && e.ctrlKey) continue;
+
+                if (keybinding.isGlobal) e.preventDefault();
+
+                eventBus.current.dispatchEvent(new CustomEvent(keybinding.action))
+                return
             }
+        }
 
-            localListeners.push(fn)
-
-            ctx.addEventListener("keydown", fn)
-        })
+        ctx.addEventListener("keydown", onKeyDown)
 
         return () => {
-            localListeners.forEach(l => ctx.removeEventListener("keydown", l))
+            ctx.removeEventListener("keydown", onKeyDown)
         }
     }, [...deps, ctx]);
 
     return {}
+}
+
+export function useKeybindActionEvent(
+    event: KeybindAction,
+    fun: () => void,
+    eventBus: RefObject<EventTarget>,
+    deps: any[] = []
+) {
+    useEffect(() => {
+        eventBus.current.addEventListener(
+            event,
+            fun
+        )
+
+        return () => {
+            eventBus.current.removeEventListener(
+                event,
+                fun
+            )
+        }
+    }, deps);
 }

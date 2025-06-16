@@ -45,6 +45,7 @@
       display: flex;
       gap: 6px;
       height: max-content;
+      margin-left: 4px;
 
       .tab {
         padding: 4px;
@@ -70,5 +71,6 @@
     flex-direction: column;
     overflow-y: hidden;
     height: 100%;
+    padding: 4px;
   }
 }

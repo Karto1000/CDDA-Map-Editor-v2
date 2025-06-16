@@ -19,6 +19,7 @@ export function DropdownGroup(props: Props) {
             {
                 props.children.map((child, i) => {
                     return <Dropdown
+                        key={`dropdown-${i}`}
                         name={child.props.name}
                         groups={child.props.groups}
                         ref={refs[i]}

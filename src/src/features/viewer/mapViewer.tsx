@@ -25,6 +25,8 @@ import "./mapViewer.scss"
 import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../three/hooks/useMouseCells.js";
 import {clsx} from "clsx";
+import {useKeybindActionEvent} from "../../shared/hooks/useKeybindings.js";
+import {KeybindAction} from "../../tauri/types/editor.js";
 
 export type MapViewerProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -73,6 +75,13 @@ export function MapViewer(props: MapViewerProps) {
     )
     const [selectedMousePosition, setSelectedMousePosition] = useState<Vector3 | null>(null)
     const [isLoading, setIsLoading] = useState<boolean>(false)
+
+    useKeybindActionEvent(
+        KeybindAction.ReloadMap,
+        onReload,
+        props.eventBus,
+        []
+    )
 
     async function clearAndLoadSprites() {
         const tileInfo = getTileInfo(props.spritesheetConfig.current)

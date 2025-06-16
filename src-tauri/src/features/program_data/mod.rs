@@ -1,5 +1,6 @@
 pub mod handlers;
 pub mod io;
+mod keybinds;
 
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::palettes::Palettes;
@@ -12,6 +13,7 @@ use crate::features::map::{
     CalculateParametersError, GetMappedCDDAIdsError, MapData,
     MappedCDDAIdsForTile, DEFAULT_MAP_DATA_SIZE,
 };
+use crate::features::program_data::keybinds::{Keybind, KeybindAction};
 use crate::impl_serialize_for_error;
 use crate::util::{IVec3JsonKey, Load, Save, SaveError};
 use cdda_lib::types::CDDAIdentifier;
@@ -356,6 +358,7 @@ pub struct EditorConfig {
     pub config_path: PathBuf,
     pub selected_tileset: Option<String>,
     pub theme: Theme,
+    pub keybinds: HashSet<Keybind>,
 }
 
 #[derive(Debug, Serialize, Error)]
@@ -394,6 +397,19 @@ impl Default for EditorConfig {
             selected_tileset: None,
             json_data_path: DEFAULT_CDDA_DATA_JSON_PATH.into(),
             theme: Theme::Dark,
+            keybinds: HashSet::from_iter(vec![
+                Keybind::with_ctrl("n").action(KeybindAction::NewProject),
+                Keybind::with_ctrl("o").action(KeybindAction::OpenProject),
+                Keybind::with_ctrl("s").action(KeybindAction::SaveProject),
+                Keybind::with_ctrl("w").action(KeybindAction::CloseTab),
+                Keybind::with_ctrl_alt("w").action(KeybindAction::CloseAllTabs),
+                Keybind::with_ctrl("i").action(KeybindAction::ImportMap),
+                Keybind::with_ctrl("e").action(KeybindAction::ExportMap),
+                Keybind::with_ctrl_alt("s").action(KeybindAction::OpenSettings),
+                Keybind::single("F5")
+                    .action(KeybindAction::ReloadMap)
+                    .global(),
+            ]),
         }
     }
 }

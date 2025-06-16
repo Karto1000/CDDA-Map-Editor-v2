@@ -21,6 +21,7 @@ import {clsx} from "clsx";
 import {MapViewer} from "./features/viewer/mapViewer.js";
 import {SideMenu, SideMenuRef} from "./shared/components/imguilike/sideMenu.js";
 import {openWindow, WindowLabel} from "./windows/lib.js";
+import {useKeybindings} from "./shared/hooks/useKeybindings.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -53,6 +54,13 @@ function App() {
 
     const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false)
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
+
+    useKeybindings(
+        window,
+        eventBus,
+        editorData,
+        [tabs]
+    )
 
     useEffect(() => {
         (async () => {

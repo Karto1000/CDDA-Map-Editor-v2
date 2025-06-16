@@ -1,5 +1,15 @@
 @import "../../theme.scss";
 
+@include themed($themes) {
+  .settings-body {
+    .keybindings-container {
+      .keybinding {
+        background-color: theme-var("dark-blue");
+      }
+    }
+  }
+}
+
 .settings-body {
   display: flex;
   flex-direction: column;
@@ -9,5 +19,19 @@
     display: flex;
     flex-direction: column;
     gap: 8px;
+  }
+
+  .keybindings-container {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    .keybinding {
+      height: 32px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 8px;
+    }
   }
 }
