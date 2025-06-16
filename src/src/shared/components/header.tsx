@@ -65,14 +65,14 @@ export function Header(props: Props) {
         KeybindAction.CloseTab,
         onClose,
         props.eventBus,
-        []
+        [tabs]
     )
 
     useKeybindActionEvent(
         KeybindAction.CloseAllTabs,
         onCloseAll,
         props.eventBus,
-        []
+        [tabs]
     )
 
     useKeybindActionEvent(

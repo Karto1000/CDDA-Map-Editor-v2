@@ -9,7 +9,6 @@ export function useEditorData(): EditorData {
     useTauriEvent(
         TauriEvent.EDITOR_DATA_CHANGED,
         (editorData) => {
-            console.log(editorData)
             setEditorData(editorData)
         },
         []

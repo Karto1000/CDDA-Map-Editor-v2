@@ -20,7 +20,6 @@ export enum KeybindAction {
     NewProject = "NewProject",
     OpenProject = "OpenProject",
     SaveProject = "SaveProject",
-    OpenTab = "OpenTab",
     CloseTab = "CloseTab",
     CloseAllTabs = "CloseAllTabs",
     ImportMap = "ImportMap",
@@ -42,6 +41,7 @@ export type Keybind = {
     withCtrl?: boolean,
     withShift?: boolean,
     withAlt?: boolean,
+    isGlobal?: boolean,
 }
 
 export function getKeybindingText(kb: Keybind): string {

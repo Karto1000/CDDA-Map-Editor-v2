@@ -82,7 +82,7 @@ export function Dropdown(
                     style={{left: sub ? menuRef.current?.clientWidth : 0}} key={`menu${sub ? "-sub" : ""}`}>
             {
                 groups.map((items, gi) => (
-                    <>
+                    <React.Fragment key={`group-${gi}`}>
                         <div className={`dropdown-items`}>
                             {
                                 items.map((item, ii) => (
@@ -126,8 +126,8 @@ export function Dropdown(
                             }
                         </div>
                         {gi < groups.length - 1 &&
-                            <div className={"dropdown-section-divider"} key={`div-${gi}`}/>}
-                    </>
+                            <div className={"dropdown-section-divider"} />}
+                    </React.Fragment>
                 ))
             }
         </div>

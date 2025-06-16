@@ -27,6 +27,7 @@ pub struct Keybind {
     pub with_alt: bool,
     pub with_shift: bool,
     pub with_ctrl: bool,
+    pub is_global: bool,
     pub action: Option<KeybindAction>,
 }
 
@@ -37,6 +38,7 @@ impl Keybind {
             with_alt: false,
             with_shift: false,
             with_ctrl: false,
+            is_global: false,
             action: None,
         }
     }
@@ -47,6 +49,7 @@ impl Keybind {
             with_alt: true,
             with_shift: false,
             with_ctrl: false,
+            is_global: false,
             action: None,
         }
     }
@@ -57,6 +60,7 @@ impl Keybind {
             with_alt: false,
             with_shift: false,
             with_ctrl: true,
+            is_global: false,
             action: None,
         }
     }
@@ -67,6 +71,7 @@ impl Keybind {
             with_alt: false,
             with_shift: true,
             with_ctrl: false,
+            is_global: false,
             action: None,
         }
     }
@@ -77,12 +82,18 @@ impl Keybind {
             with_alt: true,
             with_shift: false,
             with_ctrl: true,
+            is_global: false,
             action: None,
         }
     }
 
     pub fn action(mut self, action: KeybindAction) -> Self {
         self.action = Some(action);
+        self
+    }
+
+    pub fn global(mut self) -> Self {
+        self.is_global = true;
         self
     }
 }

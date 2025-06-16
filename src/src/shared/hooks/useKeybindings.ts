@@ -20,13 +20,18 @@ export function useKeybindings(
                 return bModifiers - aModifiers;
             });
 
-
             for (const keybinding of sortedKeybinds) {
                 if (e.key !== keybinding.key) continue;
 
                 if (keybinding.withAlt && !e.altKey) continue;
                 if (keybinding.withShift && !e.shiftKey) continue;
                 if (keybinding.withCtrl && !e.ctrlKey) continue;
+
+                if (!keybinding.withAlt && e.altKey) continue;
+                if (!keybinding.withShift && e.shiftKey) continue;
+                if (!keybinding.withCtrl && e.ctrlKey) continue;
+
+                if (keybinding.isGlobal) e.preventDefault();
 
                 eventBus.current.dispatchEvent(new CustomEvent(keybinding.action))
                 return

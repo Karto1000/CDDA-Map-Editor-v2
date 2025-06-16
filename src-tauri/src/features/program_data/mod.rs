@@ -406,6 +406,9 @@ impl Default for EditorConfig {
                 Keybind::with_ctrl("i").action(KeybindAction::ImportMap),
                 Keybind::with_ctrl("e").action(KeybindAction::ExportMap),
                 Keybind::with_ctrl_alt("s").action(KeybindAction::OpenSettings),
+                Keybind::single("F5")
+                    .action(KeybindAction::ReloadMap)
+                    .global(),
             ]),
         }
     }
