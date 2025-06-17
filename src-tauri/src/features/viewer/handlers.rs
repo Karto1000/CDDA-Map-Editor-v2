@@ -447,7 +447,7 @@ pub async fn new_single_mapgen_viewer(
             mapgen_file_paths: vec![path],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
-            save_path: project_save_path,
+            project_save_path: project_save_path,
         },
         editor_data,
         json_data,
@@ -538,7 +538,7 @@ pub async fn new_special_mapgen_viewer(
     create_viewer(
         app,
         OpenViewerData::Special {
-            save_path: project_save_path,
+            project_save_path: project_save_path,
             mapgen_file_paths: vec![path.clone()],
             om_file_paths: vec![path.clone()],
             project_name,
@@ -595,7 +595,7 @@ pub async fn new_nested_mapgen_viewer(
             mapgen_file_paths: vec![path.clone()],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
-            save_path: project_save_path,
+            project_save_path: project_save_path,
         },
         editor_data,
         json_data,
@@ -613,13 +613,13 @@ pub async fn new_nested_mapgen_viewer(
 )]
 pub enum OpenViewerData {
     Terrain {
-        save_path: PathBuf,
+        project_save_path: PathBuf,
         mapgen_file_paths: Vec<PathBuf>,
         project_name: String,
         om_id: CDDAIdentifier,
     },
     Special {
-        save_path: PathBuf,
+        project_save_path: PathBuf,
         mapgen_file_paths: Vec<PathBuf>,
         om_file_paths: Vec<PathBuf>,
         project_name: String,
@@ -664,7 +664,7 @@ pub async fn create_viewer(
             project_name,
             mapgen_file_paths,
             om_id,
-            save_path,
+            project_save_path: save_path,
         } => {
             if editor_data_lock
                 .loaded_projects
@@ -723,7 +723,7 @@ pub async fn create_viewer(
             mapgen_file_paths,
             om_file_paths,
             om_id,
-            save_path,
+            project_save_path: save_path,
         } => {
             if editor_data_lock
                 .loaded_projects

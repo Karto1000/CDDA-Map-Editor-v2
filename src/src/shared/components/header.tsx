@@ -101,7 +101,11 @@ export function Header(props: Props) {
     }
 
     function onNewClicked() {
-        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
+        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme, {defaultWidth: 800, defaultHeight: 500})
+    }
+
+    function onImport() {
+        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme, {defaultWidth: 800, defaultHeight: 500})
     }
 
     function onOpen() {
@@ -122,10 +126,6 @@ export function Header(props: Props) {
         for (const tab of Object.keys(tabs.tabs)) {
             await onTabClose(tab)
         }
-    }
-
-    function onImport() {
-        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
     }
 
     function onExport() {

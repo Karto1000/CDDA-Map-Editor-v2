@@ -1,6 +1,6 @@
 import React, {useState} from "react";
 import GenericWindow from "../generic-window.js";
-import {open} from "@tauri-apps/plugin-dialog";
+import {open, save} from "@tauri-apps/plugin-dialog";
 import "./main.scss"
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {OpenViewerData, OpenViewerDataType} from "../../tauri/types/viewer.js";
@@ -19,10 +19,22 @@ function OpenMapViewer() {
     async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault()
 
+        const projectSavePath = await save({
+            filters: [
+                {
+                    name: "Json",
+                    extensions: ["json"]
+                }
+            ]
+        })
+
+        if (!projectSavePath) return;
+
         let data: OpenViewerData;
         if (creatingType === OpenViewerDataType.Terrain) {
             data = {
                 type: OpenViewerDataType.Terrain,
+                projectSavePath: projectSavePath,
                 mapgenFilePaths: mapgenFilePaths,
                 projectName: projectName,
                 omId: omSpecialOrTerrainId,
@@ -30,6 +42,7 @@ function OpenMapViewer() {
         } else if (creatingType === OpenViewerDataType.Special) {
             data = {
                 type: OpenViewerDataType.Special,
+                projectSavePath: projectSavePath,
                 mapgenFilePaths: mapgenFilePaths,
                 omFilePaths: omFilePaths,
                 projectName: projectName,
