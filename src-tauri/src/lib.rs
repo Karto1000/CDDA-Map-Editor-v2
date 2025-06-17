@@ -7,10 +7,11 @@ use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::features::editor::handler::new_map_editor;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project, get_editor_data,
-    open_project, open_recent_project, save_editor_data, tileset_picked,
+    open_project, open_recent_project, save_program_data, tileset_picked,
 };
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, MappedCDDAIdContainer, ProgramData, ProjectType,
+    get_map_data_collection_from_live_viewer_data, get_map_data_collection_from_map_editor, MappedCDDAIdContainer, ProgramData,
+    ProjectType,
     ZLevel,
 };
 use crate::features::tileset::handlers::{
@@ -127,7 +128,50 @@ async fn frontend_ready(
                 match &project.ty {
                     ProjectType::MapEditor(me) => {
                         info!("Opening Map Editor",);
-                        todo!();
+
+                        let mut map_data_collection =
+                            match get_map_data_collection_from_map_editor(me)
+                                .await
+                            {
+                                Ok(v) => v,
+                                Err(e) => {
+                                    app.emit(
+                                        events::TOAST_MESSAGE,
+                                        ToastMessage::error(e.to_string()),
+                                    )
+                                    .unwrap();
+                                    warn!(
+                                        "Failed to load map data for project {}: {}",
+                                        &project.name, e
+                                    );
+                                    continue;
+                                },
+                            };
+
+                        map_data_collection.iter_mut().for_each(
+                            |(_, m)| match m
+                                .calculate_parameters(&json_data.palettes)
+                            {
+                                Ok(_) => {},
+                                Err(e) => app
+                                    .emit(
+                                        events::TOAST_MESSAGE,
+                                        ToastMessage::error(e.to_string()),
+                                    )
+                                    .unwrap(),
+                            },
+                        );
+
+                        project.maps = map_data_collection;
+
+                        app.emit(
+                            events::TAB_CREATED,
+                            Tab {
+                                name: project.name.clone(),
+                                tab_type: TabType::LiveViewer,
+                            },
+                        )
+                        .unwrap()
                     },
                     ProjectType::LiveViewer(lvd) => {
                         info!("Opening Live viewer",);
@@ -244,7 +288,7 @@ pub fn run() -> () {
             get_editor_data,
             cdda_installation_directory_picked,
             tileset_picked,
-            save_editor_data,
+            save_program_data,
             frontend_ready,
             open_project,
             close_project,

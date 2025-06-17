@@ -13,8 +13,8 @@ use crate::data::vehicle_parts::CDDAVehiclePart;
 use crate::data::vehicles::CDDAVehicle;
 use crate::data::{CDDAJsonEntry, TileLayer};
 use crate::features::map::MapData;
-use crate::features::program_data::io::ProgramDataLoader;
-use crate::features::program_data::{MapDataCollection, ProgramData};
+use crate::features::program_data::io::{ProgramDataLoader, ProjectLoader};
+use crate::features::program_data::{MapDataCollection, ProgramData, Project};
 use crate::util::Load;
 use anyhow::Error;
 use async_walkdir::WalkDir;
@@ -736,7 +736,7 @@ pub fn get_saved_editor_data() -> Result<ProgramData, Error> {
                 path: directory_path.clone(),
             };
 
-            let data = match editor_data_loader.load() {
+            let mut data = match editor_data_loader.load() {
                 Ok(d) => {
                     info!("config.json file successfully read and parsed");
                     d
@@ -760,6 +760,22 @@ pub fn get_saved_editor_data() -> Result<ProgramData, Error> {
                     default_editor_data
                 },
             };
+
+            for (project_name, saved_project) in data.openable_projects.iter() {
+                let mut project_loader = ProjectLoader {
+                    path: saved_project.path.clone(),
+                };
+
+                match project_loader.load() {
+                    Ok(p) => {
+                        data.loaded_projects.insert(project_name.clone(), p);
+                    },
+                    Err(e) => {
+                        error!("{}", e.to_string());
+                        continue;
+                    },
+                }
+            }
 
             data
         },

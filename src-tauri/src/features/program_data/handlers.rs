@@ -3,8 +3,8 @@ use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::program_data::io::ProgramDataSaver;
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, LiveViewerData, ProgramData, Project, ProjectName, ProjectType,
-    Tab, TabType,
+    get_map_data_collection_from_live_viewer_data, LiveViewerData, ProgramData, Project, ProjectName,
+    ProjectType, SavedProject, Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     load_tilesheet, LegacyTilesheet,
@@ -155,7 +155,7 @@ pub enum SaveEditorDataError {
 }
 
 #[tauri::command]
-pub async fn save_editor_data(
+pub async fn save_program_data(
     editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<(), SaveEditorDataError> {
     let lock = editor_data.lock().await;
@@ -226,14 +226,15 @@ pub async fn open_recent_project(
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
-    let recent_project = editor_data_lock
+    let saved_project = editor_data_lock
         .recent_projects
         .iter()
-        .find(|p| p.name == name)
+        .find(|(saved_name, _)| *saved_name == &name)
+        .map(|(_, saved_project)| saved_project.clone())
         .ok_or(OpenProjectError::NoRecentProject(name.clone()))?;
 
     let mut project: Project = serde_json::from_str(
-        fs::read_to_string(recent_project.path.join(format!("{}.json", name)))
+        fs::read_to_string(saved_project.path.join(format!("{}.json", name)))
             .map_err(|_| OpenProjectError::NoRecentProject(name.clone()))?
             .as_str(),
     )
@@ -274,7 +275,7 @@ pub async fn open_recent_project(
 
             editor_data_lock
                 .openable_projects
-                .insert(project.name.clone());
+                .insert(name, saved_project.clone());
 
             editor_data_lock
                 .loaded_projects

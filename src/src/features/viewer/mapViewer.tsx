@@ -326,6 +326,7 @@ export function MapViewer(props: MapViewerProps) {
             grid.current.dispose()
 
             props.sideMenuRef.current.removeTab(MapViewerTab.MapInfo)
+            props.tilesheets.current.clearAll()
 
             props.eventBus.current.removeEventListener(
                 LocalEvent.TILESET_LOADED,

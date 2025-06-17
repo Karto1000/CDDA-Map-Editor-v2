@@ -6,7 +6,7 @@ import {TabTypeKind, useTabs, UseTabsReturn} from './shared/hooks/useTabs.ts';
 import {NoTabScreen} from "./shared/components/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
-import {EditorData} from "./tauri/types/editor.js";
+import {ProgramData} from "./tauri/types/editor.js";
 import {useEditorData} from "./shared/hooks/useEditorData.js";
 import {MainCanvas} from "./shared/components/mainCanvas.js";
 import {useWindows} from "./shared/hooks/useWindows.js";
@@ -34,7 +34,7 @@ export type SidebarContent = {
 }
 
 export const TabContext = createContext<UseTabsReturn | null>(null)
-export const EditorDataContext = createContext<EditorData | null>(null)
+export const EditorDataContext = createContext<ProgramData | null>(null)
 
 function App() {
     const eventBus = useRef<EventTarget>(new EventTarget())

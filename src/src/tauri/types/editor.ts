@@ -48,7 +48,7 @@ export function getKeybindingText(kb: Keybind): string {
     return `${kb.withCtrl ? "Ctrl+" : ""}${kb.withAlt ? "Alt+" : ""}${kb.withShift ? "Shift+" : ""}${kb.key}`
 }
 
-export type EditorConfig = {
+export type ProgramConfig = {
     cdda_path?: string
     selected_tileset?: string
     theme: string
@@ -56,10 +56,10 @@ export type EditorConfig = {
     keybinds: Keybind[]
 }
 
-export type EditorData = {
-    config: EditorConfig
-    openable_projects: string[],
+export type ProgramData = {
+    config: ProgramConfig
     available_tilesets: string[] | null,
-    recent_projects: { name: string, path: string }[],
+    openable_projects: { [name: string]: { path: string } },
+    recent_projects: { [name: string]: { path: string } },
     opened_project: number | null
 }

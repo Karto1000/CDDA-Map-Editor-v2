@@ -105,7 +105,10 @@ export function Header(props: Props) {
     }
 
     function onImport() {
-        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme, {defaultWidth: 800, defaultHeight: 500})
+        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme, {
+            defaultWidth: 800,
+            defaultHeight: 500
+        })
     }
 
     function onOpen() {
@@ -323,13 +326,13 @@ export function Header(props: Props) {
                                     },
                                     subGroups: [
                                         editorData ?
-                                            editorData.recent_projects.map(p => {
+                                            Object.keys(editorData.recent_projects).map(name => {
                                                 return {
-                                                    name: p.name,
+                                                    name: name,
                                                     onClick: async (ref) => {
                                                         ref.current.closeMenu()
-                                                        await onRecentProjectOpen(p.name)
-                                                        await onTabOpen(p.name)
+                                                        await onRecentProjectOpen(name)
+                                                        await onTabOpen(name)
                                                     }
                                                 }
                                             })

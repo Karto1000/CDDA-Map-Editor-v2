@@ -51,3 +51,24 @@ impl Save<Project> for ProjectSaver {
         Ok(())
     }
 }
+
+pub struct ProjectLoader {
+    pub path: PathBuf,
+}
+
+impl ProjectLoader {
+    pub fn load(&mut self) -> Result<Project, Error> {
+        let data = match fs::read_to_string(&self.path) {
+            Ok(d) => d,
+            Err(e) => {
+                return Err(anyhow::anyhow!(
+                    "Cannot find project at path {:?} skipping; {}",
+                    self.path,
+                    e
+                ));
+            },
+        };
+
+        Ok(serde_json::from_str(&data)?)
+    }
+}

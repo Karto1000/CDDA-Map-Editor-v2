@@ -3,7 +3,7 @@ import GenericWindow from "../generic-window.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./main.scss"
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {EditorData, getKeybindingText, Keybind} from "../../tauri/types/editor.js";
+import {ProgramData, getKeybindingText, Keybind} from "../../tauri/types/editor.js";
 import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 import {open} from "@tauri-apps/plugin-dialog";
@@ -13,11 +13,11 @@ import {DEFAULT_TILESET} from "../../features/sprites/tilesheets.js";
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
     const [cddaDirectoryPath, setCDDADirectoryPath] = useState<string>(null)
-    const [editorData, setEditorData] = useState<EditorData>(null)
+    const [editorData, setEditorData] = useState<ProgramData>(null)
     const selectRef = useRef<HTMLSelectElement>(null)
 
     async function getAndSetEditorData() {
-        const response = await tauriBridge.invoke<EditorData, unknown>(
+        const response = await tauriBridge.invoke<ProgramData, unknown>(
             TauriCommand.GET_EDITOR_DATA,
             {}
         )

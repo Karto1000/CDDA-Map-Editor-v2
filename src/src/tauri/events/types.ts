@@ -1,5 +1,5 @@
 import {AnimatedSprite, FallbackSprite, StaticSprite} from "../types/map_data.js";
-import {EditorData} from "../types/editor.js";
+import {ProgramData} from "../types/editor.js";
 import {TabTypeKind} from "../../shared/hooks/useTabs.js";
 import {Vector2, Vector3} from "three";
 import {OpenViewerData} from "../types/viewer.js";
@@ -154,7 +154,7 @@ export type Sprites = {
 }
 
 export interface TauriEventMap {
-    [TauriEvent.EDITOR_DATA_CHANGED]: EditorData;
+    [TauriEvent.EDITOR_DATA_CHANGED]: ProgramData;
     [TauriEvent.TAB_CREATED]: {
         name: string,
         tab_type: TabTypeKind,

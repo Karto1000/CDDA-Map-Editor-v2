@@ -1,12 +1,12 @@
 import {RefObject, useEffect} from "react";
-import {EditorData, KeybindAction} from "../../tauri/types/editor.js";
+import {ProgramData, KeybindAction} from "../../tauri/types/editor.js";
 
 export type UseKeybindingsRet = {}
 
 export function useKeybindings(
     ctx: HTMLElement | Window,
     eventBus: RefObject<EventTarget>,
-    editorData: EditorData,
+    editorData: ProgramData,
     deps: any[] = []
 ): UseKeybindingsRet {
     useEffect(() => {

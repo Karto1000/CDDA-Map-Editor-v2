@@ -435,24 +435,9 @@ impl Default for ProgramConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct RecentProject {
+pub struct SavedProject {
     pub path: PathBuf,
-    pub name: String,
 }
-
-impl Hash for RecentProject {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state);
-    }
-}
-
-impl PartialEq<Self> for RecentProject {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for RecentProject {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProgramData {
@@ -461,9 +446,9 @@ pub struct ProgramData {
     #[serde(skip)]
     pub loaded_projects: HashMap<ProjectName, Project>,
 
-    pub openable_projects: HashSet<ProjectName>,
+    pub openable_projects: HashMap<ProjectName, SavedProject>,
     pub opened_project: Option<ProjectName>,
-    pub recent_projects: HashSet<RecentProject>,
+    pub recent_projects: HashMap<ProjectName, SavedProject>,
 
     pub available_tilesets: Option<Vec<String>>,
 }

@@ -5,7 +5,7 @@ import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {open} from "@tauri-apps/plugin-dialog";
-import {EditorData} from "../../tauri/types/editor.js";
+import {ProgramData} from "../../tauri/types/editor.js";
 import Icon, {IconName} from "../../shared/components/icon.js";
 
 function Main() {
@@ -52,7 +52,7 @@ function Main() {
         )
         setCDDAInstallDirectory(path)
 
-        const response = await tauriBridge.invoke<EditorData, unknown>(
+        const response = await tauriBridge.invoke<ProgramData, unknown>(
             TauriCommand.GET_EDITOR_DATA,
             {}
         )

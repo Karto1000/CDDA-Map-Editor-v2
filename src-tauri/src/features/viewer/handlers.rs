@@ -10,6 +10,9 @@ use crate::features::map::importing::{
 use crate::features::map::MappedCDDAId;
 use crate::features::map::SPECIAL_EMPTY_CHAR;
 use crate::features::map::{CalculateParametersError, DEFAULT_MAP_DATA_SIZE};
+use crate::features::program_data::handlers::{
+    save_program_data, SaveEditorDataError,
+};
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::GetLiveViewerDataError;
 use crate::features::program_data::LiveViewerData;
@@ -20,7 +23,7 @@ use crate::features::program_data::ZLevel;
 use crate::features::program_data::{
     get_map_data_collection_from_live_viewer_data, Tab, TabType,
 };
-use crate::features::program_data::{ProgramData, RecentProject};
+use crate::features::program_data::{ProgramData, SavedProject};
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::features::tileset::Tilesheet;
@@ -642,7 +645,10 @@ pub enum OpenViewerError {
     CalculateParametersError(#[from] CalculateParametersError),
 
     #[error(transparent)]
-    SaveError(#[from] SaveError),
+    SaveEditorDataError(#[from] SaveEditorDataError),
+
+    #[error(transparent)]
+    SaveProjectError(#[from] SaveError),
 }
 impl_serialize_for_error!(OpenViewerError);
 
@@ -692,7 +698,9 @@ pub async fn create_viewer(
                 }),
             );
 
-            let project_saver = ProjectSaver { path: save_path };
+            let project_saver = ProjectSaver {
+                path: save_path.clone(),
+            };
             project_saver.save(&new_project).await?;
 
             new_project.maps.insert(0, collection);
@@ -700,15 +708,16 @@ pub async fn create_viewer(
                 .loaded_projects
                 .insert(project_name.clone(), new_project);
             editor_data_lock.opened_project = Some(project_name.clone());
+
+            let saved_project = SavedProject { path: save_path };
+
             editor_data_lock
                 .openable_projects
-                .insert(project_name.clone());
+                .insert(project_name.clone(), saved_project.clone());
 
-            let recent_project = RecentProject {
-                path: editor_data_lock.config.config_path.clone(),
-                name: project_name.clone(),
-            };
-            editor_data_lock.recent_projects.insert(recent_project);
+            editor_data_lock
+                .recent_projects
+                .insert(project_name.clone(), saved_project);
 
             app.emit(
                 events::TAB_CREATED,
@@ -756,22 +765,25 @@ pub async fn create_viewer(
                 }),
             );
 
-            let project_saver = ProjectSaver { path: save_path };
+            let project_saver = ProjectSaver {
+                path: save_path.clone(),
+            };
             project_saver.save(&new_project).await?;
 
             new_project.maps = maps;
             editor_data_lock
                 .loaded_projects
                 .insert(project_name.clone(), new_project);
+
+            let saved_project = SavedProject { path: save_path };
+
             editor_data_lock
                 .openable_projects
-                .insert(project_name.clone());
+                .insert(project_name.clone(), saved_project.clone());
 
-            let recent_project = RecentProject {
-                path: editor_data_lock.config.config_path.clone(),
-                name: project_name.clone(),
-            };
-            editor_data_lock.recent_projects.insert(recent_project);
+            editor_data_lock
+                .recent_projects
+                .insert(project_name.clone(), saved_project);
 
             editor_data_lock.opened_project = Some(project_name.clone());
             app.emit(
@@ -785,6 +797,9 @@ pub async fn create_viewer(
     };
 
     app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())?;
+    drop(editor_data_lock);
+
+    save_program_data(editor_data).await?;
 
     Ok(())
 }

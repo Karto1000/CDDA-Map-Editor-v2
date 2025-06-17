@@ -2,7 +2,7 @@ use crate::features::editor::data::ZLevels;
 use crate::features::editor::MapSize;
 use crate::features::program_data::{
     EditorSaveState, MapDataCollection, ProgramData, Project, ProjectType,
-    RecentProject, Tab, TabType,
+    SavedProject, Tab, TabType,
 };
 use crate::{events, impl_serialize_for_error};
 use glam::{IVec2, UVec2};
@@ -50,15 +50,18 @@ pub async fn new_map_editor(
         .loaded_projects
         .insert(project_name.clone(), new_project);
     editor_data_lock.opened_project = Some(project_name.clone());
+
+    let saved_project = SavedProject {
+        path: editor_data_lock.config.config_path.clone(),
+    };
+
     editor_data_lock
         .openable_projects
-        .insert(project_name.clone());
+        .insert(project_name.clone(), saved_project.clone());
 
-    let recent_project = RecentProject {
-        path: editor_data_lock.config.config_path.clone(),
-        name: project_name.clone(),
-    };
-    editor_data_lock.recent_projects.insert(recent_project);
+    editor_data_lock
+        .recent_projects
+        .insert(project_name.clone(), saved_project);
 
     app.emit(
         events::TAB_CREATED,
