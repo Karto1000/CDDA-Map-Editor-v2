@@ -689,7 +689,7 @@ pub async fn load_cdda_json_data(
     data_loader.load().await
 }
 
-pub fn get_saved_editor_data() -> Result<ProgramData, Error> {
+pub async fn get_saved_editor_data() -> Result<ProgramData, Error> {
     let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
 
     let directory_path = match project_dir {
@@ -761,12 +761,12 @@ pub fn get_saved_editor_data() -> Result<ProgramData, Error> {
                 },
             };
 
-            for (project_name, saved_project) in data.openable_projects.iter() {
+            for (project_name, save_path) in data.openable_projects.iter() {
                 let mut project_loader = ProjectLoader {
-                    path: saved_project.path.clone(),
+                    path: save_path.clone(),
                 };
 
-                match project_loader.load() {
+                match project_loader.load().await {
                     Ok(p) => {
                         data.loaded_projects.insert(project_name.clone(), p);
                     },

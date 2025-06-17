@@ -208,7 +208,7 @@ pub enum GetCurrentProjectError {
     #[error("No project has been opened")]
     NoProjectOpen,
     #[error("Invalid project name {0}")]
-    InvalidProjectName(String),
+    ProjectNotFound(String),
 }
 
 #[derive(Debug, Error, Serialize)]
@@ -236,9 +236,9 @@ pub fn get_size(maps: &HashMap<ZLevel, MapDataCollection>) -> UVec2 {
     )
 }
 
-pub fn get_current_project<'a>(
-    editor_data: &'a MutexGuard<ProgramData>,
-) -> Result<&'a Project, GetCurrentProjectError> {
+pub fn get_current_project(
+    editor_data: &ProgramData,
+) -> Result<&Project, GetCurrentProjectError> {
     let project_name = match &editor_data.opened_project {
         None => return Err(GetCurrentProjectError::NoProjectOpen),
         Some(i) => i,
@@ -246,7 +246,7 @@ pub fn get_current_project<'a>(
 
     let data = match editor_data.loaded_projects.get(project_name) {
         None => {
-            return Err(GetCurrentProjectError::InvalidProjectName(
+            return Err(GetCurrentProjectError::ProjectNotFound(
                 project_name.clone(),
             ));
         },
@@ -266,7 +266,7 @@ pub fn get_current_project_mut<'a>(
 
     let data = match editor_data.loaded_projects.get_mut(&project_name) {
         None => {
-            return Err(GetCurrentProjectError::InvalidProjectName(
+            return Err(GetCurrentProjectError::ProjectNotFound(
                 project_name.clone(),
             ));
         },

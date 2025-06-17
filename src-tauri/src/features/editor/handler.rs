@@ -1,13 +1,15 @@
 use crate::features::editor::data::ZLevels;
-use crate::features::editor::MapSize;
+use crate::features::editor::{MapEditor, MapSize};
 use crate::features::program_data::{
-    EditorSaveState, MapDataCollection, ProgramData, Project, ProjectType,
-    SavedProject, Tab, TabType,
+    MapDataCollection, ProgramData, Project, ProjectType, SavedProject, Tab,
+    TabType,
 };
+use crate::util::get_size;
 use crate::{events, impl_serialize_for_error};
 use glam::{IVec2, UVec2};
 use log::info;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::HashMap;
 use std::ops::Range;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
@@ -25,7 +27,7 @@ impl_serialize_for_error!(NewMapEditorError);
 #[tauri::command(rename_all = "camelCase")]
 pub async fn new_map_editor(
     app: AppHandle,
-    editor_data: State<'_, Mutex<ProgramData>>,
+    program_data: State<'_, Mutex<ProgramData>>,
     project_name: String,
     map_size: MapSize,
     z_levels: ZLevels,
@@ -33,35 +35,22 @@ pub async fn new_map_editor(
 ) -> Result<(), NewMapEditorError> {
     info!("Creating new map editor");
 
-    let mut new_project = Project::new(
-        project_name.clone(),
-        map_size.value(),
-        ProjectType::MapEditor(EditorSaveState::Saved { path }),
-    );
-
+    let mut map_collection = HashMap::new();
     for z in z_levels.value().0..=z_levels.value().1 {
         let collection = MapDataCollection::new(map_size.clone());
-        new_project.maps.insert(z, collection);
+        map_collection.insert(z, collection);
     }
 
-    let mut editor_data_lock = editor_data.lock().await;
-
-    editor_data_lock
-        .loaded_projects
-        .insert(project_name.clone(), new_project);
-    editor_data_lock.opened_project = Some(project_name.clone());
-
-    let saved_project = SavedProject {
-        path: editor_data_lock.config.config_path.clone(),
+    let map_editor = MapEditor {
+        maps: map_collection,
+        size: map_size.value(),
     };
 
-    editor_data_lock
-        .openable_projects
-        .insert(project_name.clone(), saved_project.clone());
+    let new_project =
+        Project::new(project_name.clone(), ProjectType::MapEditor(map_editor));
 
-    editor_data_lock
-        .recent_projects
-        .insert(project_name.clone(), saved_project);
+    let mut editor_data_lock = program_data.lock().await;
+    editor_data_lock.create_and_open_project(new_project, path);
 
     app.emit(
         events::TAB_CREATED,

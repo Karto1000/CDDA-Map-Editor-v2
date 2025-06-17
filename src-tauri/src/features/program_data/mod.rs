@@ -5,7 +5,7 @@ mod keybinds;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::palettes::Palettes;
 use crate::data::TileLayer;
-use crate::features::editor::MapSize;
+use crate::features::editor::{MapEditor, MapSize};
 use crate::features::map::importing::{
     OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
     SingleMapDataImporterError,
@@ -15,6 +15,7 @@ use crate::features::map::{
     MappedCDDAIdsForTile, DEFAULT_MAP_DATA_SIZE,
 };
 use crate::features::program_data::keybinds::{Keybind, KeybindAction};
+use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::impl_serialize_for_error;
 use crate::util::{IVec3JsonKey, Load, Save, SaveError};
 use cdda_lib::types::CDDAIdentifier;
@@ -48,12 +49,12 @@ pub enum GetLiveViewerDataError {
 
 impl_serialize_for_error!(GetLiveViewerDataError);
 
-pub async fn get_map_data_collection_from_live_viewer_data(
-    data: &LiveViewerData,
+pub async fn get_map_data_collection_from_map_viewer(
+    viewer: &MapViewer,
 ) -> Result<HashMap<ZLevel, MapDataCollection>, GetLiveViewerDataError> {
     info!("Opening Live viewer");
 
-    let map_data_collection = match &data {
+    let map_data_collection = match &viewer.data {
         LiveViewerData::Terrain {
             om_id,
             mapgen_file_paths,
@@ -86,12 +87,6 @@ pub async fn get_map_data_collection_from_live_viewer_data(
     };
 
     Ok(map_data_collection)
-}
-
-pub async fn get_map_data_collection_from_map_editor(
-    state: &EditorSaveState,
-) -> Result<HashMap<ZLevel, MapDataCollection>, SaveError> {
-    todo!()
 }
 
 #[derive(Debug, Clone)]
@@ -164,75 +159,37 @@ impl MappedCDDAIdContainer {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
+#[serde(rename_all = "camelCase")]
 pub enum ProjectType {
-    MapEditor(EditorSaveState),
-    LiveViewer(LiveViewerData),
+    MapEditor(MapEditor),
+    MapViewer(MapViewer),
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum LiveViewerData {
-    Terrain {
-        mapgen_file_paths: Vec<PathBuf>,
-        project_name: String,
-        om_id: CDDAIdentifier,
-    },
-    Special {
-        mapgen_file_paths: Vec<PathBuf>,
-        om_file_paths: Vec<PathBuf>,
-        project_name: String,
-        om_id: CDDAIdentifier,
-    },
-}
+impl ProjectType {
+    pub fn maps(&self) -> &HashMap<ZLevel, MapDataCollection> {
+        match self {
+            ProjectType::MapEditor(me) => &me.maps,
+            ProjectType::MapViewer(lv) => &lv.maps,
+        }
+    }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-#[serde(tag = "state")]
-pub enum EditorSaveState {
-    #[default]
-    Unsaved,
-    Saved {
-        path: PathBuf,
-    },
+    pub fn maps_mut(&mut self) -> &mut HashMap<ZLevel, MapDataCollection> {
+        match self {
+            ProjectType::MapEditor(me) => &mut me.maps,
+            ProjectType::MapViewer(lv) => &mut lv.maps,
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Project {
     pub name: String,
-
-    #[serde(skip)]
-    pub maps: HashMap<ZLevel, MapDataCollection>,
-
-    pub size: UVec2,
-    pub ty: ProjectType,
+    pub project_type: ProjectType,
 }
 
 impl Project {
-    pub fn new(name: String, size: UVec2, ty: ProjectType) -> Self {
-        let mut maps = HashMap::new();
-        let map_collection = MapDataCollection::default();
-        maps.insert(0, map_collection);
-
-        Self {
-            name,
-            maps,
-            size,
-            ty,
-        }
-    }
-}
-
-impl Default for Project {
-    fn default() -> Self {
-        let mut maps = HashMap::new();
-        let map_collection = MapDataCollection::default();
-        maps.insert(0, map_collection);
-
-        Self {
-            name: "New Project".to_string(),
-            maps,
-            size: DEFAULT_MAP_DATA_SIZE,
-            ty: ProjectType::MapEditor(EditorSaveState::Unsaved),
-        }
+    pub fn new(name: String, project_type: ProjectType) -> Self {
+        Self { name, project_type }
     }
 }
 
@@ -446,11 +403,30 @@ pub struct ProgramData {
     #[serde(skip)]
     pub loaded_projects: HashMap<ProjectName, Project>,
 
-    pub openable_projects: HashMap<ProjectName, SavedProject>,
+    pub recent_projects: HashMap<ProjectName, PathBuf>,
+    pub openable_projects: HashMap<ProjectName, PathBuf>,
     pub opened_project: Option<ProjectName>,
-    pub recent_projects: HashMap<ProjectName, SavedProject>,
 
     pub available_tilesets: Option<Vec<String>>,
+}
+
+impl ProgramData {
+    pub fn create_and_open_project(
+        &mut self,
+        new_project: Project,
+        path: PathBuf,
+    ) {
+        self.opened_project = Some(new_project.name.clone());
+
+        self.openable_projects
+            .insert(new_project.name.clone(), path.clone());
+
+        self.recent_projects
+            .insert(new_project.name.clone(), path.clone());
+
+        self.loaded_projects
+            .insert(new_project.name.clone(), new_project);
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

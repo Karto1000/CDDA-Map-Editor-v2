@@ -87,6 +87,7 @@ export interface TauriCommandMap {
     };
     [TauriCommand.GET_PROJECT_CELL_DATA]: {};
     [TauriCommand.CREATE_VIEWER]: {
+        projectSavePath: string,
         data: OpenViewerData
     };
     [TauriCommand.GET_INFO_OF_CURRENT_TILESET]: {};

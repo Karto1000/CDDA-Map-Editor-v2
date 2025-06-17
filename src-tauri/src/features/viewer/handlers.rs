@@ -15,19 +15,19 @@ use crate::features::program_data::handlers::{
 };
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::GetLiveViewerDataError;
-use crate::features::program_data::LiveViewerData;
 use crate::features::program_data::MappedCDDAIdContainer;
 use crate::features::program_data::Project;
 use crate::features::program_data::ProjectType;
 use crate::features::program_data::ZLevel;
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, Tab, TabType,
+    get_map_data_collection_from_map_viewer, Tab, TabType,
 };
 use crate::features::program_data::{ProgramData, SavedProject};
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::features::tileset::Tilesheet;
 use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
+use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::impl_serialize_for_error;
 use crate::util;
 use crate::util::GetCurrentProjectError;
@@ -75,12 +75,21 @@ use tokio::io::AsyncWriteExt;
 use tokio::sync::MutexGuard;
 use tokio_test::block_on;
 
+#[derive(Debug, Error, Serialize)]
+pub enum GetMapViewerError {
+    #[error("The map was not found")]
+    NotFound,
+
+    #[error(transparent)]
+    GetCurrentProjectError(#[from] GetCurrentProjectError),
+}
+
 #[tauri::command]
 pub async fn get_current_project_data(
     editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<Project, GetCurrentProjectError> {
     let editor_data_lock = editor_data.lock().await;
-    let data = util::get_current_project(&editor_data_lock)?;
+    let data = get_current_project(&editor_data_lock)?;
     Ok(data.clone())
 }
 
@@ -88,23 +97,26 @@ pub async fn get_current_project_data(
 pub enum GetCalculatedParametersError {
     #[error(transparent)]
     ProjectError(#[from] GetCurrentProjectError),
+
+    #[error(transparent)]
+    GetMapViewerError(#[from] GetMapViewerError),
 }
 
 impl_serialize_for_error!(GetCalculatedParametersError);
 
 #[tauri::command]
 pub async fn get_calculated_parameters(
-    editor_data: State<'_, Mutex<ProgramData>>,
+    program_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<
     HashMap<IVec3JsonKey, IndexMap<ParameterIdentifier, CDDAIdentifier>>,
     GetCalculatedParametersError,
 > {
-    let editor_data_lock = editor_data.lock().await;
-    let data = util::get_current_project(&editor_data_lock)?;
+    let editor_data_lock = program_data.lock().await;
+    let project = get_current_project(&editor_data_lock)?;
 
     let mut calculated_parameters = HashMap::new();
 
-    for (z, z_maps) in data.maps.iter() {
+    for (z, z_maps) in project.project_type.maps().iter() {
         for (map_coords, map) in z_maps.maps.iter() {
             calculated_parameters.insert(
                 IVec3JsonKey(IVec3::new(
@@ -127,6 +139,9 @@ pub enum GetSpritesError {
 
     #[error(transparent)]
     GetCurrentProjectError(#[from] GetCurrentProjectError),
+
+    #[error(transparent)]
+    GetMapViewerError(#[from] GetMapViewerError),
 }
 
 impl_serialize_for_error!(GetSpritesError);
@@ -170,7 +185,7 @@ pub async fn get_sprites(
 
     let tilesheet_lock = tilesheet.lock().await;
 
-    for (_, map_collection) in project.maps.iter_mut() {
+    for (_, map_collection) in project.project_type.maps_mut().iter_mut() {
         // we need to calculate the parameters for the predecessor here because we
         // cannot borrow json data as mutable inside the get_mapped_cdda_ids function
         map_collection.calculate_predecessor_parameters(json_data);
@@ -182,7 +197,8 @@ pub async fn get_sprites(
         .expect("Region settings to exist");
 
     let saved_cdda_ids = project
-        .maps
+        .project_type
+        .maps()
         .par_iter()
         .flat_map(|(z, map_collection)| {
             let local_mapped_cdda_ids =
@@ -337,6 +353,9 @@ pub async fn get_sprites(
 
 #[derive(Debug, Error)]
 pub enum ReloadProjectError {
+    #[error("Project is not a live viewer")]
+    NotALiveViewer,
+
     #[error(transparent)]
     CDDADataError(#[from] CDDADataError),
 
@@ -348,6 +367,9 @@ pub enum ReloadProjectError {
 
     #[error(transparent)]
     CalculateParametersError(#[from] CalculateParametersError),
+
+    #[error(transparent)]
+    GetMapViewerError(#[from] GetMapViewerError),
 }
 
 impl_serialize_for_error!(ReloadProjectError);
@@ -359,20 +381,23 @@ pub async fn reload_project(
 ) -> Result<(), ReloadProjectError> {
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
+
     let mut editor_data_lock = editor_data.lock().await;
     let project = get_current_project_mut(&mut editor_data_lock)?;
 
-    match &project.ty {
-        ProjectType::MapEditor(_) => unimplemented!(),
-        ProjectType::LiveViewer(lvd) => {
+    match &mut project.project_type {
+        ProjectType::MapEditor(_) => {
+            return Err(ReloadProjectError::NotALiveViewer);
+        },
+        ProjectType::MapViewer(map_viewer) => {
             let mut map_data_collection =
-                get_map_data_collection_from_live_viewer_data(lvd).await?;
+                get_map_data_collection_from_map_viewer(map_viewer).await?;
 
             for (_, map_data) in map_data_collection.iter_mut() {
                 map_data.calculate_parameters(&json_data.palettes)?
             }
 
-            project.maps = map_data_collection;
+            map_viewer.maps = map_data_collection;
         },
     }
 
@@ -446,11 +471,11 @@ pub async fn new_single_mapgen_viewer(
 
     create_viewer(
         app,
+        project_save_path,
         OpenViewerData::Terrain {
             mapgen_file_paths: vec![path],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
-            project_save_path: project_save_path,
         },
         editor_data,
         json_data,
@@ -540,8 +565,8 @@ pub async fn new_special_mapgen_viewer(
 
     create_viewer(
         app,
+        project_save_path,
         OpenViewerData::Special {
-            project_save_path: project_save_path,
             mapgen_file_paths: vec![path.clone()],
             om_file_paths: vec![path.clone()],
             project_name,
@@ -594,11 +619,11 @@ pub async fn new_nested_mapgen_viewer(
 
     create_viewer(
         app,
+        project_save_path,
         OpenViewerData::Terrain {
             mapgen_file_paths: vec![path.clone()],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
-            project_save_path: project_save_path,
         },
         editor_data,
         json_data,
@@ -616,13 +641,11 @@ pub async fn new_nested_mapgen_viewer(
 )]
 pub enum OpenViewerData {
     Terrain {
-        project_save_path: PathBuf,
         mapgen_file_paths: Vec<PathBuf>,
         project_name: String,
         om_id: CDDAIdentifier,
     },
     Special {
-        project_save_path: PathBuf,
         mapgen_file_paths: Vec<PathBuf>,
         om_file_paths: Vec<PathBuf>,
         project_name: String,
@@ -655,24 +678,24 @@ impl_serialize_for_error!(OpenViewerError);
 #[tauri::command]
 pub async fn create_viewer(
     app: AppHandle,
+    project_save_path: PathBuf,
     data: OpenViewerData,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), OpenViewerError> {
     info!("Creating Live viewer");
 
-    let mut editor_data_lock = editor_data.lock().await;
+    let mut program_data_lock = editor_data.lock().await;
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
-    match data {
+    let project = match data {
         OpenViewerData::Terrain {
             project_name,
             mapgen_file_paths,
             om_id,
-            project_save_path: save_path,
         } => {
-            if editor_data_lock
+            if program_data_lock
                 .loaded_projects
                 .get(&project_name)
                 .is_some()
@@ -688,53 +711,33 @@ pub async fn create_viewer(
             let mut collection = overmap_terrain_importer.load().await.unwrap();
             collection.calculate_parameters(&json_data.palettes)?;
 
-            let mut new_project = Project::new(
-                project_name.clone(),
-                DEFAULT_MAP_DATA_SIZE,
-                ProjectType::LiveViewer(LiveViewerData::Terrain {
+            let mut maps = HashMap::new();
+            maps.insert(0, collection);
+
+            let map_viewer = MapViewer {
+                maps,
+                data: LiveViewerData::Terrain {
                     mapgen_file_paths,
                     project_name: project_name.clone(),
                     om_id,
-                }),
+                },
+                size: DEFAULT_MAP_DATA_SIZE,
+            };
+
+            let project = Project::new(
+                project_name.clone(),
+                ProjectType::MapViewer(map_viewer),
             );
 
-            let project_saver = ProjectSaver {
-                path: save_path.clone(),
-            };
-            project_saver.save(&new_project).await?;
-
-            new_project.maps.insert(0, collection);
-            editor_data_lock
-                .loaded_projects
-                .insert(project_name.clone(), new_project);
-            editor_data_lock.opened_project = Some(project_name.clone());
-
-            let saved_project = SavedProject { path: save_path };
-
-            editor_data_lock
-                .openable_projects
-                .insert(project_name.clone(), saved_project.clone());
-
-            editor_data_lock
-                .recent_projects
-                .insert(project_name.clone(), saved_project);
-
-            app.emit(
-                events::TAB_CREATED,
-                Tab {
-                    name: project_name.clone(),
-                    tab_type: TabType::LiveViewer,
-                },
-            )?;
+            project
         },
         OpenViewerData::Special {
             project_name,
             mapgen_file_paths,
             om_file_paths,
             om_id,
-            project_save_path: save_path,
         } => {
-            if editor_data_lock
+            if program_data_lock
                 .loaded_projects
                 .get(&project_name)
                 .is_some()
@@ -754,50 +757,47 @@ pub async fn create_viewer(
                 m.calculate_parameters(&json_data.palettes)?
             }
 
-            let mut new_project = Project::new(
-                project_name.clone(),
-                get_size(&maps),
-                ProjectType::LiveViewer(LiveViewerData::Special {
+            let map_size = get_size(&maps);
+
+            let map_viewer = MapViewer {
+                maps,
+                data: LiveViewerData::Special {
                     mapgen_file_paths,
                     om_file_paths,
                     project_name: project_name.clone(),
                     om_id,
-                }),
+                },
+                size: map_size,
+            };
+
+            let project = Project::new(
+                project_name.clone(),
+                ProjectType::MapViewer(map_viewer),
             );
 
-            let project_saver = ProjectSaver {
-                path: save_path.clone(),
-            };
-            project_saver.save(&new_project).await?;
+            program_data_lock.opened_project = Some(project_name.clone());
 
-            new_project.maps = maps;
-            editor_data_lock
-                .loaded_projects
-                .insert(project_name.clone(), new_project);
-
-            let saved_project = SavedProject { path: save_path };
-
-            editor_data_lock
-                .openable_projects
-                .insert(project_name.clone(), saved_project.clone());
-
-            editor_data_lock
-                .recent_projects
-                .insert(project_name.clone(), saved_project);
-
-            editor_data_lock.opened_project = Some(project_name.clone());
-            app.emit(
-                events::TAB_CREATED,
-                Tab {
-                    name: project_name.clone(),
-                    tab_type: TabType::LiveViewer,
-                },
-            )?;
+            project
         },
     };
 
-    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())?;
-    drop(editor_data_lock);
+    let project_saver = ProjectSaver {
+        path: project_save_path.clone(),
+    };
+    project_saver.save(&project).await?;
+
+    app.emit(
+        events::TAB_CREATED,
+        Tab {
+            name: project.name.clone(),
+            tab_type: TabType::LiveViewer,
+        },
+    )?;
+
+    program_data_lock.create_and_open_project(project, project_save_path);
+
+    app.emit(events::EDITOR_DATA_CHANGED, program_data_lock.clone())?;
+    drop(program_data_lock);
 
     save_program_data(editor_data).await?;
 

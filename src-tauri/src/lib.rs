@@ -5,13 +5,13 @@ mod util;
 
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::features::editor::handler::new_map_editor;
+use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project, get_editor_data,
     open_project, open_recent_project, save_program_data, tileset_picked,
 };
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, get_map_data_collection_from_map_editor, MappedCDDAIdContainer, ProgramData,
-    ProjectType,
+    get_map_data_collection_from_map_viewer, MappedCDDAIdContainer, ProgramData, ProjectName, ProjectType,
     ZLevel,
 };
 use crate::features::tileset::handlers::{
@@ -24,18 +24,22 @@ use crate::features::viewer::handlers::{
     get_project_cell_data, get_sprites, new_nested_mapgen_viewer,
     new_single_mapgen_viewer, new_special_mapgen_viewer, reload_project,
 };
+use crate::features::viewer::MapViewer;
+use crate::util::Load;
+use anyhow::{anyhow, Error};
 use async_once::AsyncOnce;
 use data::io;
 use features::program_data::{Tab, TabType};
 use features::tileset::legacy_tileset;
 use features::toast::ToastMessage;
+use features::viewer::LiveViewerData;
 use lazy_static::lazy_static;
 use log::{info, warn, LevelFilter};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use tauri::async_runtime::Mutex;
+use tauri::async_runtime::{block_on, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
 use tokio::task::JoinHandle;
@@ -125,93 +129,39 @@ async fn frontend_ready(
             for (name, project) in editor_data_lock.loaded_projects.iter_mut() {
                 info!("Loading Project {}", name);
 
-                match &project.ty {
-                    ProjectType::MapEditor(me) => {
-                        info!("Opening Map Editor",);
-
-                        let mut map_data_collection =
-                            match get_map_data_collection_from_map_editor(me)
-                                .await
-                            {
-                                Ok(v) => v,
-                                Err(e) => {
-                                    app.emit(
-                                        events::TOAST_MESSAGE,
-                                        ToastMessage::error(e.to_string()),
-                                    )
-                                    .unwrap();
-                                    warn!(
-                                        "Failed to load map data for project {}: {}",
-                                        &project.name, e
-                                    );
-                                    continue;
-                                },
-                            };
-
-                        map_data_collection.iter_mut().for_each(
-                            |(_, m)| match m
-                                .calculate_parameters(&json_data.palettes)
-                            {
-                                Ok(_) => {},
-                                Err(e) => app
-                                    .emit(
-                                        events::TOAST_MESSAGE,
-                                        ToastMessage::error(e.to_string()),
-                                    )
-                                    .unwrap(),
-                            },
-                        );
-
-                        project.maps = map_data_collection;
-
-                        app.emit(
-                            events::TAB_CREATED,
-                            Tab {
-                                name: project.name.clone(),
-                                tab_type: TabType::LiveViewer,
-                            },
-                        )
-                        .unwrap()
+                match &mut project.project_type {
+                    ProjectType::MapEditor(_) => {
+                        todo!()
                     },
-                    ProjectType::LiveViewer(lvd) => {
+                    ProjectType::MapViewer(map_viewer) => {
                         info!("Opening Live viewer",);
 
-                        let mut map_data_collection =
-                            match get_map_data_collection_from_live_viewer_data(
-                                lvd,
+                        let collection =
+                            match get_map_data_collection_from_map_viewer(
+                                &map_viewer,
                             )
                             .await
                             {
-                                Ok(v) => v,
+                                Ok(mut map_data_collection) => {
+                                    for (_, maps) in
+                                        map_data_collection.iter_mut()
+                                    {
+                                        match maps.calculate_parameters(
+                                            &json_data.palettes,
+                                        ) {
+                                            Ok(_) => {},
+                                            Err(e) => continue,
+                                        }
+                                    }
+                                    map_data_collection
+                                },
                                 Err(e) => {
-                                    app.emit(
-                                        events::TOAST_MESSAGE,
-                                        ToastMessage::error(e.to_string()),
-                                    )
-                                    .unwrap();
-                                    warn!(
-                                        "Failed to load map data for project {}: {}",
-                                        &project.name, e
-                                    );
+                                    warn!("Failed to load map data {}", e);
                                     continue;
                                 },
                             };
 
-                        map_data_collection.iter_mut().for_each(
-                            |(_, m)| match m
-                                .calculate_parameters(&json_data.palettes)
-                            {
-                                Ok(_) => {},
-                                Err(e) => app
-                                    .emit(
-                                        events::TOAST_MESSAGE,
-                                        ToastMessage::error(e.to_string()),
-                                    )
-                                    .unwrap(),
-                            },
-                        );
-
-                        project.maps = map_data_collection;
+                        map_viewer.maps = collection;
 
                         app.emit(
                             events::TAB_CREATED,
@@ -264,7 +214,7 @@ pub fn run() -> () {
         )
         .setup(|app| {
             info!("Loading Editor data config");
-            let editor_data = io::get_saved_editor_data()?;
+            let editor_data = block_on(io::get_saved_editor_data())?;
 
             info!("Getting fallback tilesheet");
             let fallback_tilesheet = get_fallback_tilesheet();

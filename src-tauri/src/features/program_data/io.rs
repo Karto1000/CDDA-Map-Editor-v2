@@ -1,7 +1,10 @@
-use crate::features::program_data::{ProgramData, Project};
+use crate::data::io::DeserializedCDDAJsonData;
+use crate::features::program_data::{
+    get_map_data_collection_from_map_viewer, ProgramData, Project, ProjectType,
+};
 use crate::util::{Load, Save, SaveError};
 use anyhow::Error;
-use log::{error, info};
+use log::{error, info, warn};
 use std::fs;
 use std::path::PathBuf;
 use tokio::fs::File;
@@ -56,15 +59,14 @@ pub struct ProjectLoader {
     pub path: PathBuf,
 }
 
-impl ProjectLoader {
-    pub fn load(&mut self) -> Result<Project, Error> {
-        let data = match fs::read_to_string(&self.path) {
+impl Load<Project> for ProjectLoader {
+    async fn load(&mut self) -> Result<Project, Error> {
+        let data = match tokio::fs::read_to_string(&self.path).await {
             Ok(d) => d,
             Err(e) => {
                 return Err(anyhow::anyhow!(
-                    "Cannot find project at path {:?} skipping; {}",
-                    self.path,
-                    e
+                    "Cannot find project at path {}",
+                    self.path.display(),
                 ));
             },
         };

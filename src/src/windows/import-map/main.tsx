@@ -34,7 +34,6 @@ function OpenMapViewer() {
         if (creatingType === OpenViewerDataType.Terrain) {
             data = {
                 type: OpenViewerDataType.Terrain,
-                projectSavePath: projectSavePath,
                 mapgenFilePaths: mapgenFilePaths,
                 projectName: projectName,
                 omId: omSpecialOrTerrainId,
@@ -42,7 +41,6 @@ function OpenMapViewer() {
         } else if (creatingType === OpenViewerDataType.Special) {
             data = {
                 type: OpenViewerDataType.Special,
-                projectSavePath: projectSavePath,
                 mapgenFilePaths: mapgenFilePaths,
                 omFilePaths: omFilePaths,
                 projectName: projectName,
@@ -53,6 +51,7 @@ function OpenMapViewer() {
         await tauriBridge.invoke(
             TauriCommand.CREATE_VIEWER,
             {
+                projectSavePath,
                 data
             }
         )

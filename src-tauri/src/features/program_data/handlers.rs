@@ -1,16 +1,20 @@
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
-use crate::features::program_data::io::ProgramDataSaver;
+use crate::features::program_data::io::{ProgramDataSaver, ProjectLoader};
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, LiveViewerData, ProgramData, Project, ProjectName,
-    ProjectType, SavedProject, Tab, TabType,
+    get_map_data_collection_from_map_viewer, ProgramData, Project, ProjectName, ProjectType, SavedProject, Tab,
+    TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     load_tilesheet, LegacyTilesheet,
 };
 use crate::features::toast::ToastMessage;
-use crate::util::{get_json_data, CDDADataError, Save};
+use crate::features::viewer::{LiveViewerData, MapViewer};
+use crate::util::{
+    get_current_project, get_json_data, CDDADataError, Load, Save,
+};
+use anyhow::Error;
 use log::{error, info, warn};
 use notify_debouncer_full::new_debouncer;
 use serde::Serialize;
@@ -226,7 +230,7 @@ pub async fn open_recent_project(
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
-    let saved_project = editor_data_lock
+    let saved_project_path = editor_data_lock
         .recent_projects
         .iter()
         .find(|(saved_name, _)| *saved_name == &name)
@@ -234,63 +238,64 @@ pub async fn open_recent_project(
         .ok_or(OpenProjectError::NoRecentProject(name.clone()))?;
 
     let mut project: Project = serde_json::from_str(
-        fs::read_to_string(saved_project.path.join(format!("{}.json", name)))
+        fs::read_to_string(saved_project_path.clone())
             .map_err(|_| OpenProjectError::NoRecentProject(name.clone()))?
             .as_str(),
     )
     .map_err(|_| OpenProjectError::InvalidContent)?;
 
-    match &project.ty {
-        ProjectType::MapEditor(_) => unimplemented!(),
-        ProjectType::LiveViewer(lvd) => {
-            let mut map_data_collection =
-                match get_map_data_collection_from_live_viewer_data(&lvd).await
-                {
-                    Ok(v) => v,
-                    Err(e) => {
-                        warn!("Failed to load map data for project; {}", e);
-                        return Err(OpenProjectError::InvalidContent);
-                    },
-                };
-
-            map_data_collection.iter_mut().for_each(|(_, m)| {
-                match m.calculate_parameters(&json_data.palettes) {
-                    Ok(_) => {},
-                    Err(e) => {
-                        warn!("{}", e);
-                    },
-                }
-            });
-
-            project.maps = map_data_collection;
-
-            app.emit(
-                events::TAB_CREATED,
-                Tab {
-                    name: project.name.clone(),
-                    tab_type: TabType::LiveViewer,
-                },
+    match &mut project.project_type {
+        ProjectType::MapEditor(_) => {},
+        ProjectType::MapViewer(map_viewer) => {
+            let collection = match get_map_data_collection_from_map_viewer(
+                &map_viewer,
             )
-            .unwrap();
-
-            editor_data_lock
-                .openable_projects
-                .insert(name, saved_project.clone());
-
-            editor_data_lock
-                .loaded_projects
-                .insert(project.name.clone(), project);
-
-            let saver = ProgramDataSaver {
-                path: editor_data_lock.config.config_path.clone(),
+            .await
+            {
+                Ok(mut map_data_collection) => {
+                    for (_, maps) in map_data_collection.iter_mut() {
+                        match maps.calculate_parameters(&json_data.palettes) {
+                            Ok(_) => {},
+                            Err(e) => continue,
+                        }
+                    }
+                    map_data_collection
+                },
+                Err(e) => {
+                    warn!("Failed to load map data {}", e);
+                    return Err(OpenProjectError::InvalidContent);
+                },
             };
 
-            saver.save(&editor_data_lock).await.unwrap();
-
-            app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
-                .unwrap();
+            map_viewer.maps = collection;
         },
     }
+
+    app.emit(
+        events::TAB_CREATED,
+        Tab {
+            name: project.name.clone(),
+            tab_type: TabType::LiveViewer,
+        },
+    )
+    .unwrap();
+
+    editor_data_lock
+        .openable_projects
+        .insert(name, saved_project_path.clone());
+
+    editor_data_lock
+        .loaded_projects
+        .insert(project.name.clone(), project);
+
+    let saver = ProgramDataSaver {
+        path: editor_data_lock.config.config_path.clone(),
+    };
+
+    saver.save(&editor_data_lock).await.unwrap();
+
+    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
+        .unwrap();
 
     Ok(())
 }
@@ -314,18 +319,12 @@ pub async fn open_project(
     app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
         .unwrap();
 
-    let project = match editor_data_lock.loaded_projects.get(&name) {
-        None => {
-            warn!("Could not find project with name {}", name);
-            return Err(());
-        },
-        Some(d) => d,
-    };
+    let project = get_current_project(&editor_data_lock).unwrap();
 
-    match &project.ty {
+    match &project.project_type {
         ProjectType::MapEditor(_) => {},
-        ProjectType::LiveViewer(lvd) => {
-            let lvd_clone = lvd.clone();
+        ProjectType::MapViewer(map_viewer) => {
+            let mvd_clone = map_viewer.data.clone();
 
             let join_handle = tokio::spawn(async move {
                 info!("Spawning File Watcher for Live Viewer");
@@ -343,7 +342,7 @@ pub async fn open_project(
                 )
                 .unwrap();
 
-                let mapgen_paths = match lvd_clone {
+                let mapgen_paths = match mvd_clone {
                     LiveViewerData::Terrain {
                         mapgen_file_paths, ..
                     } => mapgen_file_paths,

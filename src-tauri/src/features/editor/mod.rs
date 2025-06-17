@@ -1,11 +1,19 @@
+use std::collections::HashMap;
 use glam::UVec2;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use thiserror::Error;
+use crate::features::program_data::{MapDataCollection, ZLevel};
 
 mod data;
 pub mod handler;
 mod io;
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MapEditor {
+    pub maps: HashMap<ZLevel, MapDataCollection>,
+    pub size: UVec2,
+}
 
 #[derive(Debug, Clone)]
 pub struct MapSize(UVec2);
