@@ -1,8 +1,8 @@
 import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../sprites/tilesheets.js";
 import React, {RefObject, useContext, useEffect, useReducer, useRef, useState} from "react";
-import {SHOW_STATS} from "../three/hooks/useThreeSetup.js";
+import {createGrid, SHOW_STATS} from "../three/hooks/useThreeSetup.js";
 import {Canvas, ThreeConfig} from "../three/types/three.ts";
-import {GridHelper, Vector3} from "three";
+import {GridHelper, Object3D, Vector3} from "three";
 import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
 import {degToRad} from "three/src/math/MathUtils.js";
 import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
@@ -26,7 +26,8 @@ import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../three/hooks/useMouseCells.js";
 import {clsx} from "clsx";
 import {useKeybindActionEvent} from "../../shared/hooks/useKeybindings.js";
-import {KeybindAction} from "../../tauri/types/editor.js";
+import {KeybindAction, MapViewerData} from "../../tauri/types/editor.js";
+import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
 
 export type MapViewerProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -46,7 +47,7 @@ const CHUNK_SIZE = 24
 
 export function MapViewer(props: MapViewerProps) {
     const [, forceUpdate] = useReducer(x => x + 1, 0);
-    const grid = useRef<GridHelper>(null)
+    const grid = useRef<Object3D>(null)
     const zLevel = useRef<number>(0)
 
     const {theme} = useContext(ThemeContext)
@@ -75,6 +76,7 @@ export function MapViewer(props: MapViewerProps) {
     )
     const [selectedMousePosition, setSelectedMousePosition] = useState<Vector3 | null>(null)
     const [isLoading, setIsLoading] = useState<boolean>(false)
+    const project = useCurrentProject<MapViewerData>(tabs)
 
     useKeybindActionEvent(
         KeybindAction.ReloadMap,
@@ -204,13 +206,11 @@ export function MapViewer(props: MapViewerProps) {
 
     // Main Draw Loop
     useEffect(() => {
+        if (!project) return
+
         logRender("Setting up main draw loop")
 
         let handler: number;
-
-        function setColors(theme: Theme) {
-            props.threeConfig.current.renderer.setClearColor(getColorFromTheme(theme, "darker"))
-        }
 
         function setRenderBounds() {
             const newWidth = props.canvas.canvasContainerRef.current.clientWidth
@@ -227,23 +227,24 @@ export function MapViewer(props: MapViewerProps) {
         function setupGrid(theme: Theme) {
             const tileInfo = getTileInfo(props.spritesheetConfig.current)
 
-            const gridHelper = new GridHelper(
-                1,
-                16 * 8 * tileInfo.width * 24 / tileInfo.height,
-                getColorFromTheme(theme, "disabled"), getColorFromTheme(theme, "light")
+            const gridWidth = project.project_type.mapViewer.size[0] * tileInfo.width / 2
+            const gridHeight = project.project_type.mapViewer.size[1] * tileInfo.height / 2
+
+            const gridHelper = createGrid(
+                {
+                    width: gridWidth,
+                    height: gridHeight,
+                    linesHeight: gridHeight / tileInfo.height * 2,
+                    linesWidth: gridWidth / tileInfo.width * 2,
+                    color: getColorFromTheme(theme, "disabled")
+                }
             )
 
-            gridHelper.scale.x = 16 * 8 * tileInfo.width * 24
-            gridHelper.scale.z = 16 * 8 * tileInfo.height * 24
-
-            gridHelper.position.x -= tileInfo.width / 2
-            gridHelper.position.y -= tileInfo.height / 2
-
-            gridHelper.rotateX(degToRad(90))
+            gridHelper.position.x += gridWidth - tileInfo.width / 2
+            gridHelper.position.y += -gridHeight - tileInfo.height / 2
 
             if (grid.current) {
                 props.threeConfig.current.scene.remove(grid.current)
-                grid.current.dispose()
                 grid.current = null
             }
 
@@ -266,7 +267,6 @@ export function MapViewer(props: MapViewerProps) {
 
         setupGrid(theme)
         setRenderBounds()
-        setColors(theme)
         setupSideMenuTabs()
 
         async function onTilesetLoaded() {
@@ -323,7 +323,6 @@ export function MapViewer(props: MapViewerProps) {
             cancelAnimationFrame(handler)
 
             props.threeConfig.current.scene.remove(grid.current)
-            grid.current.dispose()
 
             props.sideMenuRef.current.removeTab(MapViewerTab.MapInfo)
             props.tilesheets.current.clearAll()
@@ -338,7 +337,7 @@ export function MapViewer(props: MapViewerProps) {
                 onToggleGrid,
             )
         }
-    }, [tabs.openedTab, theme])
+    }, [theme, project])
 
     return (
         <>

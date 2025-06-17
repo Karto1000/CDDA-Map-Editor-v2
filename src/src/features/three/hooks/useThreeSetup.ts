@@ -1,9 +1,20 @@
-import {MutableRefObject, RefObject, useEffect, useRef} from "react";
+import {RefObject, useEffect, useRef} from "react";
 import Stats from "stats.js";
-import {AmbientLight, OrthographicCamera, Raycaster, Scene, WebGLRenderer} from "three";
-import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
+import {
+    AmbientLight,
+    BufferGeometry,
+    LineBasicMaterial,
+    LineSegments,
+    Object3D,
+    OrthographicCamera,
+    Raycaster,
+    Scene,
+    Vector3,
+    WebGLRenderer
+} from "three";
 import {ThreeConfig} from "../types/three.js";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
+import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -14,7 +25,51 @@ export type UseThreeSetupRet = {
     onResize: () => void
 }
 
+export type GridConfig = {
+    height: number,
+    width: number,
+    linesHeight: number,
+    linesWidth: number,
+    color: string
+}
+
+// Thanks -> https://stackoverflow.com/a/77012282
+export function createGrid(
+    config: GridConfig
+) {
+    const points = [];
+
+    const material = new LineBasicMaterial({
+        color: config.color,
+        transparent: true,
+        opacity: 0.2
+    });
+
+    const gridObject = new Object3D();
+    const stepw = 2 * config.width / config.linesWidth;
+    const steph = 2 * config.height / config.linesHeight;
+
+    // Add horizontal lines
+    for (let i = -config.height; i <= config.height; i += steph) {
+        points.push(new Vector3(-config.width, i, 0));
+        points.push(new Vector3(config.width, i, 0));
+    }
+
+    // Add vertical lines
+    for (let i = -config.width; i <= config.width; i += stepw) {
+        points.push(new Vector3(i, -config.height, 0));
+        points.push(new Vector3(i, config.height, 0));
+    }
+
+    const gridGeo = new BufferGeometry().setFromPoints(points);
+    const line = new LineSegments(gridGeo, material);
+
+    gridObject.add(line);
+    return gridObject
+}
+
 export function useThreeSetup(
+    theme: Theme,
     canvasRef: RefObject<HTMLCanvasElement>,
     canvasContainerRef: RefObject<HTMLDivElement>
 ): UseThreeSetupRet {
@@ -76,7 +131,7 @@ export function useThreeSetup(
         )
         camera.position.z = 999999
 
-        const renderer = new WebGLRenderer({canvas: canvasRef.current, alpha: true })
+        const renderer = new WebGLRenderer({canvas: canvasRef.current, alpha: true})
         renderer.setSize(canvasWidth, canvasHeight)
 
         const controls = new OrbitControls(camera, canvasRef.current)
@@ -97,6 +152,10 @@ export function useThreeSetup(
         threeConfigRef.current.controls = controls
         threeConfigRef.current.ambientLight = ambientLight
     }, []);
+
+    useEffect(() => {
+        threeConfigRef.current.renderer.setClearColor(getColorFromTheme(theme, "darker"))
+    }, [theme]);
 
     useEffect(() => {
         window.addEventListener("resize", onResize)

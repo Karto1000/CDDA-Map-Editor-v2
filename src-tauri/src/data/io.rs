@@ -353,7 +353,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                         CDDAIdentifier(id.clone()),
                                         map_data_collection
                                             .maps
-                                            .remove(&UVec2::ZERO)
+                                            .remove(&UVec2::ZERO.into())
                                             .unwrap(),
                                     );
                                 },
@@ -372,7 +372,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                             CDDAIdentifier(id.clone()),
                                             map_data_collection
                                                 .maps
-                                                .get(&UVec2::ZERO)
+                                                .get(&UVec2::ZERO.into())
                                                 .unwrap()
                                                 .clone(),
                                         );
@@ -421,7 +421,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                 nested_mapgen.clone(),
                                 map_data_collection
                                     .maps
-                                    .remove(&UVec2::ZERO)
+                                    .remove(&UVec2::ZERO.into())
                                     .unwrap(),
                             );
                         } else if let Some(update_mapgen) =
@@ -440,7 +440,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                                 update_mapgen.clone(),
                                 map_data_collection
                                     .maps
-                                    .remove(&UVec2::ZERO)
+                                    .remove(&UVec2::ZERO.into())
                                     .unwrap(),
                             );
                         }

@@ -12,7 +12,8 @@ use crate::features::tileset::legacy_tileset::{
 use crate::features::toast::ToastMessage;
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::util::{
-    get_current_project, get_json_data, CDDADataError, Load, Save,
+    get_current_project, get_json_data, CDDADataError, GetCurrentProjectError, Load,
+    Save,
 };
 use anyhow::Error;
 use log::{error, info, warn};
@@ -25,6 +26,14 @@ use std::time::Duration;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_test::block_on;
+
+#[tauri::command]
+pub async fn get_current_project_data(
+    editor_data: State<'_, Mutex<ProgramData>>,
+) -> Result<Project, GetCurrentProjectError> {
+    let lock = editor_data.lock().await;
+    get_current_project(&lock).map(Clone::clone)
+}
 
 #[tauri::command]
 pub async fn get_editor_data(

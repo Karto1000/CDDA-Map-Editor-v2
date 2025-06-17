@@ -13,7 +13,7 @@ use crate::data::{
 };
 use crate::features::program_data::ZLevel;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::util::Rotation;
+use crate::util::{Rotation, UVec2JsonKey};
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,
@@ -228,7 +228,7 @@ pub struct MapGenNested {
     pub invert_condition: bool,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapDataConfig {
     pub simulated_neighbors: HashMap<NeighborDirection, Vec<CDDAIdentifier>>,
 }
@@ -253,7 +253,7 @@ impl Default for MapDataConfig {
     }
 }
 
-#[derive(Debug, Default, Clone, Deserialize)]
+#[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub enum MapDataRotation {
     #[default]
     Deg0,
@@ -262,9 +262,9 @@ pub enum MapDataRotation {
     Deg270,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapData {
-    pub cells: IndexMap<UVec2, Cell>,
+    pub cells: IndexMap<UVec2JsonKey, Cell>,
     pub fill: Option<DistributionInner>,
     pub map_size: UVec2,
     pub predecessor: Option<CDDAIdentifier>,
@@ -295,7 +295,7 @@ impl Default for MapData {
         for y in 0..DEFAULT_MAP_HEIGHT {
             for x in 0..DEFAULT_MAP_WIDTH {
                 cells.insert(
-                    UVec2::new(x as u32, y as u32),
+                    UVec2JsonKey(UVec2::new(x as u32, y as u32)),
                     Cell { character: ' ' },
                 );
             }
@@ -433,7 +433,7 @@ impl MapData {
 
         self.cells.iter().for_each(|(p, _)| {
             let transformed_position =
-                self.transform_coordinates(&p.as_ivec2());
+                self.transform_coordinates(&p.0.as_ivec2());
             let coords =
                 IVec3::new(transformed_position.x, transformed_position.y, z);
             // If there was no id added from the predecessor mapgen, we will add the fill sprite here
@@ -565,7 +565,7 @@ impl MapData {
         self.cells.iter().for_each(|(p, cell)| {
             // Transform the coordinate `p` based on the map rotation
             let transformed_position =
-                self.transform_coordinates(&p.as_ivec2());
+                self.transform_coordinates(&p.0.as_ivec2());
 
             let ident_commands = self.get_identifier_change_commands(
                 &cell.character,
@@ -661,27 +661,6 @@ impl MapData {
         }
 
         commands
-    }
-}
-
-impl Serialize for MapData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut serialized_cells = HashMap::new();
-
-        for (key, value) in &self.cells {
-            let key_str = format!("{},{}", key.x, key.y);
-            serialized_cells.insert(key_str, value);
-        }
-
-        let mut state = serializer
-            .serialize_struct("MapData", 2 + serialized_cells.len())?;
-
-        state.serialize_field("cells", &serialized_cells)?;
-
-        state.end()
     }
 }
 

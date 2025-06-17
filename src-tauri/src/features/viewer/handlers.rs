@@ -84,15 +84,6 @@ pub enum GetMapViewerError {
     GetCurrentProjectError(#[from] GetCurrentProjectError),
 }
 
-#[tauri::command]
-pub async fn get_current_project_data(
-    editor_data: State<'_, Mutex<ProgramData>>,
-) -> Result<Project, GetCurrentProjectError> {
-    let editor_data_lock = editor_data.lock().await;
-    let data = get_current_project(&editor_data_lock)?;
-    Ok(data.clone())
-}
-
 #[derive(Debug, Error)]
 pub enum GetCalculatedParametersError {
     #[error(transparent)]

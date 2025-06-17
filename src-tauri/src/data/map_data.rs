@@ -19,6 +19,7 @@ use crate::features::map::{
     Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, Property,
 };
 use crate::features::program_data::{MapCoordinates, MapDataCollection};
+use crate::util::UVec2JsonKey;
 use cdda_lib::types::{
     CDDAIdentifier, CDDAString, DistributionInner, MapGenValue, MeabyVec,
     MeabyWeighted, NumberOrRange, ParameterIdentifier, Weighted,
@@ -999,7 +1000,8 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
                     for map_row_index in 0..num_rows {
                         for map_column_index in 0..num_cols {
-                            let mut nested_cells = IndexMap::new();
+                            let mut nested_cells: IndexMap<UVec2JsonKey, Cell> =
+                                IndexMap::new();
 
                             match self.object.rows.clone() {
                                 None => {
@@ -1009,7 +1011,8 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                                                 UVec2::new(
                                                     column as u32,
                                                     row as u32,
-                                                ),
+                                                )
+                                                .into(),
                                                 Cell { character: ' ' },
                                             );
                                         }
@@ -1043,7 +1046,8 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                                                 UVec2::new(
                                                     column_index as u32,
                                                     row_index as u32,
-                                                ),
+                                                )
+                                                .into(),
                                                 Cell { character },
                                             );
                                         }
@@ -1058,7 +1062,7 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                             let mut map_data = MapData::default();
 
                             let properties = self.get_properties();
-                            let place = self.get_place(map_coordinates);
+                            let place = self.get_place(map_coordinates.into());
 
                             map_data.cells = nested_cells;
                             map_data.properties = properties;
@@ -1080,7 +1084,8 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                                 UVec2::new(
                                     map_column_index as u32,
                                     map_row_index as u32,
-                                ),
+                                )
+                                .into(),
                                 map_data,
                             );
                         }
@@ -1095,9 +1100,9 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
         let mut map_data = MapData::default();
 
         let properties = self.get_properties();
-        let place = self.get_place(UVec2::ZERO);
+        let place = self.get_place(UVec2::ZERO.into());
 
-        let mut cells = IndexMap::new();
+        let mut cells: IndexMap<UVec2JsonKey, Cell> = IndexMap::new();
 
         for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y
         {
@@ -1114,7 +1119,10 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                     },
                 };
 
-                cells.insert(UVec2::new(column, row), Cell { character: char });
+                cells.insert(
+                    UVec2::new(column, row).into(),
+                    Cell { character: char },
+                );
             }
         }
 
@@ -1129,7 +1137,7 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
         map_data.flags = self.object.common.flags.clone();
         map_data.predecessor = self.object.common.predecessor_mapgen.clone();
 
-        collection.maps.insert(UVec2::ZERO, map_data);
+        collection.maps.insert(UVec2::ZERO.into(), map_data);
 
         Ok(collection)
     }

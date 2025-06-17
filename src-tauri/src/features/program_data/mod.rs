@@ -17,7 +17,7 @@ use crate::features::map::{
 use crate::features::program_data::keybinds::{Keybind, KeybindAction};
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::impl_serialize_for_error;
-use crate::util::{IVec3JsonKey, Load, Save, SaveError};
+use crate::util::{IVec3JsonKey, Load, Save, SaveError, UVec2JsonKey};
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
@@ -35,7 +35,7 @@ use thiserror::Error;
 pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 
 pub type ZLevel = i32;
-pub type MapCoordinates = UVec2;
+pub type MapCoordinates = UVec2JsonKey;
 pub type ProjectName = String;
 
 #[derive(Debug, Error)]
@@ -203,9 +203,9 @@ impl MapDataCollection {
         let size_value = size.value();
 
         let mut maps = HashMap::new();
-        for y in 0..(size_value.y % DEFAULT_MAP_DATA_SIZE.y) {
-            for x in 0..(size_value.x & DEFAULT_MAP_DATA_SIZE.x) {
-                maps.insert(UVec2::new(x, y), MapData::default());
+        for y in 0..=(size_value.y % DEFAULT_MAP_DATA_SIZE.y) {
+            for x in 0..=(size_value.x & DEFAULT_MAP_DATA_SIZE.x) {
+                maps.insert(UVec2::new(x, y).into(), MapData::default());
             }
         }
 
@@ -323,7 +323,7 @@ impl MapDataCollection {
 impl Default for MapDataCollection {
     fn default() -> Self {
         let mut maps = HashMap::new();
-        maps.insert(MapCoordinates::ZERO, MapData::default());
+        maps.insert(UVec2::ZERO.into(), MapData::default());
         Self { maps }
     }
 }

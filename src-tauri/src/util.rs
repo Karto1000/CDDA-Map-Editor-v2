@@ -20,6 +20,20 @@ use tokio::sync::MutexGuard;
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
 pub struct UVec2JsonKey(pub UVec2);
 
+impl From<UVec2> for UVec2JsonKey {
+    fn from(value: UVec2) -> Self {
+        Self(value)
+    }
+}
+
+impl Deref for UVec2JsonKey {
+    type Target = UVec2;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 impl Serialize for UVec2JsonKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

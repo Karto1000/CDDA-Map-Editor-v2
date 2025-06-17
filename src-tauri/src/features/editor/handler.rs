@@ -1,10 +1,11 @@
 use crate::features::editor::data::ZLevels;
 use crate::features::editor::{MapEditor, MapSize};
+use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::{
     MapDataCollection, ProgramData, Project, ProjectType, SavedProject, Tab,
     TabType,
 };
-use crate::util::get_size;
+use crate::util::{get_size, Save, SaveError};
 use crate::{events, impl_serialize_for_error};
 use glam::{IVec2, UVec2};
 use log::info;
@@ -20,6 +21,9 @@ use tokio::sync::Mutex;
 pub enum NewMapEditorError {
     #[error(transparent)]
     TauriError(#[from] tauri::Error),
+
+    #[error(transparent)]
+    SaveError(#[from] SaveError),
 }
 
 impl_serialize_for_error!(NewMapEditorError);
@@ -35,6 +39,8 @@ pub async fn new_map_editor(
 ) -> Result<(), NewMapEditorError> {
     info!("Creating new map editor");
 
+    let mut program_data_lock = program_data.lock().await;
+
     let mut map_collection = HashMap::new();
     for z in z_levels.value().0..=z_levels.value().1 {
         let collection = MapDataCollection::new(map_size.clone());
@@ -49,8 +55,15 @@ pub async fn new_map_editor(
     let new_project =
         Project::new(project_name.clone(), ProjectType::MapEditor(map_editor));
 
-    let mut editor_data_lock = program_data.lock().await;
-    editor_data_lock.create_and_open_project(new_project, path);
+    let project_saver = ProjectSaver { path: path.clone() };
+    project_saver.save(&new_project).await?;
+
+    program_data_lock.create_and_open_project(new_project, path);
+
+    let program_data_saver = ProgramDataSaver {
+        path: program_data_lock.config.config_path.clone(),
+    };
+    program_data_saver.save(&program_data_lock).await?;
 
     app.emit(
         events::TAB_CREATED,

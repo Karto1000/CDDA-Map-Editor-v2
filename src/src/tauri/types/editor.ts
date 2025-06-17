@@ -48,6 +48,26 @@ export function getKeybindingText(kb: Keybind): string {
     return `${kb.withCtrl ? "Ctrl+" : ""}${kb.withAlt ? "Alt+" : ""}${kb.withShift ? "Shift+" : ""}${kb.key}`
 }
 
+export type MapViewerData = {
+    mapViewer: {
+        // TODO: Add more fields
+        size: [number, number]
+    }
+}
+
+export type MapEditorData = {
+    mapEditor: {
+        // TODO: Add more fields
+        size: [number, number]
+    }
+}
+
+
+export type Project<T> = {
+    name: string,
+    project_type: T
+}
+
 export type ProgramConfig = {
     cdda_path?: string
     selected_tileset?: string

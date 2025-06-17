@@ -7,8 +7,9 @@ use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::features::editor::handler::new_map_editor;
 use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
-    cdda_installation_directory_picked, close_project, get_editor_data,
-    open_project, open_recent_project, save_program_data, tileset_picked,
+    cdda_installation_directory_picked, close_project,
+    get_current_project_data, get_editor_data, open_project,
+    open_recent_project, save_program_data, tileset_picked,
 };
 use crate::features::program_data::{
     get_map_data_collection_from_map_viewer, MappedCDDAIdContainer, ProgramData, ProjectName, ProjectType,
@@ -20,9 +21,9 @@ use crate::features::tileset::handlers::{
 use crate::features::tileset::legacy_tileset::fallback::get_fallback_tilesheet;
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::viewer::handlers::{
-    create_viewer, get_calculated_parameters, get_current_project_data,
-    get_project_cell_data, get_sprites, new_nested_mapgen_viewer,
-    new_single_mapgen_viewer, new_special_mapgen_viewer, reload_project,
+    create_viewer, get_calculated_parameters, get_project_cell_data,
+    get_sprites, new_nested_mapgen_viewer, new_single_mapgen_viewer,
+    new_special_mapgen_viewer, reload_project,
 };
 use crate::features::viewer::MapViewer;
 use crate::util::Load;
@@ -130,11 +131,28 @@ async fn frontend_ready(
                 info!("Loading Project {}", name);
 
                 match &mut project.project_type {
-                    ProjectType::MapEditor(_) => {
-                        todo!()
+                    ProjectType::MapEditor(map_editor) => {
+                        info!("Opening Map Editor");
+
+                        for (_, maps) in map_editor.maps.iter_mut() {
+                            match maps.calculate_parameters(&json_data.palettes)
+                            {
+                                Ok(_) => {},
+                                Err(e) => continue,
+                            }
+                        }
+
+                        app.emit(
+                            events::TAB_CREATED,
+                            Tab {
+                                name: project.name.clone(),
+                                tab_type: TabType::MapEditor,
+                            },
+                        )
+                        .unwrap();
                     },
                     ProjectType::MapViewer(map_viewer) => {
-                        info!("Opening Live viewer",);
+                        info!("Opening Live viewer");
 
                         let collection =
                             match get_map_data_collection_from_map_viewer(

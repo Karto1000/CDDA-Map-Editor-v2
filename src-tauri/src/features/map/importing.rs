@@ -27,7 +27,8 @@ pub enum MapDataImporterError {
     NoMapDataFound,
     #[error("Could not read bytes of file at path {0}")]
     ReadError(PathBuf),
-    #[error("The file at {0} is not a valid CDDA json file. CDDA Json files must have a top level array"
+    #[error(
+        "The file at {0} is not a valid CDDA json file. CDDA Json files must have a top level array"
     )]
     InvalidJson(PathBuf),
 }
@@ -85,10 +86,13 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
                                         Ok(mut map_data) => {
                                             match map_data
                                                 .maps
-                                                .remove(&UVec2::ZERO)
+                                                .remove(&UVec2::ZERO.into())
                                             {
                                                 None => {
-                                                    warn!("Missing map data at 0,0 for duplicate terrain {}", om_id_to_find);
+                                                    warn!(
+                                                        "Missing map data at 0,0 for duplicate terrain {}",
+                                                        om_id_to_find
+                                                    );
                                                     break;
                                                 },
                                                 Some(v) => {
@@ -125,10 +129,13 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
                                         Ok(mut map_data) => {
                                             match map_data
                                                 .maps
-                                                .remove(&UVec2::ZERO)
+                                                .remove(&UVec2::ZERO.into())
                                             {
                                                 None => {
-                                                    warn!("Missing map data at 0,0 for duplicate terrain {}", om_id_to_find);
+                                                    warn!(
+                                                        "Missing map data at 0,0 for duplicate terrain {}",
+                                                        om_id_to_find
+                                                    );
                                                     break;
                                                 },
                                                 Some(v) => {
@@ -168,7 +175,10 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
                                                     .get(k.y as usize)
                                                 {
                                                     None => {
-                                                        warn!("Missing nested terrain identifier list for map data {}", om_id_to_find);
+                                                        warn!(
+                                                            "Missing nested terrain identifier list for map data {}",
+                                                            om_id_to_find
+                                                        );
                                                         break;
                                                     },
                                                     Some(id_list) => id_list,
@@ -177,7 +187,10 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
                                                 match id_list.get(k.x as usize)
                                                 {
                                                     None => {
-                                                        warn!("Missing nested terrain identifier list for map data {}", om_id_to_find);
+                                                        warn!(
+                                                            "Missing nested terrain identifier list for map data {}",
+                                                            om_id_to_find
+                                                        );
                                                         break;
                                                     },
                                                     Some(id) => {
@@ -491,7 +504,8 @@ impl Load<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
                             UVec2::new(
                                 om_special.point.x as u32,
                                 om_special.point.y as u32,
-                            ),
+                            )
+                            .into(),
                             map_data,
                         );
                     },
@@ -500,7 +514,8 @@ impl Load<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
                             UVec2::new(
                                 om_special.point.x as u32,
                                 om_special.point.y as u32,
-                            ),
+                            )
+                            .into(),
                             map_data,
                         );
                     },

@@ -38,14 +38,16 @@ export const EditorDataContext = createContext<ProgramData | null>(null)
 
 function App() {
     const eventBus = useRef<EventTarget>(new EventTarget())
+    const [theme] = useTheme(eventBus);
+
     const canvasContainerRef = useRef<HTMLDivElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const {threeConfigRef, onResize} = useThreeSetup(
+        theme,
         canvasRef,
         canvasContainerRef
     )
 
-    const [theme] = useTheme(eventBus);
     const editorData = useEditorData()
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
@@ -111,7 +113,18 @@ function App() {
                 />
 
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor)
-                return <MapEditor/>
+                return <MapEditor
+                    showGridRef={showGridRef}
+                    eventBus={eventBus}
+                    sideMenuRef={sideMenuRef}
+                    tilesheets={tilesheets}
+                    spritesheetConfig={spritesheetConfig}
+                    threeConfig={threeConfigRef}
+                    canvas={{
+                        canvasRef,
+                        canvasContainerRef
+                    }}
+                />
         }
 
         return <NoTabScreen importMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>
