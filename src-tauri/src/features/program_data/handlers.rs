@@ -3,7 +3,7 @@ use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::program_data::io::ProgramDataSaver;
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, EditorData, LiveViewerData, Project, ProjectName, ProjectType,
+    get_map_data_collection_from_live_viewer_data, LiveViewerData, ProgramData, Project, ProjectName, ProjectType,
     Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
@@ -24,8 +24,8 @@ use tokio_test::block_on;
 
 #[tauri::command]
 pub async fn get_editor_data(
-    editor_data: State<'_, Mutex<EditorData>>,
-) -> Result<EditorData, ()> {
+    editor_data: State<'_, Mutex<ProgramData>>,
+) -> Result<ProgramData, ()> {
     Ok(editor_data.lock().await.clone())
 }
 
@@ -42,7 +42,7 @@ pub enum InstallationPickedError {
 pub async fn cdda_installation_directory_picked(
     path: PathBuf,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), InstallationPickedError> {
     let gfx_dir = fs::read_dir(&path.join("gfx")).map_err(|_| {
@@ -109,7 +109,7 @@ pub enum TilesetPickedError {
 pub async fn tileset_picked(
     tileset: String,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
 ) -> Result<(), TilesetPickedError> {
     let mut editor_data_lock = editor_data.lock().await;
@@ -156,7 +156,7 @@ pub enum SaveEditorDataError {
 
 #[tauri::command]
 pub async fn save_editor_data(
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<(), SaveEditorDataError> {
     let lock = editor_data.lock().await;
 
@@ -176,7 +176,7 @@ pub async fn save_editor_data(
 pub async fn close_project(
     app: AppHandle,
     name: ProjectName,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;
 
@@ -219,7 +219,7 @@ pub enum OpenProjectError {
 pub async fn open_recent_project(
     name: ProjectName,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), OpenProjectError> {
     let mut editor_data_lock = editor_data.lock().await;
@@ -298,7 +298,7 @@ pub async fn open_recent_project(
 pub async fn open_project(
     name: String,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     file_watcher: State<'_, Mutex<Option<tokio::task::JoinHandle<()>>>>,
 ) -> Result<(), ()> {
     let mut file_watcher_lock = file_watcher.lock().await;

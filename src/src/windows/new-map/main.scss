@@ -4,13 +4,19 @@
 
 }
 
-.new-map-viewer-body {
+.new-map-viewer-body, .new-map-editor-body {
   overflow-y: auto;
   display: flex;
   height: 100%;
   flex-direction: column;
 
-  .new-mapgen-form {
+  .new-mapgen-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
+  .new-mapgen-form, .new-editor-form {
     display: flex;
     flex-direction: column;
     justify-content: space-between;

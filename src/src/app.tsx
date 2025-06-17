@@ -22,6 +22,7 @@ import {MapViewer} from "./features/viewer/mapViewer.js";
 import {SideMenu, SideMenuRef} from "./shared/components/imguilike/sideMenu.js";
 import {openWindow, WindowLabel} from "./windows/lib.js";
 import {useKeybindings} from "./shared/hooks/useKeybindings.js";
+import {MapEditor} from "./features/editor/mapEditor.js";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -108,6 +109,9 @@ function App() {
                         canvasContainerRef
                     }}
                 />
+
+            if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor)
+                return <MapEditor/>
         }
 
         return <NoTabScreen importMapWindowRef={importMapWindowRef} newMapWindowRef={newMapWindowRef}/>

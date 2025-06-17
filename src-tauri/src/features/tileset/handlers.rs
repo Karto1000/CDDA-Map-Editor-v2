@@ -1,5 +1,5 @@
 use crate::features::program_data::{
-    CDDAPathError, EditorData, SelectedTilesetError,
+    CDDAPathError, ProgramData, SelectedTilesetError,
 };
 use crate::features::tileset::legacy_tileset::fallback::{
     get_fallback_config, FALLBACK_TILESHEET_IMAGE,
@@ -22,7 +22,7 @@ pub enum GetSpritesheetsError {
 }
 #[tauri::command]
 pub async fn get_info_of_current_tileset(
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<Value, GetSpritesheetsError> {
     let lock = editor_data.lock().await;
 
@@ -56,7 +56,7 @@ pub enum DownloadSpritesheetError {
 #[tauri::command(rename_all = "snake_case")]
 pub async fn download_spritesheet(
     name: String,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<Response, DownloadSpritesheetError> {
     info!("Loading spritesheet {}", &name);
 

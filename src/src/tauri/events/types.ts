@@ -58,6 +58,7 @@ export enum TauriCommand {
     OPEN_RECENT_PROJECT = "open_recent_project",
     ABOUT = "about",
     CLOSE_APP = "close_app",
+    NEW_MAP_EDITOR = "new_map_editor",
 }
 
 export type AboutInfo = {
@@ -76,8 +77,7 @@ export interface TauriCommandMap {
     };
     [TauriCommand.SAVE_EDITOR_DATA]: {};
     [TauriCommand.GET_CURRENT_PROJECT_DATA]: {};
-    [TauriCommand.GET_SPRITES]: {
-    };
+    [TauriCommand.GET_SPRITES]: {};
     [TauriCommand.RELOAD_PROJECT]: {};
     [TauriCommand.OPEN_PROJECT]: {
         name: string
@@ -96,11 +96,13 @@ export interface TauriCommandMap {
     [TauriCommand.FRONTEND_READY]: {};
     [TauriCommand.NEW_SINGLE_MAPGEN_VIEWER]: {
         path: string
+        projectSavePath: string,
         omTerrainName: string,
         projectName: string,
     },
     [TauriCommand.NEW_SPECIAL_MAPGEN_VIEWER]: {
         path: string
+        projectSavePath: string,
         omTerrainName: string,
         projectName: string,
         specialWidth: number,
@@ -110,6 +112,7 @@ export interface TauriCommandMap {
     },
     [TauriCommand.NEW_NESTED_MAPGEN_VIEWER]: {
         path: string
+        projectSavePath: string,
         omTerrainName: string,
         projectName: string,
         nestedWidth: number,
@@ -121,6 +124,12 @@ export interface TauriCommandMap {
     },
     [TauriCommand.ABOUT]: {};
     [TauriCommand.CLOSE_APP]: {};
+    [TauriCommand.NEW_MAP_EDITOR]: {
+        path: string
+        projectName: string
+        zLevels: [number, number],
+        mapSize: [number, number],
+    }
 }
 
 export enum TauriEvent {

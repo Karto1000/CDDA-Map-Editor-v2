@@ -272,10 +272,12 @@ pub struct MapData {
     pub config: MapDataConfig,
     pub rotation: MapDataRotation,
 
-    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
     pub palettes: Vec<MapGenValue>,
     pub flags: HashSet<MapDataFlag>,
+
+    #[serde(skip)]
+    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
 
     #[serde(skip)]
     pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
@@ -780,7 +782,7 @@ mod tests {
     async fn test_fill_ter() {
         let mut map_loader = SingleMapDataImporter {
             paths: vec![
-                PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json")
+                PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json"),
             ],
             om_terrain: "test_fill_ter".into(),
         };
@@ -809,7 +811,9 @@ mod tests {
         let cdda_data = TEST_CDDA_DATA.get().await;
 
         let mut map_loader = SingleMapDataImporter {
-            paths: vec![PathBuf::from(TEST_DATA_PATH).join("test_terrain.json")],
+            paths: vec![
+                PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
+            ],
             om_terrain: "test_terrain".into(),
         };
 
@@ -862,7 +866,9 @@ mod tests {
         let cdda_data = TEST_CDDA_DATA.get().await;
 
         let mut map_loader = SingleMapDataImporter {
-            paths: vec![PathBuf::from(TEST_DATA_PATH).join("test_terrain.json")],
+            paths: vec![
+                PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
+            ],
             om_terrain: "test_terrain".into(),
         };
 

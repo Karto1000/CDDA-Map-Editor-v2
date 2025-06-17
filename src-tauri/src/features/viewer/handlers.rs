@@ -10,7 +10,7 @@ use crate::features::map::importing::{
 use crate::features::map::MappedCDDAId;
 use crate::features::map::SPECIAL_EMPTY_CHAR;
 use crate::features::map::{CalculateParametersError, DEFAULT_MAP_DATA_SIZE};
-use crate::features::program_data::io::ProgramDataSaver;
+use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::GetLiveViewerDataError;
 use crate::features::program_data::LiveViewerData;
 use crate::features::program_data::MappedCDDAIdContainer;
@@ -20,20 +20,20 @@ use crate::features::program_data::ZLevel;
 use crate::features::program_data::{
     get_map_data_collection_from_live_viewer_data, Tab, TabType,
 };
-use crate::features::program_data::{EditorData, RecentProject};
+use crate::features::program_data::{ProgramData, RecentProject};
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::features::tileset::Tilesheet;
 use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
 use crate::impl_serialize_for_error;
 use crate::util;
-use crate::util::CDDADataError;
 use crate::util::GetCurrentProjectError;
 use crate::util::IVec3JsonKey;
 use crate::util::Save;
 use crate::util::UVec2JsonKey;
 use crate::util::{get_current_project, get_json_data, get_json_data_mut};
 use crate::util::{get_current_project_mut, get_size, Load};
+use crate::util::{CDDADataError, SaveError};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
 use cdda_lib::DEFAULT_MAP_HEIGHT;
@@ -74,7 +74,7 @@ use tokio_test::block_on;
 
 #[tauri::command]
 pub async fn get_current_project_data(
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<Project, GetCurrentProjectError> {
     let editor_data_lock = editor_data.lock().await;
     let data = util::get_current_project(&editor_data_lock)?;
@@ -91,7 +91,7 @@ impl_serialize_for_error!(GetCalculatedParametersError);
 
 #[tauri::command]
 pub async fn get_calculated_parameters(
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
 ) -> Result<
     HashMap<IVec3JsonKey, IndexMap<ParameterIdentifier, CDDAIdentifier>>,
     GetCalculatedParametersError,
@@ -132,7 +132,7 @@ impl_serialize_for_error!(GetSpritesError);
 pub async fn get_sprites(
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     mapped_cdda_ids: State<
         '_,
@@ -351,7 +351,7 @@ impl_serialize_for_error!(ReloadProjectError);
 
 #[tauri::command]
 pub async fn reload_project(
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), ReloadProjectError> {
     let json_data_lock = json_data.lock().await;
@@ -415,10 +415,11 @@ impl_serialize_for_error!(NewMapgenViewerError);
 #[tauri::command]
 pub async fn new_single_mapgen_viewer(
     path: PathBuf,
+    project_save_path: PathBuf,
     om_terrain_name: String,
     project_name: String,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), NewMapgenViewerError> {
     let data = serde_json::to_string_pretty(&json!(
@@ -446,6 +447,7 @@ pub async fn new_single_mapgen_viewer(
             mapgen_file_paths: vec![path],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
+            save_path: project_save_path,
         },
         editor_data,
         json_data,
@@ -458,6 +460,7 @@ pub async fn new_single_mapgen_viewer(
 #[tauri::command]
 pub async fn new_special_mapgen_viewer(
     path: PathBuf,
+    project_save_path: PathBuf,
     om_terrain_name: String,
     project_name: String,
     special_width: Bound_usize<1, { usize::MAX }>,
@@ -465,7 +468,7 @@ pub async fn new_special_mapgen_viewer(
     special_z_from: i32,
     special_z_to: i32,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), NewMapgenViewerError> {
     let mut data = Vec::new();
@@ -515,15 +518,17 @@ pub async fn new_special_mapgen_viewer(
             rows.push(DEFAULT_EMPTY_CHAR_ROW.repeat(special_width.get()));
         }
 
-        data.push(json!({
-            "type": "mapgen",
-            "method": "json",
-            "om_terrain": z_om_terrain_names,
-            "object": {
-                "fill_ter": "t_region_groundcover",
-                "rows": rows
+        data.push(json!(
+            {
+                "type": "mapgen",
+                "method": "json",
+                "om_terrain": z_om_terrain_names,
+                "object": {
+                    "fill_ter": "t_region_groundcover",
+                    "rows": rows
+                }
             }
-        }));
+        ));
     }
 
     let data_ser = serde_json::to_string_pretty(&data).unwrap();
@@ -533,6 +538,7 @@ pub async fn new_special_mapgen_viewer(
     create_viewer(
         app,
         OpenViewerData::Special {
+            save_path: project_save_path,
             mapgen_file_paths: vec![path.clone()],
             om_file_paths: vec![path.clone()],
             project_name,
@@ -549,12 +555,13 @@ pub async fn new_special_mapgen_viewer(
 #[tauri::command]
 pub async fn new_nested_mapgen_viewer(
     path: PathBuf,
+    project_save_path: PathBuf,
     om_terrain_name: String,
     project_name: String,
     nested_width: Bound_usize<1, 24>,
     nested_height: Bound_usize<1, 24>,
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), NewMapgenViewerError> {
     let mut rows = Vec::new();
@@ -566,10 +573,10 @@ pub async fn new_nested_mapgen_viewer(
     let data = json!(
         [
             {
-            "type": "mapgen",
-            "method": "json",
-            "nested_mapgen_id": om_terrain_name,
-            "object": {
+                "type": "mapgen",
+                "method": "json",
+                "nested_mapgen_id": om_terrain_name,
+                "object": {
                     "mapgensize": [nested_width, nested_height],
                     "fill_ter": "t_region_groundcover",
                     "rows": rows
@@ -588,6 +595,7 @@ pub async fn new_nested_mapgen_viewer(
             mapgen_file_paths: vec![path.clone()],
             project_name,
             om_id: CDDAIdentifier(om_terrain_name),
+            save_path: project_save_path,
         },
         editor_data,
         json_data,
@@ -605,11 +613,13 @@ pub async fn new_nested_mapgen_viewer(
 )]
 pub enum OpenViewerData {
     Terrain {
+        save_path: PathBuf,
         mapgen_file_paths: Vec<PathBuf>,
         project_name: String,
         om_id: CDDAIdentifier,
     },
     Special {
+        save_path: PathBuf,
         mapgen_file_paths: Vec<PathBuf>,
         om_file_paths: Vec<PathBuf>,
         project_name: String,
@@ -630,6 +640,9 @@ pub enum OpenViewerError {
 
     #[error(transparent)]
     CalculateParametersError(#[from] CalculateParametersError),
+
+    #[error(transparent)]
+    SaveError(#[from] SaveError),
 }
 impl_serialize_for_error!(OpenViewerError);
 
@@ -637,7 +650,7 @@ impl_serialize_for_error!(OpenViewerError);
 pub async fn create_viewer(
     app: AppHandle,
     data: OpenViewerData,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
 ) -> Result<(), OpenViewerError> {
     info!("Creating Live viewer");
@@ -651,6 +664,7 @@ pub async fn create_viewer(
             project_name,
             mapgen_file_paths,
             om_id,
+            save_path,
         } => {
             if editor_data_lock
                 .loaded_projects
@@ -677,6 +691,9 @@ pub async fn create_viewer(
                     om_id,
                 }),
             );
+
+            let project_saver = ProjectSaver { path: save_path };
+            project_saver.save(&new_project).await?;
 
             new_project.maps.insert(0, collection);
             editor_data_lock
@@ -706,6 +723,7 @@ pub async fn create_viewer(
             mapgen_file_paths,
             om_file_paths,
             om_id,
+            save_path,
         } => {
             if editor_data_lock
                 .loaded_projects
@@ -738,6 +756,9 @@ pub async fn create_viewer(
                 }),
             );
 
+            let project_saver = ProjectSaver { path: save_path };
+            project_saver.save(&new_project).await?;
+
             new_project.maps = maps;
             editor_data_lock
                 .loaded_projects
@@ -761,13 +782,7 @@ pub async fn create_viewer(
                 },
             )?;
         },
-    }
-
-    let saver = ProgramDataSaver {
-        path: editor_data_lock.config.config_path.clone(),
     };
-
-    saver.save(editor_data_lock.deref()).await.unwrap();
 
     app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())?;
 

@@ -14,7 +14,7 @@ use crate::data::vehicles::CDDAVehicle;
 use crate::data::{CDDAJsonEntry, TileLayer};
 use crate::features::map::MapData;
 use crate::features::program_data::io::ProgramDataLoader;
-use crate::features::program_data::{EditorData, MapDataCollection};
+use crate::features::program_data::{MapDataCollection, ProgramData};
 use crate::util::Load;
 use anyhow::Error;
 use async_walkdir::WalkDir;
@@ -689,12 +689,14 @@ pub async fn load_cdda_json_data(
     data_loader.load().await
 }
 
-pub fn get_saved_editor_data() -> Result<EditorData, Error> {
+pub fn get_saved_editor_data() -> Result<ProgramData, Error> {
     let project_dir = ProjectDirs::from("", "", "CDDA Map Editor");
 
     let directory_path = match project_dir {
         None => {
-            warn!("No valid project directory found, creating data folder application directory instead");
+            warn!(
+                "No valid project directory found, creating data folder application directory instead"
+            );
             let app_dir = match std::env::current_dir() {
                 Ok(d) => d,
                 Err(e) => {
@@ -745,7 +747,7 @@ pub fn get_saved_editor_data() -> Result<EditorData, Error> {
                         "Error while reading config.json file, recreating file"
                     );
 
-                    let mut default_editor_data = EditorData::default();
+                    let mut default_editor_data = ProgramData::default();
                     default_editor_data.config.config_path =
                         directory_path.clone();
 
@@ -765,7 +767,7 @@ pub fn get_saved_editor_data() -> Result<EditorData, Error> {
             info!("config.json file does not exist");
             info!("Creating config.json file with default data");
 
-            let mut default_editor_data = EditorData::default();
+            let mut default_editor_data = ProgramData::default();
             default_editor_data.config.config_path = directory_path.clone();
 
             let serialized = serde_json::to_string_pretty(&default_editor_data)

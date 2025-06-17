@@ -255,6 +255,12 @@ export function Header(props: Props) {
                                                 <Icon name={IconName.EyeMedium} width={16} height={16}/>
                                             </div>
                                         }
+                                        {
+                                            t.tab_type === TabTypeKind.MapEditor &&
+                                            <div className={"tab-type-indicator"}>
+                                                <Icon name={IconName.BucketMedium} width={16} height={16}/>
+                                            </div>
+                                        }
                                         <p>{t.name}</p>
                                         <div onClick={async (e) => {
                                             e.preventDefault()

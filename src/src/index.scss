@@ -79,10 +79,6 @@
   src: local("Unifont"), url(../public/fonts/unifont.ttf) format('truetype');
 }
 
-p {
-  margin: 4px 0;
-}
-
 * {
   font-smooth: never;
   -webkit-font-smoothing: none;
@@ -117,6 +113,17 @@ input, button, select {
   box-sizing: border-box;
   font-size: 1rem;
 }
+
+input {
+  &::-webkit-outer-spin-button,
+  &::-webkit-inner-spin-button,
+  &[type=number] {
+    -webkit-appearance: none;
+    appearance: none;
+    margin: 0;
+  }
+}
+
 
 form {
   display: flex;

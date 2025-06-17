@@ -7,8 +7,8 @@ import {EditorData, getKeybindingText, Keybind} from "../../tauri/types/editor.j
 import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 import {open} from "@tauri-apps/plugin-dialog";
-import {DEFAULT_TILESET} from "../../features/editor/index.ts";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
+import {DEFAULT_TILESET} from "../../features/sprites/tilesheets.js";
 
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")

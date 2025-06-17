@@ -9,7 +9,7 @@ function Main() {
 
     useEffect(() => {
         (async () => {
-           const response = await tauriBridge.invoke<AboutInfo, never, TauriCommand.ABOUT>(TauriCommand.ABOUT, {})
+           const response = await tauriBridge.invoke<AboutInfo, never>(TauriCommand.ABOUT, {})
 
             if (response.type === BackendResponseType.Error) {
                 return
@@ -26,9 +26,13 @@ function Main() {
                 {
                     aboutInfo &&
                     <div>
-                        <p>Version: {aboutInfo.version}</p>
-                        <p>Contributors: {aboutInfo.contributors}</p>
-                        <p>Description: {aboutInfo.description}</p>
+                        <p>
+                            Version: {aboutInfo.version}
+                            <br/>
+                            Contributors: {aboutInfo.contributors}
+                            <br/>
+                            Description: {aboutInfo.description}
+                        </p>
                     </div>
                 }
             </div>

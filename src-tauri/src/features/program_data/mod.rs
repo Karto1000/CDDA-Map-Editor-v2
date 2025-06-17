@@ -5,6 +5,7 @@ mod keybinds;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::palettes::Palettes;
 use crate::data::TileLayer;
+use crate::features::editor::MapSize;
 use crate::features::map::importing::{
     OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
     SingleMapDataImporterError,
@@ -87,6 +88,12 @@ pub async fn get_map_data_collection_from_live_viewer_data(
     Ok(map_data_collection)
 }
 
+pub async fn get_map_data_collection_from_map_editor(
+    state: &EditorSaveState,
+) -> Result<HashMap<ZLevel, MapDataCollection>, SaveError> {
+    todo!()
+}
+
 #[derive(Debug, Clone)]
 pub struct MappedCDDAIdContainer {
     pub ids: HashMap<IVec3, MappedCDDAIdsForTile>,
@@ -159,7 +166,7 @@ impl MappedCDDAIdContainer {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum ProjectType {
-    MapEditor(ProjectSaveState),
+    MapEditor(EditorSaveState),
     LiveViewer(LiveViewerData),
 }
 
@@ -180,7 +187,7 @@ pub enum LiveViewerData {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(tag = "state")]
-pub enum ProjectSaveState {
+pub enum EditorSaveState {
     #[default]
     Unsaved,
     Saved {
@@ -224,7 +231,7 @@ impl Default for Project {
             name: "New Project".to_string(),
             maps,
             size: DEFAULT_MAP_DATA_SIZE,
-            ty: ProjectType::MapEditor(ProjectSaveState::Unsaved),
+            ty: ProjectType::MapEditor(EditorSaveState::Unsaved),
         }
     }
 }
@@ -235,6 +242,19 @@ pub struct MapDataCollection {
 }
 
 impl MapDataCollection {
+    pub fn new(size: MapSize) -> Self {
+        let size_value = size.value();
+
+        let mut maps = HashMap::new();
+        for y in 0..(size_value.y % DEFAULT_MAP_DATA_SIZE.y) {
+            for x in 0..(size_value.x & DEFAULT_MAP_DATA_SIZE.x) {
+                maps.insert(UVec2::new(x, y), MapData::default());
+            }
+        }
+
+        Self { maps }
+    }
+
     pub fn map_to_global_cell_coords(
         map_coordinates: &MapCoordinates,
         cell_coordinates: &UVec2,
@@ -352,7 +372,7 @@ impl Default for MapDataCollection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EditorConfig {
+pub struct ProgramConfig {
     pub cdda_path: Option<PathBuf>,
     pub json_data_path: PathBuf,
     pub config_path: PathBuf,
@@ -373,7 +393,7 @@ pub enum SelectedTilesetError {
     NoTilesetSelected,
 }
 
-impl EditorConfig {
+impl ProgramConfig {
     pub fn get_cdda_path(&self) -> Result<PathBuf, CDDAPathError> {
         self.cdda_path
             .as_ref()
@@ -389,7 +409,7 @@ impl EditorConfig {
     }
 }
 
-impl Default for EditorConfig {
+impl Default for ProgramConfig {
     fn default() -> Self {
         Self {
             cdda_path: None,
@@ -435,8 +455,8 @@ impl PartialEq<Self> for RecentProject {
 impl Eq for RecentProject {}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct EditorData {
-    pub config: EditorConfig,
+pub struct ProgramData {
+    pub config: ProgramConfig,
 
     #[serde(skip)]
     pub loaded_projects: HashMap<ProjectName, Project>,

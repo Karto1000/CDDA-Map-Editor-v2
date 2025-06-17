@@ -1,7 +1,7 @@
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::features::map::DEFAULT_MAP_DATA_SIZE;
 use crate::features::program_data::{
-    EditorData, MapDataCollection, Project, ZLevel,
+    MapDataCollection, ProgramData, Project, ZLevel,
 };
 use cdda_lib::types::Weighted;
 use derive_more::with_trait::Display;
@@ -192,10 +192,10 @@ macro_rules! impl_serialize_for_error {
     (
         $ident: ident
     ) => {
-        impl Serialize for $ident {
+        impl serde::Serialize for $ident {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
-                S: Serializer,
+                S: serde::Serializer,
             {
                 serializer.serialize_str(&self.to_string())
             }
@@ -237,7 +237,7 @@ pub fn get_size(maps: &HashMap<ZLevel, MapDataCollection>) -> UVec2 {
 }
 
 pub fn get_current_project<'a>(
-    editor_data: &'a MutexGuard<EditorData>,
+    editor_data: &'a MutexGuard<ProgramData>,
 ) -> Result<&'a Project, GetCurrentProjectError> {
     let project_name = match &editor_data.opened_project {
         None => return Err(GetCurrentProjectError::NoProjectOpen),
@@ -257,7 +257,7 @@ pub fn get_current_project<'a>(
 }
 
 pub fn get_current_project_mut<'a>(
-    editor_data: &'a mut MutexGuard<EditorData>,
+    editor_data: &'a mut MutexGuard<ProgramData>,
 ) -> Result<&'a mut Project, GetCurrentProjectError> {
     let project_name = match editor_data.opened_project.clone() {
         None => return Err(GetCurrentProjectError::NoProjectOpen),

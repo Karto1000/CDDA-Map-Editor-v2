@@ -6,6 +6,8 @@ import {ThreeConfig} from "../three/types/three.js";
 import {logDeletion} from "../../shared/utils/log.js";
 
 export const MAX_DEPTH = 999997
+export const DEFAULT_TILESET = "None"
+
 const MAX_ROW = 1000
 const ANIMATION_FRAME_DURATION = 50
 

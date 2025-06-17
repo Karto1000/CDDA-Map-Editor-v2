@@ -4,12 +4,13 @@ mod features;
 mod util;
 
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
+use crate::features::editor::handler::new_map_editor;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project, get_editor_data,
     open_project, open_recent_project, save_editor_data, tileset_picked,
 };
 use crate::features::program_data::{
-    get_map_data_collection_from_live_viewer_data, EditorData, MappedCDDAIdContainer, ProjectType,
+    get_map_data_collection_from_live_viewer_data, MappedCDDAIdContainer, ProgramData, ProjectType,
     ZLevel,
 };
 use crate::features::tileset::handlers::{
@@ -84,7 +85,7 @@ async fn about() -> AboutInfo {
 #[tauri::command]
 async fn frontend_ready(
     app: AppHandle,
-    editor_data: State<'_, Mutex<EditorData>>,
+    editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
 ) -> Result<(), ()> {
@@ -124,7 +125,10 @@ async fn frontend_ready(
                 info!("Loading Project {}", name);
 
                 match &project.ty {
-                    ProjectType::MapEditor(me) => unimplemented!(),
+                    ProjectType::MapEditor(me) => {
+                        info!("Opening Map Editor",);
+                        todo!();
+                    },
                     ProjectType::LiveViewer(lvd) => {
                         info!("Opening Live viewer",);
 
@@ -253,7 +257,8 @@ pub fn run() -> () {
             get_calculated_parameters,
             open_recent_project,
             about,
-            close_app
+            close_app,
+            new_map_editor
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

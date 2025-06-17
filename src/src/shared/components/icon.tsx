@@ -39,7 +39,7 @@ export enum IconName {
     HideSmall = "hide-small",
     ImportSmall = "import-small",
     OpenSmall = "open-small",
-    PaintBucketSmall = "paint-bucket-small",
+    BucketMedium = "bucket-medium",
     SaveSmall = "save-small",
     SettingsSmall = "settings-small",
     ShapesSmall = "shapes-small",

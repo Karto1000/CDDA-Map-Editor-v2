@@ -1,7 +1,7 @@
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::vehicle_parts::CDDAVehiclePart;
 use crate::features::map::MappedCDDAId;
-use crate::features::program_data::EditorData;
+use crate::features::program_data::ProgramData;
 use crate::features::tileset::data::{
     AdditionalTileType, FALLBACK_TILE_MAPPING,
 };
@@ -167,7 +167,10 @@ fn to_weighted_vec(
             },
             Err(e) => {
                 // TODO: This happens when the supplied fg or bg is an empty array
-                info!("{}, this is probably due to an empty array. Ignoring this entry ", e);
+                info!(
+                    "{}, this is probably due to an empty array. Ignoring this entry ",
+                    e
+                );
                 continue;
             },
         }
@@ -350,7 +353,7 @@ impl Tilesheet for LegacyTilesheet {
                         }
                     },
                     Some(_) => {
-                        return self.get_sprite(&sliced_postfix, json_data)
+                        return self.get_sprite(&sliced_postfix, json_data);
                     },
                 }
 
@@ -433,7 +436,7 @@ impl LegacyTilesheet {
 }
 
 pub async fn load_tilesheet(
-    editor_data: &EditorData,
+    editor_data: &ProgramData,
 ) -> Result<Option<LegacyTilesheet>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),

@@ -39,7 +39,6 @@
     display: flex;
     flex-direction: column;
     height: max-content;
-    margin-bottom: 8px;
 
     .tabs {
       display: flex;
@@ -71,6 +70,6 @@
     flex-direction: column;
     overflow-y: hidden;
     height: 100%;
-    padding: 4px;
+    padding: 0 4px 4px 4px;
   }
 }
