@@ -34,7 +34,6 @@ export type MapViewerProps = {
     tilesheets: RefObject<Tilesheets>
     threeConfig: RefObject<ThreeConfig>
     canvas: Canvas
-    sideMenuRef: RefObject<SideMenuRef>
     eventBus: RefObject<EventTarget>
     showGridRef: RefObject<boolean>
 }
@@ -253,21 +252,8 @@ export function MapViewer(props: MapViewerProps) {
             grid.current.visible = props.showGridRef.current
         }
 
-        function setupSideMenuTabs() {
-            props.sideMenuRef.current.registerTab(
-                MapViewerTab.MapInfo,
-                {
-                    icon: <Icon name={IconName.InfoMedium}/>,
-                    content: <div>
-
-                    </div>
-                }
-            )
-        }
-
         setupGrid(theme)
         setRenderBounds()
-        setupSideMenuTabs()
 
         async function onTilesetLoaded() {
             setIsLoading(true)
@@ -323,8 +309,6 @@ export function MapViewer(props: MapViewerProps) {
             cancelAnimationFrame(handler)
 
             props.threeConfig.current.scene.remove(grid.current)
-
-            props.sideMenuRef.current.removeTab(MapViewerTab.MapInfo)
             props.tilesheets.current.clearAll()
 
             props.eventBus.current.removeEventListener(

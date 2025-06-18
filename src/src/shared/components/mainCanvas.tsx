@@ -1,8 +1,8 @@
-import React from "react";
+import React, {RefObject} from "react";
 
 export type MainCanvasProps = {
-    canvasRef: React.MutableRefObject<HTMLCanvasElement>,
-    canvasContainerRef: React.MutableRefObject<HTMLDivElement>,
+    canvasRef: RefObject<HTMLCanvasElement>,
+    canvasContainerRef: RefObject<HTMLDivElement>,
     displayState: "flex" | "none"
 }
 

@@ -17,7 +17,6 @@ export type MapEditorProps = {
     tilesheets: RefObject<Tilesheets>
     threeConfig: RefObject<ThreeConfig>
     canvas: Canvas
-    sideMenuRef: RefObject<SideMenuRef>
     eventBus: RefObject<EventTarget>
     showGridRef: RefObject<boolean>
 }
@@ -43,6 +42,7 @@ export function MapEditor(props: MapEditorProps) {
             props.threeConfig.current.camera.top = newHeight / 2
             props.threeConfig.current.camera.bottom = newHeight / -2
             props.threeConfig.current.camera.position.z = 999999
+            console.log(newWidth, newHeight)
         }
 
         function setupGrid(theme: Theme) {
@@ -113,7 +113,6 @@ export function MapEditor(props: MapEditorProps) {
 
     return (
         <div>
-            Map Editor
         </div>
     )
 }

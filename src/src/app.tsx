@@ -16,10 +16,7 @@ import {useTileset} from "./features/sprites/hooks/useTileset.js";
 import toast, {ToastBar, Toaster} from "react-hot-toast";
 import Icon, {IconName} from "./shared/components/icon.js";
 import {useTauriEvent} from "./shared/hooks/useTauriEvent.js";
-import {Panel, PanelGroup, PanelResizer} from "@window-splitter/react";
-import {clsx} from "clsx";
 import {MapViewer} from "./features/viewer/mapViewer.js";
-import {SideMenu, SideMenuRef} from "./shared/components/imguilike/sideMenu.js";
 import {openWindow, WindowLabel} from "./windows/lib.js";
 import {useKeybindings} from "./shared/hooks/useKeybindings.js";
 import {MapEditor} from "./features/editor/mapEditor.js";
@@ -42,20 +39,14 @@ function App() {
 
     const canvasContainerRef = useRef<HTMLDivElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const {threeConfigRef, onResize} = useThreeSetup(
-        theme,
-        canvasRef,
-        canvasContainerRef
-    )
+    const showGridRef = useRef<boolean>(true)
 
+    const {threeConfigRef} = useThreeSetup(theme, canvasRef, canvasContainerRef)
     const editorData = useEditorData()
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
     const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef} = useWindows()
-    const sideMenuRef = useRef<SideMenuRef>(null)
-    const showGridRef = useRef<boolean>(true)
 
-    const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(false)
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
 
     useKeybindings(
@@ -102,7 +93,6 @@ function App() {
                 return <MapViewer
                     showGridRef={showGridRef}
                     eventBus={eventBus}
-                    sideMenuRef={sideMenuRef}
                     tilesheets={tilesheets}
                     spritesheetConfig={spritesheetConfig}
                     threeConfig={threeConfigRef}
@@ -116,7 +106,6 @@ function App() {
                 return <MapEditor
                     showGridRef={showGridRef}
                     eventBus={eventBus}
-                    sideMenuRef={sideMenuRef}
                     tilesheets={tilesheets}
                     spritesheetConfig={spritesheetConfig}
                     threeConfig={threeConfigRef}
@@ -172,32 +161,12 @@ function App() {
                             aboutWindowRef={aboutWindowRef}
                         />
 
-                        <PanelGroup>
-                            <Panel
-                                collapsible
-                                collapsed={!isSidebarOpen}
-                                onCollapseChange={collapsed => collapsed ? sideMenuRef.current?.collapse() : sideMenuRef.current?.expand()}
-                                collapsedSize={"32px"}
-                                min={"100px"}
-                                max={"1000px"}
-                                onResize={onResize}>
-                                <div className={clsx("side-panel", isSidebarOpen && "collapsed")}>
-                                    {
-                                        <SideMenu ref={sideMenuRef} onStateChange={state => setIsSidebarOpen(state)}/>
-                                    }
-                                </div>
-                            </Panel>
-                            <PanelResizer className={clsx("resize-handle")} disabled={!isSidebarOpen}
-                                          size={"5px"}/>
-                            <Panel>
-                                <MainCanvas
-                                    canvasRef={canvasRef}
-                                    canvasContainerRef={canvasContainerRef}
-                                    displayState={tabs.shouldDisplayCanvas() ? "flex" : "none"}
-                                />
-                                {getMainBasedOnTab()}
-                            </Panel>
-                        </PanelGroup>
+                        <MainCanvas
+                            canvasRef={canvasRef}
+                            canvasContainerRef={canvasContainerRef}
+                            displayState={tabs.shouldDisplayCanvas() ? "flex" : "none"}
+                        />
+                        {getMainBasedOnTab()}
                     </TabContext.Provider>
                 </ThemeContext.Provider>
             </EditorDataContext.Provider>
