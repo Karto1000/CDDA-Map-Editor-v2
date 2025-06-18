@@ -2,7 +2,6 @@ use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::map_data::{MapGenItem, MapGenMonsters};
 use crate::data::GetIdentifier;
 use crate::data::KnownCataVariant;
-use crate::features::map::map_properties::ItemsProperty;
 use crate::features::map::map_properties::{
     FurnitureProperty, MonstersProperty, TerrainProperty,
 };
@@ -161,22 +160,9 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
             monster_map.insert(char, monster_prop as Arc<dyn Property>);
         }
 
-        let mut item_map = HashMap::new();
-        for (char, items) in self.items {
-            let item_prop = Arc::new(ItemsProperty {
-                items: items
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
-            item_map.insert(char, item_prop as Arc<dyn Property>);
-        }
-
         properties.insert(MappingKind::Terrain, terrain_map);
         properties.insert(MappingKind::Furniture, furniture_map);
         properties.insert(MappingKind::Monsters, monster_map);
-        properties.insert(MappingKind::ItemGroups, item_map);
 
         CDDAPalette {
             id: self.id,

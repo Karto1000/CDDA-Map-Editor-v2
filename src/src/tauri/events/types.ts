@@ -139,7 +139,6 @@ export enum TauriEvent {
     TAB_CREATED = "tab_created",
     TAB_REMOVED = "tab_removed",
     UPDATE_LIVE_VIEWER = "update_live_viewer",
-    CHANGE_THEME = "change_theme",
     EMIT_TOAST_MESSAGE = "emit_toast_message"
 }
 
@@ -164,7 +163,6 @@ export interface TauriEventMap {
         name: string
     };
     [TauriEvent.UPDATE_LIVE_VIEWER]: {};
-    [TauriEvent.CHANGE_THEME]: {},
     [TauriEvent.EMIT_TOAST_MESSAGE]: {
         type: ToastType,
         message: string

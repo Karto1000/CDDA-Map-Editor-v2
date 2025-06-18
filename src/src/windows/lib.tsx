@@ -1,5 +1,6 @@
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "@tauri-apps/api/window";
+import {emitTo, UnlistenFn} from "@tauri-apps/api/event";
 
 export enum WindowLabel {
     Main = "main",
@@ -8,6 +9,7 @@ export enum WindowLabel {
     NewMap = "new-map",
     About = "about",
     Welcome = "welcome",
+    MapInfo = "map-info",
 }
 
 export type WindowOptions = {
@@ -15,15 +17,16 @@ export type WindowOptions = {
     defaultHeight?: number,
 }
 
-export function openWindow(
+export async function openWindow<T = any>(
     label: WindowLabel,
     theme: Theme,
     {
         defaultWidth = 400,
         defaultHeight = 400
-    }: WindowOptions = {}
-): WebviewWindow {
-    return new WebviewWindow(label.toString(), {
+    }: WindowOptions = {},
+    data?: T
+): Promise<[WebviewWindow, UnlistenFn]> {
+    const window = new WebviewWindow(label.toString(), {
         url: `src/windows/${label.toString()}/window.html?theme=${theme.toString()}`,
         width: defaultWidth,
         height: defaultHeight,
@@ -36,4 +39,9 @@ export function openWindow(
         focus: true
     })
 
+    const unlisten = await window.once("window-ready", async () => {
+        await emitTo(label, "initial-data", data)
+    })
+
+    return [window, unlisten]
 }

@@ -20,6 +20,7 @@ import {MapViewer} from "./features/viewer/mapViewer.js";
 import {openWindow, WindowLabel} from "./windows/lib.js";
 import {useKeybindings} from "./shared/hooks/useKeybindings.js";
 import {MapEditor} from "./features/editor/mapEditor.js";
+import {UnlistenFn} from "@tauri-apps/api/event";
 
 export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
@@ -45,7 +46,7 @@ function App() {
     const editorData = useEditorData()
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
-    const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef} = useWindows()
+    const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef, mapInfoWindowRef} = useWindows()
 
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
 
@@ -65,12 +66,17 @@ function App() {
     useEffect(() => {
         if (!editorData) return;
 
+        let unlisten: UnlistenFn;
         if (!editorData.config.cdda_path) {
-            openWindow(WindowLabel.Welcome, theme, {defaultWidth: 760, defaultHeight: 600})
+            unlisten = openWindow(WindowLabel.Welcome, theme, {defaultWidth: 760, defaultHeight: 600})[1]
             return
         }
 
         setIsAppReady(true)
+
+        return () => {
+            if (unlisten) unlisten()
+        }
     }, [editorData]);
 
     useTauriEvent(
@@ -104,6 +110,7 @@ function App() {
 
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor)
                 return <MapEditor
+                    mapInfoWindowRef={mapInfoWindowRef}
                     showGridRef={showGridRef}
                     eventBus={eventBus}
                     tilesheets={tilesheets}

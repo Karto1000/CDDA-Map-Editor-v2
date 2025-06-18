@@ -138,7 +138,13 @@ async fn frontend_ready(
                             match maps.calculate_parameters(&json_data.palettes)
                             {
                                 Ok(_) => {},
-                                Err(e) => continue,
+                                Err(e) => {
+                                    warn!(
+                                        "Failed to calculate parameters: {}",
+                                        e
+                                    );
+                                    continue;
+                                },
                             }
                         }
 
@@ -168,7 +174,13 @@ async fn frontend_ready(
                                             &json_data.palettes,
                                         ) {
                                             Ok(_) => {},
-                                            Err(e) => continue,
+                                            Err(e) => {
+                                                warn!(
+                                                    "Failed to calculate parameters: {}",
+                                                    e
+                                                );
+                                                continue;
+                                            },
                                         }
                                     }
                                     map_data_collection

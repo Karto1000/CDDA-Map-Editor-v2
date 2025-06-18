@@ -4,6 +4,7 @@ use crate::data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
 use crate::data::palettes::Parameter;
 use crate::features::map::map_properties::ComputersProperty;
 use crate::features::map::map_properties::CorpsesProperty;
+use crate::features::map::map_properties::GaspumpsProperty;
 use crate::features::map::map_properties::ToiletsProperty;
 use crate::features::map::map_properties::TrapsProperty;
 use crate::features::map::map_properties::VehiclesProperty;
@@ -11,7 +12,6 @@ use crate::features::map::map_properties::{
     FieldsProperty, FurnitureProperty, MonstersProperty, NestedProperty,
     SignsProperty, TerrainProperty,
 };
-use crate::features::map::map_properties::{GaspumpsProperty, ItemsProperty};
 use crate::features::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
 use crate::features::map::SetTile;
 use crate::features::map::DEFAULT_MAP_DATA_SIZE;
@@ -468,8 +468,6 @@ impl Into<Arc<dyn Place>> for PlaceInnerMonster {
     }
 }
 
-create_place_inner!(Items, MapGenItem);
-
 create_place_inner!(Fields, MapGenField);
 
 create_place_inner!(Computers, MapGenComputer);
@@ -546,7 +544,6 @@ macro_rules! impl_from {
 
 impl_from!(PlaceInnerFurniture);
 impl_from!(PlaceInnerTerrain);
-impl_from!(PlaceInnerItems);
 impl_from!(PlaceInnerNested);
 impl_from!(PlaceInnerToilets);
 impl_from!(PlaceInnerFields);
@@ -646,7 +643,6 @@ map_data_object!(
     [FIELDS_WITH_PLACE]
     terrain: MapGenValue,
     furniture: MapGenValue,
-    items: MeabyVec<MeabyWeighted<MapGenItem>>,
     monsters: MeabyVec<MeabyWeighted<MapGenMonsters>>,
     monster: MeabyVec<MeabyWeighted<MapGenMonsters>>,
     nested: MeabyVec<MeabyWeighted<MapGenNestedIntermediate>>,
@@ -797,18 +793,6 @@ impl CDDAMapDataIntermediate {
             field_map.insert(char, field_prop as Arc<dyn Property>);
         }
 
-        let mut item_map = HashMap::new();
-        for (char, items) in self.object.common.items.clone() {
-            let item_prop = Arc::new(ItemsProperty {
-                items: items
-                    .into_vec()
-                    .into_iter()
-                    .map(MeabyWeighted::to_weighted)
-                    .collect(),
-            });
-            item_map.insert(char, item_prop as Arc<dyn Property>);
-        }
-
         let mut sign_map = HashMap::new();
         for (char, sign) in self.object.common.signs.clone() {
             let sign_prop = Arc::new(SignsProperty {
@@ -882,7 +866,6 @@ impl CDDAMapDataIntermediate {
         properties.insert(MappingKind::Monsters, monsters_map);
         properties.insert(MappingKind::Nested, nested_map);
         properties.insert(MappingKind::Field, field_map);
-        properties.insert(MappingKind::ItemGroups, item_map);
         properties.insert(MappingKind::Computer, computer_map);
         properties.insert(MappingKind::Toilet, toilet_map);
         properties.insert(MappingKind::Sign, sign_map);
@@ -970,7 +953,6 @@ impl CDDAMapDataIntermediate {
         insert_place!(Monster);
         insert_place!(Nested);
         insert_place!(Field, fields);
-        insert_place!(ItemGroups, items);
         insert_place!(Vehicle, vehicles);
         insert_place!(Corpse, corpses);
 

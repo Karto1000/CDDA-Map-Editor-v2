@@ -96,19 +96,20 @@ export function Header(props: Props) {
         []
     )
 
-    function onAboutClicked() {
-        props.aboutWindowRef.current = openWindow(WindowLabel.About, theme)
+    // This component is never unmounted, so we don't have to call unlisten
+    async function onAboutClicked() {
+        props.aboutWindowRef.current = await openWindow(WindowLabel.About, theme)[0]
     }
 
-    function onNewClicked() {
-        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme, {defaultWidth: 800, defaultHeight: 500})
+    async function onNewClicked() {
+        props.newMapWindowRef.current = await openWindow(WindowLabel.NewMap, theme, {defaultWidth: 800, defaultHeight: 500})[0]
     }
 
-    function onImport() {
-        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme, {
+    async function onImport() {
+        props.importMapWindowRef.current = await openWindow(WindowLabel.ImportMap, theme, {
             defaultWidth: 800,
             defaultHeight: 500
-        })
+        })[0]
     }
 
     function onOpen() {
@@ -135,8 +136,8 @@ export function Header(props: Props) {
         alert("Not Implemented")
     }
 
-    function onSettingsOpen() {
-        setSettingsWindow(openWindow(WindowLabel.Settings, theme))
+    async function onSettingsOpen() {
+        setSettingsWindow(await openWindow(WindowLabel.Settings, theme)[1])
     }
 
     useEffect(() => {
@@ -174,8 +175,8 @@ export function Header(props: Props) {
         )
     }
 
-    function onTabCreate() {
-        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
+    async function onTabCreate() {
+        props.importMapWindowRef.current = await openWindow(WindowLabel.ImportMap, theme)[1]
     }
 
     async function onTabOpen(name: string) {
@@ -370,15 +371,15 @@ export function Header(props: Props) {
                                 {
                                     name: "Import",
                                     shortcut: getKeyboardShortcutForAction(KeybindAction.ImportMap),
-                                    onClick: (ref) => {
-                                        onImport()
+                                    onClick: async (ref) => {
+                                        await onImport()
                                         ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Export",
                                     shortcut: getKeyboardShortcutForAction(KeybindAction.ExportMap),
-                                    onClick: (ref) => {
+                                    onClick: async (ref) => {
                                         onExport()
                                         ref.current.closeMenu()
                                     }
@@ -388,8 +389,8 @@ export function Header(props: Props) {
                                 {
                                     name: "Settings",
                                     shortcut: getKeyboardShortcutForAction(KeybindAction.OpenSettings),
-                                    onClick: (ref) => {
-                                        onSettingsOpen()
+                                    onClick: async (ref) => {
+                                        await onSettingsOpen()
                                         ref.current.closeMenu()
                                     }
                                 },
@@ -552,8 +553,8 @@ export function Header(props: Props) {
                             [
                                 {
                                     name: "About",
-                                    onClick: (ref) => {
-                                        onAboutClicked()
+                                    onClick: async (ref) => {
+                                        await onAboutClicked()
                                         ref.current.closeMenu()
                                     }
                                 }

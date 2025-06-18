@@ -11,6 +11,9 @@ use crate::data::{
     replace_region_setting, GetIdentifier, GetIdentifierError, GetRandomError,
     TileLayer,
 };
+use crate::features::map::map_properties::{
+    value_to_property, TerrainProperty,
+};
 use crate::features::program_data::ZLevel;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::util::{Rotation, UVec2JsonKey};
@@ -21,6 +24,7 @@ use cdda_lib::types::{
 use cdda_lib::{
     DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH, NULL_FURNITURE, NULL_TERRAIN,
 };
+use derive_more::Display;
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
 use futures_lite::StreamExt;
@@ -29,7 +33,7 @@ use indexmap::IndexMap;
 use log::warn;
 use rand::{rng, Rng};
 use serde::ser::{SerializeMap, SerializeStruct};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
 use std::fmt::Debug;
@@ -66,9 +70,9 @@ pub trait Property:
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        None
-    }
+    ) -> Option<Vec<SetTile>>;
+
+    fn value(&self) -> Value;
 }
 
 clone_trait_object!(Property);
@@ -85,6 +89,7 @@ impl_downcast!(sync Property);
     Eq,
     Ord,
     EnumIter,
+    Display,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum MappingKind {
@@ -216,7 +221,7 @@ pub enum MapDataFlag {
     Other,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapGenNested {
     pub neighbors: Option<HashMap<NeighborDirection, Vec<OmTerrainMatch>>>,
     pub joins: Option<HashMap<NeighborDirection, Vec<OmTerrainMatch>>>,
@@ -262,7 +267,7 @@ pub enum MapDataRotation {
     Deg270,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct MapData {
     pub cells: IndexMap<UVec2JsonKey, Cell>,
     pub fill: Option<DistributionInner>,
@@ -275,17 +280,104 @@ pub struct MapData {
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
     pub palettes: Vec<MapGenValue>,
     pub flags: HashSet<MapDataFlag>,
-
-    #[serde(skip)]
     pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
 
-    #[serde(skip)]
     pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
-
-    // #[serde(skip)]
-    // pub set: Vec<Arc<dyn Set>>,
-    #[serde(skip)]
     pub place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
+}
+
+impl<'de> Deserialize<'de> for MapData {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct MapDataHelper {
+            cells: IndexMap<UVec2JsonKey, Cell>,
+            fill: Option<DistributionInner>,
+            map_size: UVec2,
+            predecessor: Option<CDDAIdentifier>,
+            config: MapDataConfig,
+            rotation: MapDataRotation,
+            parameters: IndexMap<ParameterIdentifier, Parameter>,
+            palettes: Vec<MapGenValue>,
+            flags: HashSet<MapDataFlag>,
+            properties: HashMap<MappingKind, HashMap<char, Value>>,
+        }
+
+        let helper = MapDataHelper::deserialize(deserializer)?;
+
+        let mut properties: HashMap<
+            MappingKind,
+            HashMap<char, Arc<dyn Property>>,
+        > = HashMap::new();
+        for (kind, inner_map) in helper.properties {
+            let mut transformed_inner_map = HashMap::new();
+            for (char_key, value) in inner_map {
+                let property = match value_to_property(kind.clone(), value) {
+                    Ok(p) => p,
+                    Err(e) => {
+                        warn!(
+                            "Could not serialize property of kind {} due to error: {}",
+                            kind, e
+                        );
+                        continue;
+                    },
+                };
+                transformed_inner_map.insert(char_key, property);
+            }
+            properties.insert(kind, transformed_inner_map);
+        }
+
+        Ok(MapData {
+            cells: helper.cells,
+            fill: helper.fill,
+            map_size: helper.map_size,
+            predecessor: helper.predecessor,
+            config: helper.config,
+            rotation: helper.rotation,
+            parameters: helper.parameters,
+            palettes: helper.palettes,
+            flags: helper.flags,
+            calculated_parameters: IndexMap::new(),
+            properties,
+            place: HashMap::new(),
+        })
+    }
+}
+
+impl Serialize for MapData {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let mut state = serializer.serialize_struct("MapData", 10)?;
+        state.serialize_field("cells", &self.cells)?;
+        state.serialize_field("fill", &self.fill)?;
+        state.serialize_field("map_size", &self.map_size)?;
+        state.serialize_field("predecessor", &self.predecessor)?;
+        state.serialize_field("config", &self.config)?;
+        state.serialize_field("rotation", &self.rotation)?;
+        state.serialize_field("parameters", &self.parameters)?;
+        state.serialize_field("palettes", &self.palettes)?;
+        state.serialize_field("flags", &self.flags)?;
+
+        let serialized_properties: HashMap<_, HashMap<_, _>> = self
+            .properties
+            .iter()
+            .map(|(key, value)| {
+                let serialized_inner = value
+                    .iter()
+                    .map(|(char_key, property)| (char_key, property.value()))
+                    .collect();
+                (key, serialized_inner)
+            })
+            .collect();
+
+        state.serialize_field("properties", &serialized_properties)?;
+
+        state.end()
+    }
 }
 
 impl Default for MapData {
@@ -303,6 +395,26 @@ impl Default for MapData {
         let fill =
             Some(DistributionInner::Normal(CDDAIdentifier::from("t_grass")));
 
+        let mut properties = HashMap::new();
+        for kind in MappingKind::iter() {
+            let mapping = match kind {
+                MappingKind::Terrain => {
+                    let mut mapping = HashMap::new();
+                    mapping.insert(
+                        'g',
+                        Arc::new(TerrainProperty {
+                            mapgen_value: MapGenValue::String("t_grass".into()),
+                        }) as Arc<dyn Property>,
+                    );
+
+                    mapping
+                },
+                _ => HashMap::new(),
+            };
+
+            properties.insert(kind, mapping);
+        }
+
         Self {
             cells,
             fill,
@@ -312,7 +424,7 @@ impl Default for MapData {
             rotation: Default::default(),
             calculated_parameters: Default::default(),
             parameters: Default::default(),
-            properties: Default::default(),
+            properties,
             palettes: Default::default(),
             place: Default::default(),
             flags: Default::default(),
@@ -661,381 +773,6 @@ impl MapData {
         }
 
         commands
-    }
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
-#[strum(serialize_all = "snake_case")]
-pub enum PlaceableSetType {
-    Terrain,
-    Furniture,
-    Trap,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize, EnumString)]
-#[strum(serialize_all = "snake_case")]
-pub enum RemovableSetType {
-    ItemRemove,
-    FieldRemove,
-    TrapRemove,
-    CreatureRemove,
-}
-
-#[derive(Debug, Clone)]
-pub enum SetOperation {
-    Place {
-        id: CDDAIdentifier,
-        ty: PlaceableSetType,
-    },
-    Remove {
-        ty: RemovableSetType,
-    },
-    Radiation {
-        amount: NumberOrRange<u32>,
-    },
-    Variable {
-        id: CDDAIdentifier,
-    },
-    Bash {},
-    Burn {},
-}
-
-#[derive(Debug, Clone)]
-pub struct SetPoint {
-    pub x: NumberOrRange<u32>,
-    pub y: NumberOrRange<u32>,
-    pub z: i32,
-    pub chance: u32,
-    pub repeat: (u32, u32),
-    pub operation: SetOperation,
-}
-
-#[derive(Debug, Clone)]
-pub struct SetLine {
-    pub from_x: NumberOrRange<u32>,
-    pub from_y: NumberOrRange<u32>,
-
-    pub to_x: NumberOrRange<u32>,
-    pub to_y: NumberOrRange<u32>,
-
-    pub z: i32,
-    pub chance: u32,
-    pub repeat: (u32, u32),
-    pub operation: SetOperation,
-}
-
-#[derive(Debug, Clone)]
-pub struct SetSquare {
-    pub top_left_x: NumberOrRange<u32>,
-    pub top_left_y: NumberOrRange<u32>,
-
-    pub bottom_right_x: NumberOrRange<u32>,
-    pub bottom_right_y: NumberOrRange<u32>,
-
-    pub z: i32,
-    pub chance: u32,
-    pub repeat: (u32, u32),
-    pub operation: SetOperation,
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::features::map::importing::SingleMapDataImporter;
-    use crate::features::map::map_properties::TerrainProperty;
-    use crate::features::map::MappingKind;
-    use crate::util::Load;
-    use crate::TEST_CDDA_DATA;
-    use cdda_lib::types::{
-        CDDADistributionInner, CDDAIdentifier, Distribution, DistributionInner,
-        MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier, Switch,
-        Weighted,
-    };
-    use glam::UVec2;
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-    use tokio;
-
-    const TEST_DATA_PATH: &str = "test_data";
-
-    #[tokio::test]
-    async fn test_fill_ter() {
-        let mut map_loader = SingleMapDataImporter {
-            paths: vec![
-                PathBuf::from(TEST_DATA_PATH).join("test_fill_ter.json"),
-            ],
-            om_terrain: "test_fill_ter".into(),
-        };
-
-        let map_data = map_loader
-            .load()
-            .await
-            .unwrap()
-            .maps
-            .remove(&UVec2::ZERO)
-            .unwrap();
-
-        for (coords, cell) in map_data.cells.iter() {
-            assert_eq!(cell.character, ' ');
-            assert!(coords.x < 24 && coords.y < 24);
-        }
-
-        assert_eq!(
-            map_data.fill,
-            Some(DistributionInner::Normal("t_grass".into()))
-        );
-    }
-
-    #[tokio::test]
-    async fn test_parameters() {
-        let cdda_data = TEST_CDDA_DATA.get().await;
-
-        let mut map_loader = SingleMapDataImporter {
-            paths: vec![
-                PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
-            ],
-            om_terrain: "test_terrain".into(),
-        };
-
-        let mut map_data = map_loader
-            .load()
-            .await
-            .unwrap()
-            .maps
-            .remove(&UVec2::ZERO)
-            .unwrap();
-
-        map_data.calculate_parameters(&cdda_data.palettes);
-
-        let parameter_identifier =
-            ParameterIdentifier("terrain_type".to_string());
-        let parameter = map_data.parameters.get(&parameter_identifier).unwrap();
-
-        let weighted_grass = Weighted::new("t_grass", 10);
-        let weighted_grass_dead = Weighted::new("t_grass_dead", 1);
-
-        let expected_distribution = Distribution {
-            distribution: MeabyVec::Vec(vec![
-                MeabyWeighted::Weighted(weighted_grass),
-                MeabyWeighted::Weighted(weighted_grass_dead),
-            ]),
-        };
-
-        assert_eq!(parameter.default, expected_distribution);
-
-        let calculated_parameter = map_data
-            .calculated_parameters
-            .get(&parameter_identifier)
-            .unwrap();
-
-        assert!(
-            calculated_parameter.0 == "t_grass".to_string()
-                || calculated_parameter.0 == "t_grass_dead".to_string()
-        )
-    }
-
-    #[tokio::test]
-    async fn test_terrain() {
-        const SINGLE_CHAR: char = '.';
-        const NOT_WEIGHTED_DISTRIBUTION_CHAR: char = '1';
-        const WEIGHTED_DISTRIBUTION_CHAR: char = '2';
-        const WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR: char = '3';
-        const PARAMETER_CHAR: char = '4';
-        const SWITCH_CHAR: char = '5';
-
-        let cdda_data = TEST_CDDA_DATA.get().await;
-
-        let mut map_loader = SingleMapDataImporter {
-            paths: vec![
-                PathBuf::from(TEST_DATA_PATH).join("test_terrain.json"),
-            ],
-            om_terrain: "test_terrain".into(),
-        };
-
-        let mut map_data = map_loader
-            .load()
-            .await
-            .unwrap()
-            .maps
-            .remove(&UVec2::ZERO)
-            .unwrap();
-
-        map_data.calculate_parameters(&cdda_data.palettes);
-
-        // Test the terrain mapped to a single sprite
-        {
-            let single_terrain = map_data.cells.get(&UVec2::new(0, 1)).unwrap();
-            assert_eq!(single_terrain.character, SINGLE_CHAR);
-
-            let terrain_property = map_data
-                .properties
-                .get(&MappingKind::Terrain)
-                .unwrap()
-                .get(&SINGLE_CHAR)
-                .unwrap()
-                .clone();
-
-            let terrain_property =
-                terrain_property.downcast_arc::<TerrainProperty>().unwrap();
-
-            assert_eq!(
-                terrain_property.mapgen_value,
-                MapGenValue::String("t_grass".into())
-            )
-        }
-
-        // Test the distribution that is not weighted
-        {
-            let distr_terrain = map_data.cells.get(&UVec2::new(0, 0)).unwrap();
-            assert_eq!(distr_terrain.character, NOT_WEIGHTED_DISTRIBUTION_CHAR);
-
-            let terrain_property = map_data
-                .properties
-                .get(&MappingKind::Terrain)
-                .unwrap()
-                .get(&NOT_WEIGHTED_DISTRIBUTION_CHAR)
-                .unwrap()
-                .clone();
-
-            let terrain_property =
-                terrain_property.downcast_arc::<TerrainProperty>().unwrap();
-
-            let expected_distribution = vec![
-                MeabyWeighted::NotWeighted("t_grass".into()),
-                MeabyWeighted::NotWeighted("t_grass_dead".into()),
-            ];
-
-            assert_eq!(
-                terrain_property.mapgen_value,
-                MapGenValue::Distribution(MeabyVec::Vec(expected_distribution))
-            );
-        }
-
-        // Test the distribution that is weighted
-        {
-            let distr_terrain = map_data.cells.get(&UVec2::new(1, 0)).unwrap();
-            assert_eq!(distr_terrain.character, WEIGHTED_DISTRIBUTION_CHAR);
-
-            let terrain_property = map_data
-                .properties
-                .get(&MappingKind::Terrain)
-                .unwrap()
-                .get(&WEIGHTED_DISTRIBUTION_CHAR)
-                .unwrap()
-                .clone();
-
-            let terrain_property =
-                terrain_property.downcast_arc::<TerrainProperty>().unwrap();
-
-            let weighted_grass = Weighted::new("t_grass", 10);
-            let weighted_grass_dead = Weighted::new("t_grass_dead", 1);
-
-            let expected_distribution = vec![
-                MeabyWeighted::Weighted(weighted_grass),
-                MeabyWeighted::Weighted(weighted_grass_dead),
-            ];
-
-            assert_eq!(
-                terrain_property.mapgen_value,
-                MapGenValue::Distribution(MeabyVec::Vec(expected_distribution))
-            );
-        }
-
-        // Test the weighted distribution with the "distribution" keyword
-        {
-            let distr_terrain = map_data.cells.get(&UVec2::new(2, 0)).unwrap();
-            assert_eq!(
-                distr_terrain.character,
-                WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR
-            );
-
-            let terrain_property = map_data
-                .properties
-                .get(&MappingKind::Terrain)
-                .unwrap()
-                .get(&WEIGHTED_DISTRIBUTION_WITH_KEYWORD_CHAR)
-                .unwrap()
-                .clone();
-
-            let terrain_property =
-                terrain_property.downcast_arc::<TerrainProperty>().unwrap();
-
-            let weighted_grass = Weighted::new("t_grass", 1);
-            let weighted_grass_dead = Weighted::new("t_grass_dead", 10);
-
-            let expected_distribution = Distribution {
-                distribution: MeabyVec::Vec(vec![
-                    MeabyWeighted::Weighted(weighted_grass),
-                    MeabyWeighted::Weighted(weighted_grass_dead),
-                ]),
-            };
-
-            assert_eq!(
-                terrain_property.mapgen_value,
-                MapGenValue::Distribution(MeabyVec::Single(
-                    MeabyWeighted::NotWeighted(
-                        CDDADistributionInner::Distribution(
-                            expected_distribution
-                        )
-                    )
-                ))
-            );
-        }
-
-        // Test if a set parameter works
-        {
-            let distr_terrain = map_data.cells.get(&UVec2::new(3, 0)).unwrap();
-            assert_eq!(distr_terrain.character, PARAMETER_CHAR);
-
-            let terrain_property = map_data
-                .properties
-                .get(&MappingKind::Terrain)
-                .unwrap()
-                .get(&PARAMETER_CHAR)
-                .unwrap()
-                .clone();
-
-            let terrain_property =
-                terrain_property.downcast_arc::<TerrainProperty>().unwrap();
-
-            let to_eq = MapGenValue::Param {
-                param: ParameterIdentifier("terrain_type".to_string()),
-                fallback: Some("t_grass".into()),
-            };
-
-            assert_eq!(terrain_property.mapgen_value, to_eq);
-        }
-
-        // Test if a switch works
-        {
-            let distr_terrain = map_data.cells.get(&UVec2::new(4, 0)).unwrap();
-            assert_eq!(distr_terrain.character, SWITCH_CHAR);
-
-            let terrain_property = map_data
-                .properties
-                .get(&MappingKind::Terrain)
-                .unwrap()
-                .get(&SWITCH_CHAR)
-                .unwrap()
-                .clone();
-
-            let terrain_property =
-                terrain_property.downcast_arc::<TerrainProperty>().unwrap();
-
-            let mut to_eq_cases: HashMap<CDDAIdentifier, CDDAIdentifier> =
-                HashMap::new();
-            to_eq_cases.insert("t_grass".into(), "t_concrete_railing".into());
-            to_eq_cases.insert("t_grass_dead".into(), "t_concrete_wall".into());
-
-            let to_eq = MapGenValue::Switch {
-                switch: Switch {
-                    param: ParameterIdentifier("terrain_type".into()),
-                    fallback: "t_grass".into(),
-                },
-                cases: to_eq_cases,
-            };
-
-            assert_eq!(terrain_property.mapgen_value, to_eq);
-        }
     }
 }
 

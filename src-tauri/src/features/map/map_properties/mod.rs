@@ -1,14 +1,15 @@
 use crate::data::map_data::{
-    MapGenComputer, MapGenField, MapGenGaspump, MapGenItem, MapGenMonsters,
-    MapGenSign, MapGenTrap, PlaceInnerComputers, PlaceInnerFields,
-    PlaceInnerFurniture, PlaceInnerGaspumps, PlaceInnerItems,
-    PlaceInnerMonster, PlaceInnerMonsters, PlaceInnerSigns, PlaceInnerTerrain,
-    PlaceInnerToilets, PlaceInnerTraps, PlaceInnerVehicles,
+    MapGenComputer, MapGenField, MapGenGaspump, MapGenMonsters, MapGenSign,
+    MapGenTrap, PlaceInnerComputers, PlaceInnerFields, PlaceInnerFurniture,
+    PlaceInnerGaspumps, PlaceInnerMonster, PlaceInnerMonsters, PlaceInnerSigns,
+    PlaceInnerTerrain, PlaceInnerToilets, PlaceInnerTraps, PlaceInnerVehicles,
 };
 use crate::data::map_data::{MapGenCorpse, MapGenVehicle, PlaceInnerCorpses};
-use crate::features::map::MapGenNested;
+use crate::features::map::{MapGenNested, MappingKind, Property};
 use cdda_lib::types::MapGenValue;
 use cdda_lib::types::Weighted;
+use serde_json::Value;
+use std::sync::Arc;
 
 pub(crate) mod impl_property;
 
@@ -104,19 +105,6 @@ impl From<PlaceInnerFields> for FieldsProperty {
 }
 
 #[derive(Debug, Clone)]
-pub struct ItemsProperty {
-    pub items: Vec<Weighted<MapGenItem>>,
-}
-
-impl From<PlaceInnerItems> for ItemsProperty {
-    fn from(value: PlaceInnerItems) -> Self {
-        Self {
-            items: vec![Weighted::new(value.value, 1)],
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct ComputersProperty {
     computer: Vec<Weighted<MapGenComputer>>,
 }
@@ -179,5 +167,73 @@ impl From<PlaceInnerCorpses> for CorpsesProperty {
         Self {
             corpses: vec![Weighted::new(value.value, 1)],
         }
+    }
+}
+
+pub fn value_to_property(
+    kind: MappingKind,
+    value: Value,
+) -> serde_json::Result<Arc<dyn Property>> {
+    match kind {
+        MappingKind::Terrain => {
+            let mapgen_value = serde_json::from_value::<MapGenValue>(value)?;
+            Ok(Arc::new(TerrainProperty { mapgen_value }))
+        },
+        MappingKind::Furniture => {
+            let mapgen_value = serde_json::from_value::<MapGenValue>(value)?;
+            Ok(Arc::new(FurnitureProperty { mapgen_value }))
+        },
+        MappingKind::Trap => {
+            let trap =
+                serde_json::from_value::<Vec<Weighted<MapGenValue>>>(value)?;
+            Ok(Arc::new(TrapsProperty { trap }))
+        },
+        MappingKind::ItemGroups => unimplemented!(),
+        MappingKind::Computer => {
+            let computer =
+                serde_json::from_value::<Vec<Weighted<MapGenComputer>>>(value)?;
+            Ok(Arc::new(ComputersProperty { computer }))
+        },
+        MappingKind::Sign => {
+            let signs =
+                serde_json::from_value::<Vec<Weighted<MapGenSign>>>(value)?;
+            Ok(Arc::new(SignsProperty { signs }))
+        },
+        MappingKind::Toilet => Ok(Arc::new(ToiletsProperty)),
+        MappingKind::Gaspump => {
+            let gaspumps =
+                serde_json::from_value::<Vec<Weighted<MapGenGaspump>>>(value)?;
+            Ok(Arc::new(GaspumpsProperty { gaspumps }))
+        },
+        MappingKind::Monsters => {
+            let monster =
+                serde_json::from_value::<Vec<Weighted<MapGenMonsters>>>(value)?;
+            Ok(Arc::new(MonstersProperty { monster }))
+        },
+        MappingKind::Monster => {
+            let monster =
+                serde_json::from_value::<Vec<Weighted<MapGenMonsters>>>(value)?;
+            Ok(Arc::new(MonstersProperty { monster }))
+        },
+        MappingKind::Field => {
+            let field =
+                serde_json::from_value::<Vec<Weighted<MapGenField>>>(value)?;
+            Ok(Arc::new(FieldsProperty { field }))
+        },
+        MappingKind::Nested => {
+            let nested =
+                serde_json::from_value::<Vec<Weighted<MapGenNested>>>(value)?;
+            Ok(Arc::new(NestedProperty { nested }))
+        },
+        MappingKind::Vehicle => {
+            let vehicles =
+                serde_json::from_value::<Vec<Weighted<MapGenVehicle>>>(value)?;
+            Ok(Arc::new(VehiclesProperty { vehicles }))
+        },
+        MappingKind::Corpse => {
+            let corpses =
+                serde_json::from_value::<Vec<Weighted<MapGenCorpse>>>(value)?;
+            Ok(Arc::new(CorpsesProperty { corpses }))
+        },
     }
 }

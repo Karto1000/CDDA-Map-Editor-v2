@@ -1,14 +1,11 @@
 use crate::data::item::{ItemEntry, ItemGroupSubtype};
-use crate::data::map_data::{
-    MapGenGaspumpFuelType, VehicleStatus,
-};
+use crate::data::map_data::{MapGenGaspumpFuelType, VehicleStatus};
 use crate::data::vehicle_parts::{CDDAVehiclePart, Location};
 use crate::data::vehicles::VehiclePart;
 use crate::features::map::map_properties::{
     ComputersProperty, CorpsesProperty, FieldsProperty, FurnitureProperty,
-    GaspumpsProperty, ItemsProperty, MonstersProperty, NestedProperty,
-    SignsProperty, TerrainProperty, ToiletsProperty, TrapsProperty,
-    VehiclesProperty,
+    GaspumpsProperty, MonstersProperty, NestedProperty, SignsProperty,
+    TerrainProperty, ToiletsProperty, TrapsProperty, VehiclesProperty,
 };
 use crate::features::map::*;
 use crate::util::GetRandom;
@@ -17,6 +14,7 @@ use log::error;
 use num_traits::real::Real;
 use rand::prelude::IndexedRandom;
 use rand::random_range;
+use serde_json::Map;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -44,6 +42,10 @@ impl Property for TerrainProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.mapgen_value).unwrap()
     }
 }
 
@@ -103,6 +105,10 @@ impl Property for MonstersProperty {
 
         None
     }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.monster).unwrap()
+    }
 }
 
 impl Property for FurnitureProperty {
@@ -130,6 +136,10 @@ impl Property for FurnitureProperty {
 
         Some(vec![command])
     }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.mapgen_value).unwrap()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -152,6 +162,10 @@ impl Property for SignsProperty {
             TileState::Normal,
         );
         Some(vec![command])
+    }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.signs).unwrap()
     }
 }
 
@@ -223,6 +237,10 @@ impl Property for NestedProperty {
 
         Some(commands)
     }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.nested).unwrap()
+    }
 }
 
 impl Property for FieldsProperty {
@@ -245,6 +263,10 @@ impl Property for FieldsProperty {
             TileState::Normal,
         );
         Some(vec![command])
+    }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.field).unwrap()
     }
 }
 
@@ -275,166 +297,11 @@ impl Property for GaspumpsProperty {
         );
         Some(vec![command])
     }
-}
 
-#[derive(Debug, Serialize)]
-#[serde(tag = "type")]
-pub enum DisplayItemGroup {
-    Single {
-        item: CDDAIdentifier,
-        probability: f32,
-    },
-    Collection {
-        name: Option<String>,
-        items: Vec<DisplayItemGroup>,
-        probability: f32,
-    },
-    Distribution {
-        name: Option<String>,
-        items: Vec<DisplayItemGroup>,
-        probability: f32,
-    },
-}
-
-impl DisplayItemGroup {
-    pub fn probability(&self) -> f32 {
-        match self {
-            DisplayItemGroup::Single { probability, .. } => probability.clone(),
-            DisplayItemGroup::Collection { probability, .. } => {
-                probability.clone()
-            },
-            DisplayItemGroup::Distribution { probability, .. } => {
-                probability.clone()
-            },
-        }
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.gaspumps).unwrap()
     }
 }
-
-impl ItemsProperty {
-    fn get_display_items_from_entries(
-        &self,
-        entries: &Vec<ItemEntry>,
-        json_data: &DeserializedCDDAJsonData,
-        group_probability: f32,
-    ) -> Vec<DisplayItemGroup> {
-        let mut display_item_groups: Vec<DisplayItemGroup> = Vec::new();
-
-        let weight_sum = entries.iter().fold(0, |acc, v| match v {
-            ItemEntry::Item(i) => acc + i.probability,
-            ItemEntry::Group(g) => acc + g.probability,
-            ItemEntry::Distribution { probability, .. } => {
-                acc + probability.unwrap_or(100)
-            },
-            ItemEntry::Collection { probability, .. } => {
-                acc + probability.unwrap_or(100)
-            },
-        });
-
-        for entry in entries.iter() {
-            match entry {
-                ItemEntry::Item(i) => {
-                    let display_item = DisplayItemGroup::Single {
-                        item: i.item.clone(),
-                        probability: i.probability as f32 / weight_sum as f32
-                            * group_probability,
-                    };
-                    display_item_groups.push(display_item);
-                },
-                ItemEntry::Group(g) => {
-                    let other_group =
-                        &json_data.item_groups.get(&g.group).expect(
-                            format!("Item Group {} to exist", &g.group)
-                                .as_str(),
-                        );
-
-                    let probability = g.probability as f32 / weight_sum as f32
-                        * group_probability;
-
-                    let display_items = self.get_display_items_from_entries(
-                        &other_group.common.entries,
-                        json_data,
-                        probability,
-                    );
-
-                    match other_group.common.subtype {
-                        ItemGroupSubtype::Collection => {
-                            display_item_groups.push(
-                                DisplayItemGroup::Collection {
-                                    items: display_items,
-                                    name: Some(other_group.id.clone().0),
-                                    probability,
-                                },
-                            );
-                        },
-                        ItemGroupSubtype::Distribution => {
-                            display_item_groups.push(
-                                DisplayItemGroup::Distribution {
-                                    items: display_items,
-                                    name: Some(other_group.id.clone().0),
-                                    probability,
-                                },
-                            );
-                        },
-                    }
-                },
-                ItemEntry::Distribution {
-                    distribution,
-                    probability,
-                } => {
-                    let probability = probability
-                        .map(|p| {
-                            p as f32 / weight_sum as f32 * group_probability
-                        })
-                        .unwrap_or(group_probability / weight_sum as f32);
-
-                    let display_items = self.get_display_items_from_entries(
-                        distribution,
-                        json_data,
-                        probability,
-                    );
-
-                    display_item_groups.push(DisplayItemGroup::Distribution {
-                        name: Some("In-Place".to_string()),
-                        items: display_items,
-                        probability,
-                    });
-                },
-                ItemEntry::Collection {
-                    collection,
-                    probability,
-                } => {
-                    let probability = probability
-                        .map(|p| {
-                            p as f32 / weight_sum as f32 * group_probability
-                        })
-                        .unwrap_or(group_probability / weight_sum as f32);
-
-                    let display_items = self.get_display_items_from_entries(
-                        collection,
-                        json_data,
-                        probability,
-                    );
-
-                    display_item_groups.push(DisplayItemGroup::Distribution {
-                        name: Some("In-Place".to_string()),
-                        items: display_items,
-                        probability,
-                    });
-                },
-            }
-        }
-
-        display_item_groups.sort_by(|v1, v2| {
-            v2.probability()
-                .partial_cmp(&v1.probability())
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
-
-        display_item_groups
-    }
-}
-
-impl Property for ItemsProperty {}
 
 impl Property for ComputersProperty {
     fn get_commands(
@@ -451,6 +318,10 @@ impl Property for ComputersProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.computer).unwrap()
     }
 }
 
@@ -469,6 +340,10 @@ impl Property for ToiletsProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn value(&self) -> Value {
+        Value::Object(Map::new())
     }
 }
 
@@ -495,6 +370,10 @@ impl Property for TrapsProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.trap).unwrap()
     }
 }
 
@@ -669,6 +548,10 @@ impl Property for VehiclesProperty {
 
         Some(commands)
     }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.vehicles).unwrap()
+    }
 }
 
 impl Property for CorpsesProperty {
@@ -710,5 +593,9 @@ impl Property for CorpsesProperty {
             rotation: Rotation::Deg0,
             state: TileState::Normal,
         }])
+    }
+
+    fn value(&self) -> Value {
+        serde_json::to_value(&self.corpses).unwrap()
     }
 }

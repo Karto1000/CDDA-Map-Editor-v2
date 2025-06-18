@@ -4,13 +4,15 @@ import {TabContext, ThemeContext} from "../../app.js";
 import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {Tilesheets} from "../sprites/tilesheets.js";
 import {Canvas, ThreeConfig} from "../three/types/three.js";
-import {SideMenuRef} from "../../shared/components/imguilike/sideMenu.js";
-import {Object3D, Vector2} from "three";
+import {Object3D} from "three";
 import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
 import {createGrid} from "../three/hooks/useThreeSetup.js";
 import {MapEditorData} from "../../tauri/types/editor.js";
 import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
 import {LocalEvent, ToggleGridEvent} from "../../shared/utils/localEvent.js";
+import {openWindow, WindowLabel} from "../../windows/lib.js";
+import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
+import {UnlistenFn} from "@tauri-apps/api/event";
 
 export type MapEditorProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -19,6 +21,7 @@ export type MapEditorProps = {
     canvas: Canvas
     eventBus: RefObject<EventTarget>
     showGridRef: RefObject<boolean>
+    mapInfoWindowRef: RefObject<WebviewWindow>
 }
 
 export function MapEditor(props: MapEditorProps) {
@@ -27,7 +30,16 @@ export function MapEditor(props: MapEditorProps) {
     const grid = useRef<Object3D>(null)
     const project = useCurrentProject<MapEditorData>(tabs)
 
+    const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
+
     let handler: number;
+
+    async function onInfoClicked() {
+        const [window, unlistenFn] = await openWindow(WindowLabel.MapInfo, theme.theme, {}, project)
+
+        mapInfoUnlistenFn.current = unlistenFn
+        props.mapInfoWindowRef.current = window
+    }
 
     useEffect(() => {
         if (!project) return
@@ -42,7 +54,6 @@ export function MapEditor(props: MapEditorProps) {
             props.threeConfig.current.camera.top = newHeight / 2
             props.threeConfig.current.camera.bottom = newHeight / -2
             props.threeConfig.current.camera.position.z = 999999
-            console.log(newWidth, newHeight)
         }
 
         function setupGrid(theme: Theme) {
@@ -100,6 +111,7 @@ export function MapEditor(props: MapEditorProps) {
         return () => {
             cancelAnimationFrame(handler)
 
+            if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
             props.threeConfig.current.scene.remove(grid.current)
 
             props.eventBus.current.removeEventListener(
@@ -113,6 +125,7 @@ export function MapEditor(props: MapEditorProps) {
 
     return (
         <div>
+            <button onClick={onInfoClicked}>Info</button>
         </div>
     )
 }
