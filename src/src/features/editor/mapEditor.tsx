@@ -117,11 +117,17 @@ export function MapEditor(props: MapEditorProps) {
             cancelAnimationFrame(handler)
 
             if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
+
             props.threeConfig.current.scene.remove(grid.current)
 
             props.eventBus.current.removeEventListener(
                 LocalEvent.TOGGLE_GRID,
                 onToggleGrid
+            )
+
+            props.eventBus.current.removeEventListener(
+                LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
+                onOpenMapgenInfoWindow
             )
 
             props.tilesheets.current.clearAll()

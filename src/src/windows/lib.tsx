@@ -1,6 +1,7 @@
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "@tauri-apps/api/window";
 import {emitTo, UnlistenFn} from "@tauri-apps/api/event";
+import {Webview} from "@tauri-apps/api/webview";
 
 export enum WindowLabel {
     Main = "main",
@@ -26,6 +27,9 @@ export async function openWindow<T = any>(
     }: WindowOptions = {},
     data?: T
 ): Promise<[WebviewWindow, UnlistenFn]> {
+    const existingWindow = await Webview.getByLabel(label.toString())
+    if (existingWindow) return [existingWindow, () => {}]
+
     const window = new WebviewWindow(label.toString(), {
         url: `src/windows/${label.toString()}/window.html?theme=${theme.toString()}`,
         width: defaultWidth,
