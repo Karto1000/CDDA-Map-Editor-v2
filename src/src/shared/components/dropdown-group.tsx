@@ -2,7 +2,7 @@ import React, {useRef, useState} from "react";
 import {Dropdown, DropdownProps, DropdownRef} from "./dropdown.tsx";
 
 type Props = {
-    children: React.ReactElement<DropdownProps>[];
+    children: React.ReactElement<DropdownProps>[] | React.ReactElement<DropdownProps>;
 }
 
 export function DropdownGroup(props: Props) {
@@ -12,12 +12,12 @@ export function DropdownGroup(props: Props) {
     // Probably a better way of doing this, but cannot be bothered right now
     // From: https://stackoverflow.com/a/60977523
     // eslint-disable-next-line react-hooks/rules-of-hooks
-    const refs = props.children.map(_ => useRef<DropdownRef>(null))
+    const refs = (props.children instanceof Array ? props.children : [props.children]).map(_ => useRef<DropdownRef>(null))
 
     return (
         <div>
             {
-                props.children.map((child, i) => {
+                (props.children instanceof Array ? props.children : [props.children]).map((child, i) => {
                     return <Dropdown
                         key={`dropdown-${i}`}
                         name={child.props.name}

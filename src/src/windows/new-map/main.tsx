@@ -1,4 +1,4 @@
-import React from "react";
+import React, {useState} from "react";
 import GenericWindow from "../generic-window.tsx";
 import "./main.scss"
 // @ts-ignore
@@ -10,6 +10,8 @@ import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import toast from "react-hot-toast";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
+import {Tooltip} from 'react-tooltip'
+import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 
 type SingleMapgenFormInputs = {
     omTerrainName: string
@@ -17,7 +19,9 @@ type SingleMapgenFormInputs = {
 }
 
 
-function SingleMapgenForm() {
+function SingleMapgenForm({handleMouseMove}: {
+    handleMouseMove: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) {
     const {
         register,
         handleSubmit,
@@ -75,18 +79,24 @@ function SingleMapgenForm() {
                     <div className={"form-element"}>
                         <input
                             type={"text"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The overmap terrain name"}
+                            onMouseMove={handleMouseMove}
                             placeholder={"Overmap Terrain Name"}
                             {...register("omTerrainName", {required: "Om Terrain name is required"})}
                         />
-                        <label>The overmap terrain name</label>
+                        <label>Overmap Name</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"text"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The project name; overmap terrain name per default"}
+                            onMouseMove={handleMouseMove}
                             placeholder={"Project Name"}
                             {...register("projectName")}
                         />
-                        <label>The project name; overmap terrain name per default</label>
+                        <label>Project Name</label>
                     </div>
                 </div>
                 <div className={"submit-container"}>
@@ -108,7 +118,9 @@ type OvermapSpecialFormInputs = {
     specialZTo: number,
 }
 
-function OvermapSpecialForm() {
+function OvermapSpecialForm({handleMouseMove}: {
+    handleMouseMove: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) {
     const {
         register,
         handleSubmit,
@@ -173,53 +185,71 @@ function OvermapSpecialForm() {
                     <div className={"form-element"}>
                         <input
                             type={"text"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The overmap terrain name"}
+                            onMouseMove={handleMouseMove}
                             placeholder={"Overmap Terrain Name"}
                             {...register("omTerrainName", {required: "Om Terrain name is required"})}
                         />
-                        <label>The overmap terrain name</label>
+                        <label>Overmap Name</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"text"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The project name; overmap terrain name per default"}
+                            onMouseMove={handleMouseMove}
                             placeholder={"Project Name"}
                             {...register("projectName")}
                         />
-                        <label>The project name; overmap terrain name per default</label>
+                        <label>Project Name</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"number"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"Width of the overmap special"}
+                            onMouseMove={handleMouseMove}
                             placeholder={1}
                             {...register("specialWidth", {required: "Special Width is required", valueAsNumber: true})}
                         />
-                        <label>Width of the overmap special</label>
+                        <label>Width</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"number"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The height of the overmap special"}
+                            onMouseMove={handleMouseMove}
                             placeholder={1}
                             {...register("specialHeight", {
                                 required: "Special Height is required",
                                 valueAsNumber: true
                             })}
                         />
-                        <label>The height of the overmap special</label>
+                        <label>Height</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"number"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"Where the z Level of the overmap special starts"}
+                            onMouseMove={handleMouseMove}
                             defaultValue={0}
                             {...register("specialZFrom", {valueAsNumber: true})}
                         />
-                        <label>Where the z Level of the overmap special starts</label>
+                        <label>Z-level start</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"number"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"Where the z Level of the overmap special ends"}
+                            onMouseMove={handleMouseMove}
                             defaultValue={0}
                             {...register("specialZTo", {valueAsNumber: true})}
                         />
-                        <label>Where the z Level of the overmap special ends</label>
+                        <label>Z-level end</label>
                     </div>
                 </div>
                 <div className={"submit-container"}>
@@ -240,7 +270,9 @@ type NestedMapgenFormInputs = {
 }
 
 
-function NestedMapgenForm() {
+function NestedMapgenForm({handleMouseMove}: {
+    handleMouseMove: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) {
     const {
         register,
         handleSubmit,
@@ -302,18 +334,24 @@ function NestedMapgenForm() {
                     <div className={"form-element"}>
                         <input
                             type={"text"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The nested overmap terrain id"}
+                            onMouseMove={handleMouseMove}
                             placeholder={"Nested mapgen id"}
                             {...register("omTerrainName", {required: "Nested mapgen id is required"})}
                         />
-                        <label>The nested overmap terrain id</label>
+                        <label>Nested Overmap Id</label>
                     </div>
                     <div className={"form-element"}>
                         <input
                             type={"text"}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The project name; nested overmap terrain id per default"}
+                            onMouseMove={handleMouseMove}
                             placeholder={"Project Name"}
                             {...register("projectName")}
                         />
-                        <label>The project name; overmap terrain id per default</label>
+                        <label>Project Name</label>
                     </div>
                     <div className={"form-element"}>
                         <input
@@ -321,13 +359,16 @@ function NestedMapgenForm() {
                             min={1}
                             max={24}
                             placeholder={1}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The width of the nested mapgen; has to be between 1 and 24"}
+                            onMouseMove={handleMouseMove}
                             {...register("nestedWidth", {
                                 required: "Nested Width is required and must be between 1 and 24",
                                 valueAsNumber: true,
                                 validate: (v) => v >= 1 && v <= 24
                             })}
                         />
-                        <label>The width of the nested mapgen; has to be between 1 and 24</label>
+                        <label>Width</label>
                     </div>
                     <div className={"form-element"}>
                         <input
@@ -335,13 +376,16 @@ function NestedMapgenForm() {
                             min={1}
                             max={24}
                             placeholder={1}
+                            data-tooltip-id={"info-tooltip"}
+                            data-tooltip-content={"The height of the nested mapgen; has to be between 1 and 24"}
+                            onMouseMove={handleMouseMove}
                             {...register("nestedHeight", {
                                 required: "Nested Height is required and must be between 1 and 24",
                                 valueAsNumber: true,
                                 validate: (v) => v >= 1 && v <= 24
                             })}
                         />
-                        <label>The height of the nested mapgen; has to be between 1 and 24</label>
+                        <label>Height</label>
                     </div>
                 </div>
                 <div className={"submit-container"}>
@@ -353,7 +397,9 @@ function NestedMapgenForm() {
     )
 }
 
-function NewMapViewer() {
+function NewMapViewer({handleMouseMove}: {
+    handleMouseMove: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) {
     return (
         <div className={"new-map-viewer-body"}>
             <p>
@@ -376,15 +422,15 @@ function NewMapViewer() {
                 [
                     {
                         name: "Single Mapgen",
-                        content: <SingleMapgenForm/>
+                        content: <SingleMapgenForm handleMouseMove={handleMouseMove}/>
                     },
                     {
                         name: "Nested Mapgen",
-                        content: <NestedMapgenForm/>,
+                        content: <NestedMapgenForm handleMouseMove={handleMouseMove}/>,
                     },
                     {
                         name: "Overmap Special",
-                        content: <OvermapSpecialForm/>
+                        content: <OvermapSpecialForm handleMouseMove={handleMouseMove}/>
                     }
                 ]
             }/>
@@ -400,7 +446,9 @@ type MapEditorFormInputs = {
     zLevelTo: number
 }
 
-function NewMapEditor() {
+function NewMapEditor({handleMouseMove}: {
+    handleMouseMove: (e: React.MouseEvent<HTMLDivElement, MouseEvent>) => void
+}) {
     const {
         register,
         handleSubmit,
@@ -456,16 +504,23 @@ function NewMapEditor() {
                         <div className={"form-element"}>
                             <input
                                 type={"text"}
+                                autoComplete={"off"}
+                                data-tooltip-id={"info-tooltip"}
+                                data-tooltip-content={"The name of the Project"}
+                                onMouseMove={handleMouseMove}
                                 placeholder={"Project Name"}
                                 {...register("projectName", {required: "Project name is required"})}
                             />
-                            <label>The name of the project</label>
+                            <label>Name</label>
                         </div>
                         <div className={"form-element"}>
                             <input
                                 type={"number"}
                                 placeholder={"24"}
                                 defaultValue={24}
+                                data-tooltip-id={"info-tooltip"}
+                                data-tooltip-content={"The Map width. Any width greater than 24 must be a multiple of 24"}
+                                onMouseMove={handleMouseMove}
                                 min={1}
                                 {...register("mapWidth", {
                                     required: "Map width is required",
@@ -473,13 +528,16 @@ function NewMapEditor() {
                                     validate: validateMapSize
                                 })}
                             />
-                            <label>The map width</label>
+                            <label>Width</label>
                         </div>
                         <div className={"form-element"}>
                             <input
                                 type={"number"}
                                 placeholder={"24"}
                                 defaultValue={24}
+                                data-tooltip-id={"info-tooltip"}
+                                data-tooltip-content={"The Map height. Any height greater than 24 must be a multiple of 24"}
+                                onMouseMove={handleMouseMove}
                                 min={1}
                                 {...register("mapHeight", {
                                     required: "Map height is required",
@@ -487,28 +545,34 @@ function NewMapEditor() {
                                     validate: validateMapSize
                                 })}
                             />
-                            <label>The map height</label>
+                            <label>Height</label>
                         </div>
                         <div className={"form-element"}>
                             <input
                                 type={"number"}
                                 placeholder={"0"}
+                                data-tooltip-id={"info-tooltip"}
+                                data-tooltip-content={"The lowest z-level"}
+                                onMouseMove={handleMouseMove}
                                 defaultValue={0}
                                 {...register("zLevelFrom", {
                                     required: "ZLevel from is required",
                                     valueAsNumber: true,
                                 })}
                             />
-                            <label>The lowest z-level</label>
+                            <label>Lowest Z-level</label>
                         </div>
                         <div className={"form-element"}>
                             <input
                                 type={"number"}
                                 placeholder={"0"}
                                 defaultValue={0}
+                                data-tooltip-id={"info-tooltip"}
+                                data-tooltip-html="<p>The highest z-level. (Lowest z-level <b>up to and including</b> the highest z-level)</p>"
+                                onMouseMove={handleMouseMove}
                                 {...register("zLevelTo", {required: "ZLevel To is required", valueAsNumber: true})}
                             />
-                            <label>The highest z-level. (Lowest z-level <b>up to and including</b> the highest z-level)</label>
+                            <label>Highest z-level</label>
                         </div>
                     </div>
                     <div className={"submit-container"}>
@@ -522,16 +586,20 @@ function NewMapEditor() {
 }
 
 function Main() {
+    const [tooltipPosition, handleMouseMove] = useMouseTooltip()
+
     return (
         <GenericWindow title={"Create new Map"}>
+            <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
+                     noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
             <MultiMenu tabs={[
                 {
                     name: "New Map Editor",
-                    content: <NewMapEditor/>,
+                    content: <NewMapEditor handleMouseMove={handleMouseMove}/>,
                 },
                 {
                     name: "New Map Viewer",
-                    content: <NewMapViewer/>,
+                    content: <NewMapViewer handleMouseMove={handleMouseMove}/>,
                 }
             ]}/>
         </GenericWindow>

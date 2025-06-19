@@ -5,6 +5,13 @@
     color: theme-var("lightest")
   }
 
+  .tooltip {
+    background-color: theme-var("darker");
+    border: 1px solid theme-var("disabled");
+    border-radius: 0;
+    color: theme-var("lightest");
+  }
+
   * {
     scrollbar-color: theme-var("selected") theme-var("darker");
   }
@@ -154,8 +161,8 @@ form {
   }
 
   label {
-    flex: 1;
     white-space: wrap;
+    min-width: 200px;
   }
 
   .file-input {

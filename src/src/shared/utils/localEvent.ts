@@ -15,6 +15,7 @@ export enum LocalEvent {
     CHANGE_SELECTED_POSITION = "change-selected-position",
     UPDATE_VIEWER = "update-viewer",
     TOGGLE_GRID = "toggle-grid",
+    OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window"
 }
 
 export interface LocalEventsMap {
@@ -29,7 +30,8 @@ export interface LocalEventsMap {
     [LocalEvent.CHANGE_WORLD_MOUSE_POSITION]: { position: { x: number, y: number } }
     [LocalEvent.CHANGE_SELECTED_POSITION]: { position?: { x: number, y: number } }
     [LocalEvent.UPDATE_VIEWER]: {  },
-    [LocalEvent.TOGGLE_GRID]: { state: boolean }
+    [LocalEvent.TOGGLE_GRID]: { state: boolean },
+    [LocalEvent.OPEN_MAPGEN_INFO_WINDOW]: {}
 }
 
 export class ChangedThemeEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGED_THEME]> {
@@ -53,12 +55,6 @@ export class TilesetLoadedEvent extends CustomEvent<LocalEventsMap[LocalEvent.TI
 export class ChangeThemeRequestEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_THEME_REQUEST]> {
 }
 
-export class ChangeZLevelEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_Z_LEVEL]> {
-}
-
-export class ChangeWorldMousePositionEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_WORLD_MOUSE_POSITION]> {
-}
-export class ChangeSelectedPositionEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGE_SELECTED_POSITION]> {
-}
 export class UpdateViewerEvent extends CustomEvent<LocalEventsMap[LocalEvent.UPDATE_VIEWER]> {}
 export class ToggleGridEvent extends CustomEvent<LocalEventsMap[LocalEvent.TOGGLE_GRID]> {}
+export class OpenMapgenInfoWindowEvent extends CustomEvent<LocalEventsMap[LocalEvent.OPEN_MAPGEN_INFO_WINDOW]> {}

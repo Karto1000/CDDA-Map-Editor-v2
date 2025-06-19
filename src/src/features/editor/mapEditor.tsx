@@ -34,13 +34,6 @@ export function MapEditor(props: MapEditorProps) {
 
     let handler: number;
 
-    async function onInfoClicked() {
-        const [window, unlistenFn] = await openWindow(WindowLabel.MapInfo, theme.theme, {}, project)
-
-        mapInfoUnlistenFn.current = unlistenFn
-        props.mapInfoWindowRef.current = window
-    }
-
     useEffect(() => {
         if (!project) return
 
@@ -92,9 +85,21 @@ export function MapEditor(props: MapEditorProps) {
             grid.current.visible = e.detail.state
         }
 
+        async function onOpenMapgenInfoWindow() {
+            const [window, unlistenFn] = await openWindow(WindowLabel.MapInfo, theme.theme, {}, project)
+
+            mapInfoUnlistenFn.current = unlistenFn
+            props.mapInfoWindowRef.current = window
+        }
+
         props.eventBus.current.addEventListener(
             LocalEvent.TOGGLE_GRID,
             onToggleGrid,
+        )
+
+        props.eventBus.current.addEventListener(
+            LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
+            onOpenMapgenInfoWindow,
         )
 
         function loop() {
@@ -125,7 +130,6 @@ export function MapEditor(props: MapEditorProps) {
 
     return (
         <div>
-            <button onClick={onInfoClicked}>Info</button>
         </div>
     )
 }

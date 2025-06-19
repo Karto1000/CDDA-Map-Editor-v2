@@ -20,7 +20,7 @@ function Main() {
 
     return (
         <GenericWindow title={"Map Info"}>
-            <p>{project?.name}</p>
+            <p>Project name: {project?.name}</p>
         </GenericWindow>
     );
 }

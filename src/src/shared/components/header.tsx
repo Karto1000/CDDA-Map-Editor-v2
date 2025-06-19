@@ -12,6 +12,7 @@ import {
     CloseLocalTabEvent,
     LocalEvent,
     OpenLocalTabEvent,
+    OpenMapgenInfoWindowEvent,
     ToggleGridEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
@@ -102,7 +103,10 @@ export function Header(props: Props) {
     }
 
     async function onNewClicked() {
-        props.newMapWindowRef.current = await openWindow(WindowLabel.NewMap, theme, {defaultWidth: 800, defaultHeight: 500})[0]
+        props.newMapWindowRef.current = await openWindow(WindowLabel.NewMap, theme, {
+            defaultWidth: 800,
+            defaultHeight: 500
+        })[0]
     }
 
     async function onImport() {
@@ -560,6 +564,31 @@ export function Header(props: Props) {
                                 }
                             ]
                         ]}/>
+
+                        <Dropdown
+                            name={"Windows"}
+                            groups={
+                                [
+                                    tabs.getCurrentTab()?.tab_type === TabTypeKind.MapEditor ?
+                                        [
+                                            {
+                                                name: "Mapgen Info",
+                                                onClick: async (ref) => {
+                                                    props.eventBus.current.dispatchEvent(
+                                                        new OpenMapgenInfoWindowEvent(
+                                                            LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
+                                                            {detail: {}}
+                                                        )
+                                                    )
+                                                    ref.current.closeMenu()
+                                                }
+                                            }
+                                        ]
+                                        :
+                                        []
+                                ]
+                            }
+                        />
                     </DropdownGroup>
                 </div>
             </div>

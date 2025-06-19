@@ -3,18 +3,21 @@ import GenericWindow from "../generic-window.js";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./main.scss"
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {ProgramData, getKeybindingText, Keybind} from "../../tauri/types/editor.js";
+import {getKeybindingText, ProgramData} from "../../tauri/types/editor.js";
 import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 import {open} from "@tauri-apps/plugin-dialog";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 import {DEFAULT_TILESET} from "../../features/sprites/tilesheets.js";
+import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
+import {Tooltip} from "react-tooltip";
 
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
     const [cddaDirectoryPath, setCDDADirectoryPath] = useState<string>(null)
     const [editorData, setEditorData] = useState<ProgramData>(null)
     const selectRef = useRef<HTMLSelectElement>(null)
+    const [tooltipPosition, handleMouseMove] = useMouseTooltip()
 
     async function getAndSetEditorData() {
         const response = await tauriBridge.invoke<ProgramData, unknown>(
@@ -98,6 +101,9 @@ function Main() {
 
     return (
         <GenericWindow title={"Settings"}>
+            <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
+                     noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
+
             <div className={"settings-body"}>
                 <MultiMenu tabs={
                     [
@@ -105,15 +111,26 @@ function Main() {
                             name: "General",
                             content: <div className={"general-settings"}>
                                 <div className={"form-element"}>
-                                    <label className={clsx("file-input", !cddaDirectoryPath && "placeholder")}>
+                                    <label
+                                        className={clsx("file-input", !cddaDirectoryPath && "placeholder")}
+                                        data-tooltip-id={"info-tooltip"}
+                                        data-tooltip-content={"The path to the CDDA Game directory where the 'json' directory is located"}
+                                        onMouseMove={handleMouseMove}
+                                    >
                                         {cddaDirectoryPath ? cddaDirectoryPath : "Select your CDDA Game directory"}
                                         <button onClick={onCDDAInputChange}/>
                                     </label>
-                                    <label>Change your CDDA Game directory</label>
+                                    <label>CDDA Path</label>
                                 </div>
                                 <div className={"form-element"}>
-                                    <button onClick={onThemeChange}>Change Theme</button>
-                                    <label>Change your theme to dark or light</label>
+                                    <button
+                                        onClick={onThemeChange}
+                                        data-tooltip-id={"info-tooltip"}
+                                        data-tooltip-content={"Change the theme of the application"}
+                                        onMouseMove={handleMouseMove}
+                                    >Change Theme
+                                    </button>
+                                    <label>Theme</label>
                                 </div>
                             </div>
                         },
@@ -124,6 +141,9 @@ function Main() {
                                     value={selectedTilset}
                                     onChange={onTilesetSelect}
                                     ref={selectRef}
+                                    data-tooltip-id={"info-tooltip"}
+                                    data-tooltip-html={"The currently selected tileset. If you don't select a tileset, <br/> the tiles will be displayed using a fallback ascii tileset."}
+                                    onMouseMove={handleMouseMove}
                                     defaultValue={"None"}
                                 >
                                     <option>None</option>
@@ -131,7 +151,7 @@ function Main() {
                                         editorData?.available_tilesets.map(t => <option key={t}>{t}</option>)
                                     }
                                 </select>
-                                <label>Select your tileset here</label>
+                                <label>Tileset</label>
                             </div>
                         },
                         {
