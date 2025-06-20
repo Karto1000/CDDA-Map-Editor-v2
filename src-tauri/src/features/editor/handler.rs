@@ -2,8 +2,8 @@ use crate::features::editor::data::ZLevels;
 use crate::features::editor::{MapEditor, MapSize};
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::{
-    MapDataCollection, ProgramData, Project, ProjectType, SavedProject, Tab,
-    TabType,
+    LoadedProjects, MapDataCollection, ProgramData, Project, ProjectType,
+    SavedProject, Tab, TabType,
 };
 use crate::util::{get_size, Save, SaveError};
 use crate::{events, impl_serialize_for_error};
@@ -36,6 +36,7 @@ pub async fn new_map_editor(
     map_size: MapSize,
     z_levels: ZLevels,
     path: PathBuf,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), NewMapEditorError> {
     info!("Creating new map editor");
 
@@ -58,7 +59,10 @@ pub async fn new_map_editor(
     let project_saver = ProjectSaver { path: path.clone() };
     project_saver.save(&new_project).await?;
 
-    program_data_lock.create_and_open_project(new_project, path);
+    program_data_lock.create_and_open_project(new_project.name.clone(), path);
+
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+    loaded_projects_lock.insert(new_project.name.clone(), new_project);
 
     let program_data_saver = ProgramDataSaver {
         path: program_data_lock.config.config_path.clone(),
@@ -75,3 +79,6 @@ pub async fn new_map_editor(
 
     Ok(())
 }
+
+// #[tauri::command(rename_all = "camelCase")]
+// pub async fn update_editor() -> Result<(), ()> {}

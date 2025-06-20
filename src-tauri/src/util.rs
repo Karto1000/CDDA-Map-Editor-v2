@@ -1,7 +1,7 @@
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::features::map::DEFAULT_MAP_DATA_SIZE;
 use crate::features::program_data::{
-    MapDataCollection, ProgramData, Project, ZLevel,
+    LoadedProjects, MapDataCollection, ProgramData, Project, ZLevel,
 };
 use cdda_lib::types::Weighted;
 use derive_more::with_trait::Display;
@@ -250,15 +250,16 @@ pub fn get_size(maps: &HashMap<ZLevel, MapDataCollection>) -> UVec2 {
     )
 }
 
-pub fn get_current_project(
+pub fn get_current_project<'a>(
     editor_data: &ProgramData,
-) -> Result<&Project, GetCurrentProjectError> {
+    loaded_projects: &'a LoadedProjects,
+) -> Result<&'a Project, GetCurrentProjectError> {
     let project_name = match &editor_data.opened_project {
         None => return Err(GetCurrentProjectError::NoProjectOpen),
         Some(i) => i,
     };
 
-    let data = match editor_data.loaded_projects.get(project_name) {
+    let data = match loaded_projects.get(project_name) {
         None => {
             return Err(GetCurrentProjectError::ProjectNotFound(
                 project_name.clone(),
@@ -271,14 +272,15 @@ pub fn get_current_project(
 }
 
 pub fn get_current_project_mut<'a>(
-    editor_data: &'a mut MutexGuard<ProgramData>,
+    editor_data: &MutexGuard<ProgramData>,
+    loaded_projects: &'a mut LoadedProjects,
 ) -> Result<&'a mut Project, GetCurrentProjectError> {
     let project_name = match editor_data.opened_project.clone() {
         None => return Err(GetCurrentProjectError::NoProjectOpen),
         Some(i) => i,
     };
 
-    let data = match editor_data.loaded_projects.get_mut(&project_name) {
+    let data = match loaded_projects.get_mut(&project_name) {
         None => {
             return Err(GetCurrentProjectError::ProjectNotFound(
                 project_name.clone(),

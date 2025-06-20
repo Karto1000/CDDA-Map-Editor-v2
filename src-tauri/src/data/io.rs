@@ -761,22 +761,6 @@ pub async fn get_saved_editor_data() -> Result<ProgramData, Error> {
                 },
             };
 
-            for (project_name, save_path) in data.openable_projects.iter() {
-                let mut project_loader = ProjectLoader {
-                    path: save_path.clone(),
-                };
-
-                match project_loader.load().await {
-                    Ok(p) => {
-                        data.loaded_projects.insert(project_name.clone(), p);
-                    },
-                    Err(e) => {
-                        error!("{}", e.to_string());
-                        continue;
-                    },
-                }
-            }
-
             data
         },
         false => {

@@ -12,9 +12,10 @@ use crate::features::program_data::handlers::{
     get_current_project_data, get_editor_data, open_project,
     open_recent_project, save_program_data, tileset_picked,
 };
+use crate::features::program_data::io::ProjectLoader;
 use crate::features::program_data::{
-    get_map_data_collection_from_map_viewer, MappedCDDAIdContainer, ProgramData, ProjectName, ProjectType,
-    ZLevel,
+    get_map_data_collection_from_map_viewer, LoadedProjects, MappedCDDAIdContainer, ProgramData, Project,
+    ProjectName, ProjectType, ZLevel,
 };
 use crate::features::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
@@ -36,7 +37,7 @@ use features::tileset::legacy_tileset;
 use features::toast::ToastMessage;
 use features::viewer::LiveViewerData;
 use lazy_static::lazy_static;
-use log::{info, warn, LevelFilter};
+use log::{error, info, warn, LevelFilter};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -95,10 +96,12 @@ async fn frontend_ready(
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;
     let mut json_data_lock = json_data.lock().await;
     let mut tilesheet_lock = tilesheet.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
 
     match json_data_lock.deref() {
         None => match &editor_data_lock.config.cdda_path {
@@ -128,7 +131,7 @@ async fn frontend_ready(
     match json_data_lock.deref() {
         None => {},
         Some(json_data) => {
-            for (name, project) in editor_data_lock.loaded_projects.iter_mut() {
+            for (name, project) in loaded_projects_lock.iter_mut() {
                 info!("Loading Project {}", name);
 
                 match &mut project.project_type {
@@ -232,6 +235,28 @@ async fn close_app(app: AppHandle) {
     }
 }
 
+async fn load_projects(program_data: &ProgramData) -> LoadedProjects {
+    let mut loaded_projects = HashMap::new();
+
+    for (project_name, save_path) in program_data.openable_projects.iter() {
+        let mut project_loader = ProjectLoader {
+            path: save_path.clone(),
+        };
+
+        match project_loader.load().await {
+            Ok(p) => {
+                loaded_projects.insert(project_name.clone(), p);
+            },
+            Err(e) => {
+                error!("{}", e.to_string());
+                continue;
+            },
+        }
+    }
+
+    loaded_projects
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> () {
     tauri::Builder::default()
@@ -247,6 +272,9 @@ pub fn run() -> () {
             info!("Loading Editor data config");
             let editor_data = block_on(io::get_saved_editor_data())?;
 
+            info!("Loading openable projects");
+            let loaded_projects = block_on(load_projects(&editor_data));
+
             info!("Getting fallback tilesheet");
             let fallback_tilesheet = get_fallback_tilesheet();
 
@@ -258,6 +286,7 @@ pub fn run() -> () {
             app.manage::<Mutex<Option<LegacyTilesheet>>>(Mutex::new(None));
             app.manage::<Mutex<Option<JoinHandle<()>>>>(Mutex::new(None));
             app.manage::<Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>>(Mutex::new(None));
+            app.manage::<Mutex<LoadedProjects>>(Mutex::new(loaded_projects));
 
             Ok(())
         })

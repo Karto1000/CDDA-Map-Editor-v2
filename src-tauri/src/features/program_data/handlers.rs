@@ -3,8 +3,8 @@ use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::program_data::io::{ProgramDataSaver, ProjectLoader};
 use crate::features::program_data::{
-    get_map_data_collection_from_map_viewer, ProgramData, Project, ProjectName, ProjectType, SavedProject, Tab,
-    TabType,
+    get_map_data_collection_from_map_viewer, LoadedProjects, ProgramData, Project, ProjectName,
+    ProjectType, SavedProject, Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     load_tilesheet, LegacyTilesheet,
@@ -29,10 +29,14 @@ use tokio_test::block_on;
 
 #[tauri::command]
 pub async fn get_current_project_data(
-    editor_data: State<'_, Mutex<ProgramData>>,
+    program_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<Project, GetCurrentProjectError> {
-    let lock = editor_data.lock().await;
-    get_current_project(&lock).map(Clone::clone)
+    let program_data_lock = program_data.lock().await;
+    let loaded_projects_lock = loaded_projects.lock().await;
+
+    get_current_project(&program_data_lock, &loaded_projects_lock)
+        .map(Clone::clone)
 }
 
 #[tauri::command]
@@ -190,8 +194,10 @@ pub async fn close_project(
     app: AppHandle,
     name: ProjectName,
     editor_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), ()> {
     let mut editor_data_lock = editor_data.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
 
     match editor_data_lock.opened_project.clone() {
         None => {},
@@ -201,7 +207,7 @@ pub async fn close_project(
     }
 
     editor_data_lock.opened_project = None;
-    editor_data_lock.loaded_projects.remove(&name);
+    loaded_projects_lock.remove(&name);
     editor_data_lock.openable_projects.remove(&name);
 
     let saver = ProgramDataSaver {
@@ -234,10 +240,12 @@ pub async fn open_recent_project(
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), OpenProjectError> {
     let mut editor_data_lock = editor_data.lock().await;
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
 
     let saved_project_path = editor_data_lock
         .recent_projects
@@ -293,9 +301,7 @@ pub async fn open_recent_project(
         .openable_projects
         .insert(name, saved_project_path.clone());
 
-    editor_data_lock
-        .loaded_projects
-        .insert(project.name.clone(), project);
+    loaded_projects_lock.insert(project.name.clone(), project);
 
     let saver = ProgramDataSaver {
         path: editor_data_lock.config.config_path.clone(),
@@ -315,6 +321,7 @@ pub async fn open_project(
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
     file_watcher: State<'_, Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), ()> {
     let mut file_watcher_lock = file_watcher.lock().await;
     match file_watcher_lock.deref() {
@@ -328,7 +335,9 @@ pub async fn open_project(
     app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
         .unwrap();
 
-    let project = get_current_project(&editor_data_lock).unwrap();
+    let loaded_projects_lock = loaded_projects.lock().await;
+    let project =
+        get_current_project(&editor_data_lock, &loaded_projects_lock).unwrap();
 
     match &project.project_type {
         ProjectType::MapEditor(_) => {},

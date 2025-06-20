@@ -2,7 +2,6 @@ use super::data::Sprites;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::replace_region_setting;
 use crate::data::TileLayer;
-use crate::events;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::map::importing::{
     OvermapSpecialImporter, SingleMapDataImporter,
@@ -14,7 +13,6 @@ use crate::features::program_data::handlers::{
     save_program_data, SaveEditorDataError,
 };
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
-use crate::features::program_data::GetLiveViewerDataError;
 use crate::features::program_data::MappedCDDAIdContainer;
 use crate::features::program_data::Project;
 use crate::features::program_data::ProjectType;
@@ -22,6 +20,7 @@ use crate::features::program_data::ZLevel;
 use crate::features::program_data::{
     get_map_data_collection_from_map_viewer, Tab, TabType,
 };
+use crate::features::program_data::{GetLiveViewerDataError, LoadedProjects};
 use crate::features::program_data::{ProgramData, SavedProject};
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
@@ -37,6 +36,7 @@ use crate::util::UVec2JsonKey;
 use crate::util::{get_current_project, get_json_data, get_json_data_mut};
 use crate::util::{get_current_project_mut, get_size, Load};
 use crate::util::{CDDADataError, SaveError};
+use crate::{events, load_projects};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
 use cdda_lib::DEFAULT_MAP_HEIGHT;
@@ -98,12 +98,15 @@ impl_serialize_for_error!(GetCalculatedParametersError);
 #[tauri::command]
 pub async fn get_calculated_parameters(
     program_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<
     HashMap<IVec3JsonKey, IndexMap<ParameterIdentifier, CDDAIdentifier>>,
     GetCalculatedParametersError,
 > {
     let editor_data_lock = program_data.lock().await;
-    let project = get_current_project(&editor_data_lock)?;
+    let loaded_projects_lock = loaded_projects.lock().await;
+    let project =
+        get_current_project(&editor_data_lock, &loaded_projects_lock)?;
 
     let mut calculated_parameters = HashMap::new();
 
@@ -147,12 +150,16 @@ pub async fn get_sprites(
         '_,
         Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>,
     >,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<Sprites, GetSpritesError> {
     let mut json_data_lock = json_data.lock().await;
     let json_data = get_json_data_mut(&mut json_data_lock)?;
 
-    let mut editor_data_lock = editor_data.lock().await;
-    let project = get_current_project_mut(&mut editor_data_lock)?;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+
+    let editor_data_lock = editor_data.lock().await;
+    let project =
+        get_current_project_mut(&editor_data_lock, &mut loaded_projects_lock)?;
 
     let mut static_sprites = HashSet::new();
     let mut animated_sprites = HashSet::new();
@@ -369,12 +376,15 @@ impl_serialize_for_error!(ReloadProjectError);
 pub async fn reload_project(
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), ReloadProjectError> {
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
-    let mut editor_data_lock = editor_data.lock().await;
-    let project = get_current_project_mut(&mut editor_data_lock)?;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+    let editor_data_lock = editor_data.lock().await;
+    let project =
+        get_current_project_mut(&editor_data_lock, &mut loaded_projects_lock)?;
 
     match &mut project.project_type {
         ProjectType::MapEditor(_) => {
@@ -440,6 +450,7 @@ pub async fn new_single_mapgen_viewer(
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), NewMapgenViewerError> {
     let data = serde_json::to_string_pretty(&json!(
         [
@@ -470,6 +481,7 @@ pub async fn new_single_mapgen_viewer(
         },
         editor_data,
         json_data,
+        loaded_projects,
     )
     .await?;
 
@@ -489,6 +501,7 @@ pub async fn new_special_mapgen_viewer(
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), NewMapgenViewerError> {
     let mut data = Vec::new();
 
@@ -565,6 +578,7 @@ pub async fn new_special_mapgen_viewer(
         },
         editor_data,
         json_data,
+        loaded_projects,
     )
     .await?;
 
@@ -582,6 +596,7 @@ pub async fn new_nested_mapgen_viewer(
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), NewMapgenViewerError> {
     let mut rows = Vec::new();
 
@@ -618,6 +633,7 @@ pub async fn new_nested_mapgen_viewer(
         },
         editor_data,
         json_data,
+        loaded_projects,
     )
     .await?;
 
@@ -673,10 +689,12 @@ pub async fn create_viewer(
     data: OpenViewerData,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), OpenViewerError> {
     info!("Creating Live viewer");
 
     let mut program_data_lock = editor_data.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
 
@@ -686,11 +704,7 @@ pub async fn create_viewer(
             mapgen_file_paths,
             om_id,
         } => {
-            if program_data_lock
-                .loaded_projects
-                .get(&project_name)
-                .is_some()
-            {
+            if loaded_projects_lock.get(&project_name).is_some() {
                 return Err(OpenViewerError::ProjectAlreadyExists);
             }
 
@@ -728,11 +742,7 @@ pub async fn create_viewer(
             om_file_paths,
             om_id,
         } => {
-            if program_data_lock
-                .loaded_projects
-                .get(&project_name)
-                .is_some()
-            {
+            if loaded_projects_lock.get(&project_name).is_some() {
                 return Err(OpenViewerError::ProjectAlreadyExists);
             }
 
@@ -785,7 +795,9 @@ pub async fn create_viewer(
         },
     )?;
 
-    program_data_lock.create_and_open_project(project, project_save_path);
+    program_data_lock
+        .create_and_open_project(project.name.clone(), project_save_path);
+    loaded_projects_lock.insert(project.name.clone(), project);
 
     app.emit(events::EDITOR_DATA_CHANGED, program_data_lock.clone())?;
     drop(program_data_lock);

@@ -37,6 +37,7 @@ pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 pub type ZLevel = i32;
 pub type MapCoordinates = UVec2JsonKey;
 pub type ProjectName = String;
+pub type LoadedProjects = HashMap<ProjectName, Project>;
 
 #[derive(Debug, Error)]
 pub enum GetLiveViewerDataError {
@@ -402,9 +403,6 @@ pub struct SavedProject {
 pub struct ProgramData {
     pub config: ProgramConfig,
 
-    #[serde(skip)]
-    pub loaded_projects: HashMap<ProjectName, Project>,
-
     pub recent_projects: HashMap<ProjectName, PathBuf>,
     pub openable_projects: HashMap<ProjectName, PathBuf>,
     pub opened_project: Option<ProjectName>,
@@ -415,19 +413,13 @@ pub struct ProgramData {
 impl ProgramData {
     pub fn create_and_open_project(
         &mut self,
-        new_project: Project,
+        project_name: String,
         path: PathBuf,
     ) {
-        self.opened_project = Some(new_project.name.clone());
-
+        self.opened_project = Some(project_name.clone());
         self.openable_projects
-            .insert(new_project.name.clone(), path.clone());
-
-        self.recent_projects
-            .insert(new_project.name.clone(), path.clone());
-
-        self.loaded_projects
-            .insert(new_project.name.clone(), new_project);
+            .insert(project_name.clone(), path.clone());
+        self.recent_projects.insert(project_name, path.clone());
     }
 }
 
