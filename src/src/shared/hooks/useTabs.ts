@@ -8,6 +8,7 @@ import {
     LocalEventsMap,
     RemoveLocalTabEvent
 } from "../utils/localEvent.js";
+import {listen} from "@tauri-apps/api/event";
 
 export enum TabTypeKind {
     MapEditor = "MapEditor",

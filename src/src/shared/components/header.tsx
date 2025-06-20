@@ -16,12 +16,13 @@ import {
     ToggleGridEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {TauriCommand} from "../../tauri/events/types.js";
+import {__TAB_CHANGED, TauriCommand} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {Theme} from "../hooks/useTheme.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
 import {useKeybindActionEvent} from "../hooks/useKeybindings.js";
 import {getKeybindingText, KeybindAction} from "../../tauri/types/editor.js";
+import {emit} from "@tauri-apps/api/event";
 
 type Props = {
     eventBus: RefObject<EventTarget>
@@ -204,6 +205,11 @@ export function Header(props: Props) {
                 {
                     name: name
                 }
+            )
+
+            await emit(
+                __TAB_CHANGED,
+                name
             )
         }
     }

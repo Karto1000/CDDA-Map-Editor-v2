@@ -75,7 +75,7 @@ export function MapViewer(props: MapViewerProps) {
     )
     const [selectedMousePosition, setSelectedMousePosition] = useState<Vector3 | null>(null)
     const [isLoading, setIsLoading] = useState<boolean>(false)
-    const project = useCurrentProject<MapViewerData>(tabs)
+    const project = useCurrentProject<MapViewerData>(tabs.openedTab)
 
     useKeybindActionEvent(
         KeybindAction.ReloadMap,

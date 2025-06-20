@@ -12,7 +12,9 @@ import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
 import {LocalEvent, ToggleGridEvent} from "../../shared/utils/localEvent.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {UnlistenFn} from "@tauri-apps/api/event";
+import {emitTo, UnlistenFn} from "@tauri-apps/api/event";
+import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
+import {TauriEvent} from "../../tauri/events/types.js";
 
 export type MapEditorProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -29,7 +31,7 @@ export function MapEditor(props: MapEditorProps) {
     const tabs = useContext(TabContext)
     const theme = useContext(ThemeContext)
     const grid = useRef<Object3D>(null)
-    const project = useCurrentProject<MapEditorData>(tabs)
+    const project = useCurrentProject<MapEditorData>(tabs.openedTab)
 
     const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
     const palettesUnlistenFn = useRef<UnlistenFn>(null)
@@ -38,6 +40,7 @@ export function MapEditor(props: MapEditorProps) {
 
     useEffect(() => {
         if (!project) return
+        if ("mapViewer" in project.project_type) return
 
         function setRenderBounds() {
             const newWidth = props.canvas.canvasContainerRef.current.clientWidth
@@ -88,14 +91,14 @@ export function MapEditor(props: MapEditorProps) {
         }
 
         async function onOpenMapgenInfoWindow() {
-            const [window, close] = await openWindow(WindowLabel.MapInfo, theme.theme, {}, project)
+            const [window, close] = await openWindow(WindowLabel.MapInfo, theme.theme, {})
 
             mapInfoUnlistenFn.current = close
             props.mapInfoWindowRef.current = window
         }
 
         async function onOpenPalettesWindow() {
-            const [window, close] = await openWindow(WindowLabel.Palettes, theme.theme, {}, project)
+            const [window, close] = await openWindow(WindowLabel.Palettes, theme.theme, {})
 
             palettesUnlistenFn.current = close
             props.palettesWindowRef.current = window
@@ -130,9 +133,6 @@ export function MapEditor(props: MapEditorProps) {
         return () => {
             cancelAnimationFrame(handler)
 
-            if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
-            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
-
             props.threeConfig.current.scene.remove(grid.current)
 
             props.eventBus.current.removeEventListener(
@@ -153,6 +153,13 @@ export function MapEditor(props: MapEditorProps) {
             props.tilesheets.current.clearAll()
         }
     }, [project, theme]);
+
+    useEffect(() => {
+        return () => {
+            if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
+            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
+        }
+    }, []);
 
     return (
         <div>

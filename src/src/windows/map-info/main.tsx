@@ -7,9 +7,12 @@ import {MapEditorData, Project} from "../../tauri/types/editor.js";
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
 import {useInitialData} from "../useInitialData.js";
+import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
+import {useForeignOpenedTab} from "../useForeignOpenedTab.js";
 
 function Main() {
-    const [project, setProject] = useInitialData<Project<MapEditorData>>()
+    const openedTab = useForeignOpenedTab()
+    const project = useCurrentProject<MapEditorData>(openedTab)
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
 
     return (

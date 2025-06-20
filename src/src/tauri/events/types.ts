@@ -4,6 +4,8 @@ import {TabTypeKind} from "../../shared/hooks/useTabs.js";
 import {Vector2, Vector3} from "three";
 import {OpenViewerData} from "../types/viewer.js";
 
+export const __TAB_CHANGED = "__project_changed"
+
 export function serializedVec2ToVector2(serializedVec2: string): Vector2 {
     const parts = serializedVec2.split(",")
 
@@ -141,7 +143,9 @@ export enum TauriEvent {
     TAB_CREATED = "tab_created",
     TAB_REMOVED = "tab_removed",
     UPDATE_LIVE_VIEWER = "update_live_viewer",
-    EMIT_TOAST_MESSAGE = "emit_toast_message"
+    EMIT_TOAST_MESSAGE = "emit_toast_message",
+    // SPECIAL CASE: This is not in the event map since we need generics for the Project type
+    CURRENT_PROJECT_CHANGED = "current_project_changed"
 }
 
 export enum ToastType {
@@ -169,5 +173,5 @@ export interface TauriEventMap {
         type: ToastType,
         message: string
     }
-    [TauriEvent.TILESET_CHANGED]: {}
+    [TauriEvent.TILESET_CHANGED]: {},
 }

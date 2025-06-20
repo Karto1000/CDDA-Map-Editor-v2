@@ -1,10 +1,8 @@
-import React, {useEffect, useRef} from "react";
-import GenericWindow, {WINDOW_CLOSED} from "../generic-window.js";
+import React, {useEffect, useRef, useState} from "react";
+import GenericWindow from "../generic-window.js";
 import "./main.scss"
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
-import {MapEditorData, Project} from "../../tauri/types/editor.js";
-import {useInitialData} from "../useInitialData.js";
 import {
     CDDADistributionInner,
     MapGenValue,
@@ -12,17 +10,21 @@ import {
     meabyVecToArray,
     MeabyWeighted
 } from "../../tauri/types/map_data.js";
-import {Window} from "@tauri-apps/api/window";
 import {openWindow, WindowLabel} from "../lib.js";
 import {Theme} from "../../shared/hooks/useTheme.js";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
+import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
+import {__TAB_CHANGED} from "../../tauri/events/types.js";
+import {MapEditorData} from "../../tauri/types/editor.js";
+import {useForeignOpenedTab} from "../useForeignOpenedTab.js";
 
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
-    const [project, setProject] = useInitialData<Project<MapEditorData>>()
     const addPaletteWindowRef = useRef<WebviewWindow>(null)
     const addPaletteWindowCloseRef = useRef<UnlistenFn>(null)
+    const openedTab = useForeignOpenedTab()
+    const project = useCurrentProject<MapEditorData>(openedTab)
 
     function getStringFromMapGenValue(palette: MapGenValue): string {
         if (typeof palette === "string") return palette
