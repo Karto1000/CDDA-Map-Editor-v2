@@ -4,6 +4,7 @@ mod features;
 mod util;
 
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
+use crate::features::cdda_data::get_palettes;
 use crate::features::editor::handler::new_map_editor;
 use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
@@ -282,7 +283,8 @@ pub fn run() -> () {
             open_recent_project,
             about,
             close_app,
-            new_map_editor
+            new_map_editor,
+            get_palettes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

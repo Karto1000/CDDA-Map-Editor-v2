@@ -58,7 +58,7 @@ export type MapViewerData = {
 }
 
 export type MapDataCollection = {
-    [mapCoordinates: string]: MapData
+    maps: {[mapCoordinates: string]: MapData}
 }
 
 export type MapEditorData = {

@@ -59,6 +59,7 @@ export enum TauriCommand {
     ABOUT = "about",
     CLOSE_APP = "close_app",
     NEW_MAP_EDITOR = "new_map_editor",
+    GET_PALETTES = "get_palettes"
 }
 
 export type AboutInfo = {
@@ -130,7 +131,8 @@ export interface TauriCommandMap {
         projectName: string
         zLevels: [number, number],
         mapSize: [number, number],
-    }
+    },
+    [TauriCommand.GET_PALETTES]: {}
 }
 
 export enum TauriEvent {

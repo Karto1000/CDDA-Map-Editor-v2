@@ -14,6 +14,7 @@ export enum WindowLabel {
     Welcome = "welcome",
     MapInfo = "map-info",
     Palettes = "palettes",
+    AddPalette = "add-palette",
 }
 
 export type WindowOptions = {
@@ -28,7 +29,8 @@ export async function openWindow<T = any>(
         defaultWidth = 400,
         defaultHeight = 400
     }: WindowOptions = {},
-    data?: T
+    data?: T,
+    parent: WindowLabel = WindowLabel.Main,
 ): Promise<[WebviewWindow, UnlistenFn]> {
     const existingWindow = await Webview.getByLabel(label.toString())
     if (existingWindow) return [existingWindow, () => {
@@ -42,7 +44,7 @@ export async function openWindow<T = any>(
         center: true,
         alwaysOnTop: true,
         title: label.toString(),
-        parent: WindowLabel.Main,
+        parent,
         skipTaskbar: true,
         focus: true
     })

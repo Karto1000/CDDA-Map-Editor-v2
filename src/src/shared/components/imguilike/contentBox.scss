@@ -1,0 +1,12 @@
+@import "../../../theme.scss";
+
+@include themed($themes) {
+  .content-box {
+    border-color: theme-var("disabled");
+  }
+}
+
+.content-box {
+  border: 1px solid;
+  padding: 8px;
+}

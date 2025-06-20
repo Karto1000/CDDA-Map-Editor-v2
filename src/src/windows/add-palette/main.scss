@@ -1,0 +1,9 @@
+@import "../../theme.scss";
+
+.add-palette-form {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 100%;
+  flex: 1;
+}

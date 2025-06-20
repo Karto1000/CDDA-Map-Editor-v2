@@ -88,16 +88,16 @@ export function MapEditor(props: MapEditorProps) {
         }
 
         async function onOpenMapgenInfoWindow() {
-            const [window, unlistenFn] = await openWindow(WindowLabel.MapInfo, theme.theme, {}, project)
+            const [window, close] = await openWindow(WindowLabel.MapInfo, theme.theme, {}, project)
 
-            mapInfoUnlistenFn.current = unlistenFn
+            mapInfoUnlistenFn.current = close
             props.mapInfoWindowRef.current = window
         }
 
         async function onOpenPalettesWindow() {
-            const [window, unlistenFn] = await openWindow(WindowLabel.Palettes, theme.theme, {}, project)
+            const [window, close] = await openWindow(WindowLabel.Palettes, theme.theme, {}, project)
 
-            palettesUnlistenFn.current = unlistenFn
+            palettesUnlistenFn.current = close
             props.palettesWindowRef.current = window
         }
 
