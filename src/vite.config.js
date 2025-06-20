@@ -29,6 +29,7 @@ export default defineConfig(async () => ({
                 about: resolve( __dirname , "src/windows/about/window.html"),
                 welcome: resolve( __dirname , "src/windows/welcome/window.html"),
                 map_info: resolve( __dirname , "src/windows/map-info/window.html"),
+                palettes: resolve( __dirname , "src/windows/palettes/window.html"),
             }
         },
         publicDir: resolve(__dirname, "public"),

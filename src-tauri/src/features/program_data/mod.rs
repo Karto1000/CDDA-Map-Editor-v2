@@ -203,8 +203,10 @@ impl MapDataCollection {
         let size_value = size.value();
 
         let mut maps = HashMap::new();
-        for y in 0..=(size_value.y % DEFAULT_MAP_DATA_SIZE.y) {
-            for x in 0..=(size_value.x & DEFAULT_MAP_DATA_SIZE.x) {
+        // TODO: Handle nested mapgens with sizes smaller than 24
+
+        for y in 0..(size_value.y / DEFAULT_MAP_DATA_SIZE.y) {
+            for x in 0..(size_value.x / DEFAULT_MAP_DATA_SIZE.x) {
                 maps.insert(UVec2::new(x, y).into(), MapData::default());
             }
         }

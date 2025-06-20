@@ -425,7 +425,7 @@ impl Default for MapData {
             calculated_parameters: Default::default(),
             parameters: Default::default(),
             properties,
-            palettes: Default::default(),
+            palettes: vec![MapGenValue::String("apartment_palette".into())],
             place: Default::default(),
             flags: Default::default(),
         }

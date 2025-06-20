@@ -2,7 +2,7 @@ import React, {useEffect, useState, JSX} from "react";
 import "./generic-window.scss"
 import "../index.scss"
 import {getCurrentWindow} from "@tauri-apps/api/window";
-import {listen} from "@tauri-apps/api/event";
+import {emitTo, listen} from "@tauri-apps/api/event";
 import {Theme} from "../shared/hooks/useTheme.js";
 import Icon, {IconName} from "../shared/components/icon.js";
 
@@ -12,6 +12,9 @@ export type GenericWindowProps = {
     hasCloseButton?: boolean
     onCloseClicked?: () => Promise<void>
 }
+
+export const WINDOW_CLOSED = "window-closed"
+export const THEME_CHANGED = "theme-changed"
 
 export default function GenericWindow(
     {
@@ -27,7 +30,7 @@ export default function GenericWindow(
 
     useEffect(() => {
         // Listen for theme change
-        const unlisten = listen<{ theme: Theme }>("theme-changed", e => {
+        const unlisten = listen<{ theme: Theme }>(THEME_CHANGED, e => {
                 console.log("Received theme change event: ", e.payload)
                 setLocalTheme(e.payload.theme)
             }
@@ -40,7 +43,11 @@ export default function GenericWindow(
 
     async function onCloseClick() {
         await onCloseClicked();
+
         const window = getCurrentWindow();
+
+        await emitTo(window.label, WINDOW_CLOSED)
+
         await window.close();
     }
 

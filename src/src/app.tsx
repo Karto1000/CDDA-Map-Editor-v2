@@ -46,7 +46,14 @@ function App() {
     const editorData = useEditorData()
     const tabs = useTabs(eventBus)
     const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
-    const {importMapWindowRef, settingsWindowRef, newMapWindowRef, aboutWindowRef, mapInfoWindowRef} = useWindows()
+    const {
+        importMapWindowRef,
+        settingsWindowRef,
+        newMapWindowRef,
+        aboutWindowRef,
+        mapInfoWindowRef,
+        palettesWindowRef
+    } = useWindows()
 
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
 
@@ -110,6 +117,7 @@ function App() {
 
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor)
                 return <MapEditor
+                    palettesWindowRef={palettesWindowRef}
                     mapInfoWindowRef={mapInfoWindowRef}
                     showGridRef={showGridRef}
                     eventBus={eventBus}

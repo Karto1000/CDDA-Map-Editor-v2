@@ -1,3 +1,5 @@
+import { MapData } from "./map_data.ts";
+
 export enum ProjectTypeKind {
     MapEditor = "MapEditor",
     LiveViewer = "LiveViewer"
@@ -55,10 +57,15 @@ export type MapViewerData = {
     }
 }
 
+export type MapDataCollection = {
+    [mapCoordinates: string]: MapData
+}
+
 export type MapEditorData = {
     mapEditor: {
         // TODO: Add more fields
         size: [number, number]
+        maps: {[zLevel: number]: MapDataCollection}
     }
 }
 

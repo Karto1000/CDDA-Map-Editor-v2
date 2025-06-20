@@ -15,7 +15,8 @@ export enum LocalEvent {
     CHANGE_SELECTED_POSITION = "change-selected-position",
     UPDATE_VIEWER = "update-viewer",
     TOGGLE_GRID = "toggle-grid",
-    OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window"
+    OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window",
+    OPEN_PALETTES_WINDOW = "open-palettes-window",
 }
 
 export interface LocalEventsMap {
@@ -31,7 +32,8 @@ export interface LocalEventsMap {
     [LocalEvent.CHANGE_SELECTED_POSITION]: { position?: { x: number, y: number } }
     [LocalEvent.UPDATE_VIEWER]: {  },
     [LocalEvent.TOGGLE_GRID]: { state: boolean },
-    [LocalEvent.OPEN_MAPGEN_INFO_WINDOW]: {}
+    [LocalEvent.OPEN_MAPGEN_INFO_WINDOW]: {},
+    [LocalEvent.OPEN_PALETTES_WINDOW]: {}
 }
 
 export class ChangedThemeEvent extends CustomEvent<LocalEventsMap[LocalEvent.CHANGED_THEME]> {
@@ -58,3 +60,4 @@ export class ChangeThemeRequestEvent extends CustomEvent<LocalEventsMap[LocalEve
 export class UpdateViewerEvent extends CustomEvent<LocalEventsMap[LocalEvent.UPDATE_VIEWER]> {}
 export class ToggleGridEvent extends CustomEvent<LocalEventsMap[LocalEvent.TOGGLE_GRID]> {}
 export class OpenMapgenInfoWindowEvent extends CustomEvent<LocalEventsMap[LocalEvent.OPEN_MAPGEN_INFO_WINDOW]> {}
+export class OpenPalettesWindowEvent extends CustomEvent<LocalEventsMap[LocalEvent.OPEN_PALETTES_WINDOW]> {}

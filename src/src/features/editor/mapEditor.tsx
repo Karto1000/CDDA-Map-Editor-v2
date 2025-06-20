@@ -22,6 +22,7 @@ export type MapEditorProps = {
     eventBus: RefObject<EventTarget>
     showGridRef: RefObject<boolean>
     mapInfoWindowRef: RefObject<WebviewWindow>
+    palettesWindowRef: RefObject<WebviewWindow>
 }
 
 export function MapEditor(props: MapEditorProps) {
@@ -31,6 +32,7 @@ export function MapEditor(props: MapEditorProps) {
     const project = useCurrentProject<MapEditorData>(tabs)
 
     const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
+    const palettesUnlistenFn = useRef<UnlistenFn>(null)
 
     let handler: number;
 
@@ -92,6 +94,13 @@ export function MapEditor(props: MapEditorProps) {
             props.mapInfoWindowRef.current = window
         }
 
+        async function onOpenPalettesWindow() {
+            const [window, unlistenFn] = await openWindow(WindowLabel.Palettes, theme.theme, {}, project)
+
+            palettesUnlistenFn.current = unlistenFn
+            props.palettesWindowRef.current = window
+        }
+
         props.eventBus.current.addEventListener(
             LocalEvent.TOGGLE_GRID,
             onToggleGrid,
@@ -100,6 +109,11 @@ export function MapEditor(props: MapEditorProps) {
         props.eventBus.current.addEventListener(
             LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
             onOpenMapgenInfoWindow,
+        )
+
+        props.eventBus.current.addEventListener(
+            LocalEvent.OPEN_PALETTES_WINDOW,
+            onOpenPalettesWindow,
         )
 
         function loop() {
@@ -117,6 +131,7 @@ export function MapEditor(props: MapEditorProps) {
             cancelAnimationFrame(handler)
 
             if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
+            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
 
             props.threeConfig.current.scene.remove(grid.current)
 
@@ -128,6 +143,11 @@ export function MapEditor(props: MapEditorProps) {
             props.eventBus.current.removeEventListener(
                 LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
                 onOpenMapgenInfoWindow
+            )
+
+            props.eventBus.current.removeEventListener(
+                LocalEvent.OPEN_PALETTES_WINDOW,
+                onOpenPalettesWindow
             )
 
             props.tilesheets.current.clearAll()

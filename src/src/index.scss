@@ -20,6 +20,10 @@
     border-color: theme-var("darker");
   }
 
+  .line-break {
+    border-color: theme-var("disabled");
+  }
+
   input, button, select {
     background-color: theme-var("darkest-blue");
     outline: none;
@@ -149,6 +153,14 @@ form {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.line-break {
+  width: 100%;
+  height: 0;
+  border-bottom: 1px solid;
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .form-element {

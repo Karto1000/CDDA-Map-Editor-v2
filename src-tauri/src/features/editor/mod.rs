@@ -1,9 +1,9 @@
-use std::collections::HashMap;
+use crate::features::program_data::{MapDataCollection, ZLevel};
 use glam::UVec2;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
+use std::collections::HashMap;
 use thiserror::Error;
-use crate::features::program_data::{MapDataCollection, ZLevel};
 
 mod data;
 pub mod handler;
@@ -24,8 +24,7 @@ impl<'de> Deserialize<'de> for MapSize {
         D: Deserializer<'de>,
     {
         let uvec2 = UVec2::deserialize(deserializer)?;
-        let map_size =
-            MapSize::new(uvec2.x, uvec2.y).map_err(serde::de::Error::custom)?;
+        let map_size = MapSize::new(uvec2.x, uvec2.y).map_err(Error::custom)?;
         Ok(map_size)
     }
 }

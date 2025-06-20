@@ -3,13 +3,7 @@
   "identifier": "default",
   "description": "Capability for the main window",
   "windows": [
-    "main",
-    "import-map",
-    "new-map",
-    "settings",
-    "about",
-    "welcome",
-    "map-info"
+    "*"
   ],
   "permissions": [
     "core:window:default",

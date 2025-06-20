@@ -12,7 +12,7 @@ import {
     CloseLocalTabEvent,
     LocalEvent,
     OpenLocalTabEvent,
-    OpenMapgenInfoWindowEvent,
+    OpenMapgenInfoWindowEvent, OpenPalettesWindowEvent,
     ToggleGridEvent
 } from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
@@ -577,6 +577,18 @@ export function Header(props: Props) {
                                                     props.eventBus.current.dispatchEvent(
                                                         new OpenMapgenInfoWindowEvent(
                                                             LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
+                                                            {detail: {}}
+                                                        )
+                                                    )
+                                                    ref.current.closeMenu()
+                                                }
+                                            },
+                                            {
+                                                name: "Palettes",
+                                                onClick: async (ref) => {
+                                                    props.eventBus.current.dispatchEvent(
+                                                        new OpenPalettesWindowEvent(
+                                                            LocalEvent.OPEN_PALETTES_WINDOW,
                                                             {detail: {}}
                                                         )
                                                     )

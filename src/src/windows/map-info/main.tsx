@@ -6,20 +6,11 @@ import {emitTo, once} from "@tauri-apps/api/event";
 import {MapEditorData, Project} from "../../tauri/types/editor.js";
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
+import {useInitialData} from "../useInitialData.js";
 
 function Main() {
-    const [project, setProject] = useState<Project<MapEditorData>>(null)
+    const [project, setProject] = useInitialData<Project<MapEditorData>>()
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
-
-    useEffect(() => {
-        (async () => {
-            await once<Project<MapEditorData>>("initial-data", p => {
-                setProject(p.payload)
-            })
-
-            await emitTo(WindowLabel.MapInfo, "window-ready")
-        })()
-    }, []);
 
     return (
         <GenericWindow title={"Map Info"}>
