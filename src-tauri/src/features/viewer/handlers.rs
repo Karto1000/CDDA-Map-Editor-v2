@@ -788,7 +788,7 @@ pub async fn create_viewer(
     project_saver.save(&project).await?;
 
     app.emit(
-        events::TAB_CREATED,
+        events::CREATE_TAB,
         Tab {
             name: project.name.clone(),
             tab_type: TabType::LiveViewer,

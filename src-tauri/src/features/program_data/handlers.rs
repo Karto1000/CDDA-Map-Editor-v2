@@ -202,7 +202,7 @@ pub async fn close_project(
     match editor_data_lock.opened_project.clone() {
         None => {},
         Some(name) => {
-            app.emit(events::TAB_REMOVED, name).unwrap();
+            app.emit(events::REMOVE_TAB, name).unwrap();
         },
     }
 
@@ -289,7 +289,7 @@ pub async fn open_recent_project(
     }
 
     app.emit(
-        events::TAB_CREATED,
+        events::CREATE_TAB,
         Tab {
             name: project.name.clone(),
             tab_type: TabType::LiveViewer,

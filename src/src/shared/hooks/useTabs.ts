@@ -1,14 +1,6 @@
-import {RefObject, useEffect, useState} from "react";
+import {RefObject, useState} from "react";
 import {useTauriEvent} from "./useTauriEvent.js";
 import {TauriEvent} from "../../tauri/events/types.js";
-import {
-    AddLocalTabEvent,
-    CloseLocalTabEvent,
-    LocalEvent,
-    LocalEventsMap,
-    RemoveLocalTabEvent
-} from "../utils/localEvent.js";
-import {listen} from "@tauri-apps/api/event";
 
 export enum TabTypeKind {
     MapEditor = "MapEditor",
@@ -28,121 +20,57 @@ export type UseTabsReturn = {
 }
 
 
-export function useTabs(eventBus: RefObject<EventTarget>): UseTabsReturn {
+export function useTabs(): UseTabsReturn {
     const [tabs, setTabs] = useState<{ [name: string]: Tab }>({})
     const [openedTab, setOpenedTab] = useState<string | null>(null)
 
-    useEffect(() => {
-        const addLocalTabHandler = (
-            data: CustomEvent<LocalEventsMap[LocalEvent.ADD_LOCAL_TAB]>
-        ) => {
-            setTabs((t) => {
-                return {...t, [data.detail.name]: data.detail}
-            })
-        }
+    useTauriEvent(
+        TauriEvent.OPEN_TAB,
+        data => {
+            if (!tabs[data.name]) return
+            setOpenedTab(() => data.name)
+        },
+        [tabs]
+    )
 
-        const removeLocalTabHandler = (
-            data: CustomEvent<LocalEventsMap[LocalEvent.REMOVE_LOCAL_TAB]>
-        ) => {
+    useTauriEvent(
+        TauriEvent.CLOSE_TAB,
+        data => {
+            if (!tabs[data.name]) return
+            setOpenedTab(() => null)
+        },
+        [tabs]
+    )
+
+    useTauriEvent(
+        TauriEvent.CREATE_TAB,
+        (data) => {
+            setTabs((t) => {
+                return {...t, [data.name]: data}
+            })
+        },
+        [tabs]
+    )
+
+    useTauriEvent(
+        TauriEvent.REMOVE_TAB,
+        (data) => {
+            if (openedTab === data.name) {
+                if (!tabs[data.name]) return
+                setOpenedTab(() => null)
+            }
+
             setOpenedTab(() => {
                 setTabs(tabs => {
                     const newTabs = {...tabs}
-                    delete newTabs[data.detail.name]
+                    delete newTabs[data.name]
                     return newTabs
                 })
 
                 return null
             })
-        }
-
-        const openLocalTabHandler = (
-            data: CustomEvent<LocalEventsMap[LocalEvent.OPEN_LOCAL_TAB]>
-        ) => {
-            if (!tabs[data.detail.name]) return
-
-            setOpenedTab(() => data.detail.name)
-        }
-
-        const closeLocalTabHandler = (
-            data: CustomEvent<LocalEventsMap[LocalEvent.CLOSE_LOCAL_TAB]>
-        ) => {
-            if (!tabs[data.detail.name]) return
-            setOpenedTab(() => null)
-        }
-
-        eventBus.current.addEventListener(
-            LocalEvent.ADD_LOCAL_TAB,
-            addLocalTabHandler
-        )
-
-        eventBus.current.addEventListener(
-            LocalEvent.REMOVE_LOCAL_TAB,
-            removeLocalTabHandler
-        )
-
-        eventBus.current.addEventListener(
-            LocalEvent.OPEN_LOCAL_TAB,
-            openLocalTabHandler
-        )
-
-        eventBus.current.addEventListener(
-            LocalEvent.CLOSE_LOCAL_TAB,
-            closeLocalTabHandler
-        )
-
-        return () => {
-            eventBus.current.removeEventListener(
-                LocalEvent.ADD_LOCAL_TAB,
-                addLocalTabHandler
-            )
-
-            eventBus.current.removeEventListener(
-                LocalEvent.REMOVE_LOCAL_TAB,
-                removeLocalTabHandler
-            )
-
-            eventBus.current.removeEventListener(
-                LocalEvent.OPEN_LOCAL_TAB,
-                openLocalTabHandler
-            )
-
-            eventBus.current.removeEventListener(
-                LocalEvent.CLOSE_LOCAL_TAB,
-                closeLocalTabHandler
-            )
-        }
-    }, [tabs]);
-
-    useTauriEvent(
-        TauriEvent.TAB_CREATED,
-        (tab) => {
-            eventBus.current.dispatchEvent(
-                new AddLocalTabEvent(
-                    LocalEvent.ADD_LOCAL_TAB,
-                    {detail: tab}
-                )
-            )
         },
-        []
-    )
-
-    useTauriEvent(
-        TauriEvent.TAB_REMOVED,
-        (tab) => {
-            if (openedTab === tab.name) eventBus.current.dispatchEvent(
-                new CloseLocalTabEvent(
-                    LocalEvent.CLOSE_LOCAL_TAB,
-                    {detail: tab}
-                )
-            )
-
-            eventBus.current.dispatchEvent(
-                new RemoveLocalTabEvent(
-                    LocalEvent.REMOVE_LOCAL_TAB,
-                    {detail: tab}
-                )
-            )
-        },
+        [tabs]
     )
 
     return {

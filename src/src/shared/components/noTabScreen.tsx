@@ -17,11 +17,11 @@ export function NoTabScreen(props: Props) {
     }
 
     function onCreateClicked() {
-        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)
+        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)[0]
     }
 
     function onImportClicked() {
-        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)
+        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)[0]
     }
 
     return (

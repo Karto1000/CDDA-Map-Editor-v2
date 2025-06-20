@@ -7,14 +7,14 @@ import {BackendResponse, BackendResponseType, TauriCommand, TauriEvent} from "..
 import {Tilesheet} from "../tilesheet.js";
 import {ThreeConfig} from "../../three/types/three.js";
 import {logDeletion, logError, logRender} from "../../../shared/utils/log.js";
-import {LocalEvent, TilesetLoadedEvent} from "../../../shared/utils/localEvent.js";
+import {emit} from "@tauri-apps/api/event";
 
 export type UseTilesetRet = {
     tilesheets: RefObject<Tilesheets | null>,
     spritesheetConfig: RefObject<SpritesheetConfig | null>,
 }
 
-export function useTileset(eventBus: RefObject<EventTarget>, threeConfig: RefObject<ThreeConfig>): UseTilesetRet {
+export function useTileset(threeConfig: RefObject<ThreeConfig>): UseTilesetRet {
     const tilesheets = useRef<Tilesheets>(null)
     const spritesheetConfig = useRef<SpritesheetConfig>(null)
     const storedObjectURLS = useRef<string[]>([])
@@ -123,12 +123,7 @@ export function useTileset(eventBus: RefObject<EventTarget>, threeConfig: RefObj
 
                 addTilesheets()
 
-                eventBus.current.dispatchEvent(
-                    new TilesetLoadedEvent(
-                        LocalEvent.TILESET_LOADED,
-                        {detail: tilesheets.current}
-                    )
-                )
+                await emit(TauriEvent.TILESET_LOADED)
             })();
 
             return () => {

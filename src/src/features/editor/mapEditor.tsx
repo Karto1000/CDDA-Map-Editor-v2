@@ -9,10 +9,9 @@ import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
 import {createGrid} from "../three/hooks/useThreeSetup.js";
 import {MapEditorData} from "../../tauri/types/editor.js";
 import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
-import {LocalEvent, ToggleGridEvent} from "../../shared/utils/localEvent.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {emitTo, UnlistenFn} from "@tauri-apps/api/event";
+import {UnlistenFn} from "@tauri-apps/api/event";
 import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
 import {TauriEvent} from "../../tauri/events/types.js";
 
@@ -21,7 +20,6 @@ export type MapEditorProps = {
     tilesheets: RefObject<Tilesheets>
     threeConfig: RefObject<ThreeConfig>
     canvas: Canvas
-    eventBus: RefObject<EventTarget>
     showGridRef: RefObject<boolean>
     mapInfoWindowRef: RefObject<WebviewWindow>
     palettesWindowRef: RefObject<WebviewWindow>
@@ -37,6 +35,36 @@ export function MapEditor(props: MapEditorProps) {
     const palettesUnlistenFn = useRef<UnlistenFn>(null)
 
     let handler: number;
+
+    useTauriEvent(
+        TauriEvent.TOGGLE_GRID,
+        data => {
+            grid.current.visible = data.state
+        },
+        []
+    )
+
+    useTauriEvent(
+        TauriEvent.OPEN_MAPGEN_INFO_WINDOW,
+        _ => {
+            openWindow(WindowLabel.MapInfo, theme.theme, {}).then(value => {
+                const [window, close] = value
+                mapInfoUnlistenFn.current = close
+                props.mapInfoWindowRef.current = window
+            })
+        }
+    )
+
+    useTauriEvent(
+        TauriEvent.OPEN_PALETTES_WINDOW,
+        _ => {
+            openWindow(WindowLabel.Palettes, theme.theme, {}).then(value => {
+                const [window, close] = value
+                palettesUnlistenFn.current = close
+                props.palettesWindowRef.current = window
+            })
+        }
+    )
 
     useEffect(() => {
         if (!project) return
@@ -86,39 +114,6 @@ export function MapEditor(props: MapEditorProps) {
         setRenderBounds()
         setupGrid(theme.theme)
 
-        function onToggleGrid(e: ToggleGridEvent) {
-            grid.current.visible = e.detail.state
-        }
-
-        async function onOpenMapgenInfoWindow() {
-            const [window, close] = await openWindow(WindowLabel.MapInfo, theme.theme, {})
-
-            mapInfoUnlistenFn.current = close
-            props.mapInfoWindowRef.current = window
-        }
-
-        async function onOpenPalettesWindow() {
-            const [window, close] = await openWindow(WindowLabel.Palettes, theme.theme, {})
-
-            palettesUnlistenFn.current = close
-            props.palettesWindowRef.current = window
-        }
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.TOGGLE_GRID,
-            onToggleGrid,
-        )
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
-            onOpenMapgenInfoWindow,
-        )
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.OPEN_PALETTES_WINDOW,
-            onOpenPalettesWindow,
-        )
-
         function loop() {
             props.threeConfig.current.camera.updateProjectionMatrix()
 
@@ -134,22 +129,6 @@ export function MapEditor(props: MapEditorProps) {
             cancelAnimationFrame(handler)
 
             props.threeConfig.current.scene.remove(grid.current)
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.TOGGLE_GRID,
-                onToggleGrid
-            )
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
-                onOpenMapgenInfoWindow
-            )
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.OPEN_PALETTES_WINDOW,
-                onOpenPalettesWindow
-            )
-
             props.tilesheets.current.clearAll()
         }
     }, [project, theme]);

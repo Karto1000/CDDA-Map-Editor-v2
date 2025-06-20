@@ -26,17 +26,11 @@ export const ThemeContext = createContext<{ theme: Theme }>({
     theme: Theme.Dark,
 });
 
-export type SidebarContent = {
-    chosenProperties: React.JSX.Element,
-    calculatedParameters: React.JSX.Element,
-}
-
 export const TabContext = createContext<UseTabsReturn | null>(null)
 export const EditorDataContext = createContext<ProgramData | null>(null)
 
 function App() {
-    const eventBus = useRef<EventTarget>(new EventTarget())
-    const [theme] = useTheme(eventBus);
+    const [theme] = useTheme();
 
     const canvasContainerRef = useRef<HTMLDivElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -44,8 +38,8 @@ function App() {
 
     const {threeConfigRef} = useThreeSetup(theme, canvasRef, canvasContainerRef)
     const editorData = useEditorData()
-    const tabs = useTabs(eventBus)
-    const {spritesheetConfig, tilesheets} = useTileset(eventBus, threeConfigRef)
+    const tabs = useTabs()
+    const {spritesheetConfig, tilesheets} = useTileset(threeConfigRef)
     const {
         importMapWindowRef,
         settingsWindowRef,
@@ -59,7 +53,6 @@ function App() {
 
     useKeybindings(
         window,
-        eventBus,
         editorData,
         [tabs]
     )
@@ -105,7 +98,6 @@ function App() {
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.LiveViewer)
                 return <MapViewer
                     showGridRef={showGridRef}
-                    eventBus={eventBus}
                     tilesheets={tilesheets}
                     spritesheetConfig={spritesheetConfig}
                     threeConfig={threeConfigRef}
@@ -120,7 +112,6 @@ function App() {
                     palettesWindowRef={palettesWindowRef}
                     mapInfoWindowRef={mapInfoWindowRef}
                     showGridRef={showGridRef}
-                    eventBus={eventBus}
                     tilesheets={tilesheets}
                     spritesheetConfig={spritesheetConfig}
                     threeConfig={threeConfigRef}
@@ -171,7 +162,6 @@ function App() {
                             showGrid={showGridRef}
                             importMapWindowRef={importMapWindowRef}
                             settingsWindowRef={settingsWindowRef}
-                            eventBus={eventBus}
                             newMapWindowRef={newMapWindowRef}
                             aboutWindowRef={aboutWindowRef}
                         />

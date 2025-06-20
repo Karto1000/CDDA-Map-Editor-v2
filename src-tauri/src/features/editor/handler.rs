@@ -70,7 +70,7 @@ pub async fn new_map_editor(
     program_data_saver.save(&program_data_lock).await?;
 
     app.emit(
-        events::TAB_CREATED,
+        events::CREATE_TAB,
         Tab {
             name: project_name.clone(),
             tab_type: TabType::MapEditor,

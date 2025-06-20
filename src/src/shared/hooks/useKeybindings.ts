@@ -1,11 +1,13 @@
 import {RefObject, useEffect} from "react";
 import {ProgramData, KeybindAction} from "../../tauri/types/editor.js";
+import {emit} from "@tauri-apps/api/event";
+import {TauriEvent} from "../../tauri/events/types.js";
+import {useTauriEvent} from "./useTauriEvent.js";
 
 export type UseKeybindingsRet = {}
 
 export function useKeybindings(
     ctx: HTMLElement | Window,
-    eventBus: RefObject<EventTarget>,
     editorData: ProgramData,
     deps: any[] = []
 ): UseKeybindingsRet {
@@ -33,7 +35,10 @@ export function useKeybindings(
 
                 if (keybinding.isGlobal) e.preventDefault();
 
-                eventBus.current.dispatchEvent(new CustomEvent(keybinding.action))
+                emit(
+                    TauriEvent.KEYBIND_PRESSED,
+                    keybinding.action
+                )
                 return
             }
         }
@@ -51,20 +56,15 @@ export function useKeybindings(
 export function useKeybindActionEvent(
     event: KeybindAction,
     fun: () => void,
-    eventBus: RefObject<EventTarget>,
     deps: any[] = []
 ) {
-    useEffect(() => {
-        eventBus.current.addEventListener(
-            event,
-            fun
-        )
-
-        return () => {
-            eventBus.current.removeEventListener(
-                event,
-                fun
-            )
-        }
-    }, deps);
+    useTauriEvent(
+        TauriEvent.KEYBIND_PRESSED,
+        action => {
+            if (event === action) {
+                fun()
+            }
+        },
+        deps
+    )
 }

@@ -153,7 +153,7 @@ async fn frontend_ready(
                         }
 
                         app.emit(
-                            events::TAB_CREATED,
+                            events::CREATE_TAB,
                             Tab {
                                 name: project.name.clone(),
                                 tab_type: TabType::MapEditor,
@@ -198,7 +198,7 @@ async fn frontend_ready(
                         map_viewer.maps = collection;
 
                         app.emit(
-                            events::TAB_CREATED,
+                            events::CREATE_TAB,
                             Tab {
                                 name: project.name.clone(),
                                 tab_type: TabType::LiveViewer,

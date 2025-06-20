@@ -20,7 +20,6 @@ export function TilesheetSprite(props: TilesheetSpriteProps) {
     const {url, range} = useMemo(() => {
         for (const key of Object.keys(props.tilesheets.current.tilesheets)) {
             const tilesheet = props.tilesheets.current.tilesheets[key]
-            console.log(tilesheet.range, tilesheet.spritesheetInfo, props.index, tilesheet.isWithinRange(props.index))
 
             if (tilesheet.isWithinRange(props.index)) {
                 return {url: `url(${tilesheet.objectURL})`, range: tilesheet.range}

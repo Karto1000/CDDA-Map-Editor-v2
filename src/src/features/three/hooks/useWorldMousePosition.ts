@@ -50,7 +50,7 @@ export function useWorldMousePosition(props: UseWorldMousePositionProps): Vector
         return () => {
             props.canvas.canvasRef.current.removeEventListener("mousemove", onMouseMove)
         }
-    }, [props.spritesheetConfig, props.threeConfig, props.canvas, mousePosition, worldMousePosition, props.onMouseMove, props.onWorldMousePositionChange]);
+    }, [props.canvas, mousePosition, worldMousePosition, props.onMouseMove, props.onWorldMousePositionChange]);
 
     return worldMousePosition
 }

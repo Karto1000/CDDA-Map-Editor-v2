@@ -1,6 +1,7 @@
-import React, {MutableRefObject, useEffect, useState} from "react";
-import {emitTo} from "@tauri-apps/api/event";
-import {ChangedThemeEvent, ChangeThemeRequestEvent, LocalEvent} from "../utils/localEvent.js";
+import React, {useEffect, useState} from "react";
+import {emit, emitTo} from "@tauri-apps/api/event";
+import {useTauriEvent} from "./useTauriEvent.js";
+import {TauriEvent} from "../../tauri/events/types.js";
 
 export const darkColors = {
     light: "#282828",
@@ -43,33 +44,25 @@ export const getColorFromTheme = (theme: Theme, color: string): string => {
     }
 }
 
-export function useTheme(eventBus: MutableRefObject<EventTarget>): [Theme, React.Dispatch<React.SetStateAction<Theme>>] {
+export function useTheme(): [Theme, React.Dispatch<React.SetStateAction<Theme>>] {
     const [theme, setTheme] = useState<Theme>(Theme.Dark);
 
-    useEffect(() => {
-        const changeThemeHandler = (d: ChangeThemeRequestEvent) => {
-            setTheme(d.detail.theme)
-            console.log("sending theme change event: ", d.detail.theme, "")
-            eventBus.current.dispatchEvent(
-                new ChangedThemeEvent(
-                    LocalEvent.CHANGED_THEME,
-                    {detail: {theme: d.detail.theme}}
-                )
-            )
-        }
+    function changeThemeHandler(data: {theme: Theme}) {
+        setTheme(data.theme)
 
-        eventBus.current.addEventListener(
-            LocalEvent.CHANGE_THEME_REQUEST,
-            changeThemeHandler
+        console.log("sending theme change event: ", data.theme, "")
+
+        emit(
+            TauriEvent.CHANGED_THEME,
+            data.theme
         )
+    }
 
-        return () => {
-            eventBus.current.removeEventListener(
-                LocalEvent.CHANGE_THEME_REQUEST,
-                changeThemeHandler
-            )
-        }
-    }, [theme, eventBus]);
+    useTauriEvent(
+        TauriEvent.CHANGE_THEME_REQUEST,
+        changeThemeHandler,
+        [theme]
+    )
 
     useEffect(() => {
         const localTheme = localStorage.getItem("theme");
@@ -80,17 +73,11 @@ export function useTheme(eventBus: MutableRefObject<EventTarget>): [Theme, React
         }
 
         setTheme(localTheme as Theme)
-        eventBus.current.dispatchEvent(
-            new ChangedThemeEvent(
-                LocalEvent.CHANGED_THEME,
-                {detail: {theme: localTheme as Theme}})
+        emit(
+            TauriEvent.CHANGED_THEME,
+            {theme: localTheme as Theme}
         )
-    }, [eventBus]);
-
-    useEffect(() => {
-        localStorage.setItem("theme", theme.toString());
-        emitTo("setting", "theme-changed", {theme: theme.toString()});
-    }, [theme]);
+    }, []);
 
     return [theme, setTheme];
 }

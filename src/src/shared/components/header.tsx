@@ -1,4 +1,4 @@
-import React, {RefObject, useContext, useEffect, useState} from "react";
+import React, {RefObject, useContext, useState} from "react";
 import {getAllWindows, getCurrentWindow} from "@tauri-apps/api/window";
 import "./header.scss"
 import Icon, {IconName} from "./icon.tsx";
@@ -7,25 +7,15 @@ import {DropdownGroup} from "./dropdown-group.tsx";
 import {open} from "@tauri-apps/plugin-shell";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {EditorDataContext, TabContext, ThemeContext} from "../../app.js";
-import {
-    ChangedThemeEvent,
-    CloseLocalTabEvent,
-    LocalEvent,
-    OpenLocalTabEvent,
-    OpenMapgenInfoWindowEvent, OpenPalettesWindowEvent,
-    ToggleGridEvent
-} from "../utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {__TAB_CHANGED, TauriCommand} from "../../tauri/events/types.js";
+import {__TAB_CHANGED, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
-import {Theme} from "../hooks/useTheme.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
 import {useKeybindActionEvent} from "../hooks/useKeybindings.js";
 import {getKeybindingText, KeybindAction} from "../../tauri/types/editor.js";
-import {emit} from "@tauri-apps/api/event";
+import {emit, emitTo} from "@tauri-apps/api/event";
 
 type Props = {
-    eventBus: RefObject<EventTarget>
     importMapWindowRef: RefObject<WebviewWindow>
     newMapWindowRef: RefObject<WebviewWindow>
     settingsWindowRef: RefObject<WebviewWindow>
@@ -37,7 +27,6 @@ export function Header(props: Props) {
     const tauriWindow = getCurrentWindow();
     const {theme} = useContext(ThemeContext)
     const tabs = useContext(TabContext)
-    const [settingsWindow, setSettingsWindow] = useState<WebviewWindow | null>(null)
     const [showGrid, setShowGrid] = useState<boolean>(true)
 
     const editorData = useContext(EditorDataContext)
@@ -45,56 +34,48 @@ export function Header(props: Props) {
     useKeybindActionEvent(
         KeybindAction.OpenProject,
         onOpen,
-        props.eventBus,
         []
     )
 
     useKeybindActionEvent(
         KeybindAction.NewProject,
         onNewClicked,
-        props.eventBus,
         []
     )
 
     useKeybindActionEvent(
         KeybindAction.SaveProject,
         onSave,
-        props.eventBus,
         []
     )
 
     useKeybindActionEvent(
         KeybindAction.CloseTab,
         onClose,
-        props.eventBus,
         [tabs]
     )
 
     useKeybindActionEvent(
         KeybindAction.CloseAllTabs,
         onCloseAll,
-        props.eventBus,
         [tabs]
     )
 
     useKeybindActionEvent(
         KeybindAction.ImportMap,
         onImport,
-        props.eventBus,
         []
     )
 
     useKeybindActionEvent(
         KeybindAction.ExportMap,
         onExport,
-        props.eventBus,
         []
     )
 
     useKeybindActionEvent(
         KeybindAction.OpenSettings,
         onSettingsOpen,
-        props.eventBus,
         []
     )
 
@@ -142,37 +123,11 @@ export function Header(props: Props) {
     }
 
     async function onSettingsOpen() {
-        setSettingsWindow(await openWindow(WindowLabel.Settings, theme)[1])
+        props.settingsWindowRef.current = (await openWindow(WindowLabel.Settings, theme, {defaultWidth: 600}))[0]
     }
-
-    useEffect(() => {
-        props.settingsWindowRef.current = settingsWindow
-
-        if (!settingsWindow) return
-
-        const unlisten = props.settingsWindowRef.current.listen("change-theme", () => {
-            props.eventBus.current.dispatchEvent(
-                new ChangedThemeEvent(
-                    LocalEvent.CHANGE_THEME_REQUEST,
-                    {detail: {theme: theme === Theme.Light ? Theme.Dark : Theme.Light}}
-                )
-            )
-        })
-
-        return () => {
-            unlisten.then(f => f())
-        }
-    }, [settingsWindow, theme]);
 
     async function onTabClose(name: string) {
         console.log(`Closed tab ${name}`)
-
-        props.eventBus.current.dispatchEvent(
-            new CloseLocalTabEvent(
-                LocalEvent.REMOVE_LOCAL_TAB,
-                {detail: {name: name}}
-            )
-        )
 
         await tauriBridge.invoke(
             TauriCommand.CLOSE_PROJECT,
@@ -186,30 +141,19 @@ export function Header(props: Props) {
 
     async function onTabOpen(name: string) {
         if (tabs.openedTab === name) {
-            props.eventBus.current.dispatchEvent(
-                new CloseLocalTabEvent(
-                    LocalEvent.CLOSE_LOCAL_TAB,
-                    {detail: {name: name}}
-                )
+            await emit(
+                TauriEvent.CLOSE_TAB,
+                {name: name}
             )
         } else {
-            props.eventBus.current.dispatchEvent(
-                new OpenLocalTabEvent(
-                    LocalEvent.OPEN_LOCAL_TAB,
-                    {detail: {name: name}}
-                )
-            )
-
             await tauriBridge.invoke(
                 TauriCommand.OPEN_PROJECT,
-                {
-                    name: name
-                }
+                {name: name}
             )
 
             await emit(
-                __TAB_CHANGED,
-                name
+                TauriEvent.OPEN_TAB,
+                {name: name}
             )
         }
     }
@@ -527,16 +471,11 @@ export function Header(props: Props) {
                                     name: "Show Grid",
                                     isToggleable: true,
                                     toggled: showGrid,
-                                    onClick: (ref) => {
+                                    onClick: async (ref) => {
                                         setShowGrid(!showGrid)
 
                                         props.showGrid.current = !showGrid
-                                        props.eventBus.current.dispatchEvent(
-                                            new ToggleGridEvent(
-                                                LocalEvent.TOGGLE_GRID,
-                                                {detail: {state: !showGrid}}
-                                            )
-                                        )
+                                        await emit(TauriEvent.TOGGLE_GRID, {state: !showGrid})
 
                                         ref.current.closeMenu()
                                     }
@@ -580,24 +519,14 @@ export function Header(props: Props) {
                                             {
                                                 name: "Mapgen Info",
                                                 onClick: async (ref) => {
-                                                    props.eventBus.current.dispatchEvent(
-                                                        new OpenMapgenInfoWindowEvent(
-                                                            LocalEvent.OPEN_MAPGEN_INFO_WINDOW,
-                                                            {detail: {}}
-                                                        )
-                                                    )
+                                                    await emit(TauriEvent.OPEN_MAPGEN_INFO_WINDOW)
                                                     ref.current.closeMenu()
                                                 }
                                             },
                                             {
                                                 name: "Palettes",
                                                 onClick: async (ref) => {
-                                                    props.eventBus.current.dispatchEvent(
-                                                        new OpenPalettesWindowEvent(
-                                                            LocalEvent.OPEN_PALETTES_WINDOW,
-                                                            {detail: {}}
-                                                        )
-                                                    )
+                                                    await emit(TauriEvent.OPEN_PALETTES_WINDOW)
                                                     ref.current.closeMenu()
                                                 }
                                             }

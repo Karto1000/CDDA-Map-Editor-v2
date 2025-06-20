@@ -9,18 +9,18 @@ export function useCurrentProject<T>(openedTab: string): Project<T> {
     const [currentProject, setCurrentProject] = useState<Project<T>>(null)
     const unlistenRef = useRef<UnlistenFn>(null)
 
-    useEffect(() => {
-        (async () => {
-            unlistenRef.current = await listen<Project<T>>(
-                TauriEvent.CURRENT_PROJECT_CHANGED,
-                p => setCurrentProject(p.payload)
-            )
-        })()
-
-        return () => {
-            if (unlistenRef.current) unlistenRef.current()
-        }
-    }, [currentProject]);
+    // useEffect(() => {
+    //     (async () => {
+    //         unlistenRef.current = await listen<Project<T>>(
+    //             TauriEvent.CURRENT_PROJECT_CHANGED,
+    //             p => setCurrentProject(p.payload)
+    //         )
+    //     })()
+    //
+    //     return () => {
+    //         if (unlistenRef.current) unlistenRef.current()
+    //     }
+    // }, [currentProject]);
 
     useEffect(() => {
         (async () => {
@@ -29,7 +29,6 @@ export function useCurrentProject<T>(openedTab: string): Project<T> {
             if (response.type === BackendResponseType.Error) {
                 return
             }
-
             setCurrentProject(response.data)
         })()
     }, [openedTab]);

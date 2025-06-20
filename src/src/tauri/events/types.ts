@@ -1,8 +1,10 @@
 import {AnimatedSprite, FallbackSprite, StaticSprite} from "../types/map_data.js";
-import {ProgramData} from "../types/editor.js";
-import {TabTypeKind} from "../../shared/hooks/useTabs.js";
+import {KeybindAction, ProgramData} from "../types/editor.js";
+import {Tab, TabTypeKind} from "../../shared/hooks/useTabs.js";
 import {Vector2, Vector3} from "three";
 import {OpenViewerData} from "../types/viewer.js";
+import {Theme} from "../../shared/hooks/useTheme.js";
+import {Tilesheets} from "../../features/sprites/tilesheets.js";
 
 export const __TAB_CHANGED = "__project_changed"
 
@@ -140,12 +142,25 @@ export interface TauriCommandMap {
 export enum TauriEvent {
     EDITOR_DATA_CHANGED = "editor_data_changed",
     TILESET_CHANGED = "tileset_changed",
-    TAB_CREATED = "tab_created",
-    TAB_REMOVED = "tab_removed",
+    CREATE_TAB = "create-tab",
+    REMOVE_TAB = "remove-tab",
     UPDATE_LIVE_VIEWER = "update_live_viewer",
     EMIT_TOAST_MESSAGE = "emit_toast_message",
     // SPECIAL CASE: This is not in the event map since we need generics for the Project type
-    CURRENT_PROJECT_CHANGED = "current_project_changed"
+    CURRENT_PROJECT_CHANGED = "current_project_changed",
+    CHANGED_THEME = "change-theme",
+    CHANGE_THEME_REQUEST = "change-theme-request",
+    OPEN_TAB = "open-tab",
+    CLOSE_TAB = "close-tab",
+    TILESET_LOADED = "tileset-loaded",
+    CHANGE_Z_LEVEL = "change-z-level",
+    CHANGE_WORLD_MOUSE_POSITION = "change-world-mouse-position",
+    CHANGE_SELECTED_POSITION = "change-selected-position",
+    UPDATE_VIEWER = "update-viewer",
+    TOGGLE_GRID = "toggle-grid",
+    OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window",
+    OPEN_PALETTES_WINDOW = "open-palettes-window",
+    KEYBIND_PRESSED = "keybind-pressed"
 }
 
 export enum ToastType {
@@ -161,11 +176,11 @@ export type Sprites = {
 
 export interface TauriEventMap {
     [TauriEvent.EDITOR_DATA_CHANGED]: ProgramData;
-    [TauriEvent.TAB_CREATED]: {
+    [TauriEvent.CREATE_TAB]: {
         name: string,
         tab_type: TabTypeKind,
     };
-    [TauriEvent.TAB_REMOVED]: {
+    [TauriEvent.REMOVE_TAB]: {
         name: string
     };
     [TauriEvent.UPDATE_LIVE_VIEWER]: {};
@@ -174,4 +189,17 @@ export interface TauriEventMap {
         message: string
     }
     [TauriEvent.TILESET_CHANGED]: {},
+    [TauriEvent.CHANGED_THEME]: { theme: Theme }
+    [TauriEvent.OPEN_TAB]: { name: string }
+    [TauriEvent.CLOSE_TAB]: { name: string }
+    [TauriEvent.TILESET_LOADED]: {}
+    [TauriEvent.CHANGE_THEME_REQUEST]: { theme: Theme }
+    [TauriEvent.CHANGE_Z_LEVEL]: { zLevel: number }
+    [TauriEvent.CHANGE_WORLD_MOUSE_POSITION]: { position: { x: number, y: number } }
+    [TauriEvent.CHANGE_SELECTED_POSITION]: { position?: { x: number, y: number } }
+    [TauriEvent.UPDATE_VIEWER]: {  },
+    [TauriEvent.TOGGLE_GRID]: { state: boolean },
+    [TauriEvent.OPEN_MAPGEN_INFO_WINDOW]: {},
+    [TauriEvent.OPEN_PALETTES_WINDOW]: {},
+    [TauriEvent.KEYBIND_PRESSED]: KeybindAction
 }

@@ -4,13 +4,14 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./main.scss"
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {getKeybindingText, ProgramData} from "../../tauri/types/editor.js";
-import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
+import {BackendResponseType, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 import {open} from "@tauri-apps/plugin-dialog";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 import {DEFAULT_TILESET} from "../../features/sprites/tilesheets.js";
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
+import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
 
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")

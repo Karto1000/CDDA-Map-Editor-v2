@@ -10,7 +10,6 @@ import {TabContext, ThemeContext} from "../../app.js";
 import Icon, {IconName} from "../../shared/components/icon.js";
 import {SideMenuRef} from "../../shared/components/imguilike/sideMenu.js";
 import {logRender} from "../../shared/utils/log.js";
-import {LocalEvent, ToggleGridEvent} from "../../shared/utils/localEvent.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {
     BackendResponseType,
@@ -26,7 +25,7 @@ import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../three/hooks/useMouseCells.js";
 import {clsx} from "clsx";
 import {useKeybindActionEvent} from "../../shared/hooks/useKeybindings.js";
-import {KeybindAction, MapViewerData} from "../../tauri/types/editor.js";
+import {KeybindAction, MapViewerData, Project} from "../../tauri/types/editor.js";
 import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
 
 export type MapViewerProps = {
@@ -34,12 +33,7 @@ export type MapViewerProps = {
     tilesheets: RefObject<Tilesheets>
     threeConfig: RefObject<ThreeConfig>
     canvas: Canvas
-    eventBus: RefObject<EventTarget>
     showGridRef: RefObject<boolean>
-}
-
-export enum MapViewerTab {
-    MapInfo = "map-info"
 }
 
 const CHUNK_SIZE = 24
@@ -77,10 +71,38 @@ export function MapViewer(props: MapViewerProps) {
     const [isLoading, setIsLoading] = useState<boolean>(false)
     const project = useCurrentProject<MapViewerData>(tabs.openedTab)
 
+    function setupGrid(theme: Theme) {
+        const tileInfo = getTileInfo(props.spritesheetConfig.current)
+
+        const gridWidth = project.project_type.mapViewer.size[0] * tileInfo.width / 2
+        const gridHeight = project.project_type.mapViewer.size[1] * tileInfo.height / 2
+
+        const gridHelper = createGrid(
+            {
+                width: gridWidth,
+                height: gridHeight,
+                linesHeight: gridHeight / tileInfo.height * 2,
+                linesWidth: gridWidth / tileInfo.width * 2,
+                color: getColorFromTheme(theme, "disabled")
+            }
+        )
+
+        gridHelper.position.x += gridWidth - tileInfo.width / 2
+        gridHelper.position.y += -gridHeight - tileInfo.height / 2
+
+        if (grid.current) {
+            props.threeConfig.current.scene.remove(grid.current)
+            grid.current = null
+        }
+
+        props.threeConfig.current.scene.add(gridHelper)
+        grid.current = gridHelper
+        grid.current.visible = props.showGridRef.current
+    }
+
     useKeybindActionEvent(
         KeybindAction.ReloadMap,
         onReload,
-        props.eventBus,
         []
     )
 
@@ -157,6 +179,28 @@ export function MapViewer(props: MapViewerProps) {
         []
     )
 
+    useTauriEvent(
+        TauriEvent.TILESET_LOADED,
+        () => {
+            setIsLoading(true)
+
+            setupGrid(theme)
+            clearAndLoadSprites()
+            updateCellSize()
+
+            setIsLoading(false)
+        },
+        [theme, project]
+    )
+
+    useTauriEvent(
+        TauriEvent.TOGGLE_GRID,
+        data => {
+            grid.current.visible = data.state
+        },
+        []
+    )
+
     useEffect(() => {
         function onMouseDown(e: MouseEvent) {
             if (e.button !== 0) return;
@@ -223,61 +267,8 @@ export function MapViewer(props: MapViewerProps) {
             props.threeConfig.current.camera.position.z = 999999
         }
 
-        function setupGrid(theme: Theme) {
-            const tileInfo = getTileInfo(props.spritesheetConfig.current)
-
-            const gridWidth = project.project_type.mapViewer.size[0] * tileInfo.width / 2
-            const gridHeight = project.project_type.mapViewer.size[1] * tileInfo.height / 2
-
-            const gridHelper = createGrid(
-                {
-                    width: gridWidth,
-                    height: gridHeight,
-                    linesHeight: gridHeight / tileInfo.height * 2,
-                    linesWidth: gridWidth / tileInfo.width * 2,
-                    color: getColorFromTheme(theme, "disabled")
-                }
-            )
-
-            gridHelper.position.x += gridWidth - tileInfo.width / 2
-            gridHelper.position.y += -gridHeight - tileInfo.height / 2
-
-            if (grid.current) {
-                props.threeConfig.current.scene.remove(grid.current)
-                grid.current = null
-            }
-
-            props.threeConfig.current.scene.add(gridHelper)
-            grid.current = gridHelper
-            grid.current.visible = props.showGridRef.current
-        }
-
         setupGrid(theme)
         setRenderBounds()
-
-        async function onTilesetLoaded() {
-            setIsLoading(true)
-
-            setupGrid(theme)
-            await clearAndLoadSprites()
-            updateCellSize()
-
-            setIsLoading(false)
-        }
-
-        function onToggleGrid(e: ToggleGridEvent) {
-            grid.current.visible = e.detail.state
-        }
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.TILESET_LOADED,
-            onTilesetLoaded,
-        )
-
-        props.eventBus.current.addEventListener(
-            LocalEvent.TOGGLE_GRID,
-            onToggleGrid,
-        )
 
         if (props.tilesheets) {
             (async () => {
@@ -310,16 +301,6 @@ export function MapViewer(props: MapViewerProps) {
 
             props.threeConfig.current.scene.remove(grid.current)
             props.tilesheets.current.clearAll()
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.TILESET_LOADED,
-                onTilesetLoaded,
-            )
-
-            props.eventBus.current.removeEventListener(
-                LocalEvent.TOGGLE_GRID,
-                onToggleGrid,
-            )
         }
     }, [theme, project])
 
