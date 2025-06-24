@@ -205,10 +205,10 @@ impl MapDataCollection {
 
         let mut maps = HashMap::new();
 
-        let is_nested = size_value.x < DEFAULT_MAP_DATA_SIZE.x
-            || size_value.y < DEFAULT_MAP_DATA_SIZE.y;
+        let is_bigger_than_default = size_value.x <= DEFAULT_MAP_DATA_SIZE.x
+            || size_value.y <= DEFAULT_MAP_DATA_SIZE.y;
 
-        match is_nested {
+        match is_bigger_than_default {
             false => {
                 for y in 0..(size_value.y / DEFAULT_MAP_DATA_SIZE.y) {
                     for x in 0..(size_value.x / DEFAULT_MAP_DATA_SIZE.x) {
