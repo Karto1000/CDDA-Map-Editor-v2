@@ -18,6 +18,7 @@ pub enum KeybindAction {
     Fill,
     Erase,
     ReloadMap,
+    ChunkSelect,
 }
 
 #[derive(Debug, Serialize, Hash, Eq, PartialEq, Deserialize, Clone)]

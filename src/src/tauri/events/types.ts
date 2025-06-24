@@ -5,6 +5,7 @@ import {Vector2, Vector3} from "three";
 import {OpenViewerData} from "../types/viewer.js";
 import {Theme} from "../../shared/hooks/useTheme.js";
 import {Tilesheets} from "../../features/sprites/tilesheets.js";
+import {MapEditorMode} from "../../features/editor/mapEditor.js";
 
 export const __TAB_CHANGED = "__project_changed"
 
@@ -160,7 +161,8 @@ export enum TauriEvent {
     TOGGLE_GRID = "toggle-grid",
     OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window",
     OPEN_PALETTES_WINDOW = "open-palettes-window",
-    KEYBIND_PRESSED = "keybind-pressed"
+    KEYBIND_PRESSED = "keybind-pressed",
+    CHANGE_EDITOR_MODE = "change-editor-mode"
 }
 
 export enum ToastType {
@@ -202,4 +204,5 @@ export interface TauriEventMap {
     [TauriEvent.OPEN_MAPGEN_INFO_WINDOW]: {},
     [TauriEvent.OPEN_PALETTES_WINDOW]: {},
     [TauriEvent.KEYBIND_PRESSED]: KeybindAction
+    [TauriEvent.CHANGE_EDITOR_MODE]: MapEditorMode
 }

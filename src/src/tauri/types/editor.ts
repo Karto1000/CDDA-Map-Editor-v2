@@ -35,6 +35,7 @@ export enum KeybindAction {
     Fill = "Fill",
     Erase = "Erase",
     ReloadMap = "ReloadMap",
+    ChunkSelect = "ChunkSelect"
 }
 
 export type Keybind = {

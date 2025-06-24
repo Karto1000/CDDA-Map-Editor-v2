@@ -8,12 +8,13 @@ import {open} from "@tauri-apps/plugin-shell";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {EditorDataContext, TabContext, ThemeContext} from "../../app.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {__TAB_CHANGED, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
+import {TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {TabTypeKind} from "../hooks/useTabs.js";
 import {useKeybindActionEvent} from "../hooks/useKeybindings.js";
 import {getKeybindingText, KeybindAction} from "../../tauri/types/editor.js";
-import {emit, emitTo} from "@tauri-apps/api/event";
+import {emit} from "@tauri-apps/api/event";
+import {MapEditorMode} from "../../features/editor/mapEditor.js";
 
 type Props = {
     importMapWindowRef: RefObject<WebviewWindow>
@@ -129,6 +130,11 @@ export function Header(props: Props) {
     async function onTabClose(name: string) {
         console.log(`Closed tab ${name}`)
 
+        await emit(
+            TauriEvent.REMOVE_TAB,
+            {name}
+        )
+
         await tauriBridge.invoke(
             TauriCommand.CLOSE_PROJECT,
             {name}
@@ -174,6 +180,27 @@ export function Header(props: Props) {
         }
 
         await tauriWindow.close();
+    }
+
+    async function onDrawClicked() {
+        await emit(
+            TauriEvent.CHANGE_EDITOR_MODE,
+            MapEditorMode.Draw
+        )
+    }
+
+    async function onFillClicked() {
+        await emit(
+            TauriEvent.CHANGE_EDITOR_MODE,
+            MapEditorMode.Fill
+        )
+    }
+
+    async function onChunkSelectClicked() {
+        await emit(
+            TauriEvent.CHANGE_EDITOR_MODE,
+            MapEditorMode.ChunkSelect
+        )
     }
 
     function getKeyboardShortcutForAction(action: KeybindAction | null) {
@@ -419,15 +446,25 @@ export function Header(props: Props) {
                                 {
                                     name: "Draw",
                                     shortcut: getKeyboardShortcutForAction(KeybindAction.Draw),
-                                    onClick: () => {
-                                        alert("Not Implemented")
+                                    onClick: async (ref) => {
+                                        await onDrawClicked()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {
                                     name: "Fill",
                                     shortcut: getKeyboardShortcutForAction(KeybindAction.Fill),
-                                    onClick: () => {
-                                        alert("Not Implemented")
+                                    onClick: async (ref) => {
+                                        await onFillClicked()
+                                        ref.current.closeMenu()
+                                    },
+                                },
+                                {
+                                    name: "Chunk Select",
+                                    shortcut: getKeyboardShortcutForAction(KeybindAction.ChunkSelect),
+                                    onClick: async (ref) => {
+                                        await onChunkSelectClicked()
+                                        ref.current.closeMenu()
                                     }
                                 },
                                 {

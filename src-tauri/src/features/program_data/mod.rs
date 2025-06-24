@@ -389,6 +389,9 @@ impl Default for ProgramConfig {
                 Keybind::single("F5")
                     .action(KeybindAction::ReloadMap)
                     .global(),
+                Keybind::single("f").action(KeybindAction::Fill),
+                Keybind::single("d").action(KeybindAction::Draw),
+                Keybind::single("c").action(KeybindAction::ChunkSelect),
             ]),
         }
     }

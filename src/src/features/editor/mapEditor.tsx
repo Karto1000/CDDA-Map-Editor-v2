@@ -1,19 +1,21 @@
-import React, {RefObject, useContext, useEffect, useRef} from "react"
+import React, {RefObject, useContext, useEffect, useRef, useState} from "react"
 import "./mapEditor.scss"
-import {TabContext, ThemeContext} from "../../app.js";
+import {EditorDataContext, TabContext, ThemeContext} from "../../app.js";
 import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {Tilesheets} from "../sprites/tilesheets.js";
 import {Canvas, ThreeConfig} from "../three/types/three.js";
 import {Object3D} from "three";
 import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
 import {createGrid} from "../three/hooks/useThreeSetup.js";
-import {MapEditorData} from "../../tauri/types/editor.js";
+import {KeybindAction, MapEditorData} from "../../tauri/types/editor.js";
 import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {UnlistenFn} from "@tauri-apps/api/event";
+import {emit, UnlistenFn} from "@tauri-apps/api/event";
 import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
 import {TauriEvent} from "../../tauri/events/types.js";
+import {useChunkSelect} from "./useChunkSelect.js";
+import {useKeybindings} from "../../shared/hooks/useKeybindings.js";
 
 export type MapEditorProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -25,16 +27,74 @@ export type MapEditorProps = {
     palettesWindowRef: RefObject<WebviewWindow>
 }
 
+export enum MapEditorMode {
+    Draw,
+    Fill,
+    ChunkSelect
+}
+
+export const CHUNK_SIZE = 24
+
 export function MapEditor(props: MapEditorProps) {
     const tabs = useContext(TabContext)
     const theme = useContext(ThemeContext)
-    const grid = useRef<Object3D>(null)
+    const programData = useContext(EditorDataContext)
     const project = useCurrentProject<MapEditorData>(tabs.openedTab)
 
+    const grid = useRef<Object3D>(null)
     const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
     const palettesUnlistenFn = useRef<UnlistenFn>(null)
+    const [mapEditorMode, setMapEditorMode] = useState<MapEditorMode>(MapEditorMode.Draw)
+
+    useChunkSelect(
+        props.threeConfig,
+        props.spritesheetConfig,
+        props.canvas,
+        mapEditorMode,
+        project
+    )
+
+    useKeybindings(
+        props.canvas.canvasRef.current,
+        programData,
+        []
+    )
 
     let handler: number;
+
+    useTauriEvent(
+        TauriEvent.KEYBIND_PRESSED,
+        kb => {
+            let newMode: MapEditorMode = null;
+
+            switch (kb) {
+                case KeybindAction.ChunkSelect:
+                    newMode = MapEditorMode.ChunkSelect
+                    break;
+                case KeybindAction.Draw:
+                    newMode = MapEditorMode.Draw
+                    break;
+                case KeybindAction.Fill:
+                    newMode = MapEditorMode.Fill
+                    break
+            }
+
+            if (newMode != null)
+                emit(
+                    TauriEvent.CHANGE_EDITOR_MODE,
+                    newMode
+                )
+        },
+        []
+    )
+
+    useTauriEvent(
+        TauriEvent.CHANGE_EDITOR_MODE,
+        mode => {
+            setMapEditorMode(mode)
+        },
+        [mapEditorMode]
+    )
 
     useTauriEvent(
         TauriEvent.TOGGLE_GRID,

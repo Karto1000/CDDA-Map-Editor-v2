@@ -14,7 +14,9 @@ export function useKeybindings(
     useEffect(() => {
         if (!ctx) return;
 
-        function onKeyDown(e: KeyboardEvent) {
+        async function onKeyDown(e: KeyboardEvent) {
+            if (ctx !== window && document.activeElement !== ctx) return;
+
             // Sort keybinds by specificity (number of modifiers)
             const sortedKeybinds = [...editorData.config.keybinds].sort((a, b) => {
                 const aModifiers = Number(a.withAlt) + Number(a.withCtrl) + Number(a.withShift);
@@ -35,10 +37,11 @@ export function useKeybindings(
 
                 if (keybinding.isGlobal) e.preventDefault();
 
-                emit(
+                await emit(
                     TauriEvent.KEYBIND_PRESSED,
                     keybinding.action
                 )
+
                 return
             }
         }
