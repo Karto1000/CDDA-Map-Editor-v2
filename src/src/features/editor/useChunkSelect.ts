@@ -4,7 +4,7 @@ import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {CHUNK_SIZE, MapEditorMode} from "./mapEditor.js";
 import {BoxHelper, Mesh, MeshBasicMaterial, PlaneGeometry, Vector3} from "three";
 import {getColorFromTheme} from "../../shared/hooks/useTheme.js";
-import {ThemeContext} from "../../app.js";
+import {TabContext, ThemeContext} from "../../app.js";
 import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {MapEditorData, Project} from "../../tauri/types/editor.js";
 import {TextGeometry} from "three/examples/jsm/geometries/TextGeometry.js";
@@ -25,6 +25,7 @@ export function useChunkSelect(
     palettesWindowRef: RefObject<WebviewWindow>
 ) {
     const theme = useContext(ThemeContext)
+    const tabs = useContext(TabContext)
 
     const chunkSelectInnerMeshRef = useRef<Mesh>(null)
     const chunkSelectOuterMeshRef = useRef<BoxHelper>(null)
@@ -148,8 +149,9 @@ export function useChunkSelect(
         return () => {
             if (palettesUnlistenFn.current) palettesUnlistenFn.current()
             palettesUnlistenFn.current = null
+            palettesWindowRef.current = null
         }
-    }, [project, theme]);
+    }, [tabs.openedTab, theme]);
 
     useEffect(() => {
         switch (mapEditorMode) {

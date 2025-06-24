@@ -5,3 +5,5 @@ pub const CREATE_TAB: &str = "create-tab";
 pub const REMOVE_TAB: &str = "remove-tab";
 pub const UPDATE_LIVE_VIEWER: &str = "update_live_viewer";
 pub const TOAST_MESSAGE: &str = "emit_toast_message";
+
+pub const CURRENT_PROJECT_CHANGED: &str = "current_project_changed";

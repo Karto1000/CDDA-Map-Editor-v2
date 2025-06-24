@@ -6,12 +6,17 @@ import {Tooltip} from "react-tooltip";
 import {ImguiSelect, ImguiSelectOption} from "../../shared/components/imguilike/imguiSelect.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {Palette} from "../../tauri/types/palettes.js";
-import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
+import {BackendResponseType, ModifyPaletteActionKind, TauriCommand} from "../../tauri/events/types.js";
 import {FormError} from "../../shared/components/form-error.js";
+import {useInitialData} from "../useInitialData.js";
+import {Vector3} from "three";
+import {getCurrentWindow} from "@tauri-apps/api/window";
 
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
     const [options, setOptions] = useState<ImguiSelectOption[]>([])
+    const [selectedOption, setSelectedOption] = useState<string>("")
+    const chunkPosition = useInitialData<Vector3>()[0]
 
     useEffect(() => {
         (async () => {
@@ -36,11 +41,27 @@ function Main() {
     }, []);
 
     const onSelectedOptionChange = (selectedOption: string) => {
-        console.log(selectedOption)
+        setSelectedOption(selectedOption)
     }
 
-    function onSubmit(event: React.FormEvent<HTMLFormElement>) {
-        event.preventDefault()
+    async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+        e.preventDefault()
+
+        if (!selectedOption) return
+
+        await tauriBridge.invoke(
+            TauriCommand.MODIFY_PALETTE,
+            {
+                action: {
+                    type: ModifyPaletteActionKind.AddPalette,
+                    paletteName: selectedOption,
+                },
+                coordinates: [chunkPosition.x, chunkPosition.y, chunkPosition.z],
+            }
+        )
+
+        const window = getCurrentWindow()
+        await window.close()
     }
 
     return (

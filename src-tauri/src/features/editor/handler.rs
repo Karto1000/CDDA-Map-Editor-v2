@@ -9,8 +9,10 @@ use crate::util::{
     get_current_project_mut, get_size, GetCurrentProjectError, Save, SaveError,
 };
 use crate::{events, impl_serialize_for_error, InvalidProjectType};
-use glam::{IVec2, UVec2};
+use cdda_lib::types::{CDDAIdentifier, MapGenValue};
+use glam::{IVec2, IVec3, UVec2};
 use log::info;
+use rayon::max_num_threads;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::ops::Range;
@@ -93,28 +95,74 @@ pub enum AddPaletteError {
 
     #[error(transparent)]
     InvalidProjectType(#[from] InvalidProjectType),
+
+    #[error("Mapgen at coordinates {0} (x,y,z) does not exist")]
+    MissingMapgen(IVec3),
 }
 
 impl_serialize_for_error!(AddPaletteError);
 
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    tag = "type",
+    rename_all_fields = "camelCase"
+)]
+pub enum ModifyPaletteAction {
+    AddPalette { palette_name: CDDAIdentifier },
+    RemovePalette { index: usize },
+}
+
 #[tauri::command(rename_all = "camelCase")]
-pub async fn add_palette(
-    palette_name: String,
+pub async fn modify_palette(
+    app: AppHandle,
+    coordinates: IVec3,
+    action: ModifyPaletteAction,
     program_data: State<'_, Mutex<ProgramData>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), AddPaletteError> {
-    info!("Trying to add palette {} to project", palette_name);
-
     let program_data_lock = program_data.lock().await;
     let mut loaded_projects_lock = loaded_projects.lock().await;
 
-    let mut loaded_project =
+    let loaded_project =
         get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
 
-    let mut maps = match &mut loaded_project.project_type {
+    let maps = match &mut loaded_project.project_type {
         ProjectType::MapEditor(me) => &mut me.maps,
         ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
     };
+
+    let map_data = maps
+        .get_mut(&coordinates.z)
+        .ok_or(AddPaletteError::MissingMapgen(coordinates.clone()))?
+        .maps
+        .get_mut(&UVec2::new(coordinates.x as u32, coordinates.y as u32).into())
+        .ok_or(AddPaletteError::MissingMapgen(coordinates.clone()))?;
+
+    match action {
+        ModifyPaletteAction::AddPalette { palette_name } => {
+            info!("Trying to add palette {} to project", palette_name);
+            map_data.palettes.push(MapGenValue::String(palette_name));
+        },
+        ModifyPaletteAction::RemovePalette { index } => {
+            info!("Trying to remove palette at index {} from project", index);
+            map_data.palettes.remove(index);
+        },
+    }
+
+    let path = match program_data_lock
+        .openable_projects
+        .get(&loaded_project.name)
+    {
+        None => unreachable!(),
+        Some(p) => p,
+    };
+
+    let project_saver = ProjectSaver { path: path.clone() };
+    project_saver.save(&loaded_project).await?;
+
+    app.emit(events::CURRENT_PROJECT_CHANGED, loaded_project.clone())
+        .unwrap();
 
     Ok(())
 }

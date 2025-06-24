@@ -1,6 +1,6 @@
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {Theme} from "@tauri-apps/api/window";
-import {emitTo, UnlistenFn} from "@tauri-apps/api/event";
+import {emitTo, TauriEvent, UnlistenFn} from "@tauri-apps/api/event";
 import {Webview} from "@tauri-apps/api/webview";
 import {INITIAL_DATA, WINDOW_READY} from "./useInitialData.js";
 import {RefObject} from "react";
@@ -56,12 +56,9 @@ export async function openWindow<T = any>(
 
     let isClosed = false
 
-    const closedRequestedUnlisten = await window.once("tauri://close-requested", async () => {
+    const closedRequestedUnlisten = await window.once(TauriEvent.WINDOW_DESTROYED, async () => {
         ref.current = null
         isClosed = true
-
-        // @ts-expect-error For some reason it says that it cannot find this method on the window?
-        await window.close()
     })
 
     const close = () => {

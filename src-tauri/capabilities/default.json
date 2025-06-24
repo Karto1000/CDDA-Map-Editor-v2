@@ -15,6 +15,7 @@
     "core:event:allow-listen",
     "core:event:default",
     "core:webview:allow-internal-toggle-devtools",
+    "core:window:allow-destroy",
     "shell:allow-open",
     "shell:default",
     "dialog:allow-message",

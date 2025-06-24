@@ -20,7 +20,8 @@ import {useForeignOpenedTab} from "../useForeignOpenedTab.js";
 import {Vector3} from "three";
 import {useInitialData} from "../useInitialData.js";
 import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
-import {TauriEvent} from "../../tauri/events/types.js";
+import {ModifyPaletteActionKind, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
+import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
@@ -33,6 +34,8 @@ function Main() {
     useTauriEvent(
         TauriEvent.MAPGEN_CHUNK_SELECTED,
         chunk => {
+            if (addPaletteWindowCloseRef.current) addPaletteWindowCloseRef.current()
+
             setChunkPosition(chunk)
         },
         [chunkPosition]
@@ -53,25 +56,46 @@ function Main() {
         })
     }
 
+    async function onPaletteRemove(i: number) {
+        console.log("Removing palette", i)
+        await tauriBridge.invoke(
+            TauriCommand.MODIFY_PALETTE,
+            {
+                action: {
+                    type: ModifyPaletteActionKind.RemovePalette,
+                    index: i
+                },
+                coordinates: [chunkPosition.x, chunkPosition.y, chunkPosition.z],
+            }
+        )
+    }
+
     function getPaletteVisualization(palette: MapGenValue, i: number) {
         if (Array.isArray(palette)) {
             return <div className={"palette-item"} key={i} data-tooltip-id={"info-tooltip"}
                         data-tooltip-html={getListFromDistribution(palette).join(", <br/>")}
                         onMouseMove={handleMouseMove}>
-                <button>X</button>
+                <button onClick={() => onPaletteRemove(i)}>X</button>
                 <span>{getStringFromMapGenValue(palette[0])} (+{palette.length - 1})</span>
             </div>
         }
 
         return <div className={"palette-item"} key={i}>
-            <button>X</button>
+            <button onClick={() => onPaletteRemove(i)}>X</button>
             <span>{getStringFromMapGenValue(palette)}</span>
         </div>
     }
 
     async function onAddPalette() {
         // TODO: Theme
-        addPaletteWindowCloseRef.current = (await openWindow(WindowLabel.AddPalette, Theme.Dark, addPaletteWindowRef, {}, null, WindowLabel.Palettes))[1]
+        addPaletteWindowCloseRef.current = (await openWindow(
+            WindowLabel.AddPalette,
+            Theme.Dark,
+            addPaletteWindowRef,
+            {},
+            chunkPosition,
+            WindowLabel.Palettes
+        ))[1]
     }
 
     if (!chunkPosition || !project) return <></>

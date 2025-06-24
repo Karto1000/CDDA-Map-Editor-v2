@@ -191,9 +191,6 @@ export function MapEditor(props: MapEditorProps) {
         return () => {
             cancelAnimationFrame(handler)
 
-            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
-            props.palettesWindowRef.current = null
-
             props.threeConfig.current.scene.remove(grid.current)
             props.tilesheets.current.clearAll()
         }

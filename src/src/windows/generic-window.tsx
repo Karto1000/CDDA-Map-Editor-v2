@@ -43,7 +43,7 @@ export default function GenericWindow(
     async function onCloseClick() {
         await onCloseClicked();
         const window = getCurrentWindow();
-        await window.close();
+        await window.destroy();
     }
 
     return (

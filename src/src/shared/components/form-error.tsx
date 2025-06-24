@@ -1,5 +1,6 @@
 import React from "react";
 import "./form-error.scss"
+// @ts-ignore
 import {DeepRequired, FieldErrorsImpl} from "react-hook-form";
 import Icon, {IconName} from "./icon.js";
 

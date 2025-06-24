@@ -1,10 +1,9 @@
 import {AnimatedSprite, FallbackSprite, StaticSprite} from "../types/map_data.js";
 import {KeybindAction, ProgramData} from "../types/editor.js";
-import {Tab, TabTypeKind} from "../../shared/hooks/useTabs.js";
+import {TabTypeKind} from "../../shared/hooks/useTabs.js";
 import {Vector2, Vector3} from "three";
 import {OpenViewerData} from "../types/viewer.js";
 import {Theme} from "../../shared/hooks/useTheme.js";
-import {Tilesheets} from "../../features/sprites/tilesheets.js";
 import {MapEditorMode} from "../../features/editor/mapEditor.js";
 
 export const __TAB_CHANGED = "__project_changed"
@@ -64,7 +63,21 @@ export enum TauriCommand {
     ABOUT = "about",
     CLOSE_APP = "close_app",
     NEW_MAP_EDITOR = "new_map_editor",
-    GET_PALETTES = "get_palettes"
+    GET_PALETTES = "get_palettes",
+    MODIFY_PALETTE = "modify_palette"
+}
+
+export enum ModifyPaletteActionKind {
+    AddPalette = "addPalette",
+    RemovePalette = "removePalette",
+}
+
+export type ModifyPaletteAction = {
+    type: ModifyPaletteActionKind.AddPalette,
+    paletteName: string,
+} | {
+    type: ModifyPaletteActionKind.RemovePalette,
+    index: number
 }
 
 export type AboutInfo = {
@@ -137,7 +150,11 @@ export interface TauriCommandMap {
         zLevels: [number, number],
         mapSize: [number, number],
     },
-    [TauriCommand.GET_PALETTES]: {}
+    [TauriCommand.GET_PALETTES]: {},
+    [TauriCommand.MODIFY_PALETTE]: {
+        coordinates: [number, number, number]
+        action: ModifyPaletteAction
+    }
 }
 
 export enum TauriEvent {
@@ -200,7 +217,7 @@ export interface TauriEventMap {
     [TauriEvent.CHANGE_Z_LEVEL]: { zLevel: number }
     [TauriEvent.CHANGE_WORLD_MOUSE_POSITION]: { position: { x: number, y: number } }
     [TauriEvent.CHANGE_SELECTED_POSITION]: { position?: { x: number, y: number } }
-    [TauriEvent.UPDATE_VIEWER]: {  },
+    [TauriEvent.UPDATE_VIEWER]: {},
     [TauriEvent.TOGGLE_GRID]: { state: boolean },
     [TauriEvent.OPEN_MAPGEN_INFO_WINDOW]: {},
     [TauriEvent.OPEN_PALETTES_WINDOW]: {},
