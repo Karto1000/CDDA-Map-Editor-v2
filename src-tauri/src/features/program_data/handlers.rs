@@ -285,17 +285,17 @@ pub async fn open_recent_project(
             };
 
             map_viewer.maps = collection;
+
+            app.emit(
+                events::CREATE_TAB,
+                Tab {
+                    name: project.name.clone(),
+                    tab_type: TabType::LiveViewer,
+                },
+            )
+            .unwrap();
         },
     }
-
-    app.emit(
-        events::CREATE_TAB,
-        Tab {
-            name: project.name.clone(),
-            tab_type: TabType::LiveViewer,
-        },
-    )
-    .unwrap();
 
     editor_data_lock
         .openable_projects
