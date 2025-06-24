@@ -25,37 +25,35 @@ export function useChunkSelect(
             spritesheetConfig,
             threeConfig,
             canvas,
-            onMouseMove: (mousePosition) => {
-                if (!chunkSelectInnerMeshRef.current) return;
-                if (!chunkSelectOuterMeshRef.current) return;
-
-                const tileInfo = getTileInfo(spritesheetConfig.current)
-
-                const chunkSizeX = Math.min(project.project_type.mapEditor.size[0], CHUNK_SIZE)
-                const chunkSizeY = Math.min(project.project_type.mapEditor.size[1], CHUNK_SIZE)
-
-                const currentChunkXDisplay = Math.floor(mousePosition.x / chunkSizeX) + 1
-                const currentChunkYDisplay = Math.floor(mousePosition.y / chunkSizeY) + 1
-
-                const halfOffsetX = tileInfo.width / 2
-                const halfOffsetY = tileInfo.height / 2
-
-                const chunkSizePixelsX = tileInfo.width * chunkSizeX
-                const chunkSizePixelsY = tileInfo.height * chunkSizeY
-
-                const posX = chunkSizePixelsX * currentChunkXDisplay - chunkSizePixelsX / 2 - halfOffsetX
-                const posY = -(chunkSizePixelsY * currentChunkYDisplay - chunkSizePixelsY / 2 + halfOffsetY)
-
-                chunkSelectInnerMeshRef.current.position.set(
-                    posX,
-                    posY,
-                    0
-                )
-
-                chunkSelectOuterMeshRef.current.update()
-            }
         }
     )
+
+    function updateMeshPositions() {
+        const tileInfo = getTileInfo(spritesheetConfig.current)
+
+        const chunkSizeX = Math.min(project.project_type.mapEditor.size[0], CHUNK_SIZE)
+        const chunkSizeY = Math.min(project.project_type.mapEditor.size[1], CHUNK_SIZE)
+
+        const currentChunkXDisplay = Math.floor(worldMousePosition.x / chunkSizeX) + 1
+        const currentChunkYDisplay = Math.floor(worldMousePosition.y / chunkSizeY) + 1
+
+        const halfOffsetX = tileInfo.width / 2
+        const halfOffsetY = tileInfo.height / 2
+
+        const chunkSizePixelsX = tileInfo.width * chunkSizeX
+        const chunkSizePixelsY = tileInfo.height * chunkSizeY
+
+        const posX = chunkSizePixelsX * currentChunkXDisplay - chunkSizePixelsX / 2 - halfOffsetX
+        const posY = -(chunkSizePixelsY * currentChunkYDisplay - chunkSizePixelsY / 2 + halfOffsetY)
+
+        chunkSelectInnerMeshRef.current.position.set(
+            posX,
+            posY,
+            0
+        )
+
+        chunkSelectOuterMeshRef.current.update()
+    }
 
     useEffect(() => {
         function onMouseDown(e: MouseEvent) {
@@ -66,6 +64,11 @@ export function useChunkSelect(
 
         switch (mapEditorMode) {
             case MapEditorMode.ChunkSelect:
+                if (!chunkSelectInnerMeshRef.current) return;
+                if (!chunkSelectOuterMeshRef.current) return;
+
+                updateMeshPositions()
+
                 canvas.canvasRef.current.addEventListener("mousedown", onMouseDown)
         }
 
@@ -90,21 +93,6 @@ export function useChunkSelect(
 
                 const chunkSelectInnerMesh = new Mesh(chunkSelectGeo, chunkSelectMaterial)
 
-                const halfOffsetX = tileInfo.width / 2
-                const halfOffsetY = tileInfo.height / 2
-
-                const chunkSizePixelsX = tileInfo.width * chunkSizeX
-                const chunkSizePixelsY = tileInfo.height * chunkSizeY
-
-                const posX = chunkSizePixelsX - chunkSizePixelsX / 2 - halfOffsetX
-                const posY = -(chunkSizePixelsY - chunkSizePixelsY / 2 + halfOffsetY)
-
-                chunkSelectInnerMesh.position.set(
-                    posX,
-                    posY,
-                    0
-                )
-
                 const boxHelper = new BoxHelper(
                     chunkSelectInnerMesh,
                     getColorFromTheme(theme.theme, "selected")
@@ -118,6 +106,7 @@ export function useChunkSelect(
                 threeConfig.current.scene.add(chunkSelectInnerMesh)
                 threeConfig.current.scene.add(boxHelper)
 
+                updateMeshPositions()
         }
 
         return () => {
