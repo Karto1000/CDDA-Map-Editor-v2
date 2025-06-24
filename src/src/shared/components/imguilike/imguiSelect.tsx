@@ -39,6 +39,34 @@ export function ImguiSelect(props: ImguiSelectProps) {
                         outline: "none",
                         borderRadius: 0,
                         border: "none",
+                        height: "25px",
+                        minHeight: "25px"
+                    }
+                ),
+                // Height styling from -> https://stackoverflow.com/a/60912805
+                valueContainer: (base) => (
+                    {
+                        ...base,
+                        height: "25px",
+                        padding: "0px 10px",
+                    }
+                ),
+                input: (base) => (
+                    {
+                        ...base,
+                        margin: "0px"
+                    }
+                ),
+                indicatorSeparator: (base) => (
+                    {
+                        ...base,
+                        display: "none"
+                    }
+                ),
+                indicatorsContainer: (base) => (
+                    {
+                        ...base,
+                        height: "25px",
                     }
                 ),
                 dropdownIndicator: (base) => (
