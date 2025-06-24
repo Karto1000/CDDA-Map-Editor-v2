@@ -128,92 +128,104 @@ function OpenMapViewer({handleMouseMove}: { handleMouseMove: MouseMoveHandler })
                     [
                         {
                             name: "Overmap Terrain",
-                            content: <form onSubmit={onSubmit} className={"map-viewer-form"}>
-                                <div className={"map-viewer-form-terrain"}>
-                                    <div className={"form-element"}>
-                                        <label
-                                            className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}
-                                            data-tooltip-id={"info-tooltip"}
-                                            data-tooltip-html="The paths to the files where the mapgen entries are stored"
-                                            onMouseMove={handleMouseMove}>
-                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select one or more mapgen File Paths"}
-                                            <button onClick={onMapFileInputChange}/>
-                                        </label>
-                                        <label>Mapgen Paths</label>
-                                    </div>
-                                    <div className={"form-element"}>
-                                        <input
-                                            onChange={onOmTerrainIdChange}
-                                            placeholder={"Enter the overmap id"}
-                                            data-tooltip-id={"info-tooltip"}
-                                            data-tooltip-html="The overmap id which is defined in the mapgen file as om_terrain."
-                                            onMouseMove={handleMouseMove}
-                                        />
-                                        <label>Overmap Id</label>
-                                    </div>
-                                    <div className={"form-element"}>
-                                        <input
-                                            onChange={onProjectNameChange}
-                                            placeholder={"Define a name for the project"}
-                                            data-tooltip-id={"info-tooltip"}
-                                            data-tooltip-html="The name of the project"
-                                            onMouseMove={handleMouseMove}
-                                        />
-                                        <label>Project Name</label>
-                                    </div>
+                            content:
+                                <div className={"import-mapgen-body"}>
+                                    <p>An overmap terrain is a file which describes what the game will spawn when it
+                                        selects an overmap tile</p>
+                                    <form onSubmit={onSubmit} className={"map-viewer-form"}>
+                                        <div className={"map-viewer-form-terrain"}>
+                                            <div className={"form-element"}>
+                                                <label
+                                                    className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}
+                                                    data-tooltip-id={"info-tooltip"}
+                                                    data-tooltip-html="The paths to the files where the mapgen entries are stored"
+                                                    onMouseMove={handleMouseMove}>
+                                                    {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select one or more mapgen File Paths"}
+                                                    <button onClick={onMapFileInputChange}/>
+                                                </label>
+                                                <label>Mapgen Paths</label>
+                                            </div>
+                                            <div className={"form-element"}>
+                                                <input
+                                                    onChange={onOmTerrainIdChange}
+                                                    placeholder={"Enter the overmap id"}
+                                                    data-tooltip-id={"info-tooltip"}
+                                                    data-tooltip-html="The overmap id which is defined in the mapgen file as om_terrain."
+                                                    onMouseMove={handleMouseMove}
+                                                />
+                                                <label>Overmap Id</label>
+                                            </div>
+                                            <div className={"form-element"}>
+                                                <input
+                                                    onChange={onProjectNameChange}
+                                                    placeholder={"Define a name for the project"}
+                                                    data-tooltip-id={"info-tooltip"}
+                                                    data-tooltip-html="The name of the project"
+                                                    onMouseMove={handleMouseMove}
+                                                />
+                                                <label>Project Name</label>
+                                            </div>
+                                        </div>
+                                        <button type={"submit"}>Import</button>
+                                    </form>
                                 </div>
-                                <button type={"submit"}>Import</button>
-                            </form>
                         },
                         {
                             name: "Overmap Special",
-                            content: <form onSubmit={onSubmit} className={"map-viewer-form"}>
-                                <div className={"map-viewer-form-special"}>
-                                    <div className={"form-element"}>
-                                        <label
-                                            className={clsx("file-input", omFilePaths.length === 0 && "placeholder")}
-                                            data-tooltip-id={"info-tooltip"}
-                                            data-tooltip-html="The path to one or more overmap special files to search for the overmap id"
-                                            onMouseMove={handleMouseMove}
-                                        >
-                                            {omFilePaths.length > 0 ? omFilePaths : "Select one or more Overmap special File Paths"}
-                                            <button onClick={onOmFileInputChange}/>
-                                        </label>
-                                        <label>Overmap Special Paths</label>
-                                    </div>
-                                    <div className={"form-element"}>
-                                        <label
-                                            className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}
-                                            data-tooltip-id={"info-tooltip"}
-                                            data-tooltip-html="The path to the files where the map data which is referenced in the overmap special files is stored."
-                                            onMouseMove={handleMouseMove}
-                                        >
-                                            {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select one or more mapgen File Paths"}
-                                            <button onClick={onMapFileInputChange}/>
-                                        </label>
-                                        <label>Mapgen Paths</label>
-                                    </div>
-                                    <div className={"form-element"}>
-                                        <input onChange={onOmTerrainIdChange}
-                                               placeholder={"Enter the overmap special id"}
-                                               data-tooltip-id={"info-tooltip"}
-                                               data-tooltip-html="The overmap special id. The overmap special entry is used to combine multiple mapgen entries into one."
-                                               onMouseMove={handleMouseMove}
-                                        />
-                                        <label>Overmap Special Id</label>
-                                    </div>
-                                    <div className={"form-element"}>
-                                        <input onChange={onProjectNameChange}
-                                               placeholder={"The name of the project"}
-                                               data-tooltip-id={"info-tooltip"}
-                                               data-tooltip-html="The name of the project"
-                                               onMouseMove={handleMouseMove}
-                                        />
-                                        <label>Project Name</label>
-                                    </div>
+                            content:
+                                <div className={"import-mapgen-body"}>
+                                    <p>
+                                        An overmap special is a file which is contains one or more overmap terrain
+                                        entries and composes them
+                                    </p>
+                                    <form onSubmit={onSubmit} className={"map-viewer-form"}>
+                                        <div className={"map-viewer-form-special"}>
+                                            <div className={"form-element"}>
+                                                <label
+                                                    className={clsx("file-input", omFilePaths.length === 0 && "placeholder")}
+                                                    data-tooltip-id={"info-tooltip"}
+                                                    data-tooltip-html="The path to one or more overmap special files to search for the overmap id"
+                                                    onMouseMove={handleMouseMove}
+                                                >
+                                                    {omFilePaths.length > 0 ? omFilePaths : "Select one or more Overmap special File Paths"}
+                                                    <button onClick={onOmFileInputChange}/>
+                                                </label>
+                                                <label>Overmap Special Paths</label>
+                                            </div>
+                                            <div className={"form-element"}>
+                                                <label
+                                                    className={clsx("file-input", mapgenFilePaths.length === 0 && "placeholder")}
+                                                    data-tooltip-id={"info-tooltip"}
+                                                    data-tooltip-html="The path to the files where the map data which is referenced in the overmap special files is stored."
+                                                    onMouseMove={handleMouseMove}
+                                                >
+                                                    {mapgenFilePaths.length > 0 ? mapgenFilePaths : "Select one or more mapgen File Paths"}
+                                                    <button onClick={onMapFileInputChange}/>
+                                                </label>
+                                                <label>Mapgen Paths</label>
+                                            </div>
+                                            <div className={"form-element"}>
+                                                <input onChange={onOmTerrainIdChange}
+                                                       placeholder={"Enter the overmap special id"}
+                                                       data-tooltip-id={"info-tooltip"}
+                                                       data-tooltip-html="The overmap special id. The overmap special entry is used to combine multiple mapgen entries into one."
+                                                       onMouseMove={handleMouseMove}
+                                                />
+                                                <label>Overmap Special Id</label>
+                                            </div>
+                                            <div className={"form-element"}>
+                                                <input onChange={onProjectNameChange}
+                                                       placeholder={"The name of the project"}
+                                                       data-tooltip-id={"info-tooltip"}
+                                                       data-tooltip-html="The name of the project"
+                                                       onMouseMove={handleMouseMove}
+                                                />
+                                                <label>Project Name</label>
+                                            </div>
+                                        </div>
+                                        <button type={"submit"}>Import</button>
+                                    </form>
                                 </div>
-                                <button type={"submit"}>Import</button>
-                            </form>
                         }
                     ]
                 }/>

@@ -14,6 +14,12 @@
   height: 100%;
   flex-direction: column;
 
+  .import-mapgen-body {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+  }
+
   .map-viewer-form {
     display: flex;
     flex-direction: column;
