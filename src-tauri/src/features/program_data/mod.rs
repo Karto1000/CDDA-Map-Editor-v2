@@ -200,16 +200,37 @@ pub struct MapDataCollection {
 }
 
 impl MapDataCollection {
-    pub fn new(size: MapSize) -> Self {
+    pub fn new(size: MapSize, project_name: String, z: ZLevel) -> Self {
         let size_value = size.value();
 
         let mut maps = HashMap::new();
-        // TODO: Handle nested mapgens with sizes smaller than 24
 
-        for y in 0..(size_value.y / DEFAULT_MAP_DATA_SIZE.y) {
-            for x in 0..(size_value.x / DEFAULT_MAP_DATA_SIZE.x) {
-                maps.insert(UVec2::new(x, y).into(), MapData::default());
-            }
+        let is_nested = size_value.x < DEFAULT_MAP_DATA_SIZE.x
+            || size_value.y < DEFAULT_MAP_DATA_SIZE.y;
+
+        match is_nested {
+            false => {
+                for y in 0..(size_value.y / DEFAULT_MAP_DATA_SIZE.y) {
+                    for x in 0..(size_value.x / DEFAULT_MAP_DATA_SIZE.x) {
+                        let mut map_data = MapData::default();
+
+                        map_data.id = CDDAIdentifier(format!(
+                            "{}_{}_{}_{}",
+                            project_name.clone(),
+                            x,
+                            y,
+                            z
+                        ));
+
+                        maps.insert(UVec2::new(x, y).into(), map_data);
+                    }
+                }
+            },
+            true => {
+                let mut map_data = MapData::default();
+                map_data.id = CDDAIdentifier(project_name);
+                maps.insert(UVec2::new(0, 0).into(), map_data);
+            },
         }
 
         Self { maps }
@@ -249,29 +270,29 @@ impl MapDataCollection {
                         );
 
                     let predecessor_map_data = match &predecessor
-                        .mapgen
-                        .clone()
-                        .unwrap_or_default()
-                        .first_mut()
-                    {
-                        None => {
-                            // This terrain is defined in a json file, so we can just search for it
-                            json_data.map_data.get_mut(predecessor_id).expect(
-                                format!(
-                                    "Mapdata for Predecessor {} to exist",
-                                    predecessor_id
-                                )
-                                    .as_str(),
-                            )
-                        }
-                        Some(omtm) => json_data.map_data.get_mut(&omtm.builtin).expect(
+                    .mapgen
+                    .clone()
+                    .unwrap_or_default()
+                    .first_mut()
+                {
+                    None => {
+                        // This terrain is defined in a json file, so we can just search for it
+                        json_data.map_data.get_mut(predecessor_id).expect(
                             format!(
-                                "Hardcoded Map data for predecessor {} to exist",
-                                omtm.builtin
+                                "Mapdata for Predecessor {} to exist",
+                                predecessor_id
                             )
                                 .as_str(),
-                        ),
-                    };
+                        )
+                    }
+                    Some(omtm) => json_data.map_data.get_mut(&omtm.builtin).expect(
+                        format!(
+                            "Hardcoded Map data for predecessor {} to exist",
+                            omtm.builtin
+                        )
+                            .as_str(),
+                    ),
+                };
 
                     predecessor_map_data
                         .calculate_parameters(&json_data.palettes)

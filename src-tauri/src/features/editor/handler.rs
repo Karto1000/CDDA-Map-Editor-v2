@@ -5,8 +5,10 @@ use crate::features::program_data::{
     LoadedProjects, MapDataCollection, ProgramData, Project, ProjectType,
     SavedProject, Tab, TabType,
 };
-use crate::util::{get_size, Save, SaveError};
-use crate::{events, impl_serialize_for_error};
+use crate::util::{
+    get_current_project_mut, get_size, GetCurrentProjectError, Save, SaveError,
+};
+use crate::{events, impl_serialize_for_error, InvalidProjectType};
 use glam::{IVec2, UVec2};
 use log::info;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -44,7 +46,8 @@ pub async fn new_map_editor(
 
     let mut map_collection = HashMap::new();
     for z in z_levels.value().0..=z_levels.value().1 {
-        let collection = MapDataCollection::new(map_size.clone());
+        let collection =
+            MapDataCollection::new(map_size.clone(), project_name.clone(), z);
         map_collection.insert(z, collection);
     }
 
@@ -76,6 +79,42 @@ pub async fn new_map_editor(
             tab_type: TabType::MapEditor,
         },
     )?;
+
+    Ok(())
+}
+
+#[derive(Error, Debug)]
+pub enum AddPaletteError {
+    #[error(transparent)]
+    SaveError(#[from] SaveError),
+
+    #[error(transparent)]
+    GetCurrentProjectError(#[from] GetCurrentProjectError),
+
+    #[error(transparent)]
+    InvalidProjectType(#[from] InvalidProjectType),
+}
+
+impl_serialize_for_error!(AddPaletteError);
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn add_palette(
+    palette_name: String,
+    program_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
+) -> Result<(), AddPaletteError> {
+    info!("Trying to add palette {} to project", palette_name);
+
+    let program_data_lock = program_data.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+
+    let mut loaded_project =
+        get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
+
+    let mut maps = match &mut loaded_project.project_type {
+        ProjectType::MapEditor(me) => &mut me.maps,
+        ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
+    };
 
     Ok(())
 }

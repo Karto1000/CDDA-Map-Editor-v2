@@ -15,6 +15,7 @@ import {
 import {ThreeConfig} from "../types/three.js";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {getColorFromTheme, Theme} from "../../../shared/hooks/useTheme.js";
+import {FontLoader} from "three/examples/jsm/loaders/FontLoader.js";
 
 const MIN_ZOOM: number = 500;
 const MAX_ZOOM: number = 0.05;
@@ -81,7 +82,8 @@ export function useThreeSetup(
         raycaster: undefined,
         renderer: undefined,
         scene: undefined,
-        stats: undefined
+        stats: undefined,
+        font: undefined
     })
 
     function onResize() {
@@ -151,6 +153,11 @@ export function useThreeSetup(
         threeConfigRef.current.renderer = renderer
         threeConfigRef.current.controls = controls
         threeConfigRef.current.ambientLight = ambientLight
+
+        const fontLoader = new FontLoader()
+        fontLoader.load("fonts/Unifont_Medium.json", font => {
+            threeConfigRef.current.font = font
+        })
     }, []);
 
     useEffect(() => {

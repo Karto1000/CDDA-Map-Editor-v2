@@ -162,7 +162,8 @@ export enum TauriEvent {
     OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window",
     OPEN_PALETTES_WINDOW = "open-palettes-window",
     KEYBIND_PRESSED = "keybind-pressed",
-    CHANGE_EDITOR_MODE = "change-editor-mode"
+    CHANGE_EDITOR_MODE = "change-editor-mode",
+    MAPGEN_CHUNK_SELECTED = "mapgen-chunk-selected"
 }
 
 export enum ToastType {
@@ -204,5 +205,6 @@ export interface TauriEventMap {
     [TauriEvent.OPEN_MAPGEN_INFO_WINDOW]: {},
     [TauriEvent.OPEN_PALETTES_WINDOW]: {},
     [TauriEvent.KEYBIND_PRESSED]: KeybindAction
-    [TauriEvent.CHANGE_EDITOR_MODE]: MapEditorMode
+    [TauriEvent.CHANGE_EDITOR_MODE]: MapEditorMode,
+    [TauriEvent.MAPGEN_CHUNK_SELECTED]: Vector3
 }

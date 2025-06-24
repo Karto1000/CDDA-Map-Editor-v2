@@ -27,7 +27,6 @@ use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
 use crate::features::tileset::Tilesheet;
 use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
 use crate::features::viewer::{LiveViewerData, MapViewer};
-use crate::impl_serialize_for_error;
 use crate::util;
 use crate::util::GetCurrentProjectError;
 use crate::util::IVec3JsonKey;
@@ -37,6 +36,7 @@ use crate::util::{get_current_project, get_json_data, get_json_data_mut};
 use crate::util::{get_current_project_mut, get_size, Load};
 use crate::util::{CDDADataError, SaveError};
 use crate::{events, load_projects};
+use crate::{impl_serialize_for_error, InvalidProjectType};
 use cdda_lib::types::{CDDAIdentifier, ParameterIdentifier};
 use cdda_lib::DEFAULT_EMPTY_CHAR_ROW;
 use cdda_lib::DEFAULT_MAP_HEIGHT;
@@ -351,8 +351,8 @@ pub async fn get_sprites(
 
 #[derive(Debug, Error)]
 pub enum ReloadProjectError {
-    #[error("Project is not a live viewer")]
-    NotALiveViewer,
+    #[error(transparent)]
+    InvalidProjectType(#[from] InvalidProjectType),
 
     #[error(transparent)]
     CDDADataError(#[from] CDDADataError),
@@ -388,7 +388,7 @@ pub async fn reload_project(
 
     match &mut project.project_type {
         ProjectType::MapEditor(_) => {
-            return Err(ReloadProjectError::NotALiveViewer);
+            return Err(InvalidProjectType::NotAMapViewer)?;
         },
         ProjectType::MapViewer(map_viewer) => {
             let mut map_data_collection =

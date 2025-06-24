@@ -1,23 +1,5 @@
 import { MapData } from "./map_data.ts";
 
-export enum ProjectTypeKind {
-    MapEditor = "MapEditor",
-    LiveViewer = "LiveViewer"
-}
-
-type ProjectType =
-    | { type: ProjectTypeKind.MapEditor; data: ProjectSaveState }
-    | { type: ProjectTypeKind.LiveViewer; data: LiveViewerData };
-
-interface LiveViewerData {
-    path: string;
-    om_terrain: string;
-}
-
-type ProjectSaveState =
-    | { state: "Unsaved" }
-    | { state: "Saved"; path: string };
-
 export enum KeybindAction {
     NewProject = "NewProject",
     OpenProject = "OpenProject",

@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from "react";
+import React, {useRef} from "react";
 import GenericWindow from "../generic-window.js";
 import "./main.scss"
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
@@ -12,12 +12,15 @@ import {
 } from "../../tauri/types/map_data.js";
 import {openWindow, WindowLabel} from "../lib.js";
 import {Theme} from "../../shared/hooks/useTheme.js";
-import {listen, UnlistenFn} from "@tauri-apps/api/event";
+import {UnlistenFn} from "@tauri-apps/api/event";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
-import {__TAB_CHANGED} from "../../tauri/events/types.js";
 import {MapEditorData} from "../../tauri/types/editor.js";
 import {useForeignOpenedTab} from "../useForeignOpenedTab.js";
+import {Vector3} from "three";
+import {useInitialData} from "../useInitialData.js";
+import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
+import {TauriEvent} from "../../tauri/events/types.js";
 
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
@@ -25,6 +28,15 @@ function Main() {
     const addPaletteWindowCloseRef = useRef<UnlistenFn>(null)
     const openedTab = useForeignOpenedTab()
     const project = useCurrentProject<MapEditorData>(openedTab)
+    const [chunkPosition, setChunkPosition] = useInitialData<Vector3>()
+
+    useTauriEvent(
+        TauriEvent.MAPGEN_CHUNK_SELECTED,
+        chunk => {
+            setChunkPosition(chunk)
+        },
+        [chunkPosition]
+    )
 
     function getStringFromMapGenValue(palette: MapGenValue): string {
         if (typeof palette === "string") return palette
@@ -59,14 +71,13 @@ function Main() {
 
     async function onAddPalette() {
         // TODO: Theme
-        const [window, close] = await openWindow(WindowLabel.AddPalette, Theme.Dark, {}, null, WindowLabel.Palettes)
-
-        addPaletteWindowRef.current = window
-        addPaletteWindowCloseRef.current = close
+        addPaletteWindowCloseRef.current = (await openWindow(WindowLabel.AddPalette, Theme.Dark, addPaletteWindowRef, {}, null, WindowLabel.Palettes))[1]
     }
 
+    if (!chunkPosition) return <></>
+
     return (
-        <GenericWindow title={"Palettes"}>
+        <GenericWindow title={`Palettes for ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`}>
             <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
                      noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
             <p>In this window you can see a list of palettes defined in the current map</p>
@@ -77,7 +88,12 @@ function Main() {
                     <button onClick={onAddPalette}>Add Palette</button>
 
                     {
-                        project.project_type.mapEditor.maps[0].maps["0,0"].palettes.map(getPaletteVisualization)
+                        project.project_type
+                            .mapEditor
+                            .maps[chunkPosition.z]
+                            .maps[`${chunkPosition.x},${chunkPosition.y}`]
+                            .palettes
+                            .map(getPaletteVisualization)
                     }
                 </div>
             }

@@ -269,6 +269,8 @@ pub enum MapDataRotation {
 
 #[derive(Debug, Clone)]
 pub struct MapData {
+    pub id: CDDAIdentifier,
+
     pub cells: IndexMap<UVec2JsonKey, Cell>,
     pub fill: Option<DistributionInner>,
     pub map_size: UVec2,
@@ -293,6 +295,7 @@ impl<'de> Deserialize<'de> for MapData {
     {
         #[derive(Deserialize)]
         struct MapDataHelper {
+            id: CDDAIdentifier,
             cells: IndexMap<UVec2JsonKey, Cell>,
             fill: Option<DistributionInner>,
             map_size: UVec2,
@@ -330,6 +333,7 @@ impl<'de> Deserialize<'de> for MapData {
         }
 
         Ok(MapData {
+            id: helper.id,
             cells: helper.cells,
             fill: helper.fill,
             map_size: helper.map_size,
@@ -361,6 +365,7 @@ impl Serialize for MapData {
         state.serialize_field("parameters", &self.parameters)?;
         state.serialize_field("palettes", &self.palettes)?;
         state.serialize_field("flags", &self.flags)?;
+        state.serialize_field("id", &self.id)?;
 
         let serialized_properties: HashMap<_, HashMap<_, _>> = self
             .properties
@@ -416,6 +421,7 @@ impl Default for MapData {
         }
 
         Self {
+            id: CDDAIdentifier::from("map_data_default"),
             cells,
             fill,
             map_size: DEFAULT_MAP_DATA_SIZE,

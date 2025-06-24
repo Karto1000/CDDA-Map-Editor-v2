@@ -2,6 +2,7 @@ import {AmbientLight, GridHelper, OrthographicCamera, Raycaster, Scene, WebGLRen
 import {ArcballControls} from "three/examples/jsm/controls/ArcballControls.js";
 import {MutableRefObject, RefObject} from "react";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
+import {Font} from "three/examples/jsm/loaders/FontLoader.js";
 
 export type Canvas = {
     canvasRef: RefObject<HTMLCanvasElement>,
@@ -17,4 +18,5 @@ export type ThreeConfig = {
     controls: OrbitControls
     ambientLight: AmbientLight
     gridHelper: GridHelper
+    font: Font
 }

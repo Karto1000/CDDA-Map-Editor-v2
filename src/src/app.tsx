@@ -46,7 +46,8 @@ function App() {
         newMapWindowRef,
         aboutWindowRef,
         mapInfoWindowRef,
-        palettesWindowRef
+        palettesWindowRef,
+        welcomeWindowRef
     } = useWindows()
 
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
@@ -68,7 +69,10 @@ function App() {
 
         let unlisten: UnlistenFn;
         if (!editorData.config.cdda_path) {
-            unlisten = openWindow(WindowLabel.Welcome, theme, {defaultWidth: 760, defaultHeight: 600})[1]
+            unlisten = openWindow(WindowLabel.Welcome, theme, welcomeWindowRef, {
+                defaultWidth: 760,
+                defaultHeight: 600
+            })[1]
             return
         }
 

@@ -63,6 +63,7 @@ export type MapGenValue =
 
 
 export type MapData = {
+    id: CDDAIdentifier
     palettes: MapGenValue[]
 }
 

@@ -13,7 +13,6 @@ export type GenericWindowProps = {
     onCloseClicked?: () => Promise<void>
 }
 
-export const WINDOW_CLOSED = "window-closed"
 export const THEME_CHANGED = "theme-changed"
 
 export default function GenericWindow(
@@ -43,11 +42,7 @@ export default function GenericWindow(
 
     async function onCloseClick() {
         await onCloseClicked();
-
         const window = getCurrentWindow();
-
-        await emitTo(window.label, WINDOW_CLOSED)
-
         await window.close();
     }
 

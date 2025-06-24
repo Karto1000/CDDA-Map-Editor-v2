@@ -45,6 +45,7 @@ use std::sync::Arc;
 use tauri::async_runtime::{block_on, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
+use thiserror::Error;
 use tokio::task::JoinHandle;
 
 lazy_static! {
@@ -69,6 +70,17 @@ lazy_static! {
             json_data
         });
 }
+
+#[derive(Debug, Error)]
+pub enum InvalidProjectType {
+    #[error("Project must be a Map viewer")]
+    NotAMapViewer,
+
+    #[error("Project must be a Map editor")]
+    NotAMapEditor,
+}
+
+impl_serialize_for_error!(InvalidProjectType);
 
 #[derive(Debug, Clone, Serialize)]
 pub struct AboutInfo {

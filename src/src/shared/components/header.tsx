@@ -82,21 +82,21 @@ export function Header(props: Props) {
 
     // This component is never unmounted, so we don't have to call unlisten
     async function onAboutClicked() {
-        props.aboutWindowRef.current = await openWindow(WindowLabel.About, theme)[0]
+        await openWindow(WindowLabel.About, theme, props.aboutWindowRef)
     }
 
     async function onNewClicked() {
-        props.newMapWindowRef.current = await openWindow(WindowLabel.NewMap, theme, {
+        await openWindow(WindowLabel.NewMap, theme, props.newMapWindowRef, {
             defaultWidth: 800,
             defaultHeight: 500
-        })[0]
+        })
     }
 
     async function onImport() {
-        props.importMapWindowRef.current = await openWindow(WindowLabel.ImportMap, theme, {
+        await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef, {
             defaultWidth: 800,
             defaultHeight: 500
-        })[0]
+        })
     }
 
     function onOpen() {
@@ -124,7 +124,7 @@ export function Header(props: Props) {
     }
 
     async function onSettingsOpen() {
-        props.settingsWindowRef.current = (await openWindow(WindowLabel.Settings, theme, {defaultWidth: 600}))[0]
+        await openWindow(WindowLabel.Settings, theme, props.settingsWindowRef, {defaultWidth: 600})
     }
 
     async function onTabClose(name: string) {

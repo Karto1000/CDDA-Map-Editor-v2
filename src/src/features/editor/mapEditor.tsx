@@ -45,13 +45,16 @@ export function MapEditor(props: MapEditorProps) {
     const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
     const palettesUnlistenFn = useRef<UnlistenFn>(null)
     const [mapEditorMode, setMapEditorMode] = useState<MapEditorMode>(MapEditorMode.Draw)
+    const zLevel = useRef<number>(0)
 
     useChunkSelect(
         props.threeConfig,
         props.spritesheetConfig,
         props.canvas,
         mapEditorMode,
-        project
+        project,
+        zLevel,
+        props.palettesWindowRef
     )
 
     useKeybindings(
@@ -107,10 +110,9 @@ export function MapEditor(props: MapEditorProps) {
     useTauriEvent(
         TauriEvent.OPEN_MAPGEN_INFO_WINDOW,
         _ => {
-            openWindow(WindowLabel.MapInfo, theme.theme, {}).then(value => {
+            openWindow(WindowLabel.MapInfo, theme.theme, props.mapInfoWindowRef, {}).then(value => {
                 const [window, close] = value
                 mapInfoUnlistenFn.current = close
-                props.mapInfoWindowRef.current = window
             })
         }
     )
@@ -118,10 +120,9 @@ export function MapEditor(props: MapEditorProps) {
     useTauriEvent(
         TauriEvent.OPEN_PALETTES_WINDOW,
         _ => {
-            openWindow(WindowLabel.Palettes, theme.theme, {}).then(value => {
+            openWindow(WindowLabel.Palettes, theme.theme, props.palettesWindowRef, {}).then(value => {
                 const [window, close] = value
                 palettesUnlistenFn.current = close
-                props.palettesWindowRef.current = window
             })
         }
     )

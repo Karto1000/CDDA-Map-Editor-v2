@@ -1,6 +1,8 @@
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::item::CDDAItemGroupInPlace;
-use crate::data::map_data::IntoMapDataCollectionError::MissingNestedOmTerrain;
+use crate::data::map_data::IntoMapDataCollectionError::{
+    MissingNestedOmTerrain, MissingOmTerrain,
+};
 use crate::data::palettes::Parameter;
 use crate::features::map::map_properties::ComputersProperty;
 use crate::features::map::map_properties::CorpsesProperty;
@@ -962,6 +964,11 @@ impl CDDAMapDataIntermediate {
 
 #[derive(Debug, Error)]
 pub enum IntoMapDataCollectionError {
+    #[error(
+        "Missing Overmap Terrain identifier in the form of either om_terrain, nested_mapgen_id or update_mapgen_id"
+    )]
+    MissingOmTerrain,
+
     #[error("Nested om Terrain is missing identifier")]
     MissingNestedOmTerrain,
 }
@@ -982,6 +989,20 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
 
                     for map_row_index in 0..num_rows {
                         for map_column_index in 0..num_cols {
+                            let mut nested_terrain = n
+                                .get(map_row_index)
+                                .ok_or(MissingNestedOmTerrain)?
+                                .get(map_column_index)
+                                .ok_or(MissingNestedOmTerrain)?
+                                .clone();
+
+                            nested_terrain.push_str(
+                                format!("_{}", map_row_index).as_str(),
+                            );
+                            nested_terrain.push_str(
+                                format!("_{}", map_column_index).as_str(),
+                            );
+
                             let mut nested_cells: IndexMap<UVec2JsonKey, Cell> =
                                 IndexMap::new();
 
@@ -1046,6 +1067,7 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                             let properties = self.get_properties();
                             let place = self.get_place(map_coordinates.into());
 
+                            map_data.id = CDDAIdentifier(nested_terrain);
                             map_data.cells = nested_cells;
                             map_data.properties = properties;
                             map_data.place = place;
@@ -1106,6 +1128,26 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                     Cell { character: char },
                 );
             }
+        }
+
+        if let Some(update_mapgen_id) = self.update_mapgen_id {
+            map_data.id = update_mapgen_id.into();
+        } else if let Some(nested_mapgen_id) = self.nested_mapgen_id {
+            map_data.id = nested_mapgen_id.into();
+        } else if let Some(om_terrain) = self.om_terrain {
+            match om_terrain {
+                OmTerrain::Single(s) => {
+                    map_data.id = CDDAIdentifier(s);
+                },
+                OmTerrain::Duplicate(mut d) => {
+                    map_data.id =
+                        CDDAIdentifier(d.pop().ok_or(MissingOmTerrain)?);
+                },
+                // This shouldn't be possible
+                OmTerrain::Nested(_) => unreachable!(),
+            }
+        } else {
+            return Err(MissingOmTerrain);
         }
 
         map_data.cells = cells;

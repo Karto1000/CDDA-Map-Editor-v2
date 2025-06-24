@@ -1,8 +1,9 @@
-import React, {RefObject, useContext} from "react"
+import React, {RefObject, useContext, useRef} from "react"
 import "./noTabScreen.scss"
 import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {ThemeContext} from "../../app.js";
+import {UnlistenFn} from "@tauri-apps/api/event";
 
 type Props = {
     importMapWindowRef: RefObject<WebviewWindow>
@@ -12,16 +13,19 @@ type Props = {
 export function NoTabScreen(props: Props) {
     const {theme} = useContext(ThemeContext)
 
+    const importUnlistenFn = useRef<UnlistenFn>(null)
+    const newUnlistenFn = useRef<UnlistenFn>(null)
+
     function onOpenClicked() {
         alert("TBD")
     }
 
-    function onCreateClicked() {
-        props.newMapWindowRef.current = openWindow(WindowLabel.NewMap, theme)[0]
+    async function onCreateClicked() {
+        newUnlistenFn.current = (await openWindow(WindowLabel.NewMap, theme, props.newMapWindowRef))[1]
     }
 
-    function onImportClicked() {
-        props.importMapWindowRef.current = openWindow(WindowLabel.ImportMap, theme)[0]
+    async function onImportClicked() {
+         importUnlistenFn.current = (await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef))[1]
     }
 
     return (
