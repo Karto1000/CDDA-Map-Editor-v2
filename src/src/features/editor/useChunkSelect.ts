@@ -145,6 +145,13 @@ export function useChunkSelect(
     }, [mapEditorMode, worldMousePosition, project]);
 
     useEffect(() => {
+        return () => {
+            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
+            palettesUnlistenFn.current = null
+        }
+    }, [project, theme]);
+
+    useEffect(() => {
         switch (mapEditorMode) {
             case MapEditorMode.ChunkSelect:
                 const tileInfo = getTileInfo(spritesheetConfig.current)
@@ -190,9 +197,6 @@ export function useChunkSelect(
 
             threeConfig.current.scene.remove(chunkSelectOuterMeshRef.current)
             chunkSelectOuterMeshRef.current = null
-
-            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
-            palettesUnlistenFn.current = null
         }
     }, [mapEditorMode, theme, project]);
 }
