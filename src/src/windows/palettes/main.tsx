@@ -74,10 +74,16 @@ function Main() {
         addPaletteWindowCloseRef.current = (await openWindow(WindowLabel.AddPalette, Theme.Dark, addPaletteWindowRef, {}, null, WindowLabel.Palettes))[1]
     }
 
-    if (!chunkPosition) return <></>
+    if (!chunkPosition || !project) return <></>
+
+    const projectMap = project.project_type
+        .mapEditor
+        .maps[chunkPosition.z]
+        .maps[`${chunkPosition.x},${chunkPosition.y}`]
 
     return (
-        <GenericWindow title={`Palettes for ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`}>
+        <GenericWindow
+            title={`Palettes for ${projectMap.id} at ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`}>
             <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
                      noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
             <p>In this window you can see a list of palettes defined in the current map</p>
@@ -88,10 +94,7 @@ function Main() {
                     <button onClick={onAddPalette}>Add Palette</button>
 
                     {
-                        project.project_type
-                            .mapEditor
-                            .maps[chunkPosition.z]
-                            .maps[`${chunkPosition.x},${chunkPosition.y}`]
+                        projectMap
                             .palettes
                             .map(getPaletteVisualization)
                     }

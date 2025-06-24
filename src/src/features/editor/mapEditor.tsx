@@ -114,7 +114,8 @@ export function MapEditor(props: MapEditorProps) {
                 const [window, close] = value
                 mapInfoUnlistenFn.current = close
             })
-        }
+        },
+        []
     )
 
     useTauriEvent(
@@ -124,7 +125,8 @@ export function MapEditor(props: MapEditorProps) {
                 const [window, close] = value
                 palettesUnlistenFn.current = close
             })
-        }
+        },
+        []
     )
 
     useEffect(() => {
@@ -189,6 +191,9 @@ export function MapEditor(props: MapEditorProps) {
         return () => {
             cancelAnimationFrame(handler)
 
+            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
+            props.palettesWindowRef.current = null
+
             props.threeConfig.current.scene.remove(grid.current)
             props.tilesheets.current.clearAll()
         }
@@ -196,6 +201,9 @@ export function MapEditor(props: MapEditorProps) {
 
     useEffect(() => {
         return () => {
+            props.mapInfoWindowRef.current = null
+            props.palettesWindowRef.current = null
+
             if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
             if (palettesUnlistenFn.current) palettesUnlistenFn.current()
         }

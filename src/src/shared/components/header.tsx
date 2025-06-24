@@ -142,7 +142,7 @@ export function Header(props: Props) {
     }
 
     async function onTabCreate() {
-        props.importMapWindowRef.current = await openWindow(WindowLabel.ImportMap, theme)[1]
+        await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef)
     }
 
     async function onTabOpen(name: string) {
@@ -561,9 +561,9 @@ export function Header(props: Props) {
                                                 }
                                             },
                                             {
-                                                name: "Palettes",
+                                                name: "Global Palettes",
                                                 onClick: async (ref) => {
-                                                    await emit(TauriEvent.OPEN_PALETTES_WINDOW)
+                                                    alert("Not Implemented")
                                                     ref.current.closeMenu()
                                                 }
                                             }
