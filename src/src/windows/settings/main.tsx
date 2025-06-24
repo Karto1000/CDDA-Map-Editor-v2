@@ -4,14 +4,14 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./main.scss"
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {getKeybindingText, ProgramData} from "../../tauri/types/editor.js";
-import {BackendResponseType, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
+import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 import {open} from "@tauri-apps/plugin-dialog";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 import {DEFAULT_TILESET} from "../../features/sprites/tilesheets.js";
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
-import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
+import Icon, {IconName} from "../../shared/components/icon.tsx";
 
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
@@ -68,6 +68,21 @@ function Main() {
         setSelectedTileset(newTileset)
     }
 
+    async function pickCDDADirectory(path: string) {
+        await tauriBridge.invoke(
+            TauriCommand.CDDA_INSTALLATION_DIRECTORY_PICKED,
+            {
+                path
+            }
+        )
+
+        setCDDADirectoryPath(path)
+
+        await tauriBridge.invoke(TauriCommand.SAVE_EDITOR_DATA, {})
+
+        await getAndSetEditorData()
+    }
+
     async function onCDDAInputChange() {
         const path = await open({
             multiple: false,
@@ -86,18 +101,11 @@ function Main() {
             }
         )
 
-        await tauriBridge.invoke(
-            TauriCommand.CDDA_INSTALLATION_DIRECTORY_PICKED,
-            {
-                path
-            }
-        )
+        await pickCDDADirectory(path)
+    }
 
-        setCDDADirectoryPath(path)
-
-        await tauriBridge.invoke(TauriCommand.SAVE_EDITOR_DATA, {})
-
-        await getAndSetEditorData()
+    async function onReloadClick() {
+        await pickCDDADirectory(cddaDirectoryPath)
     }
 
     return (
@@ -112,6 +120,17 @@ function Main() {
                             name: "General",
                             content: <div className={"general-settings"}>
                                 <div className={"form-element"}>
+                                    {
+                                        cddaDirectoryPath &&
+                                        <button className={"reload-button"}
+                                                data-tooltip-id={"info-tooltip"}
+                                                data-tooltip-content={"Reload the game data"}
+                                                onMouseMove={handleMouseMove}
+                                                onClick={onReloadClick}
+                                        >
+                                            <Icon name={IconName.ReloadMedium}/>
+                                        </button>
+                                    }
                                     <label
                                         className={clsx("file-input", !cddaDirectoryPath && "placeholder")}
                                         data-tooltip-id={"info-tooltip"}
@@ -137,36 +156,42 @@ function Main() {
                         },
                         {
                             name: "Graphics",
-                            content: <div className={"form-element"}>
-                                <select
-                                    value={selectedTilset}
-                                    onChange={onTilesetSelect}
-                                    ref={selectRef}
-                                    data-tooltip-id={"info-tooltip"}
-                                    data-tooltip-html={"The currently selected tileset. If you don't select a tileset, <br/> the tiles will be displayed using a fallback ascii tileset."}
-                                    onMouseMove={handleMouseMove}
-                                    defaultValue={"None"}
-                                >
-                                    <option>None</option>
-                                    {
-                                        editorData?.available_tilesets.map(t => <option key={t}>{t}</option>)
-                                    }
-                                </select>
-                                <label>Tileset</label>
-                            </div>
+                            content:
+                                <div className={"graphics-settings"}>
+                                    <div className={"form-element"}>
+                                        <select
+                                            value={selectedTilset}
+                                            onChange={onTilesetSelect}
+                                            ref={selectRef}
+                                            data-tooltip-id={"info-tooltip"}
+                                            data-tooltip-html={"The currently selected tileset. If you don't select a tileset, <br/> the tiles will be displayed using a fallback ascii tileset."}
+                                            onMouseMove={handleMouseMove}
+                                            defaultValue={"None"}
+                                        >
+                                            <option>None</option>
+                                            {
+                                                editorData?.available_tilesets.map(t => <option key={t}>{t}</option>)
+                                            }
+                                        </select>
+                                        <label>Tileset</label>
+                                    </div>
+                                </div>
                         },
                         {
                             name: "Keybinds",
-                            content: <div className={"keybindings-container"}>
-                                {
-                                    editorData?.config.keybinds.map(kb => (
-                                        <div className={"keybinding"}>
-                                            <span>{getKeybindingText(kb)}</span>
-                                            <span>{kb.action}</span>
-                                        </div>
-                                    ))
-                                }
-                            </div>
+                            content:
+                                <div className={"keybinds-settings"}>
+                                    <div className={"keybindings-container"}>
+                                        {
+                                            editorData?.config.keybinds.map(kb => (
+                                                <div className={"keybinding"}>
+                                                    <span>{getKeybindingText(kb)}</span>
+                                                    <span>{kb.action}</span>
+                                                </div>
+                                            ))
+                                        }
+                                    </div>
+                                </div>
                         }
                     ]
                 }/>
