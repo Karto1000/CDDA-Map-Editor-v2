@@ -11,7 +11,8 @@ use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project,
     get_current_project_data, get_editor_data, open_project,
-    open_recent_project, save_program_data, tileset_picked,
+    open_recent_project, remove_recent_project, save_program_data,
+    tileset_picked,
 };
 use crate::features::program_data::io::ProjectLoader;
 use crate::features::program_data::{
@@ -314,7 +315,7 @@ pub fn run() -> () {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(LevelFilter::Info)
+                .level(LevelFilter::Warn)
                 .targets(vec![Target::new(TargetKind::Stdout)])
                 .build(),
         )
@@ -371,7 +372,8 @@ pub fn run() -> () {
             new_map_editor,
             get_palettes,
             modify_palette,
-            update_cdda_data_at
+            update_cdda_data_at,
+            remove_recent_project
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

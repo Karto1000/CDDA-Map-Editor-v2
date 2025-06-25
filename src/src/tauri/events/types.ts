@@ -60,6 +60,7 @@ export enum TauriCommand {
     NEW_NESTED_MAPGEN_VIEWER = "new_nested_mapgen_viewer",
     GET_CALCULATED_PARAMETERS = "get_calculated_parameters",
     OPEN_RECENT_PROJECT = "open_recent_project",
+    REMOVE_RECENT_PROJECT = "remove_recent_project",
     ABOUT = "about",
     CLOSE_APP = "close_app",
     NEW_MAP_EDITOR = "new_map_editor",
@@ -143,6 +144,9 @@ export interface TauriCommandMap {
     [TauriCommand.OPEN_RECENT_PROJECT]: {
         name: string
     },
+    [TauriCommand.REMOVE_RECENT_PROJECT]: {
+        name: string,
+    }
     [TauriCommand.ABOUT]: {};
     [TauriCommand.CLOSE_APP]: {};
     [TauriCommand.NEW_MAP_EDITOR]: {

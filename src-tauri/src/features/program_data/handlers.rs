@@ -14,9 +14,9 @@ use crate::features::toast::ToastMessage;
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::util::{
     get_current_project, get_json_data, CDDADataError, GetCurrentProjectError, Load,
-    Save,
+    Save, SaveError,
 };
-use crate::{events, ProjectFileWatcher};
+use crate::{events, impl_serialize_for_error, ProjectFileWatcher};
 use anyhow::Error;
 use cdda_lib::types::MapGenValue;
 use log::{error, info, warn};
@@ -226,6 +226,39 @@ pub async fn close_project(
     Ok(())
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum RemoveRecentProjectError {
+    #[error(transparent)]
+    CDDADataError(#[from] CDDADataError),
+
+    #[error(transparent)]
+    SaveError(#[from] SaveError),
+}
+
+impl_serialize_for_error!(RemoveRecentProjectError);
+
+#[tauri::command]
+pub async fn remove_recent_project(
+    name: ProjectName,
+    app: AppHandle,
+    program_data: State<'_, Mutex<ProgramData>>,
+) -> Result<(), RemoveRecentProjectError> {
+    let mut program_data_lock = program_data.lock().await;
+
+    program_data_lock.recent_projects.remove(&name);
+
+    app.emit(events::EDITOR_DATA_CHANGED, program_data_lock.clone())
+        .unwrap();
+
+    let saver = ProgramDataSaver {
+        path: program_data_lock.config.config_path.clone(),
+    };
+
+    saver.save(&program_data_lock).await?;
+
+    Ok(())
+}
+
 #[derive(Debug, thiserror::Error, Serialize)]
 pub enum OpenProjectError {
     #[error("No project with name `{0}` was found in recent projects")]
@@ -242,16 +275,16 @@ pub enum OpenProjectError {
 pub async fn open_recent_project(
     name: ProjectName,
     app: AppHandle,
-    editor_data: State<'_, Mutex<ProgramData>>,
+    program_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), OpenProjectError> {
-    let mut editor_data_lock = editor_data.lock().await;
+    let mut program_data_lock = program_data.lock().await;
     let json_data_lock = json_data.lock().await;
     let json_data = get_json_data(&json_data_lock)?;
     let mut loaded_projects_lock = loaded_projects.lock().await;
 
-    let saved_project_path = editor_data_lock
+    let saved_project_path = program_data_lock
         .recent_projects
         .iter()
         .find(|(saved_name, _)| *saved_name == &name)
@@ -301,19 +334,19 @@ pub async fn open_recent_project(
         },
     }
 
-    editor_data_lock
+    program_data_lock
         .openable_projects
         .insert(name, saved_project_path.clone());
 
     loaded_projects_lock.insert(project.name.clone(), project);
 
     let saver = ProgramDataSaver {
-        path: editor_data_lock.config.config_path.clone(),
+        path: program_data_lock.config.config_path.clone(),
     };
 
-    saver.save(&editor_data_lock).await.unwrap();
+    saver.save(&program_data_lock).await.unwrap();
 
-    app.emit(events::EDITOR_DATA_CHANGED, editor_data_lock.clone())
+    app.emit(events::EDITOR_DATA_CHANGED, program_data_lock.clone())
         .unwrap();
 
     Ok(())

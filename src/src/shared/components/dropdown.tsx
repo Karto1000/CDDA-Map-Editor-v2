@@ -9,7 +9,9 @@ export type DropdownItem = {
     expandable?: boolean,
     isToggleable?: boolean,
     toggled?: boolean,
+    isDeletable?: boolean,
     onToggle?: (state: boolean) => void,
+    onDelete?: (ref: RefObject<DropdownRef>) => void,
     subGroups?: DropdownItem[][],
     onClick?: (ref: RefObject<DropdownRef>) => void,
 }
@@ -90,9 +92,8 @@ export function Dropdown(
                                          key={ii}
                                          tabIndex={ii}
                                          onMouseEnter={() => onDropdownItemMouseEnter(gi, ii, item, sub)}
-                                         onClick={() => item.onClick(ref)}
                                     >
-                                        <div className={"dropdown-item-left"}>
+                                        <div className={"dropdown-item-left"} onClick={() => item.onClick(ref)}>
                                             {item.isToggleable ?
                                                 <div
                                                     className={`dropdown-item-toggle-button ${item.toggled ? "toggled" : "not-toggled"}`}/>
@@ -115,6 +116,12 @@ export function Dropdown(
                                         {
                                             item.shortcut &&
                                             <span className={"shortcut"}>{item.shortcut}</span>
+                                        }
+                                        {
+                                            item.isDeletable &&
+                                            <button className={"delete-button"} onClick={() => item.onDelete(ref)}>
+                                                <Icon name={IconName.CloseSmall} width={8} height={8}/>
+                                            </button>
                                         }
                                         {subGroupOpenIndex &&
                                             item.subGroups &&

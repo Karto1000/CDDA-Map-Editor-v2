@@ -168,6 +168,10 @@ export function Header(props: Props) {
         await tauriBridge.invoke(TauriCommand.OPEN_RECENT_PROJECT, {name: name})
     }
 
+    async function onRecentProjectDelete(name: string) {
+        await tauriBridge.invoke(TauriCommand.REMOVE_RECENT_PROJECT, {name: name})
+    }
+
     async function onWindowClose() {
         const windows = await getAllWindows()
         // We only want to close the other windows.
@@ -311,6 +315,11 @@ export function Header(props: Props) {
                                             Object.keys(editorData.recent_projects).map(name => {
                                                 return {
                                                     name: name,
+                                                    isDeletable: true,
+                                                    onDelete: async (ref) => {
+                                                        ref.current.closeMenu()
+                                                        await onRecentProjectDelete(name)
+                                                    },
                                                     onClick: async (ref) => {
                                                         ref.current.closeMenu()
                                                         await onRecentProjectOpen(name)

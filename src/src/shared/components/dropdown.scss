@@ -17,12 +17,20 @@
 
       .dropdown-items {
         .dropdown-item {
-          &:hover {
+          &:has(.dropdown-item-left:hover) {
             background-color: theme-var("selected");
             color: theme-var("darker");
 
             .shortcut {
               color: theme-var("darker");
+            }
+          }
+
+          .delete-button {
+            background-color: transparent;
+
+            &:hover {
+              background-color: theme-var("delete");
             }
           }
 
@@ -83,7 +91,6 @@
 
       .dropdown-item {
         display: flex;
-        justify-content: space-between;
         background-color: transparent;
         color: unset;
         border: none;
@@ -92,12 +99,22 @@
         position: relative;
         cursor: pointer;
 
+        .delete-button {
+          width: 17px;
+          height: 17px;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
         .dropdown-item-left {
           display: flex;
           flex-direction: row;
           align-items: center;
           gap: 4px;
           padding-left: 4px;
+          flex: 1;
 
           .dropdown-item-toggle-button {
             width: 10px;
