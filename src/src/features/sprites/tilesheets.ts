@@ -4,6 +4,7 @@ import {TileInfo} from "../../tauri/types/spritesheet.js";
 import {RefObject} from "react";
 import {ThreeConfig} from "../three/types/three.js";
 import {logDeletion} from "../../shared/utils/log.js";
+import {SlimTilesheets} from "./slimTilesheets.js";
 
 export const MAX_DEPTH = 999997
 export const DEFAULT_TILESET = "None"
@@ -56,6 +57,16 @@ export class Tilesheets {
         this.tilesheets = tilesheets
         this.fallback = fallback
         this.tileInfo = tileInfo
+    }
+
+    public toSlimTilesheets(): SlimTilesheets {
+        return {
+            fallback: this.fallback.toSlimTilesheet(),
+            tilesheets: Object.fromEntries(
+                Object.entries(this.tilesheets)
+                    .map(([name, tilesheet]) => [name, tilesheet.toSlimTilesheet()])
+            )
+        }
     }
 
     public updateAnimatedSprites(zLevel: number) {

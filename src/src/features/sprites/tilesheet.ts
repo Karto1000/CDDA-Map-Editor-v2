@@ -11,6 +11,7 @@ import {
     Vector3
 } from "three";
 import {TileInfo, TileNew} from "../../tauri/types/spritesheet.js";
+import {SlimTilesheet} from "./slimTilesheets.js";
 
 export type InstanceNumber = number;
 
@@ -84,6 +85,13 @@ export class Tilesheet {
             transform.updateMatrix()
 
             this.mesh.setMatrixAt(instance, transform.matrix)
+        }
+    }
+
+    public toSlimTilesheet(): SlimTilesheet {
+        return {
+            objectURL: this.objectURL,
+            range: this.range
         }
     }
 

@@ -582,6 +582,13 @@ export function Header(props: Props) {
                                                     await emit(TauriEvent.OPEN_GLOBAL_PALETTES_WINDOW)
                                                     ref.current.closeMenu()
                                                 }
+                                            },
+                                            {
+                                                name: "Global Select",
+                                                onClick: async (ref) => {
+                                                    await emit(TauriEvent.OPEN_GLOBAL_SELECT_WINDOW)
+                                                    ref.current.closeMenu()
+                                                }
                                             }
                                         ]
                                         :

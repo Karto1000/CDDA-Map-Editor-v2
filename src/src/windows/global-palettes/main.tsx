@@ -43,7 +43,6 @@ function Main() {
                 return
             }
 
-            console.log(response.data)
             setGlobalPalettes(response.data)
         })()
     }, [project]);

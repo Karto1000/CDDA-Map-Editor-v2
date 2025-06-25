@@ -70,6 +70,7 @@ export enum TauriCommand {
     MODIFY_PALETTE = "modify_palette",
     MODIFY_GLOBAL_PALETTE = "modify_global_palette",
     GET_GLOBAL_PALETTES = "get_global_palettes",
+    GET_GLOBAL_PALETTE_REPRESENTATIONS = "get_global_palette_representations",
     UPDATE_CDDA_DATA_AT = "update_cdda_data_at"
 }
 
@@ -98,6 +99,10 @@ export type AboutInfo = {
     version: string,
     contributors: string,
     description: string,
+}
+
+export type CharacterMapping = {
+    terrain: number
 }
 
 export interface TauriCommandMap {
@@ -177,7 +182,9 @@ export interface TauriCommandMap {
     [TauriCommand.MODIFY_GLOBAL_PALETTE]: {
         action: ModifyGlobalPaletteAction,
     }
-    [TauriCommand.UPDATE_CDDA_DATA_AT]: {paths: string[]}
+    [TauriCommand.UPDATE_CDDA_DATA_AT]: {paths: string[]},
+    [TauriCommand.GET_GLOBAL_PALETTES]: {};
+    [TauriCommand.GET_GLOBAL_PALETTE_REPRESENTATIONS]: {};
 }
 
 export enum TauriEvent {
@@ -202,6 +209,7 @@ export enum TauriEvent {
     TOGGLE_GRID = "toggle-grid",
     OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window",
     OPEN_GLOBAL_PALETTES_WINDOW = "open-global-palettes-window",
+    OPEN_GLOBAL_SELECT_WINDOW = "open-global-select-window",
     KEYBIND_PRESSED = "keybind-pressed",
     CHANGE_EDITOR_MODE = "change-editor-mode",
     MAPGEN_CHUNK_SELECTED = "mapgen-chunk-selected",
@@ -251,4 +259,5 @@ export interface TauriEventMap {
     [TauriEvent.MAPGEN_CHUNK_SELECTED]: Vector3,
     [TauriEvent.UPDATE_CDDA_DATA]: string[],
     [TauriEvent.CLOSE_ALL_TABS]: {},
+    [TauriEvent.OPEN_GLOBAL_SELECT_WINDOW]: {},
 }

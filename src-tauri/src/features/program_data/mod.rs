@@ -466,3 +466,14 @@ pub struct AdjacentSprites {
     pub bottom: Option<CDDAIdentifier>,
     pub left: Option<CDDAIdentifier>,
 }
+
+impl AdjacentSprites {
+    pub fn none() -> Self {
+        Self {
+            top: None,
+            right: None,
+            bottom: None,
+            left: None,
+        }
+    }
+}

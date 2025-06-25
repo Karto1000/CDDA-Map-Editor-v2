@@ -73,6 +73,8 @@ pub fn spawn_cdda_watcher(
             let paths: Vec<PathBuf> =
                 events.into_iter().flat_map(|e| e.paths.clone()).collect();
 
+            info!("Updating CDDA Data at {:?} due to file change", paths);
+
             app.emit(UPDATE_CDDA_DATA, paths).unwrap();
         }
     });

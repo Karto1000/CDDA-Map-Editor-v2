@@ -48,7 +48,8 @@ function App() {
         mapInfoWindowRef,
         chunkInfoWindowRef,
         welcomeWindowRef,
-        globalPalettesWindowRef
+        globalPalettesWindowRef,
+        globalCharacterSelectWindowRef
     } = useWindows()
 
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
@@ -118,6 +119,7 @@ function App() {
 
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor)
                 return <MapEditor
+                    globalCharacterSelectWindowRef={globalCharacterSelectWindowRef}
                     globalPalettesWindowRef={globalPalettesWindowRef}
                     chunkInfoWindowRef={chunkInfoWindowRef}
                     mapInfoWindowRef={mapInfoWindowRef}

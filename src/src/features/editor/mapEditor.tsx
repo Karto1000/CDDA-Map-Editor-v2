@@ -13,9 +13,11 @@ import {openWindow, WindowLabel} from "../../windows/lib.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
 import {emit, UnlistenFn} from "@tauri-apps/api/event";
 import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
-import {TauriEvent} from "../../tauri/events/types.js";
+import {TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {useChunkSelect} from "./useChunkSelect.js";
 import {useKeybindings} from "../../shared/hooks/useKeybindings.js";
+import {InitialGlobalPaletteData} from "../../windows/global-character-select/main.js";
+import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 
 export type MapEditorProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
@@ -26,6 +28,7 @@ export type MapEditorProps = {
     mapInfoWindowRef: RefObject<WebviewWindow>
     chunkInfoWindowRef: RefObject<WebviewWindow>
     globalPalettesWindowRef: RefObject<WebviewWindow>
+    globalCharacterSelectWindowRef: RefObject<WebviewWindow>
 }
 
 export enum MapEditorMode {
@@ -43,8 +46,11 @@ export function MapEditor(props: MapEditorProps) {
     const project = useCurrentProject<MapEditorData>(tabs.openedTab)
 
     const grid = useRef<Object3D>(null)
+
     const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
     const globalPalettesUnlistenRef = useRef<UnlistenFn>(null)
+    const globalCharacterSelectUnlistenRef = useRef<UnlistenFn>(null)
+
     const [mapEditorMode, setMapEditorMode] = useState<MapEditorMode>(MapEditorMode.Draw)
     const zLevel = useRef<number>(0)
 
@@ -65,6 +71,19 @@ export function MapEditor(props: MapEditorProps) {
     )
 
     let handler: number;
+
+    useTauriEvent(
+        TauriEvent.UPDATE_CDDA_DATA,
+        (paths) => {
+            (async () => {
+                await tauriBridge.invoke(
+                    TauriCommand.UPDATE_CDDA_DATA_AT,
+                    {paths}
+                )
+            })()
+        },
+        []
+    )
 
     useTauriEvent(
         TauriEvent.KEYBIND_PRESSED,
@@ -111,10 +130,10 @@ export function MapEditor(props: MapEditorProps) {
     useTauriEvent(
         TauriEvent.OPEN_MAPGEN_INFO_WINDOW,
         _ => {
-            openWindow(WindowLabel.MapInfo, theme.theme, props.mapInfoWindowRef, {}).then(value => {
-                const [window, close] = value
+            (async () => {
+                const [window, close] = await openWindow(WindowLabel.MapInfo, theme.theme, props.mapInfoWindowRef, {})
                 mapInfoUnlistenFn.current = close
-            })
+            })()
         },
         []
     )
@@ -122,10 +141,30 @@ export function MapEditor(props: MapEditorProps) {
     useTauriEvent(
         TauriEvent.OPEN_GLOBAL_PALETTES_WINDOW,
         _ => {
-            openWindow(WindowLabel.GlobalPalettes, theme.theme, props.globalPalettesWindowRef, {}).then(value => {
-                const [window, close] = value
+            (async () => {
+                const [window, close] = await openWindow(WindowLabel.GlobalPalettes, theme.theme, props.globalPalettesWindowRef, {})
                 globalPalettesUnlistenRef.current = close
-            })
+            })()
+        },
+        []
+    )
+
+    useTauriEvent(
+        TauriEvent.OPEN_GLOBAL_SELECT_WINDOW,
+        _ => {
+            (async () => {
+                const [window, close] = await openWindow<InitialGlobalPaletteData>(
+                    WindowLabel.GlobalCharacterSelect,
+                    theme.theme,
+                    props.globalCharacterSelectWindowRef,
+                    {},
+                    {
+                        slimTilesheets: props.tilesheets.current.toSlimTilesheets(),
+                        spritesheetConfig: props.spritesheetConfig,
+                    }
+                )
+                globalCharacterSelectUnlistenRef.current = close
+            })()
         },
         []
     )
@@ -201,9 +240,11 @@ export function MapEditor(props: MapEditorProps) {
         return () => {
             props.mapInfoWindowRef.current = null
             props.chunkInfoWindowRef.current = null
+            props.globalPalettesWindowRef.current = null
 
             if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
             if (globalPalettesUnlistenRef.current) globalPalettesUnlistenRef.current()
+            if (globalCharacterSelectUnlistenRef.current) globalCharacterSelectUnlistenRef.current()
         }
     }, []);
 

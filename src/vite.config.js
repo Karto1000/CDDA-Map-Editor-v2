@@ -31,7 +31,8 @@ export default defineConfig(async () => ({
                 map_info: resolve( __dirname , "src/windows/map-info/window.html"),
                 chunk: resolve( __dirname , "src/windows/chunk/window.html"),
                 add_palette: resolve( __dirname , "src/windows/add-palette/window.html"),
-                global_palettes: resolve( __dirname , "src/windows/global_palettes/window.html"),
+                global_palettes: resolve( __dirname , "src/windows/global-palettes/window.html"),
+                global_select: resolve( __dirname , "src/windows/global-character-select/window.html"),
             }
         },
         publicDir: resolve(__dirname, "public"),
