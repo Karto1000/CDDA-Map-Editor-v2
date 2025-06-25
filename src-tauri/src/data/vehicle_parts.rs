@@ -2,6 +2,7 @@ use cdda_lib::types::CDDAIdentifier;
 use cdda_lib::types::CDDAString;
 use cdda_macros::cdda_entry;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 use strum_macros::EnumString;
 
 #[derive(Debug, Default, EnumString, Clone, Serialize, Deserialize)]
@@ -49,6 +50,8 @@ impl Location {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CDDAVehiclePart {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
+
     pub looks_like: Option<CDDAIdentifier>,
     pub name: Option<CDDAString>,
     pub flags: Vec<String>,

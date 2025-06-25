@@ -1,6 +1,7 @@
 use cdda_lib::types::NumberOrRange;
 use cdda_lib::types::{CDDAIdentifier, Weighted};
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 const fn default_probability() -> i32 {
     100
@@ -263,6 +264,7 @@ impl Into<CDDAItemGroup> for CDDAItemGroupIntermediate {
 
         CDDAItemGroup {
             id: self.id,
+            source: None,
             common: CDDAItemGroupCommon {
                 entries,
                 subtype: self.subtype,
@@ -282,6 +284,7 @@ pub struct CDDAItemGroupCommon {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAItemGroup {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
 
     #[serde(flatten)]
     pub common: CDDAItemGroupCommon,

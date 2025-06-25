@@ -2,6 +2,7 @@ use cdda_lib::types::CDDAIdentifier;
 use cdda_lib::types::CDDAString;
 use cdda_macros::cdda_entry;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 // What is the part of the vehicle at x, y made of?
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -25,6 +26,8 @@ pub struct VehiclePartPlacement {
 #[derive(Default, Debug, Serialize, Clone)]
 pub struct CDDAVehicle {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
+
     pub name: Option<CDDAString>,
     pub parts: Vec<VehiclePartPlacement>,
     pub flags: Vec<String>,

@@ -2,13 +2,11 @@ import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../sp
 import React, {RefObject, useContext, useEffect, useReducer, useRef, useState} from "react";
 import {createGrid, SHOW_STATS} from "../three/hooks/useThreeSetup.js";
 import {Canvas, ThreeConfig} from "../three/types/three.ts";
-import {GridHelper, Object3D, Vector3} from "three";
+import {Object3D, Vector3} from "three";
 import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
-import {degToRad} from "three/src/math/MathUtils.js";
 import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {TabContext, ThemeContext} from "../../app.js";
 import Icon, {IconName} from "../../shared/components/icon.js";
-import {SideMenuRef} from "../../shared/components/imguilike/sideMenu.js";
 import {logRender} from "../../shared/utils/log.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {
@@ -25,7 +23,7 @@ import {useWorldMousePosition} from "../three/hooks/useWorldMousePosition.js";
 import {useMouseCells} from "../three/hooks/useMouseCells.js";
 import {clsx} from "clsx";
 import {useKeybindActionEvent} from "../../shared/hooks/useKeybindings.js";
-import {KeybindAction, MapViewerData, Project} from "../../tauri/types/editor.js";
+import {KeybindAction, MapViewerData} from "../../tauri/types/editor.js";
 import {useCurrentProject} from "../../shared/hooks/useCurrentProject.js";
 
 export type MapViewerProps = {
@@ -173,6 +171,21 @@ export function MapViewer(props: MapViewerProps) {
         TauriEvent.UPDATE_LIVE_VIEWER,
         () => {
             (async () => {
+                await onReload()
+            })()
+        },
+        []
+    )
+
+    useTauriEvent(
+        TauriEvent.UPDATE_CDDA_DATA,
+        (paths) => {
+            (async () => {
+                await tauriBridge.invoke(
+                    TauriCommand.UPDATE_CDDA_DATA_AT,
+                    {paths}
+                )
+
                 await onReload()
             })()
         },

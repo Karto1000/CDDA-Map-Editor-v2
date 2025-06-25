@@ -9,16 +9,18 @@ use crate::features::map::{
     CalculateParametersError, MapData, MappingKind, Property, SetTile,
 };
 use cdda_lib::types::{
-    CDDAIdentifier, Comment, Distribution, MapGenValue, MeabyVec,
-    MeabyWeighted, ParameterIdentifier,
+    CDDADistributionInner, CDDAIdentifier, Comment, Distribution, MapGenValue,
+    MeabyVec, MeabyWeighted, ParameterIdentifier, Switch,
 };
 use futures_lite::StreamExt;
 use glam::IVec2;
 use indexmap::IndexMap;
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Borrow;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub type Palettes = HashMap<CDDAIdentifier, CDDAPalette>;
@@ -54,6 +56,9 @@ pub struct Parameter {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAPaletteIntermediate {
     pub id: CDDAIdentifier,
+
+    #[serde(skip)]
+    pub source: Option<PathBuf>,
 
     #[serde(rename = "//")]
     pub comment: Comment,
@@ -170,6 +175,7 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
             comment: self.comment,
             parameters: self.parameters,
             palettes: self.palettes,
+            source: self.source,
         }
     }
 }
@@ -177,6 +183,7 @@ impl Into<CDDAPalette> for CDDAPaletteIntermediate {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAPalette {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
 
     #[serde(skip)]
     pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
@@ -262,5 +269,111 @@ impl CDDAPalette {
         }
 
         None
+    }
+
+    fn get_path_from_ident(
+        &self,
+        id: &CDDAIdentifier,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Vec<PathBuf> {
+        match json_data.palettes.get(&id) {
+            None => vec![],
+            Some(p) => p.get_source(json_data),
+        }
+    }
+
+    fn param_source(
+        &self,
+        param: &ParameterIdentifier,
+        fallback: &Option<CDDAIdentifier>,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Vec<PathBuf> {
+        let parameter = match self.parameters.get(param) {
+            None => {
+                warn!("Parameter {} not found", param);
+                return vec![];
+            },
+            Some(p) => p,
+        };
+
+        match parameter.ty {
+            KnownCataVariant::Palette => {},
+            _ => {
+                warn!("Parameter {} is not a palette", param);
+                return vec![];
+            },
+        }
+
+        let mut source = vec![];
+
+        match fallback {
+            None => {},
+            Some(f) => {
+                source.append(&mut self.get_path_from_ident(f, json_data))
+            },
+        }
+
+        let values = parameter.default.distribution.clone().into_values();
+
+        for value in values {
+            source.append(&mut self.get_path_from_ident(&value, json_data));
+        }
+
+        source
+    }
+
+    fn switch_source(
+        &self,
+        switch: &Switch,
+        cases: &HashMap<CDDAIdentifier, CDDAIdentifier>,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Vec<PathBuf> {
+        let mut source = vec![];
+
+        match json_data.palettes.get(&switch.fallback) {
+            None => {},
+            Some(p) => source.append(&mut p.get_source(json_data)),
+        };
+
+        for (_, case) in cases {
+            match json_data.palettes.get(&case) {
+                None => {},
+                Some(p) => source.append(&mut p.get_source(json_data)),
+            };
+        }
+
+        source
+    }
+
+    pub fn get_source(
+        &self,
+        json_data: &DeserializedCDDAJsonData,
+    ) -> Vec<PathBuf> {
+        let mut source = vec![];
+
+        if let Some(source_path) = &self.source {
+            source.push(source_path.clone());
+        }
+
+        for palette in self.palettes.iter() {
+            let refs = palette.get_cdda_entry_refs();
+
+            for palette in refs {
+                let palette = match json_data.palettes.get(&palette) {
+                    None => {
+                        info!(
+                            "Palette {} not found as ref in {}",
+                            palette, self.id
+                        );
+                        continue;
+                    },
+                    Some(p) => p,
+                };
+
+                source.append(&mut palette.get_source(json_data));
+            }
+        }
+
+        source
     }
 }

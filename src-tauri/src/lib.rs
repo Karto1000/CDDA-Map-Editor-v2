@@ -4,7 +4,8 @@ mod features;
 mod util;
 
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
-use crate::features::cdda_data::get_palettes;
+use crate::data::spawn_cdda_watcher;
+use crate::features::cdda_data::handler::{get_palettes, update_cdda_data_at};
 use crate::features::editor::handler::{modify_palette, new_map_editor};
 use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
@@ -109,8 +110,9 @@ async fn frontend_ready(
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
+    cdda_watcher_handle: State<'_, Mutex<Option<CDDADataFileWatcher>>>,
 ) -> Result<(), ()> {
-    let mut editor_data_lock = editor_data.lock().await;
+    let editor_data_lock = editor_data.lock().await;
     let mut json_data_lock = json_data.lock().await;
     let mut tilesheet_lock = tilesheet.lock().await;
     let mut loaded_projects_lock = loaded_projects.lock().await;
@@ -129,6 +131,22 @@ async fn frontend_ready(
                 .await
                 {
                     Ok(cdda_json_data) => {
+                        let mut cdda_watcher_handle_lock =
+                            cdda_watcher_handle.lock().await;
+
+                        info!(
+                            "Watching CDDA data recursively at root {}",
+                            cdda_path.display()
+                        );
+                        let watcher = spawn_cdda_watcher(
+                            app.clone(),
+                            cdda_path
+                                .join(&editor_data_lock.config.json_data_path),
+                        )
+                        .unwrap();
+
+                        cdda_watcher_handle_lock.replace(watcher);
+
                         json_data_lock.replace(cdda_json_data);
                     },
                     Err(e) => {
@@ -269,6 +287,26 @@ async fn load_projects(program_data: &ProgramData) -> LoadedProjects {
     loaded_projects
 }
 
+pub struct ProjectFileWatcher(JoinHandle<()>);
+
+impl Deref for ProjectFileWatcher {
+    type Target = JoinHandle<()>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub struct CDDADataFileWatcher(JoinHandle<()>);
+
+impl Deref for CDDADataFileWatcher {
+    type Target = JoinHandle<()>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() -> () {
     tauri::Builder::default()
@@ -276,7 +314,7 @@ pub fn run() -> () {
         .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::new()
-                .level(LevelFilter::Warn)
+                .level(LevelFilter::Info)
                 .targets(vec![Target::new(TargetKind::Stdout)])
                 .build(),
         )
@@ -296,7 +334,13 @@ pub fn run() -> () {
                 None,
             ));
             app.manage::<Mutex<Option<LegacyTilesheet>>>(Mutex::new(None));
-            app.manage::<Mutex<Option<JoinHandle<()>>>>(Mutex::new(None));
+
+            // File watcher lock for the current project
+            app.manage::<Mutex<Option<ProjectFileWatcher>>>(Mutex::new(None));
+
+            // File watcher for all cdda data
+            app.manage::<Mutex<Option<CDDADataFileWatcher>>>(Mutex::new(None));
+
             app.manage::<Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>>(Mutex::new(None));
             app.manage::<Mutex<LoadedProjects>>(Mutex::new(loaded_projects));
 
@@ -326,7 +370,8 @@ pub fn run() -> () {
             close_app,
             new_map_editor,
             get_palettes,
-            modify_palette
+            modify_palette,
+            update_cdda_data_at
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

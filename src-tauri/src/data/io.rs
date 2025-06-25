@@ -1,22 +1,28 @@
-use crate::data::furniture::CDDAFurniture;
+use crate::data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
 use crate::data::item::CDDAItemGroup;
-use crate::data::map_data::OmTerrain;
+use crate::data::map_data::{CDDAMapDataIntermediate, OmTerrain};
 use crate::data::monster::CDDAMonster;
-use crate::data::monster_group::CDDAMonsterGroup;
-use crate::data::overmap::{
-    CDDAOvermapLocation, CDDAOvermapSpecial, CDDAOvermapTerrain,
+use crate::data::monster_group::{
+    CDDAMonsterGroup, CDDAMonsterGroupIntermediate,
 };
-use crate::data::palettes::CDDAPalette;
+use crate::data::overmap::{
+    CDDAOvermapLocation, CDDAOvermapLocationIntermediate, CDDAOvermapSpecial,
+    CDDAOvermapSpecialIntermediate, CDDAOvermapTerrain,
+    CDDAOvermapTerrainIntermediate,
+};
+use crate::data::palettes::{CDDAPalette, CDDAPaletteIntermediate};
 use crate::data::region_settings::CDDARegionSettings;
-use crate::data::terrain::CDDATerrain;
-use crate::data::vehicle_parts::CDDAVehiclePart;
-use crate::data::vehicles::CDDAVehicle;
+use crate::data::terrain::{CDDATerrain, CDDATerrainIntermediate};
+use crate::data::vehicle_parts::{
+    CDDAVehiclePart, CDDAVehiclePartIntermediate,
+};
+use crate::data::vehicles::{CDDAVehicle, CDDAVehicleIntermediate};
 use crate::data::{CDDAJsonEntry, TileLayer};
 use crate::features::map::MapData;
 use crate::features::program_data::io::{ProgramDataLoader, ProjectLoader};
 use crate::features::program_data::{MapDataCollection, ProgramData, Project};
 use crate::util::Load;
-use anyhow::Error;
+use anyhow::{anyhow, Error};
 use async_walkdir::WalkDir;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, ImportCDDAObject, MeabyVec,
@@ -35,6 +41,7 @@ use std::io::BufReader;
 use std::path::PathBuf;
 use std::string::ToString;
 use thiserror::Error;
+use thiserror::__private::AsDisplay;
 
 #[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {
@@ -273,6 +280,393 @@ impl DeserializedCDDAJsonData {
     }
 }
 
+pub fn parse_json_entries(path: &PathBuf) -> Result<Vec<CDDAJsonEntry>, Error> {
+    info!("Reading and parsing json file at {}", path.display());
+    let reader = BufReader::new(File::open(path)?);
+
+    let des = match serde_json::from_reader::<BufReader<File>, Vec<CDDAJsonEntry>>(
+        reader,
+    ) {
+        Ok(des) => des,
+        Err(e) => {
+            warn!("Failed to deserialize {}, error: {}", path.display(), e);
+            return Err(anyhow!(e));
+        },
+    };
+
+    Ok(des)
+}
+
+#[derive(Default)]
+pub struct IntermediateCDDAJsonData {
+    pub intermediate_map_data: Vec<CDDAMapDataIntermediate>,
+    pub intermediate_region_settings:
+        HashMap<CDDAIdentifier, CDDARegionSettings>,
+    pub intermediate_palettes: HashMap<CDDAIdentifier, CDDAPaletteIntermediate>,
+    pub intermediate_vehicles: HashMap<CDDAIdentifier, CDDAVehicleIntermediate>,
+    pub intermediate_vehicle_parts:
+        HashMap<CDDAIdentifier, CDDAVehiclePartIntermediate>,
+    pub intermediate_terrains: HashMap<CDDAIdentifier, CDDATerrainIntermediate>,
+    pub intermediate_furnitures:
+        HashMap<CDDAIdentifier, CDDAFurnitureIntermediate>,
+    pub intermediate_overmap_locations:
+        HashMap<CDDAIdentifier, CDDAOvermapLocationIntermediate>,
+    pub intermediate_overmap_terrains:
+        HashMap<CDDAIdentifier, CDDAOvermapTerrainIntermediate>,
+    pub intermediate_overmap_specials:
+        HashMap<CDDAIdentifier, CDDAOvermapSpecialIntermediate>,
+    pub intermediate_monster_groups:
+        HashMap<CDDAIdentifier, CDDAMonsterGroupIntermediate>,
+}
+
+pub fn set_intermediate_data_from_json_entries(
+    intermediate_data: &mut IntermediateCDDAJsonData,
+    path: &PathBuf,
+    deserialized_entries: Vec<CDDAJsonEntry>,
+) -> Result<(), Error> {
+    for des_entry in deserialized_entries {
+        match des_entry {
+            CDDAJsonEntry::Mapgen(mapgen) => {
+                intermediate_data.intermediate_map_data.push(mapgen);
+            },
+            CDDAJsonEntry::RegionSettings(rs) => {
+                debug!("Found Region setting {} in {}", rs.id, path.display());
+
+                let id = rs.id.clone();
+                let mut region_settings: CDDARegionSettings = rs.into();
+                region_settings.source = Some(path.clone());
+
+                intermediate_data
+                    .intermediate_region_settings
+                    .insert(id, region_settings);
+            },
+            CDDAJsonEntry::Palette(mut p) => {
+                debug!("Found Palette {} in {}", p.id, path.display());
+
+                p.source = Some(path.clone());
+
+                intermediate_data
+                    .intermediate_palettes
+                    .insert(p.id.clone(), p);
+            },
+            CDDAJsonEntry::Terrain(terrain) => {
+                for ident in terrain.id.clone().into_vec() {
+                    debug!(
+                        "Found Terrain entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = terrain.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_terrains
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::Furniture(furniture) => {
+                for ident in furniture.id.clone().into_vec() {
+                    debug!(
+                        "Found Furniture entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = furniture.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_furnitures
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::MonsterGroup(group) => {
+                for ident in group.id.clone().into_vec() {
+                    debug!(
+                        "Found MonsterGroup entry {} in {}",
+                        ident,
+                        path.display()
+                    );
+
+                    let mut clone = group.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_monster_groups
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::OvermapLocation(location) => {
+                for ident in location.id.clone().into_vec() {
+                    debug!(
+                        "Found OvermapLocation entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = location.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_overmap_locations
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::OvermapTerrain(terrain) => {
+                for ident in terrain.id.clone().into_vec() {
+                    debug!(
+                        "Found OvermapTerrain entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = terrain.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_overmap_terrains
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::OvermapSpecial(s) => {
+                for ident in s.id.clone().into_vec() {
+                    debug!(
+                        "Found OvermapSpecial entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = s.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_overmap_specials
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::Vehicle(v) => {
+                for ident in v.id.clone().into_vec() {
+                    debug!(
+                        "Found Vehicle entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = v.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_vehicles
+                        .insert(ident, clone);
+                }
+            },
+            CDDAJsonEntry::VehiclePart(vp) => {
+                for ident in vp.id.clone().into_vec() {
+                    debug!(
+                        "Found VehiclePart entry {} in {}",
+                        &ident,
+                        path.display()
+                    );
+
+                    let mut clone = vp.clone();
+                    clone.id = MeabyVec::Single(ident.clone());
+                    clone.source = Some(path.clone());
+
+                    intermediate_data
+                        .intermediate_vehicle_parts
+                        .insert(ident, clone);
+                }
+            },
+            _ => {
+                info!("Unused JSON entry in {}", path.display());
+            },
+        }
+    }
+
+    Ok(())
+}
+
+pub fn replace_data_in_cdda_data(
+    cdda_data: &mut DeserializedCDDAJsonData,
+    intermediate_data: IntermediateCDDAJsonData,
+) -> Result<(), Error> {
+    for mapgen in intermediate_data.intermediate_map_data {
+        if let Some(om_terrain) = mapgen.om_terrain.clone() {
+            match om_terrain {
+                OmTerrain::Single(id) => {
+                    let mut map_data_collection: MapDataCollection =
+                        mapgen.try_into()?;
+
+                    cdda_data.map_data.insert(
+                        CDDAIdentifier(id.clone()),
+                        map_data_collection
+                            .maps
+                            .remove(&UVec2::ZERO.into())
+                            .unwrap(),
+                    );
+                },
+                OmTerrain::Duplicate(duplicate) => {
+                    let map_data_collection: MapDataCollection =
+                        mapgen.try_into()?;
+
+                    for id in duplicate.iter() {
+                        cdda_data.map_data.insert(
+                            CDDAIdentifier(id.clone()),
+                            map_data_collection
+                                .maps
+                                .get(&UVec2::ZERO.into())
+                                .unwrap()
+                                .clone(),
+                        );
+                    }
+                },
+                OmTerrain::Nested(nested) => {
+                    let map_data_collection: MapDataCollection =
+                        mapgen.try_into()?;
+
+                    for (coords, map_data) in map_data_collection.maps {
+                        let om_terrain = nested
+                            .get(coords.y as usize)
+                            .unwrap()
+                            .get(coords.x as usize)
+                            .unwrap()
+                            .clone();
+
+                        cdda_data
+                            .map_data
+                            .insert(CDDAIdentifier(om_terrain), map_data);
+                    }
+                },
+            }
+        } else if let Some(nested_mapgen) = mapgen.nested_mapgen_id.clone() {
+            let mut map_data_collection: MapDataCollection =
+                mapgen.try_into()?;
+
+            cdda_data.map_data.insert(
+                nested_mapgen.clone(),
+                map_data_collection
+                    .maps
+                    .remove(&UVec2::ZERO.into())
+                    .unwrap(),
+            );
+        } else if let Some(update_mapgen) = mapgen.update_mapgen_id.clone() {
+            let mut map_data_collection: MapDataCollection =
+                mapgen.try_into()?;
+
+            cdda_data.map_data.insert(
+                update_mapgen.clone(),
+                map_data_collection
+                    .maps
+                    .remove(&UVec2::ZERO.into())
+                    .unwrap(),
+            );
+        }
+    }
+
+    for (id, region_setting) in intermediate_data.intermediate_region_settings {
+        cdda_data.region_settings.insert(id, region_setting);
+    }
+
+    for (id, palette) in intermediate_data.intermediate_palettes {
+        let palette: CDDAPalette = palette.into();
+        cdda_data.palettes.insert(id, palette);
+    }
+
+    for (id, terrain) in &intermediate_data.intermediate_terrains {
+        cdda_data.terrain.insert(
+            id.clone(),
+            terrain
+                .calculate_copy(&intermediate_data.intermediate_terrains)
+                .into(),
+        );
+    }
+
+    for (id, furniture) in &intermediate_data.intermediate_furnitures {
+        cdda_data.furniture.insert(
+            id.clone(),
+            furniture
+                .calculate_copy(&intermediate_data.intermediate_furnitures)
+                .into(),
+        );
+    }
+
+    for (id, monster_group) in &intermediate_data.intermediate_monster_groups {
+        cdda_data.monster_groups.insert(
+            id.clone(),
+            monster_group
+                .calculate_copy(&intermediate_data.intermediate_monster_groups)
+                .into(),
+        );
+    }
+
+    for (id, overmap_location) in
+        &intermediate_data.intermediate_overmap_locations
+    {
+        cdda_data.overmap_locations.insert(
+            id.clone(),
+            overmap_location
+                .calculate_copy(
+                    &intermediate_data.intermediate_overmap_locations,
+                )
+                .into(),
+        );
+    }
+
+    for (id, overmap_terrain) in
+        &intermediate_data.intermediate_overmap_terrains
+    {
+        cdda_data.overmap_terrains.insert(
+            id.clone(),
+            overmap_terrain
+                .calculate_copy(
+                    &intermediate_data.intermediate_overmap_terrains,
+                )
+                .into(),
+        );
+    }
+
+    for (id, overmap_special) in
+        &intermediate_data.intermediate_overmap_specials
+    {
+        cdda_data.overmap_specials.insert(
+            id.clone(),
+            overmap_special
+                .calculate_copy(
+                    &intermediate_data.intermediate_overmap_specials,
+                )
+                .into(),
+        );
+    }
+
+    for (id, vehicle) in &intermediate_data.intermediate_vehicles {
+        cdda_data.vehicles.insert(
+            id.clone(),
+            vehicle
+                .calculate_copy(&intermediate_data.intermediate_vehicles)
+                .into(),
+        );
+    }
+
+    for (id, vehicle_part) in &intermediate_data.intermediate_vehicle_parts {
+        cdda_data.vehicle_parts.insert(
+            id.clone(),
+            vehicle_part
+                .calculate_copy(&intermediate_data.intermediate_vehicle_parts)
+                .into(),
+        );
+    }
+
+    Ok(())
+}
+
 pub struct CDDADataLoader {
     pub json_path: PathBuf,
 }
@@ -284,14 +678,7 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
         let mut cdda_data = DeserializedCDDAJsonData::default();
         cdda_data.add_hardcoded_map_data();
 
-        let mut intermediate_vehicles = HashMap::new();
-        let mut intermediate_vehicle_parts = HashMap::new();
-        let mut intermediate_terrains = HashMap::new();
-        let mut intermediate_furnitures = HashMap::new();
-        let mut intermediate_overmap_locations = HashMap::new();
-        let mut intermediate_overmap_terrains = HashMap::new();
-        let mut intermediate_overmap_specials = HashMap::new();
-        let mut intermediate_monster_groups = HashMap::new();
+        let mut intermediate_data = IntermediateCDDAJsonData::default();
 
         while let Some(entry) = walkdir.next().await {
             let entry = entry?;
@@ -316,346 +703,19 @@ impl Load<DeserializedCDDAJsonData> for CDDADataLoader {
                 continue;
             }
 
-            info!("Reading and parsing json file at {:?}", entry.path());
-            let reader = BufReader::new(File::open(entry.path())?);
-
-            let des = match serde_json::from_reader::<
-                BufReader<File>,
-                Vec<CDDAJsonEntry>,
-            >(reader)
-            {
-                Ok(des) => des,
-                Err(e) => {
-                    error!(
-                        "Failed to deserialize {:?}, error: {}",
-                        entry.path(),
-                        e
-                    );
-                    continue;
-                },
+            let deserialized_entries = match parse_json_entries(&path) {
+                Ok(d) => d,
+                Err(_) => continue,
             };
 
-            for des_entry in des {
-                match des_entry {
-                    CDDAJsonEntry::Mapgen(mapgen) => {
-                        if let Some(om_terrain) = mapgen.om_terrain.clone() {
-                            match om_terrain {
-                                OmTerrain::Single(id) => {
-                                    debug!(
-                                        "Found Single Mapgen '{}' in {:?}",
-                                        id,
-                                        entry.path()
-                                    );
-
-                                    let mut map_data_collection: MapDataCollection = mapgen.try_into()?;
-
-                                    cdda_data.map_data.insert(
-                                        CDDAIdentifier(id.clone()),
-                                        map_data_collection
-                                            .maps
-                                            .remove(&UVec2::ZERO.into())
-                                            .unwrap(),
-                                    );
-                                },
-                                OmTerrain::Duplicate(duplicate) => {
-                                    debug!(
-                                        "Found Duplicate Mapgen '{:?}' in {:?}",
-                                        duplicate,
-                                        entry.path()
-                                    );
-
-                                    let map_data_collection: MapDataCollection =
-                                        mapgen.try_into()?;
-
-                                    for id in duplicate.iter() {
-                                        cdda_data.map_data.insert(
-                                            CDDAIdentifier(id.clone()),
-                                            map_data_collection
-                                                .maps
-                                                .get(&UVec2::ZERO.into())
-                                                .unwrap()
-                                                .clone(),
-                                        );
-                                    }
-                                },
-                                OmTerrain::Nested(nested) => {
-                                    debug!(
-                                        "Found Nested Mapgen '{:?}' in {:?}",
-                                        nested,
-                                        entry.path()
-                                    );
-
-                                    let map_data_collection: MapDataCollection =
-                                        mapgen.try_into()?;
-
-                                    for (coords, map_data) in
-                                        map_data_collection.maps
-                                    {
-                                        let om_terrain = nested
-                                            .get(coords.y as usize)
-                                            .unwrap()
-                                            .get(coords.x as usize)
-                                            .unwrap()
-                                            .clone();
-
-                                        cdda_data.map_data.insert(
-                                            CDDAIdentifier(om_terrain),
-                                            map_data,
-                                        );
-                                    }
-                                },
-                            }
-                        } else if let Some(nested_mapgen) =
-                            mapgen.nested_mapgen_id.clone()
-                        {
-                            debug!(
-                                "Found Nested Mapgen Object '{}' in {:?}",
-                                nested_mapgen,
-                                entry.path()
-                            );
-
-                            let mut map_data_collection: MapDataCollection =
-                                mapgen.try_into()?;
-
-                            cdda_data.map_data.insert(
-                                nested_mapgen.clone(),
-                                map_data_collection
-                                    .maps
-                                    .remove(&UVec2::ZERO.into())
-                                    .unwrap(),
-                            );
-                        } else if let Some(update_mapgen) =
-                            mapgen.update_mapgen_id.clone()
-                        {
-                            debug!(
-                                "Found Update Mapgen Object '{:?}' in {:?}",
-                                update_mapgen,
-                                entry.path()
-                            );
-
-                            let mut map_data_collection: MapDataCollection =
-                                mapgen.try_into()?;
-
-                            cdda_data.map_data.insert(
-                                update_mapgen.clone(),
-                                map_data_collection
-                                    .maps
-                                    .remove(&UVec2::ZERO.into())
-                                    .unwrap(),
-                            );
-                        }
-                    },
-                    CDDAJsonEntry::RegionSettings(rs) => {
-                        debug!(
-                            "Found Region setting {} in {:?}",
-                            rs.id,
-                            entry.path()
-                        );
-                        cdda_data.region_settings.insert(rs.id.clone(), rs);
-                    },
-                    CDDAJsonEntry::Palette(p) => {
-                        debug!("Found Palette {} in {:?}", p.id, entry.path());
-                        cdda_data.palettes.insert(p.id.clone(), p.into());
-                    },
-                    CDDAJsonEntry::Terrain(terrain) => {
-                        for ident in terrain.id.clone().into_vec() {
-                            debug!(
-                                "Found Terrain entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = terrain.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_terrains.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::Furniture(furniture) => {
-                        for ident in furniture.id.clone().into_vec() {
-                            debug!(
-                                "Found Furniture entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = furniture.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_furnitures.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::ItemGroup(group) => {
-                        let new_group: CDDAItemGroup = group.into();
-                        debug!(
-                            "Found ItemGroup entry {} in {:?}",
-                            new_group.id,
-                            entry.path()
-                        );
-                        cdda_data
-                            .item_groups
-                            .insert(new_group.id.clone(), new_group);
-                    },
-                    CDDAJsonEntry::MonsterGroup(group) => {
-                        for ident in group.id.clone().into_vec() {
-                            debug!(
-                                "Found MonsterGroup entry {} in {:?}",
-                                ident,
-                                entry.path()
-                            );
-
-                            let mut clone = group.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_monster_groups.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::OvermapLocation(location) => {
-                        for ident in location.id.clone().into_vec() {
-                            debug!(
-                                "Found OvermapLocation entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = location.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_overmap_locations.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::OvermapTerrain(terrain) => {
-                        for ident in terrain.id.clone().into_vec() {
-                            debug!(
-                                "Found OvermapTerrain entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = terrain.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_overmap_terrains.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::OvermapSpecial(s) => {
-                        for ident in s.id.clone().into_vec() {
-                            debug!(
-                                "Found OvermapSpecial entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = s.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_overmap_specials.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::Vehicle(v) => {
-                        for ident in v.id.clone().into_vec() {
-                            debug!(
-                                "Found Vehicle entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = v.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_vehicles.insert(ident, clone);
-                        }
-                    },
-                    CDDAJsonEntry::VehiclePart(vp) => {
-                        for ident in vp.id.clone().into_vec() {
-                            debug!(
-                                "Found VehiclePart entry {} in {:?}",
-                                &ident,
-                                entry.path()
-                            );
-
-                            let mut clone = vp.clone();
-                            clone.id = MeabyVec::Single(ident.clone());
-
-                            intermediate_vehicle_parts.insert(ident, clone);
-                        }
-                    },
-                    _ => {
-                        info!("Unused JSON entry in {:?}", entry.path());
-                    },
-                }
-            }
+            set_intermediate_data_from_json_entries(
+                &mut intermediate_data,
+                &path,
+                deserialized_entries,
+            )?
         }
 
-        for (id, intermediate_vehicle) in intermediate_vehicles.iter() {
-            cdda_data.vehicles.insert(
-                id.clone(),
-                intermediate_vehicle
-                    .calculate_copy(&intermediate_vehicles)
-                    .into(),
-            );
-        }
-
-        for (id, intermediate_vehicle_part) in intermediate_vehicle_parts.iter()
-        {
-            cdda_data.vehicle_parts.insert(
-                id.clone(),
-                intermediate_vehicle_part
-                    .calculate_copy(&intermediate_vehicle_parts)
-                    .into(),
-            );
-        }
-
-        for (id, intermediate_terrain) in intermediate_terrains.iter() {
-            cdda_data.terrain.insert(
-                id.clone(),
-                intermediate_terrain
-                    .calculate_copy(&intermediate_terrains)
-                    .into(),
-            );
-        }
-
-        for (id, intermediate_furniture) in intermediate_furnitures.iter() {
-            cdda_data.furniture.insert(
-                id.clone(),
-                intermediate_furniture
-                    .calculate_copy(&intermediate_furnitures)
-                    .into(),
-            );
-        }
-
-        for (id, intermediate_overmap_location) in
-            intermediate_overmap_locations.iter()
-        {
-            cdda_data.overmap_locations.insert(
-                id.clone(),
-                intermediate_overmap_location
-                    .calculate_copy(&intermediate_overmap_locations)
-                    .into(),
-            );
-        }
-
-        for (id, intermediate_overmap_terrain) in
-            intermediate_overmap_terrains.iter()
-        {
-            cdda_data.overmap_terrains.insert(
-                id.clone(),
-                intermediate_overmap_terrain
-                    .calculate_copy(&intermediate_overmap_terrains)
-                    .into(),
-            );
-        }
-
-        for (id, intermediate_monster_group) in
-            intermediate_monster_groups.iter()
-        {
-            cdda_data.monster_groups.insert(
-                id.clone(),
-                intermediate_monster_group
-                    .calculate_copy(&intermediate_monster_groups)
-                    .into(),
-            );
-        }
+        replace_data_in_cdda_data(&mut cdda_data, intermediate_data)?;
 
         Ok(cdda_data)
     }

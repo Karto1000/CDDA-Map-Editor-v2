@@ -279,7 +279,7 @@ impl Tilesheet for LegacyTilesheet {
 
                 match self.fallback_map.get(&fallback_id).clone() {
                     None => {
-                        info!("No fallback for {} found", fallback_id);
+                        debug!("No fallback for {} found", fallback_id);
                     },
                     Some(_) => {},
                 }
@@ -312,7 +312,7 @@ impl Tilesheet for LegacyTilesheet {
 
                 match self.fallback_map.get(&fallback_id).clone() {
                     None => {
-                        info!("No fallback for {} found", fallback_id);
+                        debug!("No fallback for {} found", fallback_id);
                     },
                     Some(_) => {},
                 }

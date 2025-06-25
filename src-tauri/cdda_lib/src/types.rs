@@ -10,6 +10,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
 use std::ops::{Add, Deref, Rem, Sub};
+use std::path::PathBuf;
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -167,6 +168,13 @@ impl<T: Clone> MeabyVec<T> {
             MeabyVec::Single(s) => Some(s),
             MeabyVec::Vec(v) => v.first().map(|v| v.clone()),
         }
+    }
+}
+
+impl<T: Clone> MeabyVec<MeabyWeighted<T>> {
+    pub fn into_values(self) -> Vec<T> {
+        let vec = self.into_vec();
+        vec.into_iter().map(|v| v.data()).collect()
     }
 }
 
@@ -486,6 +494,68 @@ pub enum MapGenValue {
     Distribution(MeabyVec<MeabyWeighted<CDDADistributionInner>>),
 }
 
+impl MapGenValue {
+    pub fn get_cdda_entry_refs(&self) -> Vec<CDDAIdentifier> {
+        match self {
+            MapGenValue::String(s) => vec![s.clone()],
+            MapGenValue::Param { param, fallback } => {
+                let mut refs = vec![];
+                refs.push(CDDAIdentifier(param.0.clone()));
+
+                if let Some(fallback) = fallback {
+                    refs.push(fallback.clone());
+                }
+
+                refs
+            },
+            MapGenValue::Switch { switch, cases } => {
+                let mut refs = vec![];
+                refs.push(switch.fallback.clone());
+
+                for (_, case) in cases {
+                    refs.push(case.clone());
+                }
+
+                refs
+            },
+            MapGenValue::Distribution(d) => {
+                let values = d.clone().into_values();
+
+                let mut refs = vec![];
+
+                for value in values {
+                    match value {
+                        CDDADistributionInner::String(s) => {
+                            refs.push(s.clone());
+                        },
+                        CDDADistributionInner::Param { param, fallback } => {
+                            refs.push(CDDAIdentifier(param.0));
+
+                            if let Some(fallback) = fallback {
+                                refs.push(fallback);
+                            }
+                        },
+                        CDDADistributionInner::Switch { switch, cases } => {
+                            refs.push(switch.fallback.clone());
+
+                            for (_, case) in cases {
+                                refs.push(case);
+                            }
+                        },
+                        CDDADistributionInner::Distribution(d) => {
+                            for value in d.distribution.into_values() {
+                                refs.push(value);
+                            }
+                        },
+                    }
+                }
+
+                refs
+            },
+        }
+    }
+}
+
 pub trait ImportCDDAObject: Clone + Debug {
     fn merge(base: &Self, override_: &Self) -> Self;
 
@@ -493,7 +563,6 @@ pub trait ImportCDDAObject: Clone + Debug {
 
     fn extend(&self) -> Option<&CDDAExtendOp>;
     fn delete(&self) -> Option<&CDDADeleteOp>;
-
     fn flags(&self) -> &Vec<String>;
     fn set_flags(&mut self, flags: Vec<String>);
 

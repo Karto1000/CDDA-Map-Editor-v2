@@ -6,6 +6,7 @@ use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use thiserror::Error;
 
 const fn default_weight() -> i32 {
@@ -46,6 +47,8 @@ pub struct MonsterGroupMonster {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDAMonsterGroup {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
+
     pub monsters: Vec<MonsterGroupMonster>,
     pub flags: Vec<String>,
 }

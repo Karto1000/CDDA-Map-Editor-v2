@@ -2,6 +2,7 @@ use cdda_lib::types::{CDDAIdentifier, Weighted};
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::PathBuf;
 
 #[derive(Debug, Clone, Deserialize, Eq, PartialEq, Hash, Serialize)]
 pub struct RegionIdentifier(pub String);
@@ -114,6 +115,8 @@ pub struct OvermapFeatureFlagSettings {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CDDARegionSettings {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
+
     pub default_oter: Vec<String>,
     pub default_groundcover: Vec<Weighted<CDDAIdentifier>>,
     pub region_terrain_and_furniture: RegionTerrainAndFurniture,

@@ -25,21 +25,60 @@ use crate::data::region_settings::{CDDARegionSettings, RegionIdentifier};
 use crate::data::terrain::{CDDATerrain, CDDATerrainIntermediate};
 use crate::data::vehicle_parts::CDDAVehiclePartIntermediate;
 use crate::data::vehicles::CDDAVehicleIntermediate;
+use crate::events::{UPDATE_CDDA_DATA, UPDATE_LIVE_VIEWER};
 use crate::util::GetRandom;
+use crate::{events, CDDADataFileWatcher};
 use cdda_lib::types::{
     CDDADistributionInner, CDDAIdentifier, DistributionInner, IdOrAbstract,
     MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier,
 };
 use derive_more::Display;
 use indexmap::IndexMap;
+use log::info;
+use notify_debouncer_full::new_debouncer;
 use rand::distr::weighted::WeightedIndex;
 use rand::{rng, Rng};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
 use std::convert::Infallible;
+use std::path::PathBuf;
+use std::time::Duration;
 use strum_macros::EnumIter;
+use tauri::{AppHandle, Emitter};
 use thiserror::Error;
+use tokio::task::JoinHandle;
+use tokio_test::block_on;
+
+pub fn spawn_cdda_watcher(
+    app: AppHandle,
+    path: PathBuf,
+) -> Result<CDDADataFileWatcher, anyhow::Error> {
+    let join_handle = tokio::spawn(async move {
+        info!("Spawning File Watcher for CDDA Data");
+
+        let (tx, mut rx) = tokio::sync::mpsc::channel(1);
+
+        let mut debouncer =
+            new_debouncer(Duration::from_millis(100), None, move |res| {
+                block_on(async { tx.send(res).await.unwrap() });
+            })
+            .unwrap();
+
+        debouncer
+            .watch(path, notify::RecursiveMode::Recursive)
+            .unwrap();
+
+        while let Some(Ok(events)) = rx.recv().await {
+            let paths: Vec<PathBuf> =
+                events.into_iter().flat_map(|e| e.paths.clone()).collect();
+
+            app.emit(UPDATE_CDDA_DATA, paths).unwrap();
+        }
+    });
+
+    Ok(CDDADataFileWatcher(join_handle))
+}
 
 #[derive(Debug, Error)]
 pub enum GetIdentifierError {
@@ -310,7 +349,6 @@ pub enum CDDAJsonEntry {
     Terrain(CDDATerrainIntermediate),
     Furniture(CDDAFurnitureIntermediate),
     ConnectGroup(ConnectGroup),
-    ItemGroup(CDDAItemGroupIntermediate),
     #[serde(rename = "monstergroup")]
     MonsterGroup(CDDAMonsterGroupIntermediate),
     OvermapLocation(CDDAOvermapLocationIntermediate),
@@ -320,6 +358,7 @@ pub enum CDDAJsonEntry {
     VehiclePart(CDDAVehiclePartIntermediate),
 
     // -- UNUSED
+    ItemGroup,
     WeatherType,
     FieldType,
     #[serde(rename = "LOOT_ZONE")]
@@ -494,8 +533,10 @@ pub enum CDDAJsonEntry {
 #[serde(rename_all = "snake_case")]
 pub enum KnownCataVariant {
     OvermapSpecialId,
+    #[serde(rename = "palette_id")]
     Palette,
     RegionSettings,
+    TerStrId,
     Mapgen,
     ConnectGroup,
     #[serde(rename = "monstergroup")]

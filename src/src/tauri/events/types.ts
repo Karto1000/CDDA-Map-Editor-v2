@@ -64,7 +64,8 @@ export enum TauriCommand {
     CLOSE_APP = "close_app",
     NEW_MAP_EDITOR = "new_map_editor",
     GET_PALETTES = "get_palettes",
-    MODIFY_PALETTE = "modify_palette"
+    MODIFY_PALETTE = "modify_palette",
+    UPDATE_CDDA_DATA_AT = "update_cdda_data_at"
 }
 
 export enum ModifyPaletteActionKind {
@@ -154,7 +155,8 @@ export interface TauriCommandMap {
     [TauriCommand.MODIFY_PALETTE]: {
         coordinates: [number, number, number]
         action: ModifyPaletteAction
-    }
+    },
+    [TauriCommand.UPDATE_CDDA_DATA_AT]: {paths: string[]}
 }
 
 export enum TauriEvent {
@@ -163,6 +165,7 @@ export enum TauriEvent {
     CREATE_TAB = "create-tab",
     REMOVE_TAB = "remove-tab",
     UPDATE_LIVE_VIEWER = "update_live_viewer",
+    UPDATE_CDDA_DATA = "update_cdda_data",
     EMIT_TOAST_MESSAGE = "emit_toast_message",
     // SPECIAL CASE: This is not in the event map since we need generics for the Project type
     CURRENT_PROJECT_CHANGED = "current_project_changed",
@@ -223,5 +226,6 @@ export interface TauriEventMap {
     [TauriEvent.OPEN_PALETTES_WINDOW]: {},
     [TauriEvent.KEYBIND_PRESSED]: KeybindAction
     [TauriEvent.CHANGE_EDITOR_MODE]: MapEditorMode,
-    [TauriEvent.MAPGEN_CHUNK_SELECTED]: Vector3
+    [TauriEvent.MAPGEN_CHUNK_SELECTED]: Vector3,
+    [TauriEvent.UPDATE_CDDA_DATA]: string[]
 }

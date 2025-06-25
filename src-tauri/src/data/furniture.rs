@@ -1,11 +1,14 @@
 use cdda_lib::types::{CDDAIdentifier, CDDAString, MeabyVec};
 use cdda_macros::cdda_entry;
 use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
 
 #[cdda_entry]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CDDAFurniture {
     pub id: CDDAIdentifier,
+    pub source: Option<PathBuf>,
+
     pub name: Option<CDDAString>,
     pub description: Option<CDDAString>,
     pub symbol: Option<char>,

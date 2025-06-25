@@ -1,5 +1,6 @@
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
-use crate::events;
+use crate::data::palettes::{CDDAPalette, Parameter};
+use crate::data::KnownCataVariant;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::program_data::io::{ProgramDataSaver, ProjectLoader};
 use crate::features::program_data::{
@@ -15,10 +16,13 @@ use crate::util::{
     get_current_project, get_json_data, CDDADataError, GetCurrentProjectError, Load,
     Save,
 };
+use crate::{events, ProjectFileWatcher};
 use anyhow::Error;
+use cdda_lib::types::MapGenValue;
 use log::{error, info, warn};
 use notify_debouncer_full::new_debouncer;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fs;
 use std::ops::Deref;
 use std::path::PathBuf;
@@ -320,7 +324,7 @@ pub async fn open_project(
     name: String,
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
-    file_watcher: State<'_, Mutex<Option<tokio::task::JoinHandle<()>>>>,
+    file_watcher: State<'_, Mutex<Option<ProjectFileWatcher>>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
 ) -> Result<(), ()> {
     let mut file_watcher_lock = file_watcher.lock().await;
@@ -344,6 +348,22 @@ pub async fn open_project(
         ProjectType::MapViewer(map_viewer) => {
             let mvd_clone = map_viewer.data.clone();
 
+            let json_path = editor_data_lock
+                .config
+                .cdda_path
+                .clone()
+                .unwrap()
+                .join(&editor_data_lock.config.json_data_path);
+
+            let watch_paths: HashSet<PathBuf> = match mvd_clone {
+                LiveViewerData::Terrain {
+                    mapgen_file_paths, ..
+                } => HashSet::from_iter(mapgen_file_paths),
+                LiveViewerData::Special {
+                    mapgen_file_paths, ..
+                } => HashSet::from_iter(mapgen_file_paths),
+            };
+
             let join_handle = tokio::spawn(async move {
                 info!("Spawning File Watcher for Live Viewer");
 
@@ -360,16 +380,19 @@ pub async fn open_project(
                 )
                 .unwrap();
 
-                let mapgen_paths = match mvd_clone {
-                    LiveViewerData::Terrain {
-                        mapgen_file_paths, ..
-                    } => mapgen_file_paths,
-                    LiveViewerData::Special {
-                        mapgen_file_paths, ..
-                    } => mapgen_file_paths,
-                };
+                for path in watch_paths.iter() {
+                    // If the path is a json file, we don't want to watch it since there is already
+                    // a watcher for the json data. If we were to watch it twice, the map would also
+                    // reload twice.
+                    if path.starts_with(&json_path) {
+                        info!(
+                            "Skipping {} because its already being watched",
+                            path.display()
+                        );
+                        continue;
+                    }
 
-                for path in mapgen_paths.iter() {
+                    info!("Watching {}", path.display());
                     debouncer
                         .watch(path, notify::RecursiveMode::NonRecursive)
                         .unwrap();
@@ -380,7 +403,7 @@ pub async fn open_project(
                     app.emit(UPDATE_LIVE_VIEWER, {}).unwrap()
                 }
             });
-            file_watcher_lock.replace(join_handle);
+            file_watcher_lock.replace(ProjectFileWatcher(join_handle));
         },
     }
 
