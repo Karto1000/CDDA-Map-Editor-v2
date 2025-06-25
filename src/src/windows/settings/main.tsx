@@ -4,23 +4,25 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 import "./main.scss"
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {getKeybindingText, ProgramData} from "../../tauri/types/editor.js";
-import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
+import {BackendResponseType, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
-import {open} from "@tauri-apps/plugin-dialog";
+import {ask, open} from "@tauri-apps/plugin-dialog";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 import {DEFAULT_TILESET} from "../../features/sprites/tilesheets.js";
 import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
 import Icon, {IconName} from "../../shared/components/icon.tsx";
+import {useProgramData} from "../../shared/hooks/useProgramData.js";
+import {emit} from "@tauri-apps/api/event";
 
 function Main() {
     const [selectedTilset, setSelectedTileset] = useState<string>("None")
     const [cddaDirectoryPath, setCDDADirectoryPath] = useState<string>(null)
-    const [editorData, setEditorData] = useState<ProgramData>(null)
     const selectRef = useRef<HTMLSelectElement>(null)
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
+    const [programData, setProgramData] = useProgramData()
 
-    async function getAndSetEditorData() {
+    async function getAndSetProgramData() {
         const response = await tauriBridge.invoke<ProgramData, unknown>(
             TauriCommand.GET_EDITOR_DATA,
             {}
@@ -36,12 +38,12 @@ function Main() {
             setCDDADirectoryPath(response.data.config.cdda_path)
         }
 
-        setEditorData(response.data)
+        setProgramData(response.data)
     }
 
     useEffect(() => {
         (async () => {
-            await getAndSetEditorData()
+            await getAndSetProgramData()
         })()
     }, []);
 
@@ -55,7 +57,7 @@ function Main() {
 
         if (selectRef.current.selectedIndex === 0) newTileset = "None";
         else {
-            newTileset = editorData.available_tilesets[selectRef.current.selectedIndex - 1]
+            newTileset = programData.available_tilesets[selectRef.current.selectedIndex - 1]
         }
 
         await tauriBridge.invoke(
@@ -80,7 +82,7 @@ function Main() {
 
         await tauriBridge.invoke(TauriCommand.SAVE_EDITOR_DATA, {})
 
-        await getAndSetEditorData()
+        await getAndSetProgramData()
     }
 
     async function onCDDAInputChange() {
@@ -108,12 +110,56 @@ function Main() {
         await pickCDDADirectory(cddaDirectoryPath)
     }
 
+    async function openDataDirectory() {
+        await tauriBridge.invoke(
+            TauriCommand.SHOW_PROGRAM_DARA_DIRECTORY,
+            {}
+        )
+    }
+
+    async function onRestoreDefaultsClick() {
+        const answer = await ask(
+            'Are you sure you want to restore the default settings?', {
+                title: 'Map Editor',
+                kind: 'warning',
+            }
+        );
+
+        if (!answer) return;
+
+        await emit(TauriEvent.CLOSE_ALL_TABS)
+
+        await tauriBridge.invoke(
+            TauriCommand.RESTORE_DEFAULT_CONFIG,
+            {}
+        )
+
+        const window = getCurrentWindow();
+        await window.close()
+    }
+
     return (
         <GenericWindow title={"Settings"}>
             <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
                      noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
 
             <div className={"settings-body"}>
+                <div className={"form-element"}
+                     data-tooltip-id={"info-tooltip"}
+                     data-tooltip-html={"Open the data directory of the editor"}
+                     onMouseMove={handleMouseMove}>
+                    <button onClick={openDataDirectory}>Open data directory</button>
+                    <label>Open data directory</label>
+                </div>
+                <div className={"form-element"}
+                     data-tooltip-id={"info-tooltip"}
+                     data-tooltip-html={"Restores the default settings of the application. " +
+                         "<b>This will NOT delete projects you have already created</b> "}
+                     onMouseMove={handleMouseMove}>
+                    <button onClick={onRestoreDefaultsClick}>Restore Defaults</button>
+                    <label>Restore defaults </label>
+                </div>
+
                 <MultiMenu tabs={
                     [
                         {
@@ -170,7 +216,7 @@ function Main() {
                                         >
                                             <option>None</option>
                                             {
-                                                editorData?.available_tilesets.map(t => <option key={t}>{t}</option>)
+                                                programData?.available_tilesets.map(t => <option key={t}>{t}</option>)
                                             }
                                         </select>
                                         <label>Tileset</label>
@@ -183,7 +229,7 @@ function Main() {
                                 <div className={"keybinds-settings"}>
                                     <div className={"keybindings-container"}>
                                         {
-                                            editorData?.config.keybinds.map(kb => (
+                                            programData?.config.keybinds.map(kb => (
                                                 <div className={"keybinding"}>
                                                     <span>{getKeybindingText(kb)}</span>
                                                     <span>{kb.action}</span>

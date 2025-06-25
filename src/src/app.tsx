@@ -7,7 +7,7 @@ import {NoTabScreen} from "./shared/components/noTabScreen.js";
 import {Header} from "./shared/components/header.js";
 import {getColorFromTheme, Theme, useTheme} from "./shared/hooks/useTheme.js";
 import {ProgramData} from "./tauri/types/editor.js";
-import {useEditorData} from "./shared/hooks/useEditorData.js";
+import {useProgramData} from "./shared/hooks/useProgramData.js";
 import {MainCanvas} from "./shared/components/mainCanvas.js";
 import {useWindows} from "./shared/hooks/useWindows.js";
 import {tauriBridge} from "./tauri/events/tauriBridge.js";
@@ -37,7 +37,7 @@ function App() {
     const showGridRef = useRef<boolean>(true)
 
     const {threeConfigRef} = useThreeSetup(theme, canvasRef, canvasContainerRef)
-    const editorData = useEditorData()
+    const editorData = useProgramData()[0]
     const tabs = useTabs()
     const {spritesheetConfig, tilesheets} = useTileset(threeConfigRef)
     const {
@@ -65,10 +65,14 @@ function App() {
     }, []);
 
     useEffect(() => {
-        if (!editorData) return;
+        if (!editorData) {
+            setIsAppReady(false)
+            return
+        }
 
         let unlisten: UnlistenFn;
         if (!editorData.config.cdda_path) {
+            setIsAppReady(false)
             unlisten = openWindow(WindowLabel.Welcome, theme, welcomeWindowRef, {
                 defaultWidth: 760,
                 defaultHeight: 600

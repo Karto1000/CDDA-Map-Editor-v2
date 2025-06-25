@@ -11,8 +11,8 @@ use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project,
     get_current_project_data, get_editor_data, open_project,
-    open_recent_project, remove_recent_project, save_program_data,
-    tileset_picked,
+    open_recent_project, remove_recent_project, restore_default_config,
+    save_program_data, show_program_data_directory, tileset_picked,
 };
 use crate::features::program_data::io::ProjectLoader;
 use crate::features::program_data::{
@@ -373,7 +373,9 @@ pub fn run() -> () {
             get_palettes,
             modify_palette,
             update_cdda_data_at,
-            remove_recent_project
+            remove_recent_project,
+            show_program_data_directory,
+            restore_default_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

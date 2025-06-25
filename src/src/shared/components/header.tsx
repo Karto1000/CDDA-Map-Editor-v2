@@ -15,6 +15,7 @@ import {useKeybindActionEvent} from "../hooks/useKeybindings.js";
 import {getKeybindingText, KeybindAction} from "../../tauri/types/editor.js";
 import {emit} from "@tauri-apps/api/event";
 import {MapEditorMode} from "../../features/editor/mapEditor.js";
+import {useTauriEvent} from "../hooks/useTauriEvent.js";
 
 type Props = {
     importMapWindowRef: RefObject<WebviewWindow>
@@ -31,6 +32,12 @@ export function Header(props: Props) {
     const [showGrid, setShowGrid] = useState<boolean>(true)
 
     const editorData = useContext(EditorDataContext)
+
+    useTauriEvent(
+        TauriEvent.CLOSE_ALL_TABS,
+        () => { onCloseAll() },
+        [tabs]
+    )
 
     useKeybindActionEvent(
         KeybindAction.OpenProject,

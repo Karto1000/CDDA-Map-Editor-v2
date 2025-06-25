@@ -41,6 +41,8 @@ export type BackendResponse<T, E> = {
 }
 
 export enum TauriCommand {
+    RESTORE_DEFAULT_CONFIG = "restore_default_config",
+    SHOW_PROGRAM_DARA_DIRECTORY = "show_program_data_directory",
     GET_EDITOR_DATA = "get_editor_data",
     CDDA_INSTALLATION_DIRECTORY_PICKED = "cdda_installation_directory_picked",
     TILESET_PICKED = "tileset_picked",
@@ -89,6 +91,8 @@ export type AboutInfo = {
 }
 
 export interface TauriCommandMap {
+    [TauriCommand.RESTORE_DEFAULT_CONFIG]: {};
+    [TauriCommand.SHOW_PROGRAM_DARA_DIRECTORY]: {};
     [TauriCommand.GET_EDITOR_DATA]: {};
     [TauriCommand.CDDA_INSTALLATION_DIRECTORY_PICKED]: {
         path: string,
@@ -187,7 +191,8 @@ export enum TauriEvent {
     OPEN_PALETTES_WINDOW = "open-palettes-window",
     KEYBIND_PRESSED = "keybind-pressed",
     CHANGE_EDITOR_MODE = "change-editor-mode",
-    MAPGEN_CHUNK_SELECTED = "mapgen-chunk-selected"
+    MAPGEN_CHUNK_SELECTED = "mapgen-chunk-selected",
+    CLOSE_ALL_TABS = "close-all-tabs"
 }
 
 export enum ToastType {
@@ -231,5 +236,6 @@ export interface TauriEventMap {
     [TauriEvent.KEYBIND_PRESSED]: KeybindAction
     [TauriEvent.CHANGE_EDITOR_MODE]: MapEditorMode,
     [TauriEvent.MAPGEN_CHUNK_SELECTED]: Vector3,
-    [TauriEvent.UPDATE_CDDA_DATA]: string[]
+    [TauriEvent.UPDATE_CDDA_DATA]: string[],
+    [TauriEvent.CLOSE_ALL_TABS]: {},
 }

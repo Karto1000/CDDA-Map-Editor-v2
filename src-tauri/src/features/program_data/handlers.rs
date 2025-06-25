@@ -4,8 +4,9 @@ use crate::data::KnownCataVariant;
 use crate::events::UPDATE_LIVE_VIEWER;
 use crate::features::program_data::io::{ProgramDataSaver, ProjectLoader};
 use crate::features::program_data::{
-    get_map_data_collection_from_map_viewer, LoadedProjects, ProgramData, Project, ProjectName,
-    ProjectType, SavedProject, Tab, TabType,
+    get_map_data_collection_from_map_viewer, LoadedProjects, ProgramConfig, ProgramData, Project,
+    ProjectName, ProjectType, SavedProject, Tab,
+    TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     load_tilesheet, LegacyTilesheet,
@@ -30,6 +31,52 @@ use std::time::Duration;
 use tauri::async_runtime::Mutex;
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio_test::block_on;
+
+#[tauri::command]
+pub async fn show_program_data_directory(
+    program_data: State<'_, Mutex<ProgramData>>,
+) -> Result<(), ()> {
+    let program_data_lock = program_data.lock().await;
+
+    showfile::show_path_in_file_manager(
+        program_data_lock.config.config_path.clone(),
+    );
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn restore_default_config(
+    app: AppHandle,
+    program_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
+) -> Result<(), ()> {
+    info!("Restoring default config");
+
+    let mut program_data_lock = program_data.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+
+    let mut default_config = ProgramConfig::default();
+    default_config.config_path = program_data_lock.config.config_path.clone();
+    program_data_lock.config = default_config;
+    program_data_lock.opened_project = None;
+    program_data_lock.openable_projects = Default::default();
+    program_data_lock.recent_projects = Default::default();
+    program_data_lock.available_tilesets = None;
+
+    loaded_projects_lock.clear();
+
+    let saver = ProgramDataSaver {
+        path: program_data_lock.config.config_path.clone(),
+    };
+
+    saver.save(&program_data_lock).await.unwrap();
+
+    app.emit(events::EDITOR_DATA_CHANGED, program_data_lock.clone())
+        .unwrap();
+
+    Ok(())
+}
 
 #[tauri::command]
 pub async fn get_current_project_data(

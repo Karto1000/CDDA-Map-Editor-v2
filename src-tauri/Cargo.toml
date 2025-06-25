@@ -57,3 +57,4 @@ rayon = { version = "1.10.0", features = [] }
 cdda_lib = { path = "cdda_lib" }
 cdda_macros = { path = "cdda_macros" }
 comfy-bounded-ints = { version = "0.2.1", features = ["serde"] }
+showfile = "0.1.1"
