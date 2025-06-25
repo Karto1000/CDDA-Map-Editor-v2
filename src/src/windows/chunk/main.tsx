@@ -22,6 +22,7 @@ import {useInitialData} from "../useInitialData.js";
 import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
 import {ModifyPaletteActionKind, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
+import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
@@ -94,7 +95,7 @@ function Main() {
             addPaletteWindowRef,
             {},
             chunkPosition,
-            WindowLabel.Palettes
+            WindowLabel.Chunk
         ))[1]
     }
 
@@ -107,23 +108,32 @@ function Main() {
 
     return (
         <GenericWindow
-            title={`Palettes for ${projectMap.id} at ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`}>
+            title={`${projectMap.id} at ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`}>
             <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
                      noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
-            <p>In this window you can see a list of palettes defined in the current map</p>
-            <div className={"line-break"}/>
-            {
-                project &&
-                <div className={"palettes-list"}>
-                    <button onClick={onAddPalette}>Add Palette</button>
-
+            <MultiMenu tabs={
+                [
                     {
-                        projectMap
-                            .palettes
-                            .map(getPaletteVisualization)
+                        name: "Palettes",
+                        content: <>
+                            <p>In this window you can see a list of palettes defined in the current map</p>
+                            <div className={"line-break"}/>
+                            {
+                                project &&
+                                <div className={"palettes-list"}>
+                                    <button onClick={onAddPalette}>Add Palette</button>
+
+                                    {
+                                        projectMap
+                                            .palettes
+                                            .map(getPaletteVisualization)
+                                    }
+                                </div>
+                            }
+                        </>
                     }
-                </div>
-            }
+                ]
+            }/>
         </GenericWindow>
     );
 }

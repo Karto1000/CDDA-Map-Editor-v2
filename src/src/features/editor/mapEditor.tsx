@@ -121,7 +121,7 @@ export function MapEditor(props: MapEditorProps) {
     useTauriEvent(
         TauriEvent.OPEN_PALETTES_WINDOW,
         _ => {
-            openWindow(WindowLabel.Palettes, theme.theme, props.palettesWindowRef, {}).then(value => {
+            openWindow(WindowLabel.Chunk, theme.theme, props.palettesWindowRef, {}).then(value => {
                 const [window, close] = value
                 palettesUnlistenFn.current = close
             })

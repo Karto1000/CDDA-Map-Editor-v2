@@ -116,7 +116,7 @@ export function useChunkSelect(
 
             if (!palettesWindowRef.current) {
                 palettesUnlistenFn.current = (await openWindow(
-                    WindowLabel.Palettes,
+                    WindowLabel.Chunk,
                     theme.theme,
                     palettesWindowRef,
                     {},

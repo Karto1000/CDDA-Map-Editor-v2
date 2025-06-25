@@ -13,7 +13,7 @@ export enum WindowLabel {
     About = "about",
     Welcome = "welcome",
     MapInfo = "map-info",
-    Palettes = "palettes",
+    Chunk = "chunk",
     AddPalette = "add-palette",
 }
 
