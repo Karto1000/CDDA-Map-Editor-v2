@@ -46,8 +46,9 @@ function App() {
         newMapWindowRef,
         aboutWindowRef,
         mapInfoWindowRef,
-        palettesWindowRef,
-        welcomeWindowRef
+        chunkInfoWindowRef,
+        welcomeWindowRef,
+        globalPalettesWindowRef
     } = useWindows()
 
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
@@ -117,7 +118,8 @@ function App() {
 
             if (tabs.tabs[tabs.openedTab].tab_type === TabTypeKind.MapEditor)
                 return <MapEditor
-                    palettesWindowRef={palettesWindowRef}
+                    globalPalettesWindowRef={globalPalettesWindowRef}
+                    chunkInfoWindowRef={chunkInfoWindowRef}
                     mapInfoWindowRef={mapInfoWindowRef}
                     showGridRef={showGridRef}
                     tilesheets={tilesheets}

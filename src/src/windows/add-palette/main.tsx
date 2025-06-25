@@ -12,11 +12,12 @@ import {useInitialData} from "../useInitialData.js";
 import {Vector3} from "three";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 
+export const __PALETTE_ADDED = "__palette-added"
+
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
     const [options, setOptions] = useState<ImguiSelectOption[]>([])
     const [selectedOption, setSelectedOption] = useState<string>("")
-    const chunkPosition = useInitialData<Vector3>()[0]
 
     useEffect(() => {
         (async () => {
@@ -49,18 +50,8 @@ function Main() {
 
         if (!selectedOption) return
 
-        await tauriBridge.invoke(
-            TauriCommand.MODIFY_PALETTE,
-            {
-                action: {
-                    type: ModifyPaletteActionKind.AddPalette,
-                    paletteName: selectedOption,
-                },
-                coordinates: [chunkPosition.x, chunkPosition.y, chunkPosition.z],
-            }
-        )
-
         const window = getCurrentWindow()
+        await window.emit(__PALETTE_ADDED, selectedOption )
         await window.close()
     }
 

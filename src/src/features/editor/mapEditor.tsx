@@ -24,13 +24,14 @@ export type MapEditorProps = {
     canvas: Canvas
     showGridRef: RefObject<boolean>
     mapInfoWindowRef: RefObject<WebviewWindow>
-    palettesWindowRef: RefObject<WebviewWindow>
+    chunkInfoWindowRef: RefObject<WebviewWindow>
+    globalPalettesWindowRef: RefObject<WebviewWindow>
 }
 
 export enum MapEditorMode {
-    Draw,
-    Fill,
-    ChunkSelect
+    Draw = "DRAW",
+    Fill = "FILL",
+    ChunkSelect = "CHUNK_SELECT"
 }
 
 export const CHUNK_SIZE = 24
@@ -43,7 +44,7 @@ export function MapEditor(props: MapEditorProps) {
 
     const grid = useRef<Object3D>(null)
     const mapInfoUnlistenFn = useRef<UnlistenFn>(null)
-    const palettesUnlistenFn = useRef<UnlistenFn>(null)
+    const globalPalettesUnlistenRef = useRef<UnlistenFn>(null)
     const [mapEditorMode, setMapEditorMode] = useState<MapEditorMode>(MapEditorMode.Draw)
     const zLevel = useRef<number>(0)
 
@@ -54,7 +55,7 @@ export function MapEditor(props: MapEditorProps) {
         mapEditorMode,
         project,
         zLevel,
-        props.palettesWindowRef
+        props.chunkInfoWindowRef
     )
 
     useKeybindings(
@@ -119,11 +120,11 @@ export function MapEditor(props: MapEditorProps) {
     )
 
     useTauriEvent(
-        TauriEvent.OPEN_PALETTES_WINDOW,
+        TauriEvent.OPEN_GLOBAL_PALETTES_WINDOW,
         _ => {
-            openWindow(WindowLabel.Chunk, theme.theme, props.palettesWindowRef, {}).then(value => {
+            openWindow(WindowLabel.GlobalPalettes, theme.theme, props.globalPalettesWindowRef, {}).then(value => {
                 const [window, close] = value
-                palettesUnlistenFn.current = close
+                globalPalettesUnlistenRef.current = close
             })
         },
         []
@@ -199,15 +200,18 @@ export function MapEditor(props: MapEditorProps) {
     useEffect(() => {
         return () => {
             props.mapInfoWindowRef.current = null
-            props.palettesWindowRef.current = null
+            props.chunkInfoWindowRef.current = null
 
             if (mapInfoUnlistenFn.current) mapInfoUnlistenFn.current()
-            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
+            if (globalPalettesUnlistenRef.current) globalPalettesUnlistenRef.current()
         }
     }, []);
 
     return (
-        <div>
-        </div>
+        <>
+            <div className={"editor-mode"}>
+                {mapEditorMode}
+            </div>
+        </>
     )
 }

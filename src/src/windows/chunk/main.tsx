@@ -23,11 +23,15 @@ import {useTauriEvent} from "../../shared/hooks/useTauriEvent.js";
 import {ModifyPaletteActionKind, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
 import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
+import {__PALETTE_ADDED} from "../add-palette/main.js";
 
 function Main() {
     const [tooltipPosition, handleMouseMove] = useMouseTooltip()
+
     const addPaletteWindowRef = useRef<WebviewWindow>(null)
     const addPaletteWindowCloseRef = useRef<UnlistenFn>(null)
+    const addPaletteSelectedUnlistenRef = useRef<UnlistenFn>(null)
+
     const openedTab = useForeignOpenedTab()
     const project = useCurrentProject<MapEditorData>(openedTab)
     const [chunkPosition, setChunkPosition] = useInitialData<Vector3>()
@@ -89,26 +93,49 @@ function Main() {
 
     async function onAddPalette() {
         // TODO: Theme
-        addPaletteWindowCloseRef.current = (await openWindow(
+        const [window, unlistenFn] = await openWindow(
             WindowLabel.AddPalette,
             Theme.Dark,
             addPaletteWindowRef,
             {},
-            chunkPosition,
+            {},
             WindowLabel.Chunk
-        ))[1]
+        )
+
+        addPaletteSelectedUnlistenRef.current = await window.once<string>(
+            __PALETTE_ADDED,
+            async (e) => {
+                await tauriBridge.invoke(
+                    TauriCommand.MODIFY_PALETTE,
+                    {
+                        action: {
+                            type: ModifyPaletteActionKind.AddPalette,
+                            paletteName: e.payload,
+                        },
+                        coordinates: [chunkPosition.x, chunkPosition.y, chunkPosition.z],
+                    }
+                )
+
+                addPaletteWindowCloseRef.current()
+            }
+        )
+
+        addPaletteWindowCloseRef.current = unlistenFn
     }
 
-    if (!chunkPosition || !project) return <></>
+    let windowTitle = "Loading..."
+    if (project && chunkPosition) {
+        const projectMap = project.project_type
+            .mapEditor
+            .maps[chunkPosition.z]
+            .maps[`${chunkPosition.x},${chunkPosition.y}`]
 
-    const projectMap = project.project_type
-        .mapEditor
-        .maps[chunkPosition.z]
-        .maps[`${chunkPosition.x},${chunkPosition.y}`]
+        windowTitle = `${projectMap.id} at ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`
+    }
+
 
     return (
-        <GenericWindow
-            title={`${projectMap.id} at ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`}>
+        <GenericWindow title={windowTitle}>
             <Tooltip id="info-tooltip" positionStrategy={"fixed"} position={tooltipPosition} delayShow={500}
                      noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}/>
             <MultiMenu tabs={
@@ -119,12 +146,15 @@ function Main() {
                             <p>In this window you can see a list of palettes defined in the current map</p>
                             <div className={"line-break"}/>
                             {
-                                project &&
+                                project && chunkPosition &&
                                 <div className={"palettes-list"}>
                                     <button onClick={onAddPalette}>Add Palette</button>
 
                                     {
-                                        projectMap
+                                        project.project_type
+                                            .mapEditor
+                                            .maps[chunkPosition.z]
+                                            .maps[`${chunkPosition.x},${chunkPosition.y}`]
                                             .palettes
                                             .map(getPaletteVisualization)
                                     }

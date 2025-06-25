@@ -5,7 +5,7 @@ import {BackendResponseType, TauriCommand, TauriEvent} from "../../tauri/events/
 import {UseTabsReturn} from "./useTabs.js";
 import {listen, UnlistenFn} from "@tauri-apps/api/event";
 
-export function useCurrentProject<T>(openedTab: string): Project<T> {
+export function useCurrentProject<T>(openedTab: string): Project<T> | null {
     const [currentProject, setCurrentProject] = useState<Project<T>>(null)
     const unlistenRef = useRef<UnlistenFn>(null)
 

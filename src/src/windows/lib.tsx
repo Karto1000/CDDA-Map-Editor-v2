@@ -15,6 +15,7 @@ export enum WindowLabel {
     MapInfo = "map-info",
     Chunk = "chunk",
     AddPalette = "add-palette",
+    GlobalPalettes = "global-palettes",
 }
 
 export type WindowOptions = {

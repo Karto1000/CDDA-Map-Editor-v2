@@ -579,7 +579,7 @@ export function Header(props: Props) {
                                             {
                                                 name: "Global Palettes",
                                                 onClick: async (ref) => {
-                                                    alert("Not Implemented")
+                                                    await emit(TauriEvent.OPEN_GLOBAL_PALETTES_WINDOW)
                                                     ref.current.closeMenu()
                                                 }
                                             }

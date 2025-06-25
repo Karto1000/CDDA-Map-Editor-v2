@@ -14,7 +14,8 @@ use glam::{IVec2, IVec3, UVec2};
 use log::info;
 use rayon::max_num_threads;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs::remove_dir;
 use std::ops::Range;
 use std::path::PathBuf;
 use tauri::{AppHandle, Emitter, State};
@@ -86,7 +87,7 @@ pub async fn new_map_editor(
 }
 
 #[derive(Error, Debug)]
-pub enum AddPaletteError {
+pub enum ModifyPaletteError {
     #[error(transparent)]
     SaveError(#[from] SaveError),
 
@@ -100,7 +101,7 @@ pub enum AddPaletteError {
     MissingMapgen(IVec3),
 }
 
-impl_serialize_for_error!(AddPaletteError);
+impl_serialize_for_error!(ModifyPaletteError);
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(
@@ -120,7 +121,7 @@ pub async fn modify_palette(
     action: ModifyPaletteAction,
     program_data: State<'_, Mutex<ProgramData>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
-) -> Result<(), AddPaletteError> {
+) -> Result<(), ModifyPaletteError> {
     let program_data_lock = program_data.lock().await;
     let mut loaded_projects_lock = loaded_projects.lock().await;
 
@@ -134,10 +135,10 @@ pub async fn modify_palette(
 
     let map_data = maps
         .get_mut(&coordinates.z)
-        .ok_or(AddPaletteError::MissingMapgen(coordinates.clone()))?
+        .ok_or(ModifyPaletteError::MissingMapgen(coordinates.clone()))?
         .maps
         .get_mut(&UVec2::new(coordinates.x as u32, coordinates.y as u32).into())
-        .ok_or(AddPaletteError::MissingMapgen(coordinates.clone()))?;
+        .ok_or(ModifyPaletteError::MissingMapgen(coordinates.clone()))?;
 
     match action {
         ModifyPaletteAction::AddPalette { palette_name } => {
@@ -165,6 +166,157 @@ pub async fn modify_palette(
         .unwrap();
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(
+    rename_all = "camelCase",
+    tag = "type",
+    rename_all_fields = "camelCase"
+)]
+pub enum ModifyGlobalPaletteAction {
+    AddPalette { palette_name: CDDAIdentifier },
+    RemovePalette { palette_name: CDDAIdentifier },
+}
+
+#[derive(Error, Debug)]
+pub enum ModifyGlobalPaletteError {
+    #[error(transparent)]
+    SaveError(#[from] SaveError),
+
+    #[error(transparent)]
+    GetCurrentProjectError(#[from] GetCurrentProjectError),
+
+    #[error(transparent)]
+    InvalidProjectType(#[from] InvalidProjectType),
+
+    #[error("Mapgen at coordinates {0} (x,y,z) does not exist")]
+    MissingMapgen(IVec3),
+}
+
+impl_serialize_for_error!(ModifyGlobalPaletteError);
+#[tauri::command(rename_all = "camelCase")]
+pub async fn modify_global_palette(
+    app: AppHandle,
+    action: ModifyGlobalPaletteAction,
+    program_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
+) -> Result<(), ModifyGlobalPaletteError> {
+    let program_data_lock = program_data.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+
+    let loaded_project =
+        get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
+
+    let maps = match &mut loaded_project.project_type {
+        ProjectType::MapEditor(me) => &mut me.maps,
+        ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
+    };
+
+    match action {
+        ModifyGlobalPaletteAction::AddPalette { palette_name } => {
+            info!("Trying to add global palette {} to project", palette_name);
+
+            for map_collection in maps.values_mut() {
+                for map in map_collection.maps.values_mut() {
+                    map.palettes
+                        .push(MapGenValue::String(palette_name.clone()));
+                }
+            }
+        },
+        ModifyGlobalPaletteAction::RemovePalette { palette_name } => {
+            info!(
+                "Trying to remove global palette {} from project",
+                palette_name
+            );
+
+            for map_collection in maps.values_mut() {
+                for map in map_collection.maps.values_mut() {
+                    map.palettes.retain(|p| {
+                        p != &MapGenValue::String(palette_name.clone())
+                    });
+                }
+            }
+        },
+    }
+
+    let path = match program_data_lock
+        .openable_projects
+        .get(&loaded_project.name)
+    {
+        None => unreachable!(),
+        Some(p) => p,
+    };
+
+    let project_saver = ProjectSaver { path: path.clone() };
+    project_saver.save(&loaded_project).await?;
+
+    app.emit(events::CURRENT_PROJECT_CHANGED, loaded_project.clone())
+        .unwrap();
+
+    Ok(())
+}
+#[derive(Error, Debug)]
+pub enum GetGlobalPalettesError {
+    #[error(transparent)]
+    GetCurrentProjectError(#[from] GetCurrentProjectError),
+
+    #[error(transparent)]
+    InvalidProjectType(#[from] InvalidProjectType),
+}
+
+impl_serialize_for_error!(GetGlobalPalettesError);
+
+#[tauri::command(rename_all = "camelCase")]
+pub async fn get_global_palettes(
+    program_data: State<'_, Mutex<ProgramData>>,
+    loaded_projects: State<'_, Mutex<LoadedProjects>>,
+) -> Result<Vec<MapGenValue>, GetGlobalPalettesError> {
+    let program_data_lock = program_data.lock().await;
+    let mut loaded_projects_lock = loaded_projects.lock().await;
+
+    let loaded_project =
+        get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
+
+    let maps = match &mut loaded_project.project_type {
+        ProjectType::MapEditor(me) => &mut me.maps,
+        ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
+    };
+
+    let mut removed = Vec::new();
+
+    // We want to get the palettes which are present in all maps
+    let palettes = maps
+        .values()
+        .map(|col| &col.maps)
+        .flatten()
+        .map(|(_, map)| map)
+        .fold(Vec::new(), |mut global, map| {
+            for palette in map.palettes.iter() {
+                if removed.contains(palette) {
+                    continue;
+                }
+
+                if global.contains(palette) {
+                    continue;
+                }
+
+                global.push(palette.clone());
+            }
+
+            let mut new_global = global.clone();
+
+            for palette in global.iter() {
+                if !map.palettes.contains(palette) {
+                    new_global.retain(|p| p != palette);
+                    removed.push(palette.clone());
+                }
+            }
+
+            new_global
+        });
+
+    Ok(palettes)
 }
 
 // #[tauri::command(rename_all = "camelCase")]

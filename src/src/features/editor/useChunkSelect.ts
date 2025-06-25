@@ -22,7 +22,7 @@ export function useChunkSelect(
     mapEditorMode: MapEditorMode,
     project: Project<MapEditorData>,
     z: RefObject<number>,
-    palettesWindowRef: RefObject<WebviewWindow>
+    chunkInfoWindowRef: RefObject<WebviewWindow>
 ) {
     const theme = useContext(ThemeContext)
     const tabs = useContext(TabContext)
@@ -31,7 +31,7 @@ export function useChunkSelect(
     const chunkSelectOuterMeshRef = useRef<BoxHelper>(null)
     const textRef = useRef<Mesh>(null)
 
-    const palettesUnlistenFn = useRef<UnlistenFn>(null)
+    const chunkInfoUnlistenFn = useRef<UnlistenFn>(null)
 
     const worldMousePosition = useWorldMousePosition(
         {
@@ -114,11 +114,11 @@ export function useChunkSelect(
             const currentChunkX = Math.floor(worldMousePosition.x / chunkSizeX)
             const currentChunkY = Math.floor(worldMousePosition.y / chunkSizeY)
 
-            if (!palettesWindowRef.current) {
-                palettesUnlistenFn.current = (await openWindow(
+            if (!chunkInfoWindowRef.current) {
+                chunkInfoUnlistenFn.current = (await openWindow(
                     WindowLabel.Chunk,
                     theme.theme,
-                    palettesWindowRef,
+                    chunkInfoWindowRef,
                     {},
                     new Vector3(currentChunkX, currentChunkY, z.current)
                 ))[1]
@@ -147,9 +147,9 @@ export function useChunkSelect(
 
     useEffect(() => {
         return () => {
-            if (palettesUnlistenFn.current) palettesUnlistenFn.current()
-            palettesUnlistenFn.current = null
-            palettesWindowRef.current = null
+            if (chunkInfoUnlistenFn.current) chunkInfoUnlistenFn.current()
+            chunkInfoUnlistenFn.current = null
+            chunkInfoWindowRef.current = null
         }
     }, [tabs.openedTab, theme]);
 

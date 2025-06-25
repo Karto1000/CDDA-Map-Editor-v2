@@ -44,7 +44,7 @@ pub enum CDDAString {
     StringMap { str: String },
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Hash, Eq, Clone, Serialize, Deserialize)]
 pub struct Switch {
     pub param: ParameterIdentifier,
     pub fallback: CDDAIdentifier,

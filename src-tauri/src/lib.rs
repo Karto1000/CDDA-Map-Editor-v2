@@ -6,7 +6,9 @@ mod util;
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::data::spawn_cdda_watcher;
 use crate::features::cdda_data::handler::{get_palettes, update_cdda_data_at};
-use crate::features::editor::handler::{modify_palette, new_map_editor};
+use crate::features::editor::handler::{
+    get_global_palettes, modify_global_palette, modify_palette, new_map_editor,
+};
 use crate::features::editor::MapEditor;
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project,
@@ -375,7 +377,9 @@ pub fn run() -> () {
             update_cdda_data_at,
             remove_recent_project,
             show_program_data_directory,
-            restore_default_config
+            restore_default_config,
+            modify_global_palette,
+            get_global_palettes
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
