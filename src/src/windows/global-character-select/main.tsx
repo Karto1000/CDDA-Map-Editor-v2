@@ -50,6 +50,7 @@ function Main() {
             return
         }
 
+        console.log(response.data)
         setGlobalPaletteReprs(response.data)
     }
 
@@ -79,25 +80,63 @@ function Main() {
 
                         return <div className={"character-mapping-container"} key={key}>
                             {
-                                characterMapping.terrain.bg !== null &&
+                                characterMapping.terrain?.bg &&
                                 <TilesheetSprite
                                     className={"character-mapping-sprite"}
                                     tilesheets={initialData.slimTilesheets}
                                     spritesheetConfig={initialData.spritesheetConfig}
                                     index={characterMapping.terrain.bg}
-                                    width={64}
-                                    height={64}
+                                    scale={2}
                                 />
                             }
                             {
-                                characterMapping.terrain.fg !== null &&
+                                characterMapping.terrain?.fg &&
                                 <TilesheetSprite
                                     className={"character-mapping-sprite"}
                                     tilesheets={initialData.slimTilesheets}
                                     spritesheetConfig={initialData.spritesheetConfig}
                                     index={characterMapping.terrain.fg}
-                                    width={64}
-                                    height={64}
+                                    scale={2}
+                                />
+                            }
+                            {
+                                characterMapping.furniture?.bg &&
+                                <TilesheetSprite
+                                    className={"character-mapping-sprite"}
+                                    tilesheets={initialData.slimTilesheets}
+                                    spritesheetConfig={initialData.spritesheetConfig}
+                                    index={characterMapping.furniture.bg}
+                                    scale={2}
+                                />
+                            }
+                            {
+                                characterMapping.furniture?.fg &&
+                                <TilesheetSprite
+                                    className={"character-mapping-sprite"}
+                                    tilesheets={initialData.slimTilesheets}
+                                    spritesheetConfig={initialData.spritesheetConfig}
+                                    index={characterMapping.furniture.fg}
+                                    scale={2}
+                                />
+                            }
+                            {
+                                characterMapping.monster?.bg &&
+                                <TilesheetSprite
+                                    className={"character-mapping-sprite"}
+                                    tilesheets={initialData.slimTilesheets}
+                                    spritesheetConfig={initialData.spritesheetConfig}
+                                    index={characterMapping.monster.bg}
+                                    scale={2}
+                                />
+                            }
+                            {
+                                characterMapping.monster?.fg &&
+                                <TilesheetSprite
+                                    className={"character-mapping-sprite"}
+                                    tilesheets={initialData.slimTilesheets}
+                                    spritesheetConfig={initialData.spritesheetConfig}
+                                    index={characterMapping.monster.fg}
+                                    scale={2}
                                 />
                             }
                         </div>

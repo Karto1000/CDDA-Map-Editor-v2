@@ -347,6 +347,9 @@ impl_serialize_for_error!(GetGlobalPalettesRepresentationError);
 #[derive(Debug, Serialize, Default)]
 pub struct CharacterMapping {
     pub terrain: Option<ForeBackIds<Option<u32>, Option<u32>>>,
+    pub furniture: Option<ForeBackIds<Option<u32>, Option<u32>>>,
+    pub monster: Option<ForeBackIds<Option<u32>, Option<u32>>>,
+    pub field: Option<ForeBackIds<Option<u32>, Option<u32>>>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -437,9 +440,9 @@ pub async fn get_global_palette_representations(
 
                 match repr.tile_layer {
                     TileLayer::Terrain => mapping.terrain = Some(index),
-                    TileLayer::Furniture => {},
-                    TileLayer::Monster => {},
-                    TileLayer::Field => {},
+                    TileLayer::Furniture => mapping.furniture = Some(index),
+                    TileLayer::Monster => mapping.monster = Some(index),
+                    TileLayer::Field => mapping.field = Some(index),
                 }
             }
         }

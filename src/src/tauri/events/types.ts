@@ -108,6 +108,9 @@ export type ForeBackIds = {
 
 export type CharacterMapping = {
     terrain: ForeBackIds,
+    furniture: ForeBackIds
+    monster: ForeBackIds
+    field: ForeBackIds
 }
 
 export interface TauriCommandMap {

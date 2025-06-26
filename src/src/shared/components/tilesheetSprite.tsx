@@ -1,15 +1,13 @@
 import React, {RefObject, useMemo} from "react"
 import {SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {SlimTilesheet, SlimTilesheets} from "../../features/sprites/slimTilesheets.js";
-import {ForeBackIds} from "../../tauri/events/types.js";
 import {clsx} from "clsx";
 
 export type TilesheetSpriteProps = {
     tilesheets: SlimTilesheets,
     spritesheetConfig: RefObject<SpritesheetConfig>
     index: number
-    width: number
-    height: number
+    scale: number
     className?: string
 }
 
@@ -25,23 +23,34 @@ export function TilesheetSprite(props: TilesheetSpriteProps) {
 
     const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
-    const {url, range, size} = useMemo(() => {
+    const {url, range, size, offset} = useMemo(() => {
         for (const key of Object.keys(props.tilesheets.tilesheets)) {
             const tilesheet = props.tilesheets.tilesheets[key]
 
             const tileEntry = props.spritesheetConfig.current["tiles-new"].find(s => s.file === key)
             const spriteWidth = tileEntry.sprite_width || tileInfo.width
             const spriteHeight = tileEntry.sprite_height || tileInfo.height
+            const spriteOffsetX = -tileEntry.sprite_offset_x || 0
+            const spriteOffsetY = -tileEntry.sprite_offset_y || 0
 
             if (isWithinRange(tilesheet, props.index)) {
-                return {url: `url(${tilesheet.objectURL})`, range: tilesheet.range, size: [spriteWidth, spriteHeight]}
+                return {
+                    url: `url(${tilesheet.objectURL})`,
+                    range: tilesheet.range,
+                    size: [spriteWidth, spriteHeight],
+                    offset: [
+                        spriteOffsetX,
+                        spriteOffsetY
+                    ]
+                }
             }
         }
 
         return {
             url: `url(${props.tilesheets.fallback.objectURL})`,
             range: [0, 0],
-            size: [tileInfo.width, tileInfo.height]
+            size: [tileInfo.width, tileInfo.height],
+            offset: [0, 0]
         }
     }, [])
 
@@ -51,15 +60,19 @@ export function TilesheetSprite(props: TilesheetSpriteProps) {
     return (
         <div className={clsx("tilesheet-sprite", props.className)}
              style={{
-                 width: props.width,
-                 height: props.height
+                 width: 64,
+                 height: 64,
              }}>
             <div style={{
+                position: "absolute",
+                top: -offset[1] * props.scale,
+                left: -offset[0] * props.scale,
                 backgroundImage: url,
                 backgroundPosition: `${-backgroundOffsetX}px ${-backgroundOffsetY}px`,
                 backgroundRepeat: "no-repeat",
-                transform: `scale(${props.width / size[0]}, ${props.height / size[1]})`,
-                transformOrigin: '0 0',
+                transform: `scale(${props.scale}, ${props.scale})`,
+                transformOrigin: `top left`,
+                // transformOrigin: `${-backgroundOffsetX - offset[0]}px ${-backgroundOffsetY - offset[1]}px`,
                 width: size[0],
                 height: size[1],
                 imageRendering: "pixelated",

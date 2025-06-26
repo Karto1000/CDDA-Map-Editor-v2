@@ -48,7 +48,6 @@ impl Property for TerrainProperty {
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Option<Representation> {
-        dbg!(&self.mapgen_value);
         let ident = self
             .mapgen_value
             .get_constant_identifier(calculated_parameters)
@@ -138,7 +137,21 @@ impl Property for MonstersProperty {
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Option<Representation> {
-        None
+        let first_id = self.monster.first()?;
+
+        match &first_id.data.id {
+            MapGenMonsterType::Monster { monster } => {
+                let monster = monster
+                    .get_constant_identifier(calculated_parameters)
+                    .ok()?;
+                Some(Representation {
+                    id: TilesheetCDDAId::simple(monster),
+                    tile_layer: TileLayer::Monster,
+                })
+            },
+            // TODO
+            MapGenMonsterType::MonsterGroup { .. } => None,
+        }
     }
 
     fn value(&self) -> Value {
@@ -178,7 +191,15 @@ impl Property for FurnitureProperty {
         &self,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Option<Representation> {
-        None
+        let id = self
+            .mapgen_value
+            .get_constant_identifier(calculated_parameters)
+            .ok()?;
+
+        Some(Representation {
+            id: TilesheetCDDAId::simple(id),
+            tile_layer: TileLayer::Furniture,
+        })
     }
 
     fn value(&self) -> Value {
