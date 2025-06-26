@@ -50,6 +50,7 @@ use log::info;
 use log::warn;
 use notify::{recommended_watcher, Watcher};
 use notify_debouncer_full::new_debouncer;
+use rand::rng;
 use rayon::iter::IntoParallelRefIterator;
 use rayon::iter::ParallelIterator;
 use serde::Deserialize;
@@ -186,7 +187,8 @@ pub async fn get_sprites(
     for (_, map_collection) in project.project_type.maps_mut().iter_mut() {
         // we need to calculate the parameters for the predecessor here because we
         // cannot borrow json data as mutable inside the get_mapped_cdda_ids function
-        map_collection.calculate_predecessor_parameters(json_data);
+        map_collection
+            .calculate_random_predecessor_parameters(&mut rng(), json_data);
     }
 
     let region_settings = json_data
@@ -199,8 +201,9 @@ pub async fn get_sprites(
         .maps()
         .par_iter()
         .flat_map(|(z, map_collection)| {
-            let local_mapped_cdda_ids =
-                map_collection.get_mapped_cdda_ids(json_data, *z).unwrap();
+            let local_mapped_cdda_ids = map_collection
+                .get_random_mapped_cdda_ids(&mut rng(), json_data, *z)
+                .unwrap();
 
             let mut ids = HashMap::new();
             ids.insert(*z, local_mapped_cdda_ids);
@@ -395,7 +398,10 @@ pub async fn reload_project(
                 get_map_data_collection_from_map_viewer(map_viewer).await?;
 
             for (_, map_data) in map_data_collection.iter_mut() {
-                map_data.calculate_parameters(&json_data.palettes)?
+                map_data.calculate_random_parameters(
+                    &mut rng(),
+                    &json_data.palettes,
+                )?
             }
 
             map_viewer.maps = map_data_collection;
@@ -714,7 +720,8 @@ pub async fn create_viewer(
             };
 
             let mut collection = overmap_terrain_importer.load().await.unwrap();
-            collection.calculate_parameters(&json_data.palettes)?;
+            collection
+                .calculate_random_parameters(&mut rng(), &json_data.palettes)?;
 
             let mut maps = HashMap::new();
             maps.insert(0, collection);
@@ -755,7 +762,7 @@ pub async fn create_viewer(
             let mut maps = overmap_special_importer.load().await.unwrap();
 
             for (_, m) in maps.iter_mut() {
-                m.calculate_parameters(&json_data.palettes)?
+                m.calculate_random_parameters(&mut rng(), &json_data.palettes)?
             }
 
             let map_size = get_size(&maps);

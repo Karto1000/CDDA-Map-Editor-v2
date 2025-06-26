@@ -77,13 +77,30 @@ function Main() {
                     Object.keys(globalPaletteReprs).map(key => {
                         const characterMapping = globalPaletteReprs[key]
 
-                        return <TilesheetSprite
-                            tilesheets={initialData.slimTilesheets}
-                            spritesheetConfig={initialData.spritesheetConfig}
-                            index={characterMapping.terrain}
-                            width={64}
-                            height={64}
-                        />
+                        return <div className={"character-mapping-container"} key={key}>
+                            {
+                                characterMapping.terrain.bg !== null &&
+                                <TilesheetSprite
+                                    className={"character-mapping-sprite"}
+                                    tilesheets={initialData.slimTilesheets}
+                                    spritesheetConfig={initialData.spritesheetConfig}
+                                    index={characterMapping.terrain.bg}
+                                    width={64}
+                                    height={64}
+                                />
+                            }
+                            {
+                                characterMapping.terrain.fg !== null &&
+                                <TilesheetSprite
+                                    className={"character-mapping-sprite"}
+                                    tilesheets={initialData.slimTilesheets}
+                                    spritesheetConfig={initialData.spritesheetConfig}
+                                    index={characterMapping.terrain.fg}
+                                    width={64}
+                                    height={64}
+                                />
+                            }
+                        </div>
                     })
                 }
             </div>

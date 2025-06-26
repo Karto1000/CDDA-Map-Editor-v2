@@ -43,6 +43,7 @@ use features::toast::ToastMessage;
 use features::viewer::LiveViewerData;
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
+use rand::rng;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::Deref;
@@ -173,8 +174,10 @@ async fn frontend_ready(
                         info!("Opening Map Editor");
 
                         for (_, maps) in map_editor.maps.iter_mut() {
-                            match maps.calculate_parameters(&json_data.palettes)
-                            {
+                            match maps.calculate_random_parameters(
+                                &mut rng(),
+                                &json_data.palettes,
+                            ) {
                                 Ok(_) => {},
                                 Err(e) => {
                                     warn!(
@@ -208,7 +211,8 @@ async fn frontend_ready(
                                     for (_, maps) in
                                         map_data_collection.iter_mut()
                                     {
-                                        match maps.calculate_parameters(
+                                        match maps.calculate_random_parameters(
+                                            &mut rng(),
                                             &json_data.palettes,
                                         ) {
                                             Ok(_) => {},

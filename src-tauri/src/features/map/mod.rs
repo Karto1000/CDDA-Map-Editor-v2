@@ -31,7 +31,7 @@ use futures_lite::StreamExt;
 use glam::{IVec2, IVec3, UVec2};
 use indexmap::IndexMap;
 use log::warn;
-use rand::{rng, Rng};
+use rand::{rng, Rng, RngCore};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
@@ -53,13 +53,17 @@ pub trait Place:
         position: &IVec2,
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        None
-    }
+    ) -> Option<Vec<SetTile>>;
 }
 
 clone_trait_object!(Place);
 impl_downcast!(sync Place);
+
+#[derive(Debug)]
+pub struct Representation {
+    pub id: TilesheetCDDAId,
+    pub tile_layer: TileLayer,
+}
 
 // Things like terrain, furniture, monsters This allows us to get the Identifier
 pub trait Property:
@@ -71,6 +75,11 @@ pub trait Property:
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>>;
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation>;
 
     fn value(&self) -> Value;
 }
@@ -112,24 +121,6 @@ pub enum MappingKind {
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Cell {
     pub character: char,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct FurnitureRepresentation {
-    pub selected_furniture: Value,
-    pub selected_sign: Value,
-    pub selected_computer: Value,
-    pub selected_gaspump: Value,
-}
-
-// The struct which holds the data that will be shown in the side panel in the ui
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct CellRepresentation {
-    pub terrain: Value,
-    pub furniture: FurnitureRepresentation,
-    pub item_groups: Value,
 }
 
 #[derive(Debug, Default, Serialize, Eq, PartialEq)]
@@ -463,8 +454,9 @@ pub enum GetMappedCDDAIdsError {
 }
 
 impl MapData {
-    pub fn calculate_parameters(
+    pub fn calculate_random_parameters(
         &mut self,
+        rng: &mut impl Rng,
         all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
     ) -> Result<(), CalculateParametersError> {
         let mut calculated_parameters = IndexMap::new();
@@ -473,19 +465,20 @@ impl MapData {
             let calculated_value = parameter
                 .default
                 .distribution
-                .get_identifier(&calculated_parameters)?;
+                .get_random_identifier(rng, &calculated_parameters)?;
 
             calculated_parameters.insert(id.clone(), calculated_value);
         }
 
         for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value.get_identifier(&calculated_parameters)?;
+            let id = mapgen_value
+                .get_random_identifier(rng, &calculated_parameters)?;
             let palette = all_palettes.get(&id).ok_or(
                 CalculateParametersError::MissingPalette(id.to_string()),
             )?;
 
             palette
-                .calculate_parameters(all_palettes)?
+                .calculate_parameters(rng, all_palettes)?
                 .into_iter()
                 .for_each(|(palette_id, ident)| {
                     calculated_parameters.insert(palette_id, ident);
@@ -497,8 +490,9 @@ impl MapData {
         Ok(())
     }
 
-    pub fn get_mapped_cdda_ids(
+    pub fn get_random_mapped_cdda_ids(
         &self,
+        rng: &mut impl Rng,
         json_data: &DeserializedCDDAJsonData,
         z: ZLevel,
     ) -> Result<HashMap<IVec3, MappedCDDAIdsForTile>, GetMappedCDDAIdsError>
@@ -512,9 +506,10 @@ impl MapData {
 
         let fill_terrain_sprite = match &self.fill {
             None => None,
-            Some(id) => {
-                Some(id.get_identifier(&self.calculated_parameters).unwrap())
-            },
+            Some(id) => Some(
+                id.get_random_identifier(rng, &self.calculated_parameters)
+                    .unwrap(),
+            ),
         };
 
         // we need to calculate the predecessor_mapgen here before so we can replace it later
@@ -544,8 +539,8 @@ impl MapData {
                     ),
                 };
 
-                local_mapped_cdda_ids =
-                    predecessor_map_data.get_mapped_cdda_ids(json_data, z)?;
+                local_mapped_cdda_ids = predecessor_map_data
+                    .get_random_mapped_cdda_ids(rng, json_data, z)?;
             },
         }
 
@@ -590,7 +585,7 @@ impl MapData {
             };
         });
 
-        let all_commands = self.get_commands(&json_data);
+        let all_commands = self.get_commands(rng, &json_data);
 
         for command in all_commands {
             let command_3d_coords =
@@ -672,6 +667,7 @@ impl MapData {
 
     pub fn get_commands(
         &self,
+        rng: &mut impl Rng,
         json_data: &DeserializedCDDAJsonData,
     ) -> Vec<SetTile> {
         // We need to store all commands in this list here so we can sort it and act them out in
@@ -686,6 +682,7 @@ impl MapData {
                 self.transform_coordinates(&p.0.as_ivec2());
 
             let ident_commands = self.get_identifier_change_commands(
+                rng,
                 &cell.character,
                 &transformed_position,
                 &json_data,
@@ -704,7 +701,7 @@ impl MapData {
                         self.transform_coordinates(&position);
 
                     // We only want to place one in place.chance times
-                    let rand_chance_num = rng().random_range(0..=100);
+                    let rand_chance_num = rng.random_range(0..=100);
                     if rand_chance_num > place.chance {
                         continue;
                     }
@@ -729,6 +726,7 @@ impl MapData {
 
     pub fn get_visible_mapping(
         &self,
+        rng: &mut impl Rng,
         mapping_kind: &MappingKind,
         character: &char,
         position: &IVec2,
@@ -743,7 +741,7 @@ impl MapData {
         // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value
-                .get_identifier(&self.calculated_parameters)
+                .get_random_identifier(rng, &self.calculated_parameters)
                 .ok()?;
 
             let palette = json_data.palettes.get(&palette_id)?;
@@ -764,6 +762,7 @@ impl MapData {
 
     pub fn get_identifier_change_commands(
         &self,
+        rng: &mut impl Rng,
         character: &char,
         position: &IVec2,
         json_data: &DeserializedCDDAJsonData,
@@ -772,7 +771,7 @@ impl MapData {
 
         for kind in MappingKind::iter() {
             let kind_commands = self
-                .get_visible_mapping(&kind, character, position, json_data)
+                .get_visible_mapping(rng, &kind, character, position, json_data)
                 .unwrap_or_default();
 
             commands.extend(kind_commands)

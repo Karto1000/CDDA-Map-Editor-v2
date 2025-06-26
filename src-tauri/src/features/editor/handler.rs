@@ -3,23 +3,26 @@ use crate::data::{GetIdentifier, TileLayer};
 use crate::features::editor::data::ZLevels;
 use crate::features::editor::{MapEditor, MapSize};
 use crate::features::map::map_properties::TerrainProperty;
-use crate::features::map::{MappedCDDAId, MappingKind};
+use crate::features::map::{
+    MappedCDDAId, MappingKind, Property, Representation,
+};
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::{
     AdjacentSprites, LoadedProjects, MapDataCollection, ProgramData, Project,
     ProjectType, SavedProject, Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
-    LegacyTilesheet, TilesheetCDDAId,
+    LegacyTilesheet, Rotated, SpriteIndex, TilesheetCDDAId,
 };
-use crate::features::tileset::Tilesheet;
+use crate::features::tileset::{ForeBackIds, Tilesheet};
 use crate::util::{
     get_current_project_mut, get_json_data, get_size, CDDADataError,
     GetCurrentProjectError, Save, SaveError,
 };
 use crate::{events, impl_serialize_for_error, InvalidProjectType};
-use cdda_lib::types::{CDDAIdentifier, MapGenValue};
+use cdda_lib::types::{CDDAIdentifier, MapGenValue, MeabyVec};
 use glam::{IVec2, IVec3, UVec2};
+use indexmap::IndexMap;
 use log::info;
 use rayon::max_num_threads;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -28,6 +31,7 @@ use std::fs::remove_dir;
 use std::ops::{Deref, Range};
 use std::path::PathBuf;
 use std::sync::Arc;
+use strum::IntoEnumIterator;
 use tauri::{AppHandle, Emitter, State};
 use thiserror::Error;
 use tokio::sync::Mutex;
@@ -340,9 +344,9 @@ pub enum GetGlobalPalettesRepresentationError {
 
 impl_serialize_for_error!(GetGlobalPalettesRepresentationError);
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Default)]
 pub struct CharacterMapping {
-    pub terrain: u32,
+    pub terrain: Option<ForeBackIds<Option<u32>, Option<u32>>>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -361,65 +365,83 @@ pub async fn get_global_palette_representations(
     let tilesheet_lock = tilesheet.lock().await;
 
     let mut character_mappings = HashMap::new();
+
     for global_palette in global_palettes {
-        match global_palette {
-            MapGenValue::String(s) => {
-                let palette = json_data.palettes.get(&s).unwrap();
+        let palette_id = global_palette
+            .get_constant_identifier(&IndexMap::new())
+            .unwrap();
+        let palette = json_data.palettes.get(&palette_id).unwrap();
 
-                let terrain =
-                    palette.properties.get(&MappingKind::Terrain).unwrap();
+        for kind in MappingKind::iter() {
+            let properties = match palette.properties.get(&kind) {
+                None => continue,
+                Some(p) => p,
+            };
 
-                for (char, property) in terrain {
-                    let terrain_prop = property
-                        .clone()
-                        .downcast_arc::<TerrainProperty>()
-                        .unwrap();
+            for (char, property) in properties {
+                let repr = match property.representation(&IndexMap::new()) {
+                    None => continue,
+                    Some(r) => r,
+                };
 
-                    match &terrain_prop.mapgen_value {
-                        MapGenValue::String(s) => {
-                            let mapped_cdda_id = MappedCDDAId::simple(
-                                TilesheetCDDAId::simple(s.clone()),
-                            );
+                let mapping = match character_mappings.get_mut(char) {
+                    None => {
+                        character_mappings
+                            .insert(char.clone(), CharacterMapping::default());
+                        character_mappings.get_mut(&char).unwrap()
+                    },
+                    Some(c) => c,
+                };
 
-                            let index = match tilesheet_lock.deref() {
-                                None => fallback_tilesheet
+                let mapped_cdda_id = MappedCDDAId::simple(repr.id);
+
+                let index = match tilesheet_lock.deref() {
+                    None => ForeBackIds::new(
+                        Some(
+                            fallback_tilesheet
+                                .get_fallback(&mapped_cdda_id, json_data),
+                        ),
+                        None,
+                    ),
+                    Some(t) => t
+                        .get_sprite(&mapped_cdda_id, json_data)
+                        .map(|s| {
+                            let fg_id = s
+                                .get_fg_id(
+                                    &mapped_cdda_id,
+                                    &repr.tile_layer,
+                                    &AdjacentSprites::none(),
+                                    json_data,
+                                )
+                                .map(|i| i.data.into_single().unwrap());
+
+                            let bg_id = s
+                                .get_bg_id(
+                                    &mapped_cdda_id,
+                                    &repr.tile_layer,
+                                    &AdjacentSprites::none(),
+                                    json_data,
+                                )
+                                .map(|i| i.data.into_single().unwrap());
+
+                            ForeBackIds::new(fg_id, bg_id)
+                        })
+                        .unwrap_or(ForeBackIds::new(
+                            Some(
+                                fallback_tilesheet
                                     .get_fallback(&mapped_cdda_id, json_data),
-                                Some(t) => t
-                                    .get_sprite(&mapped_cdda_id, json_data)
-                                    .map(|s| {
-                                        s.get_fg_id(
-                                            &mapped_cdda_id,
-                                            &TileLayer::Terrain,
-                                            &AdjacentSprites::none(),
-                                            json_data,
-                                        )
-                                        .unwrap()
-                                        .data
-                                        .into_single()
-                                        .unwrap()
-                                    })
-                                    .unwrap_or(
-                                        fallback_tilesheet.get_fallback(
-                                            &mapped_cdda_id,
-                                            json_data,
-                                        ),
-                                    ),
-                            };
+                            ),
+                            None,
+                        )),
+                };
 
-                            character_mappings.insert(
-                                char.clone(),
-                                CharacterMapping { terrain: index },
-                            );
-                        },
-                        MapGenValue::Param { .. } => {},
-                        MapGenValue::Switch { .. } => {},
-                        MapGenValue::Distribution(_) => {},
-                    }
+                match repr.tile_layer {
+                    TileLayer::Terrain => mapping.terrain = Some(index),
+                    TileLayer::Furniture => {},
+                    TileLayer::Monster => {},
+                    TileLayer::Field => {},
                 }
-            },
-            MapGenValue::Param { .. } => {},
-            MapGenValue::Switch { .. } => {},
-            MapGenValue::Distribution(_) => {},
+            }
         }
     }
 

@@ -101,8 +101,13 @@ export type AboutInfo = {
     description: string,
 }
 
+export type ForeBackIds = {
+    fg: number | null,
+    bg: number | null,
+}
+
 export type CharacterMapping = {
-    terrain: number
+    terrain: ForeBackIds,
 }
 
 export interface TauriCommandMap {
@@ -182,7 +187,7 @@ export interface TauriCommandMap {
     [TauriCommand.MODIFY_GLOBAL_PALETTE]: {
         action: ModifyGlobalPaletteAction,
     }
-    [TauriCommand.UPDATE_CDDA_DATA_AT]: {paths: string[]},
+    [TauriCommand.UPDATE_CDDA_DATA_AT]: { paths: string[] },
     [TauriCommand.GET_GLOBAL_PALETTES]: {};
     [TauriCommand.GET_GLOBAL_PALETTE_REPRESENTATIONS]: {};
 }

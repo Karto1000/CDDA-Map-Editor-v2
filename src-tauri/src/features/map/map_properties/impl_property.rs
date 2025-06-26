@@ -27,7 +27,7 @@ impl Property for TerrainProperty {
     ) -> Option<Vec<SetTile>> {
         let ident = self
             .mapgen_value
-            .get_identifier(&map_data.calculated_parameters)
+            .get_random_identifier(&mut rng(), &map_data.calculated_parameters)
             .ok()?;
 
         if ident == CDDAIdentifier::from(NULL_TERRAIN) {
@@ -44,6 +44,22 @@ impl Property for TerrainProperty {
         Some(vec![command])
     }
 
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        dbg!(&self.mapgen_value);
+        let ident = self
+            .mapgen_value
+            .get_constant_identifier(calculated_parameters)
+            .ok()?;
+
+        Some(Representation {
+            id: TilesheetCDDAId::simple(ident),
+            tile_layer: TileLayer::Terrain,
+        })
+    }
+
     fn value(&self) -> Value {
         serde_json::to_value(&self.mapgen_value).unwrap()
     }
@@ -58,6 +74,8 @@ impl Property for MonstersProperty {
     ) -> Option<Vec<SetTile>> {
         let monster = self.monster.get_random();
 
+        let mut rng = rng();
+
         let ident = match monster
             .chance
             .clone()
@@ -65,24 +83,34 @@ impl Property for MonstersProperty {
             .is_random_hit(100)
         {
             true => match &monster.id {
-                MapGenMonsterType::Monster { monster } => {
-                    monster.get_identifier(&map_data.calculated_parameters).ok()
-                },
+                MapGenMonsterType::Monster { monster } => monster
+                    .get_random_identifier(
+                        &mut rng,
+                        &map_data.calculated_parameters,
+                    )
+                    .ok(),
                 MapGenMonsterType::MonsterGroup { group } => {
                     let id = group
-                        .get_identifier(&map_data.calculated_parameters)
+                        .get_random_identifier(
+                            &mut rng,
+                            &map_data.calculated_parameters,
+                        )
                         .ok()?;
                     let mon_group = json_data.monster_groups.get(&id)?;
 
                     let rand_monster = mon_group
                         .get_random_monster(
+                            &mut rng,
                             &json_data.monster_groups,
                             &map_data.calculated_parameters,
                         )
                         .ok();
 
                     rand_monster?
-                        .get_identifier(&map_data.calculated_parameters)
+                        .get_random_identifier(
+                            &mut rng,
+                            &map_data.calculated_parameters,
+                        )
                         .ok()
                 },
             },
@@ -106,6 +134,13 @@ impl Property for MonstersProperty {
         None
     }
 
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
+    }
+
     fn value(&self) -> Value {
         serde_json::to_value(&self.monster).unwrap()
     }
@@ -118,9 +153,11 @@ impl Property for FurnitureProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
+        let mut rng = rng();
+
         let ident = self
             .mapgen_value
-            .get_identifier(&map_data.calculated_parameters)
+            .get_random_identifier(&mut rng, &map_data.calculated_parameters)
             .ok()?;
 
         if ident == CDDAIdentifier::from(NULL_FURNITURE) {
@@ -135,6 +172,13 @@ impl Property for FurnitureProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
     }
 
     fn value(&self) -> Value {
@@ -164,6 +208,13 @@ impl Property for SignsProperty {
         Some(vec![command])
     }
 
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
+    }
+
     fn value(&self) -> Value {
         serde_json::to_value(&self.signs).unwrap()
     }
@@ -176,7 +227,7 @@ impl Property for NestedProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
-        let rng = rng();
+        let mut rng = rng();
         let nested_chunk = self.nested.get_random();
 
         let should_place = match &nested_chunk.neighbors {
@@ -213,7 +264,7 @@ impl Property for NestedProperty {
         let selected_chunk = nested_chunk
             .chunks
             .get_random()
-            .get_identifier(&map_data.calculated_parameters)
+            .get_random_identifier(&mut rng, &map_data.calculated_parameters)
             .ok()?;
 
         if selected_chunk == CDDAIdentifier::from(NULL_NESTED) {
@@ -228,7 +279,7 @@ impl Property for NestedProperty {
             Some(v) => v,
         };
 
-        let mut commands = nested_mapgen.get_commands(json_data);
+        let mut commands = nested_mapgen.get_commands(&mut rng, json_data);
 
         commands.iter_mut().for_each(|c| {
             c.coordinates.x += position.x;
@@ -236,6 +287,13 @@ impl Property for NestedProperty {
         });
 
         Some(commands)
+    }
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
     }
 
     fn value(&self) -> Value {
@@ -263,6 +321,13 @@ impl Property for FieldsProperty {
             TileState::Normal,
         );
         Some(vec![command])
+    }
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
     }
 
     fn value(&self) -> Value {
@@ -298,6 +363,13 @@ impl Property for GaspumpsProperty {
         Some(vec![command])
     }
 
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
+    }
+
     fn value(&self) -> Value {
         serde_json::to_value(&self.gaspumps).unwrap()
     }
@@ -318,6 +390,13 @@ impl Property for ComputersProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
     }
 
     fn value(&self) -> Value {
@@ -342,6 +421,13 @@ impl Property for ToiletsProperty {
         Some(vec![command])
     }
 
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
+    }
+
     fn value(&self) -> Value {
         Value::Object(Map::new())
     }
@@ -354,9 +440,11 @@ impl Property for TrapsProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
+        let mut rng = rng();
         let trap = self.trap.get_random();
-        let ident =
-            trap.get_identifier(&map_data.calculated_parameters).ok()?;
+        let ident = trap
+            .get_random_identifier(&mut rng, &map_data.calculated_parameters)
+            .ok()?;
 
         if ident == CDDAIdentifier::from(NULL_TRAP) {
             return None;
@@ -370,6 +458,13 @@ impl Property for TrapsProperty {
         );
 
         Some(vec![command])
+    }
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
     }
 
     fn value(&self) -> Value {
@@ -549,6 +644,13 @@ impl Property for VehiclesProperty {
         Some(commands)
     }
 
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
+    }
+
     fn value(&self) -> Value {
         serde_json::to_value(&self.vehicles).unwrap()
     }
@@ -561,6 +663,7 @@ impl Property for CorpsesProperty {
         map_data: &MapData,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
+        let mut rng = rng();
         let mapgen_corpse = self.corpses.get_random();
 
         let group = match json_data.monster_groups.get(&mapgen_corpse.group) {
@@ -572,6 +675,7 @@ impl Property for CorpsesProperty {
         };
 
         let monster = match group.get_random_monster(
+            &mut rng,
             &json_data.monster_groups,
             &map_data.calculated_parameters,
         ) {
@@ -593,6 +697,13 @@ impl Property for CorpsesProperty {
             rotation: Rotation::Deg0,
             state: TileState::Normal,
         }])
+    }
+
+    fn representation(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Option<Representation> {
+        None
     }
 
     fn value(&self) -> Value {

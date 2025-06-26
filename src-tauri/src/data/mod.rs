@@ -37,7 +37,8 @@ use indexmap::IndexMap;
 use log::info;
 use notify_debouncer_full::new_debouncer;
 use rand::distr::weighted::WeightedIndex;
-use rand::{rng, Rng};
+use rand::rand_core::impls;
+use rand::{rng, Rng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -171,8 +172,9 @@ pub fn replace_region_setting(
 impl GetIdentifier for DistributionInner {
     type Error = Infallible;
 
-    fn get_identifier(
+    fn get_random_identifier(
         &self,
+        rng: &mut impl Rng,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, Infallible> {
         match self {
@@ -191,8 +193,9 @@ impl GetIdentifier for DistributionInner {
 impl GetIdentifier for CDDAIdentifier {
     type Error = Infallible;
 
-    fn get_identifier(
+    fn get_random_identifier(
         &self,
+        _rng: &mut impl Rng,
         _calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, Infallible> {
         Ok(self.clone())
@@ -202,15 +205,16 @@ impl GetIdentifier for CDDAIdentifier {
 impl GetIdentifier for CDDADistributionInner {
     type Error = GetIdentifierError;
 
-    fn get_identifier(
+    fn get_random_identifier(
         &self,
+        rng: &mut impl Rng,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, GetIdentifierError> {
         match self {
             CDDADistributionInner::String(s) => Ok(s.clone()),
-            CDDADistributionInner::Distribution(d) => {
-                Ok(d.distribution.get_identifier(calculated_parameters)?)
-            },
+            CDDADistributionInner::Distribution(d) => Ok(d
+                .distribution
+                .get_random_identifier(rng, calculated_parameters)?),
             CDDADistributionInner::Param { param, fallback } => {
                 let calculated = calculated_parameters
                     .get(param)
@@ -246,14 +250,15 @@ impl GetIdentifier for CDDADistributionInner {
 impl GetIdentifier for MapGenValue {
     type Error = GetIdentifierError;
 
-    fn get_identifier(
+    fn get_random_identifier(
         &self,
+        rng: &mut impl Rng,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, GetIdentifierError> {
         match self {
             MapGenValue::String(s) => Ok(s.clone()),
             MapGenValue::Distribution(d) => {
-                Ok(d.get_identifier(calculated_parameters)?)
+                Ok(d.get_random_identifier(rng, calculated_parameters)?)
             },
             MapGenValue::Param { param, fallback } => calculated_parameters
                 .get(param)
@@ -284,8 +289,9 @@ impl GetIdentifier for MapGenValue {
 impl<T: Clone + GetIdentifier> GetIdentifier for MeabyVec<MeabyWeighted<T>> {
     type Error = GetRandomError;
 
-    fn get_identifier(
+    fn get_random_identifier(
         &self,
+        rng: &mut impl Rng,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, Self::Error> {
         let mut weights = vec![];
@@ -296,14 +302,11 @@ impl<T: Clone + GetIdentifier> GetIdentifier for MeabyVec<MeabyWeighted<T>> {
         let weighted_index = WeightedIndex::new(weights.clone())
             .map_err(|_| WeightedIndexError::InvalidWeights(weights.clone()))?;
 
-        // let mut rng = RANDOM.write().unwrap();
-        let mut rng = rng();
-
-        let chosen_index = weighted_index.sample(&mut rng);
+        let chosen_index = weighted_index.sample(rng);
         let item = self_vec.remove(chosen_index);
 
         item.data()
-            .get_identifier(calculated_parameters)
+            .get_random_identifier(rng, calculated_parameters)
             .map_err(|_| GetRandomError::GetIdentifierError(chosen_index))
     }
 }
@@ -547,11 +550,35 @@ pub enum KnownCataVariant {
     Other,
 }
 
+pub struct ConstantRng;
+
+impl RngCore for ConstantRng {
+    fn next_u32(&mut self) -> u32 {
+        1
+    }
+
+    fn next_u64(&mut self) -> u64 {
+        impls::next_u64_via_u32(self)
+    }
+
+    fn fill_bytes(&mut self, dst: &mut [u8]) {
+        impls::fill_bytes_via_next(self, dst)
+    }
+}
+
 pub trait GetIdentifier {
     type Error;
 
-    fn get_identifier(
+    fn get_random_identifier(
         &self,
+        rng: &mut impl Rng,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, Self::Error>;
+
+    fn get_constant_identifier(
+        &self,
+        calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
+    ) -> Result<CDDAIdentifier, Self::Error> {
+        self.get_random_identifier(&mut ConstantRng, calculated_parameters)
+    }
 }

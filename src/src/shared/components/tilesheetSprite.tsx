@@ -1,6 +1,8 @@
 import React, {RefObject, useMemo} from "react"
 import {SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {SlimTilesheet, SlimTilesheets} from "../../features/sprites/slimTilesheets.js";
+import {ForeBackIds} from "../../tauri/events/types.js";
+import {clsx} from "clsx";
 
 export type TilesheetSpriteProps = {
     tilesheets: SlimTilesheets,
@@ -8,6 +10,7 @@ export type TilesheetSpriteProps = {
     index: number
     width: number
     height: number
+    className?: string
 }
 
 const TILES_PER_ROW = 16;
@@ -46,7 +49,7 @@ export function TilesheetSprite(props: TilesheetSpriteProps) {
     const backgroundOffsetY = Math.floor((props.index - range[0]) / TILES_PER_ROW) * size[1]
 
     return (
-        <div className={"tilesheet-sprite"}
+        <div className={clsx("tilesheet-sprite", props.className)}
              style={{
                  width: props.width,
                  height: props.height

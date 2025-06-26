@@ -16,6 +16,7 @@ use futures_lite::StreamExt;
 use glam::IVec2;
 use indexmap::IndexMap;
 use log::{info, warn};
+use rand::{rng, Rng};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::borrow::Borrow;
@@ -201,6 +202,7 @@ pub struct CDDAPalette {
 impl CDDAPalette {
     pub fn calculate_parameters(
         &self,
+        rng: &mut impl Rng,
         all_palettes: &Palettes,
     ) -> Result<
         IndexMap<ParameterIdentifier, CDDAIdentifier>,
@@ -217,17 +219,18 @@ impl CDDAPalette {
                 parameter
                     .default
                     .distribution
-                    .get_identifier(&calculated_parameters)?,
+                    .get_random_identifier(rng, &calculated_parameters)?,
             );
         }
 
         for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value.get_identifier(&calculated_parameters)?;
+            let id = mapgen_value
+                .get_random_identifier(rng, &calculated_parameters)?;
 
             all_palettes
                 .get(&id)
                 .ok_or(CalculateParametersError::MissingPalette(id.0))?
-                .calculate_parameters(all_palettes)?
+                .calculate_parameters(rng, all_palettes)?
                 .into_iter()
                 .for_each(|(child_id, child_param)| {
                     calculated_parameters.insert(child_id, child_param);
@@ -253,7 +256,10 @@ impl CDDAPalette {
 
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value
-                .get_identifier(&map_data.calculated_parameters)
+                .get_random_identifier(
+                    &mut rng(),
+                    &map_data.calculated_parameters,
+                )
                 .ok()?;
             let palette = json_data.palettes.get(&palette_id)?;
 

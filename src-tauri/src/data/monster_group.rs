@@ -4,6 +4,7 @@ use cdda_macros::cdda_entry;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::distr::Distribution;
+use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -68,6 +69,7 @@ pub enum GetRandomMonsterError {
 impl CDDAMonsterGroup {
     pub fn get_random_monster(
         &self,
+        rng: &mut impl Rng,
         monstergroups: &HashMap<CDDAIdentifier, CDDAMonsterGroup>,
         calculated_parameters: &IndexMap<ParameterIdentifier, CDDAIdentifier>,
     ) -> Result<CDDAIdentifier, GetRandomMonsterError> {
@@ -77,23 +79,28 @@ impl CDDAMonsterGroup {
         let weighted_index = WeightedIndex::new(weights.clone())
             .map_err(|_| WeightedIndexError::InvalidWeights(weights))?;
 
-        // TODO: Replace with RANDOM; Random not here due to deadlock
-        let chosen_index = weighted_index.sample(&mut rand::rng());
+        let chosen_index = weighted_index.sample(rng);
 
         let chosen_monster = &self.monsters[chosen_index];
 
         let id = match &chosen_monster.id {
-            MonsterGroupMonsterKind::Monster { monster } => {
-                monster.get_identifier(calculated_parameters).unwrap()
-            },
+            MonsterGroupMonsterKind::Monster { monster } => monster
+                .get_random_identifier(rng, calculated_parameters)
+                .unwrap(),
             MonsterGroupMonsterKind::Group { group } => {
-                let id = group.get_identifier(calculated_parameters).unwrap();
+                let id = group
+                    .get_random_identifier(rng, calculated_parameters)
+                    .unwrap();
                 let group = monstergroups.get(&id).ok_or(
                     GetRandomMonsterError::MissingMonstergroup(id.to_string()),
                 )?;
 
                 group
-                    .get_random_monster(monstergroups, calculated_parameters)?
+                    .get_random_monster(
+                        rng,
+                        monstergroups,
+                        calculated_parameters,
+                    )?
                     .clone()
             },
         };

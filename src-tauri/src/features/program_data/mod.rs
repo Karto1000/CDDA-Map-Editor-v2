@@ -22,6 +22,7 @@ use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
 use log::info;
+use rand::Rng;
 use serde::ser::SerializeMap;
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
@@ -250,8 +251,9 @@ impl MapDataCollection {
         )
     }
 
-    pub fn calculate_predecessor_parameters(
+    pub fn calculate_random_predecessor_parameters(
         &mut self,
+        rng: &mut impl Rng,
         json_data: &mut DeserializedCDDAJsonData,
     ) {
         for (_, map) in self.maps.iter_mut() {
@@ -295,22 +297,24 @@ impl MapDataCollection {
                 };
 
                     predecessor_map_data
-                        .calculate_parameters(&json_data.palettes)
+                        .calculate_random_parameters(rng, &json_data.palettes)
                         .unwrap();
                 },
             }
         }
     }
 
-    pub fn get_mapped_cdda_ids(
+    pub fn get_random_mapped_cdda_ids(
         &self,
+        rng: &mut impl Rng,
         json_data: &DeserializedCDDAJsonData,
         z: ZLevel,
     ) -> Result<MappedCDDAIdContainer, GetMappedCDDAIdsError> {
         let mut mapped_cdda_ids = HashMap::new();
 
         for (map_coords, map_data) in self.maps.iter() {
-            let mut ids = map_data.get_mapped_cdda_ids(json_data, z)?;
+            let mut ids =
+                map_data.get_random_mapped_cdda_ids(rng, json_data, z)?;
 
             // Transform every coordinate in the hashmap
             let mut new_ids = HashMap::new();
@@ -332,12 +336,13 @@ impl MapDataCollection {
         })
     }
 
-    pub fn calculate_parameters(
+    pub fn calculate_random_parameters(
         &mut self,
+        rng: &mut impl Rng,
         all_palettes: &Palettes,
     ) -> Result<(), CalculateParametersError> {
         for (_, map_data) in self.maps.iter_mut() {
-            map_data.calculate_parameters(all_palettes)?;
+            map_data.calculate_random_parameters(rng, all_palettes)?;
         }
 
         Ok(())

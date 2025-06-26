@@ -22,6 +22,7 @@ use anyhow::Error;
 use cdda_lib::types::MapGenValue;
 use log::{error, info, warn};
 use notify_debouncer_full::new_debouncer;
+use rand::rng;
 use serde::Serialize;
 use std::collections::HashSet;
 use std::fs;
@@ -355,7 +356,10 @@ pub async fn open_recent_project(
             {
                 Ok(mut map_data_collection) => {
                     for (_, maps) in map_data_collection.iter_mut() {
-                        match maps.calculate_parameters(&json_data.palettes) {
+                        match maps.calculate_random_parameters(
+                            &mut rng(),
+                            &json_data.palettes,
+                        ) {
                             Ok(_) => {},
                             Err(e) => continue,
                         }

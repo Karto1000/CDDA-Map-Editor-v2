@@ -149,7 +149,7 @@ export function Header(props: Props) {
     }
 
     async function onTabCreate() {
-        await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef)
+        await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef, {defaultWidth: 800, defaultHeight: 500})
     }
 
     async function onTabOpen(name: string) {
