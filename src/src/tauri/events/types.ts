@@ -71,7 +71,7 @@ export enum TauriCommand {
     MODIFY_GLOBAL_PALETTE = "modify_global_palette",
     GET_GLOBAL_PALETTES = "get_global_palettes",
     GET_GLOBAL_PALETTE_REPRESENTATIONS = "get_global_palette_representations",
-    UPDATE_CDDA_DATA_AT = "update_cdda_data_at"
+    UPDATE_CDDA_DATA_AT = "update_cdda_data_at",
 }
 
 export enum ModifyPaletteActionKind {
@@ -107,10 +107,15 @@ export type ForeBackIds = {
 }
 
 export type CharacterMapping = {
-    terrain: ForeBackIds,
-    furniture: ForeBackIds
-    monster: ForeBackIds
-    field: ForeBackIds
+    ids: ForeBackIds,
+    id: string
+}
+
+export type CharacterMappingContainer = {
+    terrain: CharacterMapping,
+    furniture: CharacterMapping
+    monster: CharacterMapping
+    field: CharacterMapping
 }
 
 export interface TauriCommandMap {
@@ -221,7 +226,8 @@ export enum TauriEvent {
     KEYBIND_PRESSED = "keybind-pressed",
     CHANGE_EDITOR_MODE = "change-editor-mode",
     MAPGEN_CHUNK_SELECTED = "mapgen-chunk-selected",
-    CLOSE_ALL_TABS = "close-all-tabs"
+    CLOSE_ALL_TABS = "close-all-tabs",
+    CHARACTER_SELECTED = "character_selected"
 }
 
 export enum ToastType {
@@ -268,4 +274,5 @@ export interface TauriEventMap {
     [TauriEvent.UPDATE_CDDA_DATA]: string[],
     [TauriEvent.CLOSE_ALL_TABS]: {},
     [TauriEvent.OPEN_GLOBAL_SELECT_WINDOW]: {},
+    [TauriEvent.CHARACTER_SELECTED]: { character: string }
 }

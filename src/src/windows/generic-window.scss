@@ -1,18 +1,18 @@
 @import "../theme.scss";
 
 @include themed($themes) {
-  .header {
-    background-color: theme-var("dark-blue");
+  &.generic-window {
+    background-color: theme-var("darker");
 
-    .close-button {
-      &:hover {
-        background-color: theme-var("delete");
+    .header {
+      background-color: theme-var("dark-blue");
+
+      .close-button {
+        &:hover {
+          background-color: theme-var("delete");
+        }
       }
     }
-  }
-
-  .window-body {
-    background-color: theme-var("darker");
   }
 }
 
@@ -45,10 +45,20 @@
     }
   }
 
+  .search-container {
+    margin: 8px;
+
+    input {
+      width: 100%;
+    }
+  }
+
   .window-body {
     height: 100%;
     padding: 8px;
     display: flex;
     flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
 }

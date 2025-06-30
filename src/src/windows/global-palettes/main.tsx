@@ -10,9 +10,9 @@ import {openWindow, WindowLabel} from "../lib.js";
 import {Theme} from "../../shared/hooks/useTheme.js";
 import {__PALETTE_ADDED} from "../add-palette/main.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {BackendResponseType, ModifyPaletteActionKind, TauriCommand} from "../../tauri/events/types.js";
+import {BackendResponseType, ModifyPaletteActionKind, TauriCommand, TauriEvent} from "../../tauri/events/types.js";
 import {WebviewWindow} from "@tauri-apps/api/webviewWindow";
-import {UnlistenFn} from "@tauri-apps/api/event";
+import {emit, UnlistenFn} from "@tauri-apps/api/event";
 import {
     CDDADistributionInner,
     MapGenValue,
@@ -64,6 +64,11 @@ function Main() {
 
     async function onPaletteRemove(name: string) {
         console.log("Removing palette", name)
+
+        await emit(
+            TauriEvent.CHARACTER_SELECTED,
+            {character: null}
+        )
 
         await tauriBridge.invoke(
             TauriCommand.MODIFY_GLOBAL_PALETTE,

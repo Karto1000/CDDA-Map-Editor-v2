@@ -858,7 +858,7 @@ impl Sprite {
 }
 
 #[derive(Debug, Serialize)]
-pub(super) struct ForeBackIds<FG, BG> {
+pub struct ForeBackIds<FG, BG> {
     pub fg: FG,
     pub bg: BG,
 }

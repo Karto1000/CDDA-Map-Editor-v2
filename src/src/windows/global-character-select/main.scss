@@ -1,5 +1,42 @@
 @import "../../theme.scss";
 
+@include themed($themes) {
+  .character-mapping {
+    .character-mapping-container {
+      &:before {
+        content: "";
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        display: none;
+      }
+
+      &:hover {
+        &:before {
+          display: block;
+          background-color: theme-var("dark-blue");
+          opacity: 0.2;
+          border: 1px solid theme-var("selected");
+        }
+      }
+
+      &.selected {
+        &:before {
+          display: block;
+          background-color: theme-var("selected");
+          opacity: 0.5;
+        }
+      }
+
+      .char-text {
+        color: theme-var("lightest");
+        background-color: theme-var("darkest-blue");
+      }
+    }
+  }
+}
+
 .character-mapping {
   display: flex;
   flex-direction: row;
@@ -12,6 +49,15 @@
 
     .character-mapping-sprite {
       position: absolute;
+      pointer-events: none;
+    }
+
+    .char-text {
+      position: absolute;
+      pointer-events: none;
+      width: 16px;
+      height: 25px;
+      text-align: center;
     }
   }
 }

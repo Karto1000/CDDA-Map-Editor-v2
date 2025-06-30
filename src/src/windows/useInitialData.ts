@@ -6,13 +6,14 @@ import {getCurrentWindow} from "@tauri-apps/api/window";
 export const INITIAL_DATA = "initial-data"
 export const WINDOW_READY = "window-ready"
 
-export function useInitialData<T>(): [T | null, Dispatch<SetStateAction<T>>] {
+export function useInitialData<T>(onReceive?: (data: T) => void): [T | null, Dispatch<SetStateAction<T>>] {
     const [data, setData] = useState<T>(null)
     const unlistenFn = useRef<UnlistenFn>(null)
 
     useEffect(() => {
         (async () => {
             unlistenFn.current = await once<T>(INITIAL_DATA, p => {
+                onReceive && onReceive(p.payload)
                 setData(p.payload)
             })
 

@@ -52,6 +52,8 @@ export function MapEditor(props: MapEditorProps) {
     const globalCharacterSelectUnlistenRef = useRef<UnlistenFn>(null)
 
     const [mapEditorMode, setMapEditorMode] = useState<MapEditorMode>(MapEditorMode.Draw)
+    const [selectedCharacter, setSelectedCharacter] = useState<string>(null)
+
     const zLevel = useRef<number>(0)
 
     useChunkSelect(
@@ -161,12 +163,21 @@ export function MapEditor(props: MapEditorProps) {
                     {
                         slimTilesheets: props.tilesheets.current.toSlimTilesheets(),
                         spritesheetConfig: props.spritesheetConfig,
+                        selectedCharacter
                     }
                 )
                 globalCharacterSelectUnlistenRef.current = close
             })()
         },
-        []
+        [selectedCharacter]
+    )
+
+    useTauriEvent(
+        TauriEvent.CHARACTER_SELECTED,
+        data => {
+            setSelectedCharacter(data.character)
+        },
+        [selectedCharacter]
     )
 
     useEffect(() => {

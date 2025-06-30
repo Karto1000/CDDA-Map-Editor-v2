@@ -344,12 +344,18 @@ pub enum GetGlobalPalettesRepresentationError {
 
 impl_serialize_for_error!(GetGlobalPalettesRepresentationError);
 
-#[derive(Debug, Serialize, Default)]
+#[derive(Debug, Serialize)]
 pub struct CharacterMapping {
-    pub terrain: Option<ForeBackIds<Option<u32>, Option<u32>>>,
-    pub furniture: Option<ForeBackIds<Option<u32>, Option<u32>>>,
-    pub monster: Option<ForeBackIds<Option<u32>, Option<u32>>>,
-    pub field: Option<ForeBackIds<Option<u32>, Option<u32>>>,
+    pub id: TilesheetCDDAId,
+    pub ids: ForeBackIds<Option<u32>, Option<u32>>,
+}
+
+#[derive(Debug, Serialize, Default)]
+pub struct CharacterMappingCollection {
+    pub terrain: Option<CharacterMapping>,
+    pub furniture: Option<CharacterMapping>,
+    pub monster: Option<CharacterMapping>,
+    pub field: Option<CharacterMapping>,
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -359,8 +365,10 @@ pub async fn get_global_palette_representations(
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
     fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
-) -> Result<HashMap<char, CharacterMapping>, GetGlobalPalettesRepresentationError>
-{
+) -> Result<
+    HashMap<char, CharacterMappingCollection>,
+    GetGlobalPalettesRepresentationError,
+> {
     let global_palettes =
         get_global_palettes(program_data, loaded_projects).await?;
     let json_data_lock = json_data.lock().await;
@@ -389,14 +397,16 @@ pub async fn get_global_palette_representations(
 
                 let mapping = match character_mappings.get_mut(char) {
                     None => {
-                        character_mappings
-                            .insert(char.clone(), CharacterMapping::default());
+                        character_mappings.insert(
+                            char.clone(),
+                            CharacterMappingCollection::default(),
+                        );
                         character_mappings.get_mut(&char).unwrap()
                     },
                     Some(c) => c,
                 };
 
-                let mapped_cdda_id = MappedCDDAId::simple(repr.id);
+                let mapped_cdda_id = MappedCDDAId::simple(repr.id.clone());
 
                 let index = match tilesheet_lock.deref() {
                     None => ForeBackIds::new(
@@ -439,10 +449,30 @@ pub async fn get_global_palette_representations(
                 };
 
                 match repr.tile_layer {
-                    TileLayer::Terrain => mapping.terrain = Some(index),
-                    TileLayer::Furniture => mapping.furniture = Some(index),
-                    TileLayer::Monster => mapping.monster = Some(index),
-                    TileLayer::Field => mapping.field = Some(index),
+                    TileLayer::Terrain => {
+                        mapping.terrain = Some(CharacterMapping {
+                            ids: index,
+                            id: repr.id,
+                        })
+                    },
+                    TileLayer::Furniture => {
+                        mapping.furniture = Some(CharacterMapping {
+                            ids: index,
+                            id: repr.id,
+                        })
+                    },
+                    TileLayer::Monster => {
+                        mapping.monster = Some(CharacterMapping {
+                            ids: index,
+                            id: repr.id,
+                        })
+                    },
+                    TileLayer::Field => {
+                        mapping.field = Some(CharacterMapping {
+                            ids: index,
+                            id: repr.id,
+                        })
+                    },
                 }
             }
         }

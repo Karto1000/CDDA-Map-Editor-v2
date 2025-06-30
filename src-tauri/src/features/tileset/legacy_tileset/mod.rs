@@ -15,7 +15,7 @@ use io::LegacyTilesheetLoader;
 use log::{debug, info, warn};
 use paste::paste;
 use rand::distr::Distribution;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
@@ -98,11 +98,51 @@ impl TryFrom<Vec<SpriteIndex>> for Rotates {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TilesheetCDDAId {
     pub id: CDDAIdentifier,
     pub prefix: Option<String>,
     pub postfix: Option<String>,
+}
+
+impl Serialize for TilesheetCDDAId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for TilesheetCDDAId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        let parts: Vec<&str> = s.split('_').collect();
+
+        let (id, prefix, postfix) = match parts.len() {
+            1 => (parts[0].to_string(), None, None),
+            2 => (parts[1].to_string(), Some(parts[0].to_string()), None),
+            3 => (
+                parts[1].to_string(),
+                Some(parts[0].to_string()),
+                Some(parts[2].to_string()),
+            ),
+            _ => {
+                return Err(serde::de::Error::custom(
+                    "Invalid TilesheetCDDAId format",
+                ));
+            },
+        };
+
+        Ok(TilesheetCDDAId {
+            id: CDDAIdentifier(id),
+            prefix,
+            postfix,
+        })
+    }
 }
 
 impl Display for TilesheetCDDAId {
