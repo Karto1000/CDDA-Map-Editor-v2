@@ -18,10 +18,9 @@ use crate::features::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
 use crate::features::map::SetTile;
 use crate::features::map::DEFAULT_MAP_DATA_SIZE;
 use crate::features::map::{
-    Cell, MapData, MapDataFlag, MapGenNested, MappingKind, Place, Property,
+    Cell, MapGen, MapDataFlag, MapGenNested, MappingKind, Place, Property,
 };
-use crate::features::program_data::{MapCoordinates, MapDataCollection};
-use crate::util::UVec2JsonKey;
+use crate::features::program_data::{Overmap};
 use cdda_lib::types::{
     CDDAIdentifier, CDDAString, DistributionInner, MapGenValue, MeabyVec,
     MeabyWeighted, NumberOrRange, ParameterIdentifier, Weighted,
@@ -384,7 +383,7 @@ macro_rules! create_place_inner {
                 fn get_commands(
                     &self,
                     position: &IVec2,
-                    map_data: &MapData,
+                    map_data: &MapGen,
                     json_data: &DeserializedCDDAJsonData,
                 ) -> Option<Vec<SetTile>> {
                     self.property.get_commands(position, map_data, json_data)
@@ -882,7 +881,7 @@ impl CDDAMapDataIntermediate {
 
     fn get_place(
         &self,
-        map_coordinates: MapCoordinates,
+        map_coordinates: UVec2,
     ) -> HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> {
         let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> =
             HashMap::new();
@@ -973,11 +972,11 @@ pub enum IntoMapDataCollectionError {
     MissingNestedOmTerrain,
 }
 
-impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
+impl TryInto<Overmap> for CDDAMapDataIntermediate {
     type Error = IntoMapDataCollectionError;
 
-    fn try_into(self) -> Result<MapDataCollection, Self::Error> {
-        let mut map_data_collection = MapDataCollection::default();
+    fn try_into(self) -> Result<Overmap, Self::Error> {
+        let mut map_data_collection = Overmap::default();
 
         match &self.om_terrain {
             None => {},
@@ -1003,7 +1002,7 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                                 format!("_{}", map_column_index).as_str(),
                             );
 
-                            let mut nested_cells: IndexMap<UVec2JsonKey, Cell> =
+                            let mut nested_cells: IndexMap<UVec2, Cell> =
                                 IndexMap::new();
 
                             match self.object.rows.clone() {
@@ -1062,7 +1061,7 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
                                 map_column_index as u32,
                                 map_row_index as u32,
                             );
-                            let mut map_data = MapData::default();
+                            let mut map_data = MapGen::default();
 
                             let properties = self.get_properties();
                             let place = self.get_place(map_coordinates.into());
@@ -1100,13 +1099,13 @@ impl TryInto<MapDataCollection> for CDDAMapDataIntermediate {
             },
         };
 
-        let mut collection = MapDataCollection::default();
-        let mut map_data = MapData::default();
+        let mut collection = Overmap::default();
+        let mut map_data = MapGen::default();
 
         let properties = self.get_properties();
         let place = self.get_place(UVec2::ZERO.into());
 
-        let mut cells: IndexMap<UVec2JsonKey, Cell> = IndexMap::new();
+        let mut cells: IndexMap<UVec2, Cell> = IndexMap::new();
 
         for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y
         {

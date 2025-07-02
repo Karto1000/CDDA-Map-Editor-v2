@@ -3,7 +3,6 @@ use crate::data::TileLayer;
 use crate::features::map::MappedCDDAId;
 use crate::features::program_data::{AdjacentSprites, ProjectType};
 use crate::features::tileset::{Sprite, SpriteLayer};
-use crate::util::UVec2JsonKey;
 use glam::{IVec3, UVec2};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -19,13 +18,13 @@ pub struct Sprites {
 #[derive(Debug, Serialize, Deserialize)]
 pub(super) struct CreateMapData {
     name: String,
-    size: UVec2JsonKey,
+    size: UVec2,
     ty: ProjectType,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(super) struct StaticSprite {
-    pub position: UVec2JsonKey,
+    pub position: UVec2,
     pub index: u32,
     pub layer: u32,
     pub z: i32,
@@ -52,7 +51,7 @@ impl Eq for StaticSprite {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(super) struct AnimatedSprite {
-    pub position: UVec2JsonKey,
+    pub position: UVec2,
     pub indices: Vec<u32>,
     pub layer: u32,
     pub z: i32,
@@ -79,7 +78,7 @@ impl Eq for AnimatedSprite {}
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub(super) struct FallbackSprite {
-    pub position: UVec2JsonKey,
+    pub position: UVec2,
     pub index: u32,
     pub z: i32,
 }
@@ -128,7 +127,7 @@ impl DisplaySprite {
             Some(sprite_id) => match sprite.is_animated() {
                 true => {
                     let display_sprite = AnimatedSprite {
-                        position: UVec2JsonKey(position_uvec2),
+                        position: position_uvec2,
                         layer: (tile_layer.clone() as u32) * 2
                             + SpriteLayer::Fg as u32,
                         indices: sprite_id.data.into_vec(),
@@ -141,7 +140,7 @@ impl DisplaySprite {
                 },
                 false => {
                     let display_sprite = StaticSprite {
-                        position: UVec2JsonKey(position_uvec2),
+                        position: position_uvec2,
                         layer: (tile_layer.clone() as u32) * 2
                             + SpriteLayer::Fg as u32,
                         index: sprite_id.data.into_single().unwrap(),
@@ -164,7 +163,7 @@ impl DisplaySprite {
             Some(id) => match sprite.is_animated() {
                 true => {
                     let display_sprite = AnimatedSprite {
-                        position: UVec2JsonKey(position_uvec2),
+                        position: position_uvec2,
                         layer: (tile_layer as u32) * 2 + SpriteLayer::Bg as u32,
                         indices: id.data.into_vec(),
                         rotate_deg: id.rotation.deg(),
@@ -175,7 +174,7 @@ impl DisplaySprite {
                 },
                 false => {
                     let display_sprite = StaticSprite {
-                        position: UVec2JsonKey(position_uvec2),
+                        position: position_uvec2,
                         layer: (tile_layer as u32) * 2 + SpriteLayer::Bg as u32,
                         index: id.data.into_single().unwrap(),
                         rotate_deg: id.rotation.deg(),

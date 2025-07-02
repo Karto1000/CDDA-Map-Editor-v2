@@ -1,4 +1,4 @@
-use crate::features::program_data::{MapDataCollection, ZLevel};
+use crate::features::program_data::{Overmap, ZLevel};
 use glam::UVec2;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -11,7 +11,7 @@ mod io;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct MapEditor {
-    pub maps: HashMap<ZLevel, MapDataCollection>,
+    pub overmaps: HashMap<ZLevel, Overmap>,
     pub size: UVec2,
 }
 

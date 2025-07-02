@@ -2,28 +2,28 @@ pub mod handlers;
 pub mod io;
 mod keybinds;
 
+use crate::data::TileLayer;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::palettes::Palettes;
-use crate::data::TileLayer;
 use crate::features::editor::{MapEditor, MapSize};
 use crate::features::map::importing::{
     OvermapSpecialImporter, OvermapSpecialImporterError, SingleMapDataImporter,
     SingleMapDataImporterError,
 };
 use crate::features::map::{
-    CalculateParametersError, GetMappedCDDAIdsError, MapData,
-    MappedCDDAIdsForTile, DEFAULT_MAP_DATA_SIZE,
+    CalculateParametersError, DEFAULT_MAP_DATA_SIZE, GetMappedCDDAIdsError,
+    MapGen, MappedCDDAIdsForTile,
 };
 use crate::features::program_data::keybinds::{Keybind, KeybindAction};
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::impl_serialize_for_error;
-use crate::util::{IVec3JsonKey, Load, Save, SaveError, UVec2JsonKey};
+use crate::util::{Load, Save, SaveError};
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
 use log::info;
-use serde::ser::SerializeMap;
 use serde::Serializer;
+use serde::ser::SerializeMap;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -35,7 +35,7 @@ use thiserror::Error;
 pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 
 pub type ZLevel = i32;
-pub type MapCoordinates = UVec2JsonKey;
+pub const DEFAULT_Z_LEVEL: ZLevel = 0;
 pub type ProjectName = String;
 pub type LoadedProjects = HashMap<ProjectName, Project>;
 
@@ -52,7 +52,7 @@ impl_serialize_for_error!(GetLiveViewerDataError);
 
 pub async fn get_map_data_collection_from_map_viewer(
     viewer: &MapViewer,
-) -> Result<HashMap<ZLevel, MapDataCollection>, GetLiveViewerDataError> {
+) -> Result<HashMap<ZLevel, Overmap>, GetLiveViewerDataError> {
     info!("Opening Live viewer");
 
     let map_data_collection = match &viewer.data {
@@ -90,24 +90,10 @@ pub async fn get_map_data_collection_from_map_viewer(
     Ok(map_data_collection)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Serialize, Clone)]
 pub struct MappedCDDAIdContainer {
+    #[serde(serialize_with = "crate::util::serialize_hashmap_with_ivec3_keys")]
     pub ids: HashMap<IVec3, MappedCDDAIdsForTile>,
-}
-
-impl Serialize for MappedCDDAIdContainer {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut map_serializer =
-            serializer.serialize_map(Some(self.ids.len()))?;
-        for (key, value) in &self.ids {
-            let key_wrapper = IVec3JsonKey(key.clone());
-            map_serializer.serialize_entry(&key_wrapper, value)?;
-        }
-        map_serializer.end()
-    }
 }
 
 impl MappedCDDAIdContainer {
@@ -167,16 +153,16 @@ pub enum ProjectType {
 }
 
 impl ProjectType {
-    pub fn maps(&self) -> &HashMap<ZLevel, MapDataCollection> {
+    pub fn maps(&self) -> &HashMap<ZLevel, Overmap> {
         match self {
-            ProjectType::MapEditor(me) => &me.maps,
+            ProjectType::MapEditor(me) => &me.overmaps,
             ProjectType::MapViewer(lv) => &lv.maps,
         }
     }
 
-    pub fn maps_mut(&mut self) -> &mut HashMap<ZLevel, MapDataCollection> {
+    pub fn maps_mut(&mut self) -> &mut HashMap<ZLevel, Overmap> {
         match self {
-            ProjectType::MapEditor(me) => &mut me.maps,
+            ProjectType::MapEditor(me) => &mut me.overmaps,
             ProjectType::MapViewer(lv) => &mut lv.maps,
         }
     }
@@ -195,11 +181,15 @@ impl Project {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MapDataCollection {
-    pub maps: HashMap<MapCoordinates, MapData>,
+pub struct Overmap {
+    #[serde(
+        serialize_with = "crate::util::serialize_hashmap_with_uvec2_keys",
+        deserialize_with = "crate::util::deserialize_hashmap_with_uvec2_keys"
+    )]
+    pub maps: HashMap<UVec2, MapGen>,
 }
 
-impl MapDataCollection {
+impl Overmap {
     pub fn new(size: MapSize, project_name: String, z: ZLevel) -> Self {
         let size_value = size.value();
 
@@ -212,7 +202,7 @@ impl MapDataCollection {
             false => {
                 for y in 0..(size_value.y / DEFAULT_MAP_DATA_SIZE.y) {
                     for x in 0..(size_value.x / DEFAULT_MAP_DATA_SIZE.x) {
-                        let mut map_data = MapData::default();
+                        let mut map_data = MapGen::default();
 
                         map_data.id = CDDAIdentifier(format!(
                             "{}_{}_{}_{}",
@@ -222,14 +212,14 @@ impl MapDataCollection {
                             z
                         ));
 
-                        maps.insert(UVec2::new(x, y).into(), map_data);
+                        maps.insert(UVec2::new(x, y), map_data);
                     }
                 }
             },
             true => {
-                let mut map_data = MapData::default();
+                let mut map_data = MapGen::default();
                 map_data.id = CDDAIdentifier(project_name);
-                maps.insert(UVec2::new(0, 0).into(), map_data);
+                maps.insert(UVec2::new(0, 0), map_data);
             },
         }
 
@@ -237,7 +227,7 @@ impl MapDataCollection {
     }
 
     pub fn map_to_global_cell_coords(
-        map_coordinates: &MapCoordinates,
+        map_coordinates: &UVec2,
         cell_coordinates: &UVec2,
         z: ZLevel,
     ) -> IVec3 {
@@ -344,10 +334,10 @@ impl MapDataCollection {
     }
 }
 
-impl Default for MapDataCollection {
+impl Default for Overmap {
     fn default() -> Self {
         let mut maps = HashMap::new();
-        maps.insert(UVec2::ZERO.into(), MapData::default());
+        maps.insert(UVec2::ZERO.into(), MapGen::default());
         Self { maps }
     }
 }

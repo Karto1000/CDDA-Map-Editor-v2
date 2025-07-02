@@ -6,17 +6,14 @@ use crate::features::map::map_properties::TerrainProperty;
 use crate::features::map::{MappedCDDAId, MappingKind};
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::{
-    AdjacentSprites, LoadedProjects, MapDataCollection, ProgramData, Project,
+    AdjacentSprites, LoadedProjects, Overmap, ProgramData, Project,
     ProjectType, SavedProject, Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     LegacyTilesheet, TilesheetCDDAId,
 };
 use crate::features::tileset::Tilesheet;
-use crate::util::{
-    get_current_project_mut, get_json_data, get_size, CDDADataError,
-    GetCurrentProjectError, Save, SaveError,
-};
+use crate::util::{get_current_project_mut, get_json_data, get_size, CDDADataError, GetCurrentProjectError, Save, SaveError};
 use crate::{events, impl_serialize_for_error, InvalidProjectType};
 use cdda_lib::types::{CDDAIdentifier, MapGenValue};
 use glam::{IVec2, IVec3, UVec2};
@@ -60,12 +57,12 @@ pub async fn new_map_editor(
     let mut map_collection = HashMap::new();
     for z in z_levels.value().0..=z_levels.value().1 {
         let collection =
-            MapDataCollection::new(map_size.clone(), project_name.clone(), z);
+            Overmap::new(map_size.clone(), project_name.clone(), z);
         map_collection.insert(z, collection);
     }
 
     let map_editor = MapEditor {
-        maps: map_collection,
+        overmaps: map_collection,
         size: map_size.value(),
     };
 
@@ -139,7 +136,7 @@ pub async fn modify_palette(
         get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
 
     let maps = match &mut loaded_project.project_type {
-        ProjectType::MapEditor(me) => &mut me.maps,
+        ProjectType::MapEditor(me) => &mut me.overmaps,
         ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
     };
 
@@ -219,7 +216,7 @@ pub async fn modify_global_palette(
         get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
 
     let maps = match &mut loaded_project.project_type {
-        ProjectType::MapEditor(me) => &mut me.maps,
+        ProjectType::MapEditor(me) => &mut me.overmaps,
         ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
     };
 
@@ -289,7 +286,7 @@ pub async fn get_global_palettes(
         get_current_project_mut(&program_data_lock, &mut loaded_projects_lock)?;
 
     let maps = match &mut loaded_project.project_type {
-        ProjectType::MapEditor(me) => &mut me.maps,
+        ProjectType::MapEditor(me) => &mut me.overmaps,
         ProjectType::MapViewer(_) => Err(InvalidProjectType::NotAMapEditor)?,
     };
 

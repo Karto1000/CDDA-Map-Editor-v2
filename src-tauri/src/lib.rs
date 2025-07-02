@@ -172,7 +172,7 @@ async fn frontend_ready(
                     ProjectType::MapEditor(map_editor) => {
                         info!("Opening Map Editor");
 
-                        for (_, maps) in map_editor.maps.iter_mut() {
+                        for (_, maps) in map_editor.overmaps.iter_mut() {
                             match maps.calculate_parameters(&json_data.palettes)
                             {
                                 Ok(_) => {},

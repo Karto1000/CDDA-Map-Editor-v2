@@ -6,8 +6,8 @@ use crate::data::overmap::{
     CDDAOvermapSpecial, CDDAOvermapSpecialIntermediate, OvermapSpecialOvermap,
     OvermapSpecialSubType,
 };
-use crate::features::map::{MapData, MapDataRotation};
-use crate::features::program_data::{MapDataCollection, ZLevel};
+use crate::features::map::{MapGen, MapDataRotation};
+use crate::features::program_data::{Overmap, ZLevel};
 use crate::util::Load;
 use cdda_lib::types::CDDAIdentifier;
 use glam::UVec2;
@@ -38,13 +38,13 @@ pub struct MapDataImporter {
     pub om_ids: Vec<CDDAIdentifier>,
 }
 
-impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
+impl Load<HashMap<CDDAIdentifier, MapGen>, MapDataImporterError>
     for MapDataImporter
 {
     async fn load(
         &mut self,
-    ) -> Result<HashMap<CDDAIdentifier, MapData>, MapDataImporterError> {
-        let mut found_map_datas: HashMap<CDDAIdentifier, MapData> =
+    ) -> Result<HashMap<CDDAIdentifier, MapGen>, MapDataImporterError> {
+        let mut found_map_datas: HashMap<CDDAIdentifier, MapGen> =
             HashMap::new();
 
         for path in self.paths.iter() {
@@ -79,7 +79,7 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
                             OmTerrain::Single(s) => {
                                 if om_id_to_find == &CDDAIdentifier(s.clone()) {
                                     match <CDDAMapDataIntermediate as TryInto<
-                                        MapDataCollection,
+                                        Overmap,
                                     >>::try_into(
                                         mdi
                                     ) {
@@ -122,7 +122,7 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
 
                                 if any_matches {
                                     match <CDDAMapDataIntermediate as TryInto<
-                                        MapDataCollection,
+                                        Overmap,
                                     >>::try_into(
                                         mdi
                                     ) {
@@ -165,7 +165,7 @@ impl Load<HashMap<CDDAIdentifier, MapData>, MapDataImporterError>
 
                                 if any_matches {
                                     match <CDDAMapDataIntermediate as TryInto<
-                                        MapDataCollection,
+                                        Overmap,
                                     >>::try_into(
                                         mdi
                                     ) {
@@ -243,12 +243,12 @@ pub struct SingleMapDataImporter {
     pub om_terrain: CDDAIdentifier,
 }
 
-impl Load<MapDataCollection, SingleMapDataImporterError>
+impl Load<Overmap, SingleMapDataImporterError>
     for SingleMapDataImporter
 {
     async fn load(
         &mut self,
-    ) -> Result<MapDataCollection, SingleMapDataImporterError> {
+    ) -> Result<Overmap, SingleMapDataImporterError> {
         for path in &self.paths {
             let mut file = File::open(path).await.map_err(|e| {
                 warn!("{}", e);
@@ -408,14 +408,14 @@ pub struct OvermapSpecialImporter {
     pub mapgen_entry_paths: Vec<PathBuf>,
 }
 
-impl Load<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
+impl Load<HashMap<ZLevel, Overmap>, OvermapSpecialImporterError>
     for OvermapSpecialImporter
 {
     async fn load(
         &mut self,
-    ) -> Result<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
+    ) -> Result<HashMap<ZLevel, Overmap>, OvermapSpecialImporterError>
     {
-        let mut aggregated_map_data: HashMap<ZLevel, MapDataCollection> =
+        let mut aggregated_map_data: HashMap<ZLevel, Overmap> =
             HashMap::new();
 
         for path in &self.overmap_special_paths {
@@ -492,7 +492,7 @@ impl Load<HashMap<ZLevel, MapDataCollection>, OvermapSpecialImporterError>
                     None => {
                         aggregated_map_data.insert(
                             om_special.point.z,
-                            MapDataCollection::default(),
+                            Overmap::default(),
                         );
 
                         let map_data_collection = aggregated_map_data
