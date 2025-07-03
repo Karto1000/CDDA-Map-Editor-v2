@@ -68,7 +68,7 @@ export type MapData = {
 }
 
 export type StaticSprite = {
-    position: string
+    position: [number, number]
     index: number
     layer: number
     rotate_deg: number
@@ -76,7 +76,7 @@ export type StaticSprite = {
 }
 
 export type AnimatedSprite = {
-    position: string
+    position: [number, number]
     indices: number[],
     layer: number
     rotate_deg: number
@@ -84,7 +84,7 @@ export type AnimatedSprite = {
 }
 
 export type FallbackSprite = {
-    position: string,
+    position: [number, number],
     index: number
     z: number
 }

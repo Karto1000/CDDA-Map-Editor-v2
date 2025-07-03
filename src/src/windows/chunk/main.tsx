@@ -127,7 +127,7 @@ function Main() {
     if (project && chunkPosition) {
         const projectMap = project.project_type
             .mapEditor
-            .maps[chunkPosition.z]
+            .overmaps[chunkPosition.z]
             .maps[`${chunkPosition.x},${chunkPosition.y}`]
 
         windowTitle = `${projectMap.id} at ${chunkPosition.x}, ${chunkPosition.y}, ${chunkPosition.z}`
@@ -153,7 +153,7 @@ function Main() {
                                     {
                                         project.project_type
                                             .mapEditor
-                                            .maps[chunkPosition.z]
+                                            .overmaps[chunkPosition.z]
                                             .maps[`${chunkPosition.x},${chunkPosition.y}`]
                                             .palettes
                                             .map(getPaletteVisualization)

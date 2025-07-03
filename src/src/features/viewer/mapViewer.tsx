@@ -2,7 +2,7 @@ import {DrawAnimatedSprite, DrawStaticSprite, MAX_DEPTH, Tilesheets} from "../sp
 import React, {RefObject, useContext, useEffect, useReducer, useRef, useState} from "react";
 import {createGrid, SHOW_STATS} from "../three/hooks/useThreeSetup.js";
 import {Canvas, ThreeConfig} from "../three/types/three.ts";
-import {Object3D, Vector3} from "three";
+import {Object3D, Vector2, Vector3} from "three";
 import {getColorFromTheme, Theme} from "../../shared/hooks/useTheme.js";
 import {getTileInfo, SpritesheetConfig} from "../../tauri/types/spritesheet.js";
 import {TabContext, ThemeContext} from "../../app.js";
@@ -117,7 +117,7 @@ export function MapViewer(props: MapViewerProps) {
         }
 
         const drawStaticSprites: DrawStaticSprite[] = response.data.static_sprites.map(ds => {
-            const vec2 = serializedVec2ToVector2(ds.position)
+            const vec2 = new Vector2(ds.position[0], ds.position[1])
             vec2.x *= tileInfo.width;
             vec2.y *= tileInfo.height;
 
@@ -128,7 +128,7 @@ export function MapViewer(props: MapViewerProps) {
         })
 
         const drawAnimatedSprites: DrawAnimatedSprite[] = response.data.animated_sprites.map(ds => {
-            const vec2 = serializedVec2ToVector2(ds.position)
+            const vec2 = new Vector2(ds.position[0], ds.position[1])
             vec2.x *= tileInfo.width;
             vec2.y *= tileInfo.height;
 
@@ -139,7 +139,7 @@ export function MapViewer(props: MapViewerProps) {
         })
 
         const drawFallbackSprites: DrawStaticSprite[] = response.data.fallback_sprites.map(ds => {
-            const vec2 = serializedVec2ToVector2(ds.position)
+            const vec2 = new Vector2(ds.position[0], ds.position[1])
             vec2.x *= tileInfo.width;
             vec2.y *= tileInfo.height;
 

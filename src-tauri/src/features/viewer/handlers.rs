@@ -29,11 +29,9 @@ use crate::features::viewer::data::{DisplaySprite, FallbackSprite};
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::util;
 use crate::util::GetCurrentProjectError;
-use crate::util::IVec3JsonKey;
-use crate::util::Save;
-use crate::util::UVec2JsonKey;
 use crate::util::{get_current_project, get_json_data, get_json_data_mut};
 use crate::util::{get_current_project_mut, get_size, Load};
+use crate::util::{serialize_hashmap_with_ivec3_keys, Save};
 use crate::util::{CDDADataError, SaveError};
 use crate::{events, load_projects};
 use crate::{impl_serialize_for_error, InvalidProjectType};
@@ -56,7 +54,7 @@ use rayon::iter::ParallelIterator;
 use serde::Deserialize;
 use serde::Serialize;
 use serde::Serializer;
-use serde_json::json;
+use serde_json::{json, to_value};
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::hash::Hasher;
@@ -100,10 +98,7 @@ impl_serialize_for_error!(GetCalculatedParametersError);
 pub async fn get_calculated_parameters(
     program_data: State<'_, Mutex<ProgramData>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
-) -> Result<
-    HashMap<IVec3JsonKey, IndexMap<ParameterIdentifier, CDDAIdentifier>>,
-    GetCalculatedParametersError,
-> {
+) -> Result<serde_json::Value, GetCalculatedParametersError> {
     let editor_data_lock = program_data.lock().await;
     let loaded_projects_lock = loaded_projects.lock().await;
     let project =
@@ -114,17 +109,17 @@ pub async fn get_calculated_parameters(
     for (z, z_maps) in project.project_type.maps().iter() {
         for (map_coords, map) in z_maps.maps.iter() {
             calculated_parameters.insert(
-                IVec3JsonKey(IVec3::new(
-                    map_coords.x as i32,
-                    map_coords.y as i32,
-                    *z,
-                )),
+                IVec3::new(map_coords.x as i32, map_coords.y as i32, *z),
                 map.calculated_parameters.clone(),
             );
         }
     }
 
-    Ok(calculated_parameters)
+    Ok(serialize_hashmap_with_ivec3_keys(
+        &calculated_parameters,
+        serde_json::value::Serializer,
+    )
+    .unwrap())
 }
 
 #[derive(Debug, Error)]
@@ -271,7 +266,7 @@ pub async fn get_sprites(
                                     );
 
                                     let fallback_sprite = DisplaySprite::Fallback(FallbackSprite {
-                                        position: UVec2JsonKey(position_uvec2),
+                                        position: position_uvec2,
                                         index: sprite,
                                         z: tile_3d_coords.z,
                                     });
@@ -295,7 +290,7 @@ pub async fn get_sprites(
 
                                             (
                                                 Some(DisplaySprite::Fallback(FallbackSprite {
-                                                    position: UVec2JsonKey(position_uvec2),
+                                                    position: position_uvec2,
                                                     index: fallback,
                                                     z: tile_3d_coords.z,
                                                 })),

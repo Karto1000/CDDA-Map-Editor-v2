@@ -1,4 +1,4 @@
-use crate::features::program_data::{MapDataCollection, ZLevel};
+use crate::features::program_data::{Overmap, ZLevel};
 use cdda_lib::types::CDDAIdentifier;
 use glam::UVec2;
 use serde::{Deserialize, Serialize};
@@ -12,7 +12,7 @@ pub mod handlers;
 #[serde(rename_all = "camelCase")]
 pub struct MapViewer {
     #[serde(skip)]
-    pub maps: HashMap<ZLevel, MapDataCollection>,
+    pub maps: HashMap<ZLevel, Overmap>,
     pub data: LiveViewerData,
     pub size: UVec2,
 }

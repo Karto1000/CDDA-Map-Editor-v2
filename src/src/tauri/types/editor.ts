@@ -48,7 +48,7 @@ export type MapEditorData = {
     mapEditor: {
         // TODO: Add more fields
         size: [number, number]
-        maps: {[zLevel: number]: MapDataCollection}
+        overmaps: {[zLevel: number]: MapDataCollection}
     }
 }
 

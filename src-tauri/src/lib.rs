@@ -43,11 +43,11 @@ use features::toast::ToastMessage;
 use features::viewer::LiveViewerData;
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
-use rand::rng;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
+use rand::rng;
 use tauri::async_runtime::{block_on, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
@@ -173,11 +173,9 @@ async fn frontend_ready(
                     ProjectType::MapEditor(map_editor) => {
                         info!("Opening Map Editor");
 
-                        for (_, maps) in map_editor.maps.iter_mut() {
-                            match maps.calculate_random_parameters(
-                                &mut rng(),
-                                &json_data.palettes,
-                            ) {
+                        for (_, maps) in map_editor.overmaps.iter_mut() {
+                            match maps.calculate_random_parameters(&mut rng(), &json_data.palettes)
+                            {
                                 Ok(_) => {},
                                 Err(e) => {
                                     warn!(

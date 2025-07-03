@@ -56,6 +56,35 @@ export function MapEditor(props: MapEditorProps) {
 
     const zLevel = useRef<number>(0)
 
+    function setupGrid(theme: Theme) {
+        const tileInfo = getTileInfo(props.spritesheetConfig.current)
+
+        const gridWidth = project.project_type.mapEditor.size[0] * tileInfo.width / 2
+        const gridHeight = project.project_type.mapEditor.size[1] * tileInfo.height / 2
+
+        const gridHelper = createGrid(
+            {
+                width: gridWidth,
+                height: gridHeight,
+                linesHeight: gridHeight / tileInfo.height * 2,
+                linesWidth: gridWidth / tileInfo.width * 2,
+                color: getColorFromTheme(theme, "disabled")
+            }
+        )
+
+        gridHelper.position.x += gridWidth - tileInfo.width / 2
+        gridHelper.position.y += -gridHeight - tileInfo.height / 2
+
+        if (grid.current) {
+            props.threeConfig.current.scene.remove(grid.current)
+            grid.current = null
+        }
+
+        props.threeConfig.current.scene.add(gridHelper)
+        grid.current = gridHelper
+        grid.current.visible = props.showGridRef.current
+    }
+
     useChunkSelect(
         props.threeConfig,
         props.spritesheetConfig,
@@ -180,6 +209,14 @@ export function MapEditor(props: MapEditorProps) {
         [selectedCharacter]
     )
 
+    useTauriEvent(
+        TauriEvent.TILESET_LOADED,
+        () => {
+            setupGrid(theme.theme)
+        },
+        [theme, project]
+    )
+
     useEffect(() => {
         if (!project) return
         if ("mapViewer" in project.project_type) return
@@ -194,35 +231,6 @@ export function MapEditor(props: MapEditorProps) {
             props.threeConfig.current.camera.top = newHeight / 2
             props.threeConfig.current.camera.bottom = newHeight / -2
             props.threeConfig.current.camera.position.z = 999999
-        }
-
-        function setupGrid(theme: Theme) {
-            const tileInfo = getTileInfo(props.spritesheetConfig.current)
-
-            const gridWidth = project.project_type.mapEditor.size[0] * tileInfo.width / 2
-            const gridHeight = project.project_type.mapEditor.size[1] * tileInfo.height / 2
-
-            const gridHelper = createGrid(
-                {
-                    width: gridWidth,
-                    height: gridHeight,
-                    linesHeight: gridHeight / tileInfo.height * 2,
-                    linesWidth: gridWidth / tileInfo.width * 2,
-                    color: getColorFromTheme(theme, "disabled")
-                }
-            )
-
-            gridHelper.position.x += gridWidth - tileInfo.width / 2
-            gridHelper.position.y += -gridHeight - tileInfo.height / 2
-
-            if (grid.current) {
-                props.threeConfig.current.scene.remove(grid.current)
-                grid.current = null
-            }
-
-            props.threeConfig.current.scene.add(gridHelper)
-            grid.current = gridHelper
-            grid.current.visible = props.showGridRef.current
         }
 
         setRenderBounds()

@@ -1,112 +1,24 @@
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::features::map::DEFAULT_MAP_DATA_SIZE;
 use crate::features::program_data::{
-    LoadedProjects, MapDataCollection, ProgramData, Project, ZLevel,
+    LoadedProjects, Overmap, ProgramData, Project, ZLevel,
 };
 use cdda_lib::types::Weighted;
 use derive_more::with_trait::Display;
-use glam::{IVec3, UVec2};
+use glam::{IVec2, IVec3, UVec2, UVec3};
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
 use rand::rng;
-use serde::de::Error as SerdeError;
+use serde::de::{Error as SerdeError, MapAccess, Visitor};
+use serde::ser::SerializeMap;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
+use std::fmt;
+use std::marker::PhantomData;
 use std::ops::{Add, Deref, DerefMut};
 use thiserror::Error;
 use tokio::sync::MutexGuard;
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct UVec2JsonKey(pub UVec2);
-
-impl From<UVec2> for UVec2JsonKey {
-    fn from(value: UVec2) -> Self {
-        Self(value)
-    }
-}
-
-impl Deref for UVec2JsonKey {
-    type Target = UVec2;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl Serialize for UVec2JsonKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Convert the UVec2 into a string like "x,y"
-        let s = format!("{},{}", self.0.x, self.0.y);
-        serializer.serialize_str(&s)
-    }
-}
-
-impl<'de> Deserialize<'de> for UVec2JsonKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Deserialize the string in the format "x,y"
-        let s = String::deserialize(deserializer)?;
-
-        // Split the string by comma to extract x and y values
-        let parts: Vec<&str> = s.split(',').collect();
-        if parts.len() != 2 {
-            return Err(serde::de::Error::invalid_value(
-                serde::de::Unexpected::Str(&s),
-                &"a string in the format 'x,y'",
-            ));
-        }
-
-        // Parse the x and y values as u32
-        let x = parts[0].parse::<u32>().map_err(serde::de::Error::custom)?;
-        let y = parts[1].parse::<u32>().map_err(serde::de::Error::custom)?;
-
-        // Return the JSONSerializableUVec2 wrapper with the parsed UVec2
-        Ok(UVec2JsonKey(UVec2::new(x, y)))
-    }
-}
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq)]
-pub struct IVec3JsonKey(pub IVec3);
-
-impl Serialize for IVec3JsonKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Convert the UVec2 into a string like "x,y"
-        let s = format!("{},{},{}", self.0.x, self.0.y, self.0.z);
-        serializer.serialize_str(&s)
-    }
-}
-
-impl<'de> Deserialize<'de> for IVec3JsonKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-
-        let parts: Vec<&str> = s.split(',').collect();
-        if parts.len() != 2 {
-            return Err(de::Error::invalid_value(
-                de::Unexpected::Str(&s),
-                &"a string in the format 'x,y,z'",
-            ));
-        }
-
-        let x = parts[0].parse::<i32>().map_err(serde::de::Error::custom)?;
-        let y = parts[1].parse::<i32>().map_err(serde::de::Error::custom)?;
-        let z = parts[2].parse::<i32>().map_err(serde::de::Error::custom)?;
-
-        Ok(IVec3JsonKey(IVec3::new(x, y, z)))
-    }
-}
 
 #[derive(Debug, Display, Error)]
 pub enum SaveError {
@@ -231,7 +143,7 @@ pub enum CDDADataError {
     NotLoaded,
 }
 
-pub fn get_size(maps: &HashMap<ZLevel, MapDataCollection>) -> UVec2 {
+pub fn get_size(maps: &HashMap<ZLevel, Overmap>) -> UVec2 {
     let mut max_x = 0u32;
     let mut max_y = 0u32;
 
@@ -264,7 +176,7 @@ pub fn get_current_project<'a>(
             return Err(GetCurrentProjectError::ProjectNotFound(
                 project_name.clone(),
             ));
-        },
+        }
         Some(d) => d,
     };
 
@@ -285,7 +197,7 @@ pub fn get_current_project_mut<'a>(
             return Err(GetCurrentProjectError::ProjectNotFound(
                 project_name.clone(),
             ));
-        },
+        }
         Some(d) => d,
     };
 
@@ -439,3 +351,133 @@ pub enum CardinalDirection {
     South = 2,
     West = 3,
 }
+
+macro_rules! impl_map_with_vec_keys_serializer_and_deserializer {
+    (
+        $vec_type: ty => [$($map_type: ty),*],
+        $parse_key: expr,
+        $error: literal
+    ) => {
+        $(
+            paste::paste! {
+                pub fn [<serialize_ $map_type:lower _with_ $vec_type:lower _keys>]<S, T>(
+                    generic_tags: &$map_type<$vec_type, T>,
+                    serializer: S,
+                ) -> Result<S::Ok, S::Error>
+                where
+                    S: Serializer,
+                    T: serde::Serialize,
+                {
+                    let mut map = serializer.serialize_map(Some(generic_tags.len()))?;
+                    for (uvec, values) in generic_tags {
+                        map.serialize_entry(&format!("{},{}", uvec.x, uvec.y), values)?;
+                    }
+                    map.end()
+                }
+
+                struct [<$vec_type $map_type KeysVisitor>]<T>(PhantomData<T>);
+
+                impl<'de, T: Deserialize<'de>> Visitor<'de> for [<$vec_type $map_type KeysVisitor>]<T> {
+                    type Value = $map_type<$vec_type, T>;
+
+                    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+                        formatter
+                            .write_str($error)
+                    }
+
+                    fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
+                    where
+                        M: MapAccess<'de>,
+                    {
+                        let mut values = $map_type::new();
+
+                        while let Some(key) = map.next_key::<String>()? {
+                            // Parse the coordinate string "x,y"
+                            let transformed_vec = $parse_key(key)?;
+                            let value = map.next_value()?;
+                            values.insert(transformed_vec, value);
+                        }
+
+                        Ok(values)
+                    }
+                }
+
+                pub fn [<deserialize_ $map_type:lower _with_ $vec_type:lower _keys>]<'de, D, T>(
+                    deserializer: D,
+                ) -> Result<$map_type<$vec_type, T>, D::Error>
+                where
+                    D: Deserializer<'de>,
+                    T: Deserialize<'de>,
+                {
+                    deserializer.deserialize_map([<$vec_type $map_type KeysVisitor>](PhantomData))
+                }
+            }
+        )*
+    };
+}
+
+impl_map_with_vec_keys_serializer_and_deserializer!(
+    UVec2 => [HashMap, IndexMap],
+    |key: String| {
+        let coords: Vec<&str> = key.split(',').collect();
+        if coords.len() != 2 {
+            return Err(M::Error::custom("map in which the keys are formatted as 'x,y' and where all the keys numbers are greater or equal to 0"));
+        }
+
+        let x = coords[0].parse::<u32>().map_err(M::Error::custom)?;
+        let y = coords[1].parse::<u32>().map_err(M::Error::custom)?;
+
+        Ok(UVec2::new(x, y))
+    },
+    "map in which the keys are formatted as 'x,y' and where all the keys numbers are greater or equal to 0"
+);
+
+impl_map_with_vec_keys_serializer_and_deserializer!(
+    UVec3 => [HashMap, IndexMap],
+    |key: String| {
+        let coords: Vec<&str> = key.split(',').collect();
+        if coords.len() != 3 {
+            return Err(M::Error::custom("map in which the keys are formatted as 'x,y,z' and where all the keys numbers are greater or equal to 0"));
+        }
+
+        let x = coords[0].parse::<u32>().map_err(M::Error::custom)?;
+        let y = coords[1].parse::<u32>().map_err(M::Error::custom)?;
+        let z = coords[2].parse::<u32>().map_err(M::Error::custom)?;
+
+        Ok(UVec3::new(x, y, z))
+    },
+    "map in which the keys are formatted as 'x,y,z' and where all the keys numbers are greater or equal to 0"
+);
+
+impl_map_with_vec_keys_serializer_and_deserializer!(
+    IVec2 => [HashMap, IndexMap],
+    |key: String| {
+        let coords: Vec<&str> = key.split(',').collect();
+        if coords.len() != 2 {
+            return Err(M::Error::custom("map in which the keys are formatted as 'x,y'"));
+        }
+
+        let x = coords[0].parse::<i32>().map_err(M::Error::custom)?;
+        let y = coords[1].parse::<i32>().map_err(M::Error::custom)?;
+
+        Ok(IVec2::new(x, y))
+    },
+    "map in which the keys are formatted as 'x,y'"
+);
+
+impl_map_with_vec_keys_serializer_and_deserializer!(
+    IVec3 => [HashMap, IndexMap],
+    |key: String| {
+        let coords: Vec<&str> = key.split(',').collect();
+        if coords.len() != 3 {
+            return Err(M::Error::custom("map in which the keys are formatted as 'x,y,z'"));
+        }
+
+        let x = coords[0].parse::<i32>().map_err(M::Error::custom)?;
+        let y = coords[1].parse::<i32>().map_err(M::Error::custom)?;
+        let z = coords[2].parse::<i32>().map_err(M::Error::custom)?;
+
+        Ok(IVec3::new(x, y, z))
+    },
+    "map in which the keys are formatted as 'x,y,z'"
+);

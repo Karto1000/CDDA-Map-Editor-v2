@@ -9,6 +9,7 @@ import {MapEditorMode} from "../../features/editor/mapEditor.js";
 export const __TAB_CHANGED = "__project_changed"
 
 export function serializedVec2ToVector2(serializedVec2: string): Vector2 {
+    console.log(serializedVec2)
     const parts = serializedVec2.split(",")
 
     const x = parseInt(parts[0])

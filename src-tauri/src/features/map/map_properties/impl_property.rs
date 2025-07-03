@@ -22,7 +22,7 @@ impl Property for TerrainProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let ident = self
@@ -68,7 +68,7 @@ impl Property for MonstersProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let monster = self.monster.get_random();
@@ -163,7 +163,7 @@ impl Property for FurnitureProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let mut rng = rng();
@@ -217,7 +217,7 @@ impl Property for SignsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let command = SetTile::furniture(
@@ -245,7 +245,7 @@ impl Property for NestedProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let mut rng = rng();
@@ -326,7 +326,7 @@ impl Property for FieldsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let field = self.field.get_random();
@@ -360,7 +360,7 @@ impl Property for GaspumpsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let gaspump = self.gaspumps.get_random();
@@ -400,7 +400,7 @@ impl Property for ComputersProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let command = SetTile::furniture(
@@ -429,7 +429,7 @@ impl Property for ToiletsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let command = SetTile::furniture(
@@ -458,7 +458,7 @@ impl Property for TrapsProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let mut rng = rng();
@@ -516,7 +516,7 @@ impl Property for VehiclesProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let mapgen_vehicle = self.vehicles.get_random();
@@ -681,7 +681,7 @@ impl Property for CorpsesProperty {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         let mut rng = rng();

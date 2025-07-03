@@ -16,7 +16,7 @@ use crate::features::map::map_properties::{
 };
 use crate::features::program_data::ZLevel;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::util::{Rotation, UVec2JsonKey};
+use crate::util::{Rotation};
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,
@@ -36,8 +36,9 @@ use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 use std::collections::{HashMap, HashSet};
-use std::fmt::Debug;
+use std::fmt::{Debug, Formatter, Write};
 use std::sync::Arc;
+use serde::de::{MapAccess, Visitor};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 use thiserror::Error;
@@ -51,9 +52,9 @@ pub trait Place:
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>>;
+    ) -> Option<Vec<SetTile>>; 
 }
 
 clone_trait_object!(Place);
@@ -72,7 +73,7 @@ pub trait Property:
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>>;
 
@@ -258,54 +259,48 @@ pub enum MapDataRotation {
     Deg270,
 }
 
-#[derive(Debug, Clone)]
-pub struct MapData {
-    pub id: CDDAIdentifier,
+pub fn serialize_properties<S>(
+    properties: &HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let serialized_properties: HashMap<_, HashMap<_, _>> = properties
+        .iter()
+        .map(|(key, value)| {
+            let serialized_inner = value
+                .iter()
+                .map(|(char_key, property)| (char_key, property.value()))
+                .collect();
+            (key, serialized_inner)
+        })
+        .collect();
 
-    pub cells: IndexMap<UVec2JsonKey, Cell>,
-    pub fill: Option<DistributionInner>,
-    pub map_size: UVec2,
-    pub predecessor: Option<CDDAIdentifier>,
-
-    pub config: MapDataConfig,
-    pub rotation: MapDataRotation,
-
-    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
-    pub palettes: Vec<MapGenValue>,
-    pub flags: HashSet<MapDataFlag>,
-    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
-
-    pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
-    pub place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
+    serialized_properties.serialize(serializer)
 }
 
-impl<'de> Deserialize<'de> for MapData {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+pub struct PropertiesVisitor;
+
+impl<'de> Visitor<'de> for PropertiesVisitor {
+    type Value = HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.write_str("any valid mapgen property")
+    }
+
+    fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
     where
-        D: Deserializer<'de>,
+        A: MapAccess<'de>,
     {
-        #[derive(Deserialize)]
-        struct MapDataHelper {
-            id: CDDAIdentifier,
-            cells: IndexMap<UVec2JsonKey, Cell>,
-            fill: Option<DistributionInner>,
-            map_size: UVec2,
-            predecessor: Option<CDDAIdentifier>,
-            config: MapDataConfig,
-            rotation: MapDataRotation,
-            parameters: IndexMap<ParameterIdentifier, Parameter>,
-            palettes: Vec<MapGenValue>,
-            flags: HashSet<MapDataFlag>,
-            properties: HashMap<MappingKind, HashMap<char, Value>>,
-        }
-
-        let helper = MapDataHelper::deserialize(deserializer)?;
-
         let mut properties: HashMap<
             MappingKind,
             HashMap<char, Arc<dyn Property>>,
         > = HashMap::new();
-        for (kind, inner_map) in helper.properties {
+
+        while let Some((kind, inner_map)) =
+            map.next_entry::<MappingKind, HashMap<char, Value>>()?
+        {
             let mut transformed_inner_map = HashMap::new();
             for (char_key, value) in inner_map {
                 let property = match value_to_property(kind.clone(), value) {
@@ -323,67 +318,60 @@ impl<'de> Deserialize<'de> for MapData {
             properties.insert(kind, transformed_inner_map);
         }
 
-        Ok(MapData {
-            id: helper.id,
-            cells: helper.cells,
-            fill: helper.fill,
-            map_size: helper.map_size,
-            predecessor: helper.predecessor,
-            config: helper.config,
-            rotation: helper.rotation,
-            parameters: helper.parameters,
-            palettes: helper.palettes,
-            flags: helper.flags,
-            calculated_parameters: IndexMap::new(),
-            properties,
-            place: HashMap::new(),
-        })
+        Ok(properties)
     }
 }
 
-impl Serialize for MapData {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let mut state = serializer.serialize_struct("MapData", 10)?;
-        state.serialize_field("cells", &self.cells)?;
-        state.serialize_field("fill", &self.fill)?;
-        state.serialize_field("map_size", &self.map_size)?;
-        state.serialize_field("predecessor", &self.predecessor)?;
-        state.serialize_field("config", &self.config)?;
-        state.serialize_field("rotation", &self.rotation)?;
-        state.serialize_field("parameters", &self.parameters)?;
-        state.serialize_field("palettes", &self.palettes)?;
-        state.serialize_field("flags", &self.flags)?;
-        state.serialize_field("id", &self.id)?;
-
-        let serialized_properties: HashMap<_, HashMap<_, _>> = self
-            .properties
-            .iter()
-            .map(|(key, value)| {
-                let serialized_inner = value
-                    .iter()
-                    .map(|(char_key, property)| (char_key, property.value()))
-                    .collect();
-                (key, serialized_inner)
-            })
-            .collect();
-
-        state.serialize_field("properties", &serialized_properties)?;
-
-        state.end()
-    }
+pub fn deserialize_properties<'de, D>(
+    deserializer: D,
+) -> Result<HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    deserializer.deserialize_map(PropertiesVisitor)
 }
 
-impl Default for MapData {
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct MapGen {
+    pub id: CDDAIdentifier,
+
+    #[serde(
+        deserialize_with = "crate::util::deserialize_indexmap_with_uvec2_keys",
+        serialize_with = "crate::util::serialize_indexmap_with_uvec2_keys"
+    )]
+    pub cells: IndexMap<UVec2, Cell>,
+    pub fill: Option<DistributionInner>,
+    pub map_size: UVec2,
+    pub predecessor: Option<CDDAIdentifier>,
+
+    pub config: MapDataConfig,
+    pub rotation: MapDataRotation,
+
+    pub parameters: IndexMap<ParameterIdentifier, Parameter>,
+    pub palettes: Vec<MapGenValue>,
+    pub flags: HashSet<MapDataFlag>,
+
+    #[serde(skip)]
+    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
+
+    #[serde(
+        serialize_with = "serialize_properties",
+        deserialize_with = "deserialize_properties"
+    )]
+    pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
+    
+    #[serde(skip)]
+    pub place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
+}
+
+impl Default for MapGen {
     fn default() -> Self {
         let mut cells = IndexMap::new();
 
         for y in 0..DEFAULT_MAP_HEIGHT {
             for x in 0..DEFAULT_MAP_WIDTH {
                 cells.insert(
-                    UVec2JsonKey(UVec2::new(x as u32, y as u32)),
+                    UVec2::new(x as u32, y as u32),
                     Cell { character: ' ' },
                 );
             }
@@ -453,7 +441,7 @@ pub enum GetMappedCDDAIdsError {
     MissingMapgenEntryForPredecessor(String),
 }
 
-impl MapData {
+impl MapGen {
     pub fn calculate_random_parameters(
         &mut self,
         rng: &mut impl Rng,
@@ -471,8 +459,7 @@ impl MapData {
         }
 
         for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value
-                .get_random_identifier(rng, &calculated_parameters)?;
+            let id = mapgen_value.get_random_identifier(rng, &calculated_parameters)?;
             let palette = all_palettes.get(&id).ok_or(
                 CalculateParametersError::MissingPalette(id.to_string()),
             )?;
@@ -506,10 +493,9 @@ impl MapData {
 
         let fill_terrain_sprite = match &self.fill {
             None => None,
-            Some(id) => Some(
-                id.get_random_identifier(rng, &self.calculated_parameters)
-                    .unwrap(),
-            ),
+            Some(id) => {
+                Some(id.get_random_identifier(rng, &self.calculated_parameters).unwrap())
+            },
         };
 
         // we need to calculate the predecessor_mapgen here before so we can replace it later
@@ -539,14 +525,14 @@ impl MapData {
                     ),
                 };
 
-                local_mapped_cdda_ids = predecessor_map_data
-                    .get_random_mapped_cdda_ids(rng, json_data, z)?;
+                local_mapped_cdda_ids =
+                    predecessor_map_data.get_random_mapped_cdda_ids(rng, json_data, z)?;
             },
         }
 
         self.cells.iter().for_each(|(p, _)| {
             let transformed_position =
-                self.transform_coordinates(&p.0.as_ivec2());
+                self.transform_coordinates(&p.as_ivec2());
             let coords =
                 IVec3::new(transformed_position.x, transformed_position.y, z);
             // If there was no id added from the predecessor mapgen, we will add the fill sprite here
@@ -679,7 +665,7 @@ impl MapData {
         self.cells.iter().for_each(|(p, cell)| {
             // Transform the coordinate `p` based on the map rotation
             let transformed_position =
-                self.transform_coordinates(&p.0.as_ivec2());
+                self.transform_coordinates(&p.as_ivec2());
 
             let ident_commands = self.get_identifier_change_commands(
                 rng,

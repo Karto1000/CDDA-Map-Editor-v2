@@ -18,9 +18,9 @@ use crate::data::vehicle_parts::{
 };
 use crate::data::vehicles::{CDDAVehicle, CDDAVehicleIntermediate};
 use crate::data::{CDDAJsonEntry, TileLayer};
-use crate::features::map::MapData;
+use crate::features::map::MapGen;
 use crate::features::program_data::io::{ProgramDataLoader, ProjectLoader};
-use crate::features::program_data::{MapDataCollection, ProgramData, Project};
+use crate::features::program_data::{Overmap, ProgramData, Project};
 use crate::util::Load;
 use anyhow::{anyhow, Error};
 use async_walkdir::WalkDir;
@@ -46,7 +46,7 @@ use thiserror::__private::AsDisplay;
 #[derive(Default, Serialize, Clone)]
 pub struct DeserializedCDDAJsonData {
     pub palettes: HashMap<CDDAIdentifier, CDDAPalette>,
-    pub map_data: HashMap<CDDAIdentifier, MapData>,
+    pub map_data: HashMap<CDDAIdentifier, MapGen>,
     pub region_settings: HashMap<CDDAIdentifier, CDDARegionSettings>,
     pub terrain: HashMap<CDDAIdentifier, CDDATerrain>,
     pub furniture: HashMap<CDDAIdentifier, CDDAFurniture>,
@@ -224,57 +224,57 @@ impl DeserializedCDDAJsonData {
         // { "ocean_shore", &mapgen_ocean_shore },
         // { "ravine_edge", &mapgen_ravine_edge },
 
-        let mut forest = MapData::default();
+        let mut forest = MapGen::default();
         forest.fill =
             Some(DistributionInner::Normal("t_region_groundcover".into()));
         self.map_data.insert("forest".into(), forest);
 
-        let mut river_curved_not = MapData::default();
+        let mut river_curved_not = MapGen::default();
         river_curved_not.fill =
             Some(DistributionInner::Normal("t_water".into()));
         self.map_data
             .insert("river_curved_not".into(), river_curved_not);
 
-        let mut river_straight = MapData::default();
+        let mut river_straight = MapGen::default();
         river_straight.fill = Some(DistributionInner::Normal("t_water".into()));
         self.map_data
             .insert("river_straight".into(), river_straight);
 
-        let mut river_curved = MapData::default();
+        let mut river_curved = MapGen::default();
         river_curved.fill = Some(DistributionInner::Normal("t_water".into()));
         self.map_data.insert("river_curved".into(), river_curved);
 
-        let mut subway_straight = MapData::default();
+        let mut subway_straight = MapGen::default();
         subway_straight.fill = Some(DistributionInner::Normal("t_road".into()));
         self.map_data
             .insert("subway_straight".into(), subway_straight);
 
-        let mut subway_curved = MapData::default();
+        let mut subway_curved = MapGen::default();
         subway_curved.fill = Some(DistributionInner::Normal("t_road".into()));
         self.map_data.insert("subway_curved".into(), subway_curved);
 
-        let mut subway_end = MapData::default();
+        let mut subway_end = MapGen::default();
         subway_end.fill = Some(DistributionInner::Normal("t_road".into()));
         self.map_data.insert("subway_end".into(), subway_end);
 
-        let mut subway_tee = MapData::default();
+        let mut subway_tee = MapGen::default();
         subway_tee.fill = Some(DistributionInner::Normal("t_road".into()));
         self.map_data.insert("subway_tee".into(), subway_tee);
 
-        let mut subway_four_way = MapData::default();
+        let mut subway_four_way = MapGen::default();
         subway_four_way.fill = Some(DistributionInner::Normal("t_road".into()));
         self.map_data
             .insert("subway_four_way".into(), subway_four_way);
 
-        let mut lake_shore = MapData::default();
+        let mut lake_shore = MapGen::default();
         lake_shore.fill = Some(DistributionInner::Normal("t_water".into()));
         self.map_data.insert("lake_shore".into(), lake_shore);
 
-        let mut ocean_shore = MapData::default();
+        let mut ocean_shore = MapGen::default();
         ocean_shore.fill = Some(DistributionInner::Normal("t_water".into()));
         self.map_data.insert("ocean_shore".into(), ocean_shore);
 
-        let mut ravine_edge = MapData::default();
+        let mut ravine_edge = MapGen::default();
         ravine_edge.fill = Some(DistributionInner::Normal("t_water".into()));
         self.map_data.insert("ravine_edge".into(), ravine_edge);
     }
@@ -502,7 +502,7 @@ pub fn replace_data_in_cdda_data(
         if let Some(om_terrain) = mapgen.om_terrain.clone() {
             match om_terrain {
                 OmTerrain::Single(id) => {
-                    let mut map_data_collection: MapDataCollection =
+                    let mut map_data_collection: Overmap =
                         mapgen.try_into()?;
 
                     cdda_data.map_data.insert(
@@ -514,7 +514,7 @@ pub fn replace_data_in_cdda_data(
                     );
                 },
                 OmTerrain::Duplicate(duplicate) => {
-                    let map_data_collection: MapDataCollection =
+                    let map_data_collection: Overmap =
                         mapgen.try_into()?;
 
                     for id in duplicate.iter() {
@@ -529,7 +529,7 @@ pub fn replace_data_in_cdda_data(
                     }
                 },
                 OmTerrain::Nested(nested) => {
-                    let map_data_collection: MapDataCollection =
+                    let map_data_collection: Overmap =
                         mapgen.try_into()?;
 
                     for (coords, map_data) in map_data_collection.maps {
@@ -547,7 +547,7 @@ pub fn replace_data_in_cdda_data(
                 },
             }
         } else if let Some(nested_mapgen) = mapgen.nested_mapgen_id.clone() {
-            let mut map_data_collection: MapDataCollection =
+            let mut map_data_collection: Overmap =
                 mapgen.try_into()?;
 
             cdda_data.map_data.insert(
@@ -558,7 +558,7 @@ pub fn replace_data_in_cdda_data(
                     .unwrap(),
             );
         } else if let Some(update_mapgen) = mapgen.update_mapgen_id.clone() {
-            let mut map_data_collection: MapDataCollection =
+            let mut map_data_collection: Overmap =
                 mapgen.try_into()?;
 
             cdda_data.map_data.insert(

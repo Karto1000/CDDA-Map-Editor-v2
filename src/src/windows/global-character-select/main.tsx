@@ -58,6 +58,7 @@ function Main() {
             return
         }
 
+        console.log(response.data)
         setGlobalPaletteReprs(response.data)
     }
 

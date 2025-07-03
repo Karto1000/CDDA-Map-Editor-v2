@@ -70,7 +70,7 @@ export function useChunkSelect(
         textRef.current.visible = true
 
         // TODO: z-level
-        const map = project.project_type.mapEditor.maps[0].maps[`${currentChunkX},${currentChunkY}`]
+        const map = project.project_type.mapEditor.overmaps[0].maps[`${currentChunkX},${currentChunkY}`]
 
         const halfOffsetX = tileInfo.width / 2
         const halfOffsetY = tileInfo.height / 2

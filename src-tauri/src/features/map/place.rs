@@ -2,7 +2,7 @@ use crate::data::io::DeserializedCDDAJsonData;
 use crate::features::map::map_properties::{
     FurnitureProperty, NestedProperty, TerrainProperty,
 };
-use crate::features::map::{MapData, Place, Property, SetTile};
+use crate::features::map::{MapGen, Place, Property, SetTile};
 use glam::IVec2;
 
 #[derive(Debug, Clone)]
@@ -14,7 +14,7 @@ impl Place for PlaceTerrain {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         self.visible.get_commands(position, map_data, json_data)
@@ -30,7 +30,7 @@ impl Place for PlaceFurniture {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         self.visible.get_commands(position, map_data, json_data)
@@ -46,7 +46,7 @@ impl Place for PlaceNested {
     fn get_commands(
         &self,
         position: &IVec2,
-        map_data: &MapData,
+        map_data: &MapGen,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Vec<SetTile>> {
         self.nested_property
