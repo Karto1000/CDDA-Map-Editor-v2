@@ -8,8 +8,8 @@ use crate::features::map::{
 };
 use crate::features::program_data::io::{ProgramDataSaver, ProjectSaver};
 use crate::features::program_data::{
-    AdjacentSprites, LoadedProjects, Overmap, ProgramData, Project,
-    ProjectType, SavedProject, Tab, TabType,
+    AdjacentTiles, LoadedProjects, Overmap, ProgramData, Project, ProjectType,
+    SavedProject, Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
     LegacyTilesheet, Rotated, SpriteIndex, TilesheetCDDAId,
@@ -423,7 +423,7 @@ pub async fn get_global_palette_representations(
                                 .get_fg_id(
                                     &mapped_cdda_id,
                                     &repr.tile_layer,
-                                    &AdjacentSprites::none(),
+                                    &AdjacentTiles::none(),
                                     json_data,
                                 )
                                 .map(|i| i.data.into_single().unwrap());
@@ -432,7 +432,7 @@ pub async fn get_global_palette_representations(
                                 .get_bg_id(
                                     &mapped_cdda_id,
                                     &repr.tile_layer,
-                                    &AdjacentSprites::none(),
+                                    &AdjacentTiles::none(),
                                     json_data,
                                 )
                                 .map(|i| i.data.into_single().unwrap());

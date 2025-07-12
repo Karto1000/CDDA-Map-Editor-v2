@@ -5,7 +5,10 @@ pub mod legacy_tileset;
 use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::TileLayer;
 use crate::features::map::MappedCDDAId;
-use crate::features::program_data::AdjacentSprites;
+use crate::features::program_data::{AdjacentTiles, ZLevel};
+use crate::features::sprites::{
+    InstancedAnimatedSprite, InstancedSprite, InstancedStaticSprite,
+};
 use crate::features::tileset::data::AdditionalTileType;
 use crate::features::tileset::data::AdditionalTileType::{
     Center, Corner, Edge, EndPiece, TConnection, Unconnected,
@@ -17,6 +20,7 @@ use crate::util::CardinalDirection::{East, North, South, West};
 use crate::util::{CardinalDirection, GetRandom, Rotation};
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, Weighted};
 use data::MeabyAnimated;
+use glam::UVec2;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
@@ -292,7 +296,7 @@ impl Sprite {
         this_id: &TilesheetCDDAId,
         layer: &TileLayer,
         json_data: &DeserializedCDDAJsonData,
-        adjacent_sprites: &AdjacentSprites,
+        adjacent_sprites: &AdjacentTiles,
     ) -> (bool, bool, bool, bool) {
         let mut this_connects_to = json_data
             .get_connects_to(this_id.id.clone(), layer)
@@ -437,11 +441,86 @@ impl Sprite {
         }
     }
 
+    pub fn instantiate(
+        &self,
+        id: &MappedCDDAId,
+        position: &UVec2,
+        z: ZLevel,
+        layer: &TileLayer,
+        cdda_data: &DeserializedCDDAJsonData,
+        adjacent_sprites: &AdjacentTiles,
+    ) -> (Option<InstancedSprite>, Option<InstancedSprite>) {
+        let fg = match self.get_fg_id(&id, &layer, adjacent_sprites, cdda_data)
+        {
+            None => None,
+            Some(sprite_id) => match self.is_animated() {
+                true => {
+                    let display_sprite = InstancedAnimatedSprite {
+                        position: position.clone(),
+                        layer: (layer.clone() as u32) * 2
+                            + SpriteLayer::Fg as u32,
+                        indices: sprite_id.data.into_vec(),
+                        rotate_deg: sprite_id.rotation.deg()
+                            + id.rotation.deg(),
+                        z,
+                    };
+
+                    Some(InstancedSprite::Animated(display_sprite))
+                },
+                false => {
+                    let display_sprite = InstancedStaticSprite {
+                        position: position.clone(),
+                        layer: (layer.clone() as u32) * 2
+                            + SpriteLayer::Fg as u32,
+                        index: sprite_id.data.into_single().unwrap(),
+                        rotate_deg: sprite_id.rotation.deg(),
+                        z,
+                    };
+
+                    Some(InstancedSprite::Static(display_sprite))
+                },
+            },
+        };
+
+        let bg = match self.get_bg_id(&id, &layer, adjacent_sprites, cdda_data)
+        {
+            None => None,
+            Some(id) => match self.is_animated() {
+                true => {
+                    let display_sprite = InstancedAnimatedSprite {
+                        position: position.clone(),
+                        layer: (layer.clone() as u32) * 2
+                            + SpriteLayer::Bg as u32,
+                        indices: id.data.into_vec(),
+                        rotate_deg: id.rotation.deg(),
+                        z,
+                    };
+
+                    Some(InstancedSprite::Animated(display_sprite))
+                },
+                false => {
+                    let display_sprite = InstancedStaticSprite {
+                        position: position.clone(),
+                        layer: (layer.clone() as u32) * 2
+                            + SpriteLayer::Bg as u32,
+                        index: id.data.into_single().unwrap(),
+                        rotate_deg: id.rotation.deg(),
+                        z,
+                    };
+
+                    Some(InstancedSprite::Static(display_sprite))
+                },
+            },
+        };
+
+        (fg, bg)
+    }
+
     pub fn get_fg_id(
         &self,
         mapped_id: &MappedCDDAId,
         layer: &TileLayer,
-        adjacent_sprites: &AdjacentSprites,
+        adjacent_sprites: &AdjacentTiles,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {
@@ -696,7 +775,7 @@ impl Sprite {
         &self,
         mapped_id: &MappedCDDAId,
         layer: &TileLayer,
-        adjacent_sprites: &AdjacentSprites,
+        adjacent_sprites: &AdjacentTiles,
         json_data: &DeserializedCDDAJsonData,
     ) -> Option<Rotated<MeabyVec<SpriteIndex>>> {
         match self {

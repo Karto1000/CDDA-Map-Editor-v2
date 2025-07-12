@@ -13,6 +13,7 @@ pub mod vehicle_parts;
 pub mod vehicles;
 
 use crate::data::furniture::{CDDAFurniture, CDDAFurnitureIntermediate};
+use crate::data::io::DeserializedCDDAJsonData;
 use crate::data::item::CDDAItemGroupIntermediate;
 use crate::data::map_data::CDDAMapDataIntermediate;
 use crate::data::monster_group::CDDAMonsterGroupIntermediate;
@@ -32,6 +33,7 @@ use cdda_lib::types::{
     CDDADistributionInner, CDDAIdentifier, DistributionInner, IdOrAbstract,
     MapGenValue, MeabyVec, MeabyWeighted, ParameterIdentifier,
 };
+use cdda_lib::{FURNITURE_PREFIX, REGION_SETTING_PREFIX, TERRAIN_PREFIX};
 use derive_more::Display;
 use indexmap::IndexMap;
 use log::info;
@@ -134,12 +136,10 @@ where
 pub fn replace_region_setting(
     id: &CDDAIdentifier,
     region_setting: &CDDARegionSettings,
-    terrain: &HashMap<CDDAIdentifier, CDDATerrain>,
-    furniture: &HashMap<CDDAIdentifier, CDDAFurniture>,
 ) -> CDDAIdentifier {
     // If it starts with t_region, we know it is a regional setting
-    if id.starts_with("t_region") {
-        if id.starts_with("f_") {
+    if id.starts_with(REGION_SETTING_PREFIX) {
+        if id.starts_with(FURNITURE_PREFIX) {
             return replace_region_setting(
                 region_setting
                     .region_terrain_and_furniture
@@ -148,10 +148,8 @@ pub fn replace_region_setting(
                     .expect("Furniture Region identifier to exist")
                     .get_random(),
                 region_setting,
-                terrain,
-                furniture,
             );
-        } else if id.0.starts_with("t_") {
+        } else if id.0.starts_with(TERRAIN_PREFIX) {
             return replace_region_setting(
                 region_setting
                     .region_terrain_and_furniture
@@ -160,8 +158,6 @@ pub fn replace_region_setting(
                     .expect("Terrain Region identifier to exist")
                     .get_random(),
                 region_setting,
-                terrain,
-                furniture,
             );
         }
     }

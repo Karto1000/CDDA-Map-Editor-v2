@@ -2,8 +2,11 @@ use crate::data::io::DeserializedCDDAJsonData;
 use crate::features::map::map_properties::{
     FurnitureProperty, NestedProperty, TerrainProperty,
 };
-use crate::features::map::{MapGen, Place, Property, SetTile};
-use glam::IVec2;
+use crate::features::map::{
+    InstantiatedMapgen, MapGen, ParametersCalculated, Place, Property,
+};
+use anyhow::Error;
+use glam::UVec2;
 
 #[derive(Debug, Clone)]
 pub struct PlaceTerrain {
@@ -11,13 +14,19 @@ pub struct PlaceTerrain {
 }
 
 impl Place for PlaceTerrain {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        self.visible.get_commands(position, map_data, json_data)
+    ) -> Result<(), Error> {
+        self.visible.apply_to_instantiation(
+            mapgen,
+            instantiation,
+            position,
+            json_data,
+        )
     }
 }
 
@@ -27,13 +36,19 @@ pub struct PlaceFurniture {
 }
 
 impl Place for PlaceFurniture {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        self.visible.get_commands(position, map_data, json_data)
+    ) -> Result<(), Error> {
+        self.visible.apply_to_instantiation(
+            mapgen,
+            instantiation,
+            position,
+            json_data,
+        )
     }
 }
 
@@ -43,13 +58,18 @@ pub struct PlaceNested {
 }
 
 impl Place for PlaceNested {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        self.nested_property
-            .get_commands(position, map_data, json_data)
+    ) -> Result<(), Error> {
+        self.nested_property.apply_to_instantiation(
+            mapgen,
+            instantiation,
+            position,
+            json_data,
+        )
     }
 }

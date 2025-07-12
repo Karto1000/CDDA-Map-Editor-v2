@@ -15,18 +15,21 @@ use crate::features::map::map_properties::{
     SignsProperty, TerrainProperty,
 };
 use crate::features::map::place::{PlaceFurniture, PlaceNested, PlaceTerrain};
-use crate::features::map::SetTile;
-use crate::features::map::DEFAULT_MAP_DATA_SIZE;
+use crate::features::map::InstantiatedMapgen;
+use crate::features::map::ParametersCalculated;
+use crate::features::map::MAX_MAP_DATA_SIZE;
 use crate::features::map::{
-    Cell, MapGen, MapDataFlag, MapGenNested, MappingKind, Place, Property,
+    Cell, MapDataFlag, MapGen, MapGenNested, MappingKind, Place, Property,
 };
-use crate::features::program_data::{Overmap};
+use crate::features::program_data::Overmap;
 use cdda_lib::types::{
     CDDAIdentifier, CDDAString, DistributionInner, MapGenValue, MeabyVec,
     MeabyWeighted, NumberOrRange, ParameterIdentifier, Weighted,
 };
-use cdda_lib::{DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH};
-use glam::{IVec2, UVec2};
+use cdda_lib::{
+    MAX_MAPGEN_HEIGHT, MAX_MAPGEN_WIDTH, MIN_MAPGEN_HEIGHT, MIN_MAPGEN_WIDTH,
+};
+use glam::UVec2;
 use indexmap::IndexMap;
 use paste::paste;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -380,14 +383,20 @@ macro_rules! create_place_inner {
             }
 
             impl Place for [<Place $name>] {
-                fn get_commands(
+               fn apply_to_instantiation(
                     &self,
-                    position: &IVec2,
-                    map_data: &MapGen,
+                    mapgen: &MapGen,
+                    instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+                    position: UVec2,
                     json_data: &DeserializedCDDAJsonData,
-                ) -> Option<Vec<SetTile>> {
-                    self.property.get_commands(position, map_data, json_data)
-                }
+               ) -> Result<(), anyhow::Error> {
+                    self.property.apply_to_instantiation(
+                        mapgen,
+                        instantiation,
+                        position,
+                        json_data,
+                    )
+               }
             }
 
             #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -498,8 +507,8 @@ pub struct PlaceOuter<T> {
     #[serde(flatten)]
     pub inner: T,
 
-    pub x: NumberOrRange<i32>,
-    pub y: NumberOrRange<i32>,
+    pub x: NumberOrRange<u32>,
+    pub y: NumberOrRange<u32>,
 
     #[serde(default = "default_repeat")]
     pub repeat: NumberOrRange<i32>,
@@ -511,8 +520,8 @@ pub struct PlaceOuter<T> {
 pub trait IntoArcDyn<T> {
     fn into_arc_dyn_place(
         value: T,
-        local_x_coords: NumberOrRange<i32>,
-        local_y_coords: NumberOrRange<i32>,
+        local_x_coords: NumberOrRange<u32>,
+        local_y_coords: NumberOrRange<u32>,
     ) -> Self;
 }
 
@@ -528,8 +537,8 @@ macro_rules! impl_from {
         {
             fn into_arc_dyn_place(
                 value: PlaceOuter<$identifier>,
-                local_x_coords: NumberOrRange<i32>,
-                local_y_coords: NumberOrRange<i32>,
+                local_x_coords: NumberOrRange<u32>,
+                local_y_coords: NumberOrRange<u32>,
             ) -> Self {
                 PlaceOuter {
                     x: local_x_coords,
@@ -558,8 +567,8 @@ impl_from!(PlaceInnerCorpses);
 impl IntoArcDyn<PlaceOuter<PlaceInnerMonster>> for PlaceOuter<Arc<dyn Place>> {
     fn into_arc_dyn_place(
         mut value: PlaceOuter<PlaceInnerMonster>,
-        local_x_coords: NumberOrRange<i32>,
-        local_y_coords: NumberOrRange<i32>,
+        local_x_coords: NumberOrRange<u32>,
+        local_y_coords: NumberOrRange<u32>,
     ) -> Self {
         // TODO: Special case since both PlaceOuter and Monster can have a chance field which
         // causes one of these to not be set when deserializing so we do this here
@@ -579,8 +588,8 @@ impl IntoArcDyn<PlaceOuter<PlaceInnerMonster>> for PlaceOuter<Arc<dyn Place>> {
 impl IntoArcDyn<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
     fn into_arc_dyn_place(
         mut value: PlaceOuter<PlaceInnerMonsters>,
-        local_x_coords: NumberOrRange<i32>,
-        local_y_coords: NumberOrRange<i32>,
+        local_x_coords: NumberOrRange<u32>,
+        local_y_coords: NumberOrRange<u32>,
     ) -> Self {
         // TODO: Special case since both PlaceOuter and Monster can have a chance field which
         // causes one of these to not be set when deserializing so we do this here
@@ -598,8 +607,8 @@ impl IntoArcDyn<PlaceOuter<PlaceInnerMonsters>> for PlaceOuter<Arc<dyn Place>> {
 }
 
 impl<T> PlaceOuter<T> {
-    pub fn coordinates(&self) -> IVec2 {
-        IVec2::new(self.x.rand_number(), self.y.rand_number())
+    pub fn coordinates(&self) -> UVec2 {
+        UVec2::new(self.x.rand_number(), self.y.rand_number())
     }
 }
 
@@ -885,7 +894,7 @@ impl CDDAMapDataIntermediate {
     ) -> HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> {
         let mut place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>> =
             HashMap::new();
-        let map_size = self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+        let map_size = self.object.mapgen_size.unwrap_or(MAX_MAP_DATA_SIZE);
 
         macro_rules! insert_place {
             (
@@ -896,11 +905,41 @@ impl CDDAMapDataIntermediate {
                     let mut map_vec = vec![];
 
                     for mapping in self.object.common.[<place_ $multi:lower>].iter() {
-                        let remapped_x = mapping.x.clone() - (map_coordinates.x * map_size.x as u32) as i32;
-                        let remapped_y = mapping.y.clone() - (map_coordinates.y * map_size.y as u32) as i32;
+                        // Check if the mapping is out of bounds. i.e not in the 24x24 area of this mapgen
+                        let (from_x, to_x) = mapping.x.get_from_to();
+                        let (from_y, to_y) = mapping.y.get_from_to();
 
-                        if remapped_x >= 0 && remapped_x < map_size.x as i32 &&
-                           remapped_y >= 0 && remapped_y < map_size.y as i32 {
+                        let overmap_x_start = map_coordinates.x * map_size.x;
+                        let overmap_y_start = map_coordinates.y * map_size.y;
+
+                        let overmap_x_end = overmap_x_start + map_size.x;
+                        let overmap_y_end = overmap_y_start + map_size.y;
+
+                        // The x is in a mapgen to the left of this one
+                        if from_x < overmap_x_start {
+                            continue
+                        }
+
+                        // The y is in a mapgen above this one
+                        if from_y < overmap_y_start {
+                            continue
+                        }
+
+                        // The x is in a mapgen to the right of this one
+                        if to_x > overmap_x_end {
+                            continue
+                        }
+
+                        // The y is in a mapgen below this one
+                        if to_y > overmap_y_end {
+                            continue
+                        }
+
+                        let remapped_x = mapping.x.clone() - overmap_x_start;
+                        let remapped_y = mapping.y.clone() - overmap_y_start;
+
+                        if remapped_x >= 0 && remapped_x < map_size.x &&
+                           remapped_y >= 0 && remapped_y < map_size.y {
                             map_vec.push(PlaceOuter::into_arc_dyn_place(
                                 mapping.clone(),
                                 remapped_x,
@@ -922,11 +961,40 @@ impl CDDAMapDataIntermediate {
                     let mut map_vec = vec![];
 
                     for mapping in self.object.common.[<place_ $name:lower>].iter() {
-                        let remapped_x = mapping.x.clone() - (map_coordinates.x * DEFAULT_MAP_WIDTH as u32) as i32;
-                        let remapped_y = mapping.y.clone() - (map_coordinates.y * DEFAULT_MAP_HEIGHT as u32) as i32;
+                        let (from_x, to_x) = mapping.x.get_from_to();
+                        let (from_y, to_y) = mapping.y.get_from_to();
 
-                        if remapped_x >= 0 && remapped_x < DEFAULT_MAP_WIDTH as i32 &&
-                           remapped_y >= 0 && remapped_y < DEFAULT_MAP_HEIGHT as i32 {
+                        let overmap_x_start = map_coordinates.x * map_size.x;
+                        let overmap_y_start = map_coordinates.y * map_size.y;
+
+                        let overmap_x_end = overmap_x_start + map_size.x;
+                        let overmap_y_end = overmap_y_start + map_size.y;
+
+                        // The x is in a mapgen to the left of this one
+                        if from_x < overmap_x_start {
+                            continue
+                        }
+
+                        // The y is in a mapgen above this one
+                        if from_y < overmap_y_start {
+                            continue
+                        }
+
+                        // The x is in a mapgen to the right of this one
+                        if to_x > overmap_x_end {
+                            continue
+                        }
+
+                        // The y is in a mapgen below this one
+                        if to_y > overmap_y_end {
+                            continue
+                        }
+
+                        let remapped_x = mapping.x.clone() - overmap_x_start;
+                        let remapped_y = mapping.y.clone() - overmap_y_start;
+
+                        if remapped_x >= 0 && remapped_x < map_size.x &&
+                           remapped_y >= 0 && remapped_y < map_size.y {
                             map_vec.push(PlaceOuter::into_arc_dyn_place(
                                 mapping.clone(),
                                 remapped_x,
@@ -1007,8 +1075,12 @@ impl TryInto<Overmap> for CDDAMapDataIntermediate {
 
                             match self.object.rows.clone() {
                                 None => {
-                                    for row in 0..DEFAULT_MAP_HEIGHT {
-                                        for column in 0..DEFAULT_MAP_WIDTH {
+                                    for row in
+                                        MIN_MAPGEN_HEIGHT..MAX_MAPGEN_HEIGHT
+                                    {
+                                        for column in
+                                            MIN_MAPGEN_WIDTH..MAX_MAPGEN_WIDTH
+                                        {
                                             nested_cells.insert(
                                                 UVec2::new(
                                                     column as u32,
@@ -1022,18 +1094,20 @@ impl TryInto<Overmap> for CDDAMapDataIntermediate {
                                 },
                                 Some(map_row_slice) => {
                                     let new_slice: Vec<String> = map_row_slice
-                                        [map_row_index * DEFAULT_MAP_HEIGHT
+                                        [map_row_index
+                                            * MAX_MAPGEN_HEIGHT as usize
                                             ..map_row_index
-                                                * DEFAULT_MAP_HEIGHT
-                                                + DEFAULT_MAP_HEIGHT]
+                                                * MAX_MAPGEN_HEIGHT as usize
+                                                + MAX_MAPGEN_HEIGHT as usize]
                                         .into_iter()
                                         .map(|str| {
                                             str.chars()
                                                 .skip(
                                                     map_column_index
-                                                        * DEFAULT_MAP_WIDTH,
+                                                        * MAX_MAPGEN_WIDTH
+                                                            as usize,
                                                 )
-                                                .take(DEFAULT_MAP_WIDTH)
+                                                .take(MAX_MAPGEN_WIDTH as usize)
                                                 .collect::<String>()
                                         })
                                         .collect();
@@ -1078,7 +1152,7 @@ impl TryInto<Overmap> for CDDAMapDataIntermediate {
                             map_data.map_size = self
                                 .object
                                 .mapgen_size
-                                .unwrap_or(DEFAULT_MAP_DATA_SIZE);
+                                .unwrap_or(MAX_MAP_DATA_SIZE);
                             map_data.flags = self.object.common.flags.clone();
                             map_data.predecessor =
                                 self.object.common.predecessor_mapgen.clone();
@@ -1107,10 +1181,9 @@ impl TryInto<Overmap> for CDDAMapDataIntermediate {
 
         let mut cells: IndexMap<UVec2, Cell> = IndexMap::new();
 
-        for row in 0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).y
-        {
+        for row in 0..self.object.mapgen_size.unwrap_or(MAX_MAP_DATA_SIZE).y {
             for column in
-                0..self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE).x
+                0..self.object.mapgen_size.unwrap_or(MAX_MAP_DATA_SIZE).x
             {
                 let char = match self.object.rows.as_ref() {
                     None => ' ',
@@ -1156,7 +1229,7 @@ impl TryInto<Overmap> for CDDAMapDataIntermediate {
         map_data.palettes = self.object.common.palettes.clone();
         map_data.fill = self.object.fill_ter.clone();
         map_data.map_size =
-            self.object.mapgen_size.unwrap_or(DEFAULT_MAP_DATA_SIZE);
+            self.object.mapgen_size.unwrap_or(MAX_MAP_DATA_SIZE);
         map_data.flags = self.object.common.flags.clone();
         map_data.predecessor = self.object.common.predecessor_mapgen.clone();
 

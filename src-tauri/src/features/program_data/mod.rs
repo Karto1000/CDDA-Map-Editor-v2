@@ -11,13 +11,15 @@ use crate::features::map::importing::{
     SingleMapDataImporterError,
 };
 use crate::features::map::{
-    CalculateParametersError, GetMappedCDDAIdsError, MapGen,
-    MappedCDDAIdsForTile, DEFAULT_MAP_DATA_SIZE,
+    CalculateParameters, CalculateParametersError, CalculateRandomParameters,
+    GetMappedCDDAIdsError, InstantiatedOvermap, InstantiatedTile,
+    MapGen, MAX_MAP_DATA_SIZE,
 };
 use crate::features::program_data::keybinds::{Keybind, KeybindAction};
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::impl_serialize_for_error;
-use crate::util::{serialize_hashmap_with_uvec2_keys, Load, Save, SaveError};
+use crate::util::{Load, Save, SaveError};
+use cdda_lib::serde_vec::serialize_uvec2_as_key;
 use cdda_lib::types::CDDAIdentifier;
 use futures_lite::StreamExt;
 use glam::{IVec3, UVec2};
@@ -36,6 +38,7 @@ use thiserror::Error;
 pub const DEFAULT_CDDA_DATA_JSON_PATH: &'static str = "data/json";
 
 pub type ZLevel = i32;
+pub const DEFAULT_Z_LEVEL: i32 = 0;
 pub type ProjectName = String;
 pub type LoadedProjects = HashMap<ProjectName, Project>;
 
@@ -90,61 +93,6 @@ pub async fn get_map_data_collection_from_map_viewer(
     Ok(map_data_collection)
 }
 
-#[derive(Debug, Serialize, Clone)]
-pub struct MappedCDDAIdContainer {
-    #[serde(serialize_with = "crate::util::serialize_hashmap_with_ivec3_keys")]
-    pub ids: HashMap<IVec3, MappedCDDAIdsForTile>,
-}
-
-impl MappedCDDAIdContainer {
-    fn get_id_from_mapped_sprites(
-        &self,
-        cords: &IVec3,
-        layer: &TileLayer,
-    ) -> Option<CDDAIdentifier> {
-        self.ids
-            .get(cords)
-            .map(|v| match layer {
-                TileLayer::Terrain => {
-                    v.terrain.clone().map(|v| v.tilesheet_id.id)
-                },
-                TileLayer::Furniture => {
-                    v.furniture.clone().map(|v| v.tilesheet_id.id)
-                },
-                TileLayer::Monster => {
-                    v.monster.clone().map(|v| v.tilesheet_id.id)
-                },
-                TileLayer::Field => v.field.clone().map(|v| v.tilesheet_id.id),
-            })
-            .flatten()
-    }
-
-    pub fn get_adjacent_identifiers(
-        &self,
-        coordinates: IVec3,
-        layer: &TileLayer,
-    ) -> AdjacentSprites {
-        let top_cords = coordinates + IVec3::new(0, 1, 0);
-        let top = self.get_id_from_mapped_sprites(&top_cords, &layer);
-
-        let right_cords = coordinates + IVec3::new(1, 0, 0);
-        let right = self.get_id_from_mapped_sprites(&right_cords, &layer);
-
-        let bottom_cords = coordinates - IVec3::new(0, 1, 0);
-        let bottom = self.get_id_from_mapped_sprites(&bottom_cords, &layer);
-
-        let left_cords = coordinates - IVec3::new(1, 0, 0);
-        let left = self.get_id_from_mapped_sprites(&left_cords, &layer);
-
-        AdjacentSprites {
-            top,
-            right,
-            bottom,
-            left,
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ProjectType {
@@ -183,8 +131,8 @@ impl Project {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Overmap {
     #[serde(
-        serialize_with = "crate::util::serialize_hashmap_with_uvec2_keys",
-        deserialize_with = "crate::util::deserialize_hashmap_with_uvec2_keys"
+        serialize_with = "cdda_lib::serde_vec::serialize_hashmap_with_uvec2_keys",
+        deserialize_with = "cdda_lib::serde_vec::deserialize_hashmap_with_uvec2_keys"
     )]
     pub maps: HashMap<UVec2, MapGen>,
 }
@@ -195,13 +143,13 @@ impl Overmap {
 
         let mut maps = HashMap::new();
 
-        let is_bigger_than_default = size_value.x <= DEFAULT_MAP_DATA_SIZE.x
-            || size_value.y <= DEFAULT_MAP_DATA_SIZE.y;
+        let is_bigger_than_default = size_value.x <= MAX_MAP_DATA_SIZE.x
+            || size_value.y <= MAX_MAP_DATA_SIZE.y;
 
         match is_bigger_than_default {
             false => {
-                for y in 0..(size_value.y / DEFAULT_MAP_DATA_SIZE.y) {
-                    for x in 0..(size_value.x / DEFAULT_MAP_DATA_SIZE.x) {
+                for y in 0..(size_value.y / MAX_MAP_DATA_SIZE.y) {
+                    for x in 0..(size_value.x / MAX_MAP_DATA_SIZE.x) {
                         let mut map_data = MapGen::default();
 
                         map_data.id = CDDAIdentifier(format!(
@@ -226,6 +174,28 @@ impl Overmap {
         Self { maps }
     }
 
+    // TODO: return correct Error
+    pub fn instantiate(
+        &self,
+        calculate_parameter_strategy: impl CalculateParameters,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Result<InstantiatedOvermap, ()> {
+        let mut instantiated_mapgens = HashMap::new();
+
+        for (map_coordinates, mapgen) in self.maps.iter() {
+            let instantiated_mapgen = mapgen
+                .instantiate(calculate_parameter_strategy.clone(), cdda_data)?;
+
+            instantiated_mapgens
+                .insert(map_coordinates.clone(), instantiated_mapgen);
+        }
+
+        Ok(InstantiatedOvermap {
+            config: Default::default(),
+            instantiated_mapgens,
+        })
+    }
+
     pub fn map_to_global_cell_coords(
         map_coordinates: &UVec2,
         cell_coordinates: &UVec2,
@@ -233,108 +203,11 @@ impl Overmap {
     ) -> IVec3 {
         IVec3::new(
             cell_coordinates.x as i32
-                + map_coordinates.x as i32 * DEFAULT_MAP_DATA_SIZE.x as i32,
+                + map_coordinates.x as i32 * MAX_MAP_DATA_SIZE.x as i32,
             cell_coordinates.y as i32
-                + map_coordinates.y as i32 * DEFAULT_MAP_DATA_SIZE.y as i32,
+                + map_coordinates.y as i32 * MAX_MAP_DATA_SIZE.y as i32,
             z,
         )
-    }
-
-    pub fn calculate_random_predecessor_parameters(
-        &mut self,
-        rng: &mut impl Rng,
-        json_data: &mut DeserializedCDDAJsonData,
-    ) {
-        for (_, map) in self.maps.iter_mut() {
-            match &map.predecessor {
-                None => {},
-                Some(predecessor_id) => {
-                    let predecessor = json_data
-                        .overmap_terrains
-                        .get_mut(predecessor_id)
-                        .expect(
-                            format!(
-                                "Overmap terrain for Predecessor {} to exist",
-                                predecessor_id
-                            )
-                            .as_str(),
-                        );
-
-                    let predecessor_map_data = match &predecessor
-                    .mapgen
-                    .clone()
-                    .unwrap_or_default()
-                    .first_mut()
-                {
-                    None => {
-                        // This terrain is defined in a json file, so we can just search for it
-                        json_data.map_data.get_mut(predecessor_id).expect(
-                            format!(
-                                "MapGen for Predecessor {} to exist",
-                                predecessor_id
-                            )
-                                .as_str(),
-                        )
-                    }
-                    Some(omtm) => json_data.map_data.get_mut(&omtm.builtin).expect(
-                        format!(
-                            "Hardcoded Map data for predecessor {} to exist",
-                            omtm.builtin
-                        )
-                            .as_str(),
-                    ),
-                };
-
-                    predecessor_map_data
-                        .calculate_random_parameters(rng, &json_data.palettes)
-                        .unwrap();
-                },
-            }
-        }
-    }
-
-    pub fn get_random_mapped_cdda_ids(
-        &self,
-        rng: &mut impl Rng,
-        json_data: &DeserializedCDDAJsonData,
-        z: ZLevel,
-    ) -> Result<MappedCDDAIdContainer, GetMappedCDDAIdsError> {
-        let mut mapped_cdda_ids = HashMap::new();
-
-        for (map_coords, map_data) in self.maps.iter() {
-            let mut ids =
-                map_data.get_random_mapped_cdda_ids(rng, json_data, z)?;
-
-            // Transform every coordinate in the hashmap
-            let mut new_ids = HashMap::new();
-
-            for (cell_coords, cdda_ids) in ids.drain() {
-                let new_cell_coords = Self::map_to_global_cell_coords(
-                    map_coords,
-                    &UVec2::new(cell_coords.x as u32, cell_coords.y as u32),
-                    z,
-                );
-                new_ids.insert(new_cell_coords, cdda_ids);
-            }
-
-            mapped_cdda_ids.extend(new_ids);
-        }
-
-        Ok(MappedCDDAIdContainer {
-            ids: mapped_cdda_ids,
-        })
-    }
-
-    pub fn calculate_random_parameters(
-        &mut self,
-        rng: &mut impl Rng,
-        all_palettes: &Palettes,
-    ) -> Result<(), CalculateParametersError> {
-        for (_, map_data) in self.maps.iter_mut() {
-            map_data.calculate_random_parameters(rng, all_palettes)?;
-        }
-
-        Ok(())
     }
 }
 
@@ -454,14 +327,14 @@ pub struct Tab {
 }
 
 #[derive(Debug)]
-pub struct AdjacentSprites {
+pub struct AdjacentTiles {
     pub top: Option<CDDAIdentifier>,
     pub right: Option<CDDAIdentifier>,
     pub bottom: Option<CDDAIdentifier>,
     pub left: Option<CDDAIdentifier>,
 }
 
-impl AdjacentSprites {
+impl AdjacentTiles {
     pub fn none() -> Self {
         Self {
             top: None,

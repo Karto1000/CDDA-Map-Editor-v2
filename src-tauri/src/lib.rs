@@ -11,6 +11,9 @@ use crate::features::editor::handler::{
     modify_global_palette, modify_palette, new_map_editor,
 };
 use crate::features::editor::MapEditor;
+use crate::features::map::{
+    CalculateRandomParameters, InstantiatedOvermapStack,
+};
 use crate::features::program_data::handlers::{
     cdda_installation_directory_picked, close_project,
     get_current_project_data, get_editor_data, open_project,
@@ -19,8 +22,8 @@ use crate::features::program_data::handlers::{
 };
 use crate::features::program_data::io::ProjectLoader;
 use crate::features::program_data::{
-    get_map_data_collection_from_map_viewer, LoadedProjects, MappedCDDAIdContainer, ProgramData, Project,
-    ProjectName, ProjectType, ZLevel,
+    get_map_data_collection_from_map_viewer, LoadedProjects, ProgramData, Project, ProjectName, ProjectType,
+    ZLevel,
 };
 use crate::features::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
@@ -28,8 +31,8 @@ use crate::features::tileset::handlers::{
 use crate::features::tileset::legacy_tileset::fallback::get_fallback_tilesheet;
 use crate::features::tileset::legacy_tileset::LegacyTilesheet;
 use crate::features::viewer::handlers::{
-    create_viewer, get_calculated_parameters, get_project_cell_data,
-    get_sprites, new_nested_mapgen_viewer, new_single_mapgen_viewer,
+    create_viewer, get_project_cell_data, get_sprites,
+    new_nested_mapgen_viewer, new_single_mapgen_viewer,
     new_special_mapgen_viewer, reload_project,
 };
 use crate::features::viewer::MapViewer;
@@ -43,11 +46,11 @@ use features::toast::ToastMessage;
 use features::viewer::LiveViewerData;
 use lazy_static::lazy_static;
 use log::{error, info, warn, LevelFilter};
+use rand::rng;
 use serde::Serialize;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::sync::Arc;
-use rand::rng;
 use tauri::async_runtime::{block_on, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_log::{Target, TargetKind};
@@ -173,20 +176,6 @@ async fn frontend_ready(
                     ProjectType::MapEditor(map_editor) => {
                         info!("Opening Map Editor");
 
-                        for (_, maps) in map_editor.overmaps.iter_mut() {
-                            match maps.calculate_random_parameters(&mut rng(), &json_data.palettes)
-                            {
-                                Ok(_) => {},
-                                Err(e) => {
-                                    warn!(
-                                        "Failed to calculate parameters: {}",
-                                        e
-                                    );
-                                    continue;
-                                },
-                            }
-                        }
-
                         app.emit(
                             events::CREATE_TAB,
                             Tab {
@@ -206,23 +195,6 @@ async fn frontend_ready(
                             .await
                             {
                                 Ok(mut map_data_collection) => {
-                                    for (_, maps) in
-                                        map_data_collection.iter_mut()
-                                    {
-                                        match maps.calculate_random_parameters(
-                                            &mut rng(),
-                                            &json_data.palettes,
-                                        ) {
-                                            Ok(_) => {},
-                                            Err(e) => {
-                                                warn!(
-                                                    "Failed to calculate parameters: {}",
-                                                    e
-                                                );
-                                                continue;
-                                            },
-                                        }
-                                    }
                                     map_data_collection
                                 },
                                 Err(e) => {
@@ -347,7 +319,9 @@ pub fn run() -> () {
             // File watcher for all cdda data
             app.manage::<Mutex<Option<CDDADataFileWatcher>>>(Mutex::new(None));
 
-            app.manage::<Mutex<Option<HashMap<ZLevel, MappedCDDAIdContainer>>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<InstantiatedOvermapStack>>>(Mutex::new(
+                None,
+            ));
             app.manage::<Mutex<LoadedProjects>>(Mutex::new(loaded_projects));
 
             Ok(())
@@ -370,7 +344,6 @@ pub fn run() -> () {
             new_single_mapgen_viewer,
             new_special_mapgen_viewer,
             new_nested_mapgen_viewer,
-            get_calculated_parameters,
             open_recent_project,
             about,
             close_app,

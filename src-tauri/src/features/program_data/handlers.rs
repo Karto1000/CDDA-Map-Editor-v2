@@ -354,18 +354,7 @@ pub async fn open_recent_project(
             )
             .await
             {
-                Ok(mut map_data_collection) => {
-                    for (_, maps) in map_data_collection.iter_mut() {
-                        match maps.calculate_random_parameters(
-                            &mut rng(),
-                            &json_data.palettes,
-                        ) {
-                            Ok(_) => {},
-                            Err(e) => continue,
-                        }
-                    }
-                    map_data_collection
-                },
+                Ok(map_data_collection) => map_data_collection,
                 Err(e) => {
                     warn!("Failed to load map data {}", e);
                     return Err(OpenProjectError::InvalidContent);

@@ -14,16 +14,20 @@ use crate::data::{
 use crate::features::map::map_properties::{
     value_to_property, TerrainProperty,
 };
-use crate::features::program_data::ZLevel;
+use crate::features::program_data::{AdjacentTiles, ZLevel, DEFAULT_Z_LEVEL};
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::util::{Rotation};
+use crate::util::Rotation;
+use anyhow::{anyhow, Error};
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, MapGenValue, NumberOrRange,
     ParameterIdentifier, Weighted,
 };
 use cdda_lib::{
-    DEFAULT_MAP_HEIGHT, DEFAULT_MAP_WIDTH, NULL_FURNITURE, NULL_TERRAIN,
+    MapgenCellCoordinates, OvermapCoordinates, DEFAULT_REGION_SETTING_ENTRY,
+    MAX_MAPGEN_HEIGHT, MAX_MAPGEN_WIDTH, MIN_MAPGEN_HEIGHT, MIN_MAPGEN_WIDTH,
+    NULL_FURNITURE, NULL_TERRAIN,
 };
+use comfy_bounded_ints::types::Bound_u32;
 use derive_more::Display;
 use downcast_rs::{impl_downcast, Downcast, DowncastSend, DowncastSync};
 use dyn_clone::{clone_trait_object, DynClone};
@@ -32,29 +36,31 @@ use glam::{IVec2, IVec3, UVec2};
 use indexmap::IndexMap;
 use log::warn;
 use rand::{rng, Rng, RngCore};
+use serde::de::{MapAccess, Visitor};
 use serde::ser::{SerializeMap, SerializeStruct};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Debug, Formatter, Write};
 use std::sync::Arc;
-use serde::de::{MapAccess, Visitor};
 use strum::IntoEnumIterator;
 use strum_macros::{EnumIter, EnumString};
 use thiserror::Error;
 
-pub const SPECIAL_EMPTY_CHAR: char = ' ';
-pub const DEFAULT_MAP_DATA_SIZE: UVec2 = UVec2::new(24, 24);
+pub const MAX_MAP_DATA_SIZE: UVec2 =
+    UVec2::new(MAX_MAPGEN_WIDTH, MAX_MAPGEN_HEIGHT);
 
 pub trait Place:
     Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
 {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>>; 
+    ) -> Result<(), anyhow::Error>;
 }
 
 clone_trait_object!(Place);
@@ -70,12 +76,13 @@ pub struct Representation {
 pub trait Property:
     Debug + DynClone + Send + Sync + Downcast + DowncastSync + DowncastSend
 {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>>;
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Result<(), anyhow::Error>;
 
     fn representation(
         &self,
@@ -226,11 +233,11 @@ pub struct MapGenNested {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MapDataConfig {
+pub struct InstancedOvermapConfig {
     pub simulated_neighbors: HashMap<NeighborDirection, Vec<CDDAIdentifier>>,
 }
 
-impl Default for MapDataConfig {
+impl Default for InstancedOvermapConfig {
     fn default() -> Self {
         let mut simulated_neighbors = HashMap::new();
         simulated_neighbors.insert(NeighborDirection::Above, vec![]);
@@ -244,7 +251,7 @@ impl Default for MapDataConfig {
         simulated_neighbors.insert(NeighborDirection::SouthEast, vec![]);
         simulated_neighbors.insert(NeighborDirection::SouthWest, vec![]);
 
-        MapDataConfig {
+        InstancedOvermapConfig {
             simulated_neighbors,
         }
     }
@@ -336,30 +343,25 @@ pub struct MapGen {
     pub id: CDDAIdentifier,
 
     #[serde(
-        deserialize_with = "crate::util::deserialize_indexmap_with_uvec2_keys",
-        serialize_with = "crate::util::serialize_indexmap_with_uvec2_keys"
+        deserialize_with = "cdda_lib::serde_vec::deserialize_indexmap_with_uvec2_keys",
+        serialize_with = "cdda_lib::serde_vec::serialize_indexmap_with_uvec2_keys"
     )]
     pub cells: IndexMap<UVec2, Cell>,
     pub fill: Option<DistributionInner>,
     pub map_size: UVec2,
     pub predecessor: Option<CDDAIdentifier>,
-
-    pub config: MapDataConfig,
     pub rotation: MapDataRotation,
 
     pub parameters: IndexMap<ParameterIdentifier, Parameter>,
     pub palettes: Vec<MapGenValue>,
     pub flags: HashSet<MapDataFlag>,
 
-    #[serde(skip)]
-    pub calculated_parameters: IndexMap<ParameterIdentifier, CDDAIdentifier>,
-
     #[serde(
         serialize_with = "serialize_properties",
         deserialize_with = "deserialize_properties"
     )]
     pub properties: HashMap<MappingKind, HashMap<char, Arc<dyn Property>>>,
-    
+
     #[serde(skip)]
     pub place: HashMap<MappingKind, Vec<PlaceOuter<Arc<dyn Place>>>>,
 }
@@ -368,12 +370,9 @@ impl Default for MapGen {
     fn default() -> Self {
         let mut cells = IndexMap::new();
 
-        for y in 0..DEFAULT_MAP_HEIGHT {
-            for x in 0..DEFAULT_MAP_WIDTH {
-                cells.insert(
-                    UVec2::new(x as u32, y as u32),
-                    Cell { character: ' ' },
-                );
+        for y in MIN_MAPGEN_WIDTH..MAX_MAPGEN_WIDTH {
+            for x in MIN_MAPGEN_HEIGHT..MAX_MAPGEN_HEIGHT {
+                cells.insert(UVec2::new(x, y), Cell { character: ' ' });
             }
         }
         let fill =
@@ -403,11 +402,9 @@ impl Default for MapGen {
             id: CDDAIdentifier::from("map_data_default"),
             cells,
             fill,
-            map_size: DEFAULT_MAP_DATA_SIZE,
+            map_size: MAX_MAP_DATA_SIZE,
             predecessor: None,
-            config: Default::default(),
             rotation: Default::default(),
-            calculated_parameters: Default::default(),
             parameters: Default::default(),
             properties,
             palettes: Default::default(),
@@ -429,6 +426,59 @@ pub enum CalculateParametersError {
     GetIdentifierError(#[from] GetIdentifierError),
 }
 
+pub trait CalculateParameters: Clone + Debug {
+    fn calculate_parameters(
+        &self,
+        mapgen: &MapGen,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Result<
+        IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        CalculateParametersError,
+    >;
+}
+
+#[derive(Debug, Clone)]
+pub struct CalculateRandomParameters;
+
+impl CalculateParameters for CalculateRandomParameters {
+    fn calculate_parameters(
+        &self,
+        mapgen: &MapGen,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Result<
+        IndexMap<ParameterIdentifier, CDDAIdentifier>,
+        CalculateParametersError,
+    > {
+        let mut calculated_parameters = IndexMap::new();
+
+        for (id, parameter) in mapgen.parameters.iter() {
+            let calculated_value = parameter
+                .default
+                .distribution
+                .get_random_identifier(&mut rng(), &calculated_parameters)?;
+
+            calculated_parameters.insert(id.clone(), calculated_value);
+        }
+
+        for mapgen_value in mapgen.palettes.iter() {
+            let id = mapgen_value
+                .get_random_identifier(&mut rng(), &calculated_parameters)?;
+            let palette = cdda_data.palettes.get(&id).ok_or(
+                CalculateParametersError::MissingPalette(id.to_string()),
+            )?;
+
+            palette
+                .calculate_parameters(&mut rng(), &cdda_data.palettes)?
+                .into_iter()
+                .for_each(|(palette_id, ident)| {
+                    calculated_parameters.insert(palette_id, ident);
+                });
+        }
+
+        Ok(calculated_parameters)
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum GetMappedCDDAIdsError {
     #[error("Missing default Region Settings in Loaded CDDA Data")]
@@ -442,60 +492,46 @@ pub enum GetMappedCDDAIdsError {
 }
 
 impl MapGen {
-    pub fn calculate_random_parameters(
-        &mut self,
-        rng: &mut impl Rng,
-        all_palettes: &HashMap<CDDAIdentifier, CDDAPalette>,
-    ) -> Result<(), CalculateParametersError> {
-        let mut calculated_parameters = IndexMap::new();
+    pub fn instantiate(
+        &self,
+        calculate_parameters_strategy: impl CalculateParameters,
+        cdda_data: &DeserializedCDDAJsonData,
+        // TODO: Error
+    ) -> Result<InstantiatedMapgen<ParametersCalculated>, ()> {
+        let mut instantiated_mapgen = InstantiatedMapgen::new()
+            .calculate_parameters(
+                calculate_parameters_strategy,
+                self,
+                cdda_data,
+            )
+            .unwrap();
 
-        for (id, parameter) in self.parameters.iter() {
-            let calculated_value = parameter
-                .default
-                .distribution
-                .get_random_identifier(rng, &calculated_parameters)?;
+        self.instantiate_tiles(&mut instantiated_mapgen, cdda_data)
+            .unwrap();
 
-            calculated_parameters.insert(id.clone(), calculated_value);
-        }
-
-        for mapgen_value in self.palettes.iter() {
-            let id = mapgen_value.get_random_identifier(rng, &calculated_parameters)?;
-            let palette = all_palettes.get(&id).ok_or(
-                CalculateParametersError::MissingPalette(id.to_string()),
-            )?;
-
-            palette
-                .calculate_parameters(rng, all_palettes)?
-                .into_iter()
-                .for_each(|(palette_id, ident)| {
-                    calculated_parameters.insert(palette_id, ident);
-                });
-        }
-
-        self.calculated_parameters = calculated_parameters;
-
-        Ok(())
+        Ok(instantiated_mapgen)
     }
 
-    pub fn get_random_mapped_cdda_ids(
+    fn instantiate_tiles(
         &self,
-        rng: &mut impl Rng,
-        json_data: &DeserializedCDDAJsonData,
-        z: ZLevel,
-    ) -> Result<HashMap<IVec3, MappedCDDAIdsForTile>, GetMappedCDDAIdsError>
-    {
-        let mut local_mapped_cdda_ids = HashMap::new();
-
-        let region_settings = json_data
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Result<(), GetMappedCDDAIdsError> {
+        let region_settings = cdda_data
             .region_settings
-            .get(&CDDAIdentifier("default".into()))
+            .get(&CDDAIdentifier(DEFAULT_REGION_SETTING_ENTRY.into()))
             .ok_or(GetMappedCDDAIdsError::MissingRegionSettings)?;
 
         let fill_terrain_sprite = match &self.fill {
             None => None,
-            Some(id) => {
-                Some(id.get_random_identifier(rng, &self.calculated_parameters).unwrap())
-            },
+            Some(id) => Some(replace_region_setting(
+                &id.get_random_identifier(
+                    &mut rng(),
+                    &instantiation.calculated_parameters.0,
+                )
+                .unwrap(),
+                region_settings,
+            )),
         };
 
         // we need to calculate the predecessor_mapgen here before so we can replace it later
@@ -503,7 +539,7 @@ impl MapGen {
             None => {},
             Some(predecessor_id) => {
                 let predecessor =
-                    json_data.overmap_terrains.get(predecessor_id)
+                    cdda_data.overmap_terrains.get(predecessor_id)
                         .ok_or(GetMappedCDDAIdsError::MissingOvermapTerrainForPredecessor(predecessor_id.0.clone()))?;
 
                 let predecessor_map_data = match &predecessor
@@ -514,168 +550,86 @@ impl MapGen {
                 {
                     None => {
                         // This terrain is defined in a json file, so we can just search for it
-                        json_data.map_data.get(predecessor_id).ok_or(GetMappedCDDAIdsError::MissingMapgenEntryForPredecessor(predecessor_id.0.clone()))?
-                    },
-                    Some(omtm) => json_data.map_data.get(&omtm.builtin).expect(
+                        cdda_data.map_data.get(predecessor_id).ok_or(GetMappedCDDAIdsError::MissingMapgenEntryForPredecessor(predecessor_id.0.clone()))?
+                    }
+                    Some(omtm) => cdda_data.map_data.get(&omtm.builtin).expect(
                         format!(
-                            "Hardcoded Map data for predecessor {} to exist",
+                            "Hardcoded Map data for the predecessor {} to exist",
                             omtm.builtin
-                        )
-                        .as_str(),
+                        ).as_str(),
                     ),
                 };
 
-                local_mapped_cdda_ids =
-                    predecessor_map_data.get_random_mapped_cdda_ids(rng, json_data, z)?;
+                let instantiated_predecessor = predecessor_map_data
+                    .instantiate(CalculateRandomParameters, cdda_data)
+                    .unwrap();
+
+                predecessor_map_data
+                    .instantiate_tiles(instantiation, cdda_data)?;
+
+                instantiation.instantiated_tiles =
+                    instantiated_predecessor.instantiated_tiles;
             },
         }
 
-        self.cells.iter().for_each(|(p, _)| {
-            let transformed_position =
-                self.transform_coordinates(&p.as_ivec2());
-            let coords =
-                IVec3::new(transformed_position.x, transformed_position.y, z);
+        for (position, cell) in self.cells.iter() {
+            let transformed_position = MapgenCellCoordinates::from(
+                self.transform_coordinates(position),
+            );
+
             // If there was no id added from the predecessor mapgen, we will add the fill sprite here
-            match local_mapped_cdda_ids.get_mut(&coords) {
+            match instantiation
+                .instantiated_tiles
+                .get_mut(&transformed_position)
+            {
                 None => {
-                    let mut mapped_ids = MappedCDDAIdsForTile::default();
+                    let mut mapped_ids = InstantiatedTile::default();
 
                     mapped_ids.terrain = fill_terrain_sprite.clone().map(|s| {
                         MappedCDDAId::simple(TilesheetCDDAId::simple(
-                            replace_region_setting(
-                                &s,
-                                region_settings,
-                                &json_data.terrain,
-                                &json_data.furniture,
-                            ),
+                            replace_region_setting(&s, region_settings),
                         ))
                     });
 
-                    local_mapped_cdda_ids.insert(coords, mapped_ids);
+                    instantiation
+                        .instantiated_tiles
+                        .insert(transformed_position, mapped_ids);
                 },
                 Some(mapped_ids) => {
                     if mapped_ids.terrain.is_none() {
                         mapped_ids.terrain =
                             fill_terrain_sprite.clone().map(|s| {
                                 MappedCDDAId::simple(TilesheetCDDAId::simple(
-                                    replace_region_setting(
-                                        &s,
-                                        region_settings,
-                                        &json_data.terrain,
-                                        &json_data.furniture,
-                                    ),
+                                    replace_region_setting(&s, region_settings),
                                 ))
                             })
                     }
                 },
             };
-        });
 
-        let all_commands = self.get_commands(rng, &json_data);
-
-        for command in all_commands {
-            let command_3d_coords =
-                IVec3::new(command.coordinates.x, command.coordinates.y, z);
-
-            let id = TilesheetCDDAId {
-                id: replace_region_setting(
-                    &command.id.id,
-                    region_settings,
-                    &json_data.terrain,
-                    &json_data.furniture,
-                ),
-                prefix: command.id.prefix,
-                postfix: command.id.postfix,
-            };
-
-            let mut mapped_id = MappedCDDAId::simple(id);
-            mapped_id.rotation = command.rotation;
-
-            match command.state {
-                TileState::Normal => {},
-                TileState::Broken => mapped_id.is_broken = true,
-                TileState::Open => mapped_id.is_open = true,
-            }
-
-            let ident_mut =
-                match local_mapped_cdda_ids.get_mut(&command_3d_coords) {
-                    None => {
-                        local_mapped_cdda_ids.insert(
-                            command_3d_coords.clone(),
-                            MappedCDDAIdsForTile::default(),
-                        );
-                        local_mapped_cdda_ids
-                            .get_mut(&command_3d_coords)
-                            // Safe
-                            .unwrap()
-                    },
-                    Some(i) => i,
+            for mapping_kind in MappingKind::iter() {
+                let property = match self
+                    .get_random_property_from_character_recursive(
+                        &mut rng(),
+                        instantiation,
+                        cell.character,
+                        &mapping_kind,
+                        cdda_data,
+                    ) {
+                    None => continue,
+                    Some(p) => p,
                 };
 
-            match command.layer {
-                TileLayer::Terrain => {
-                    ident_mut.terrain = Some(mapped_id.clone());
-                },
-                TileLayer::Furniture => {
-                    ident_mut.furniture = Some(mapped_id.clone());
-                },
-                TileLayer::Monster => {
-                    ident_mut.monster = Some(mapped_id.clone());
-                },
-                TileLayer::Field => {
-                    ident_mut.field = Some(mapped_id.clone());
-                },
+                property
+                    .apply_to_instantiation(
+                        self,
+                        instantiation,
+                        position.clone(),
+                        cdda_data,
+                    )
+                    .unwrap();
             }
         }
-
-        Ok(local_mapped_cdda_ids)
-    }
-
-    /// Transform 2d coordinates based on the rotation of the map
-    /// This is used to rotate nested mapgens as well as vehicles and other tiles which need to be rotated
-    fn transform_coordinates(&self, position: &IVec2) -> IVec2 {
-        let (map_width, map_height) = (self.map_size.x, self.map_size.y);
-
-        match self.rotation {
-            MapDataRotation::Deg0 => position.clone(),
-            MapDataRotation::Deg90 => {
-                IVec2::new(map_height as i32 - 1 - position.y, position.x)
-            },
-            MapDataRotation::Deg180 => IVec2::new(
-                map_width as i32 - 1 - position.x,
-                map_height as i32 - 1 - position.y,
-            ),
-            MapDataRotation::Deg270 => {
-                IVec2::new(position.y, map_width as i32 - 1 - position.x)
-            },
-        }
-    }
-
-    pub fn get_commands(
-        &self,
-        rng: &mut impl Rng,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<SetTile> {
-        // We need to store all commands in this list here so we can sort it and act them out in
-        // the order the VisibleMappingCommandKind enum has
-        let mut all_commands: Vec<SetTile> = vec![];
-
-        // We need to insert the mapped_sprite before we get the fg and bg of this sprite since
-        // the function relies on the mapped sprite of this sprite to already exist
-        self.cells.iter().for_each(|(p, cell)| {
-            // Transform the coordinate `p` based on the map rotation
-            let transformed_position =
-                self.transform_coordinates(&p.as_ivec2());
-
-            let ident_commands = self.get_identifier_change_commands(
-                rng,
-                &cell.character,
-                &transformed_position,
-                &json_data,
-            );
-
-            all_commands.extend(ident_commands)
-        });
 
         for (_, place_vec) in self.place.iter() {
             for place in place_vec {
@@ -687,83 +641,90 @@ impl MapGen {
                         self.transform_coordinates(&position);
 
                     // We only want to place one in place.chance times
-                    let rand_chance_num = rng.random_range(0..=100);
+                    let rand_chance_num = rng().random_range(0..=100);
                     if rand_chance_num > place.chance {
                         continue;
                     }
 
-                    match place.inner.get_commands(
-                        &transformed_position,
+                    match place.inner.apply_to_instantiation(
                         self,
-                        json_data,
+                        instantiation,
+                        transformed_position,
+                        cdda_data,
                     ) {
-                        None => {},
-                        Some(commands) => {
-                            all_commands.extend(commands);
+                        Ok(_) => {},
+                        Err(e) => {
+                            warn!("{}", e)
                         },
                     }
                 }
             }
         }
 
-        all_commands.sort_by(|a, b| a.layer.cmp(&b.layer));
-        all_commands
+        Ok(())
     }
 
-    pub fn get_visible_mapping(
+    fn get_random_property_from_character_recursive(
         &self,
         rng: &mut impl Rng,
+        instantiation: &InstantiatedMapgen<ParametersCalculated>,
+        character: char,
         mapping_kind: &MappingKind,
-        character: &char,
-        position: &IVec2,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        let mapping = self.properties.get(mapping_kind)?;
-
-        if let Some(id) = mapping.get(character) {
-            return id.get_commands(position, self, json_data);
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Option<Arc<dyn Property>> {
+        match self.properties.get(&mapping_kind) {
+            None => {},
+            Some(p) => match p.get(&character) {
+                None => {},
+                Some(p) => return Some(Arc::clone(p)),
+            },
         }
 
         // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value
-                .get_random_identifier(rng, &self.calculated_parameters)
+                .get_random_identifier(
+                    rng,
+                    &instantiation.calculated_parameters.0,
+                )
                 .ok()?;
 
-            let palette = json_data.palettes.get(&palette_id)?;
+            let palette = cdda_data.palettes.get(&palette_id)?;
 
-            if let Some(id) = palette.get_visible_mapping(
-                mapping_kind,
-                character,
-                position,
-                self,
-                json_data,
-            ) {
-                return Some(id);
+            if let Some(p) = palette
+                .get_random_property_from_character_recursive(
+                    rng,
+                    instantiation,
+                    character,
+                    mapping_kind,
+                    cdda_data,
+                )
+            {
+                return Some(p);
             }
         }
 
         None
     }
 
-    pub fn get_identifier_change_commands(
-        &self,
-        rng: &mut impl Rng,
-        character: &char,
-        position: &IVec2,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Vec<SetTile> {
-        let mut commands = Vec::new();
+    /// Transform 2d coordinates based on the rotation of the map
+    /// This is used to rotate nested mapgens as well as vehicles and other tiles which need to be rotated
+    fn transform_coordinates(&self, position: &UVec2) -> UVec2 {
+        let (map_width, map_height) = (self.map_size.x, self.map_size.y);
 
-        for kind in MappingKind::iter() {
-            let kind_commands = self
-                .get_visible_mapping(rng, &kind, character, position, json_data)
-                .unwrap_or_default();
-
-            commands.extend(kind_commands)
+        match self.rotation {
+            MapDataRotation::Deg0 => position.clone(),
+            MapDataRotation::Deg90 => {
+                UVec2::new(map_height - 1 - position.y, position.x)
+            },
+            MapDataRotation::Deg180 => UVec2::new(
+                map_width - 1 - position.x,
+                map_height - 1 - position.y,
+            ),
+            MapDataRotation::Deg270 => {
+                UVec2::new(position.y, map_width - 1 - position.x)
+            },
         }
-
-        commands
     }
 }
 
@@ -773,6 +734,17 @@ pub struct MappedCDDAId {
     pub rotation: Rotation,
     pub is_broken: bool,
     pub is_open: bool,
+}
+
+impl From<TilesheetCDDAId> for MappedCDDAId {
+    fn from(value: TilesheetCDDAId) -> Self {
+        Self {
+            tilesheet_id: value,
+            rotation: Default::default(),
+            is_broken: false,
+            is_open: false,
+        }
+    }
 }
 
 impl MappedCDDAId {
@@ -829,15 +801,15 @@ impl MappedCDDAId {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default)]
-pub struct MappedCDDAIdsForTile {
+pub struct InstantiatedTile {
     pub terrain: Option<MappedCDDAId>,
     pub furniture: Option<MappedCDDAId>,
     pub monster: Option<MappedCDDAId>,
     pub field: Option<MappedCDDAId>,
 }
 
-impl MappedCDDAIdsForTile {
-    pub fn override_none(&mut self, other: MappedCDDAIdsForTile) {
+impl InstantiatedTile {
+    pub fn override_none(&mut self, other: InstantiatedTile) {
         if other.terrain.is_some() {
             self.terrain = other.terrain;
         }
@@ -854,4 +826,208 @@ impl MappedCDDAIdsForTile {
             self.field = other.field;
         }
     }
+}
+
+pub trait CalculatedParametersMarker {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct ParametersCalculated(
+    pub IndexMap<ParameterIdentifier, CDDAIdentifier>,
+);
+
+impl CalculatedParametersMarker for ParametersCalculated {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct ParametersNotCalculated;
+
+impl CalculatedParametersMarker for ParametersNotCalculated {}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct InstantiatedMapgen<
+    Params: CalculatedParametersMarker = ParametersNotCalculated,
+> {
+    pub calculated_parameters: Params,
+    pub instantiated_tiles: HashMap<MapgenCellCoordinates, InstantiatedTile>,
+}
+
+impl InstantiatedMapgen<ParametersNotCalculated> {
+    pub fn new() -> InstantiatedMapgen<ParametersNotCalculated> {
+        InstantiatedMapgen {
+            calculated_parameters: ParametersNotCalculated,
+            instantiated_tiles: HashMap::new(),
+        }
+    }
+
+    pub fn calculate_parameters(
+        self,
+        calculate_parameters_strategy: impl CalculateParameters,
+        from_mapgen: &MapGen,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Result<
+        InstantiatedMapgen<ParametersCalculated>,
+        CalculateParametersError,
+    > {
+        let params = calculate_parameters_strategy
+            .calculate_parameters(from_mapgen, cdda_data)?;
+
+        Ok(InstantiatedMapgen {
+            calculated_parameters: ParametersCalculated(params),
+            instantiated_tiles: self.instantiated_tiles,
+        })
+    }
+}
+
+impl InstantiatedMapgen<ParametersCalculated> {
+    pub fn get_or_create_tile_at_position(
+        &mut self,
+        position: MapgenCellCoordinates,
+    ) -> &mut InstantiatedTile {
+        self.instantiated_tiles
+            .entry(position)
+            .or_insert_with(InstantiatedTile::default)
+    }
+
+    pub fn place_nested(
+        &mut self,
+        position: MapgenCellCoordinates,
+        instantiated_mapgen: InstantiatedMapgen<ParametersCalculated>,
+    ) {
+        for (local_nested_tile_coordinates, nested_tile) in
+            instantiated_mapgen.instantiated_tiles.into_iter()
+        {
+            let global_coordinates = position + local_nested_tile_coordinates;
+
+            match self.instantiated_tiles.get_mut(&global_coordinates) {
+                None => {
+                    self.instantiated_tiles
+                        .insert(global_coordinates, nested_tile);
+                },
+                Some(t) => {
+                    t.override_none(nested_tile);
+                },
+            }
+        }
+    }
+
+    pub fn place_terrain(
+        &mut self,
+        position: MapgenCellCoordinates,
+        terrain: impl Into<MappedCDDAId>,
+    ) {
+        let tile = self.get_or_create_tile_at_position(position);
+        tile.terrain = Some(terrain.into());
+    }
+
+    pub fn place_furniture(
+        &mut self,
+        position: MapgenCellCoordinates,
+        furniture: impl Into<MappedCDDAId>,
+    ) {
+        let tile = self.get_or_create_tile_at_position(position);
+        tile.furniture = Some(furniture.into());
+    }
+
+    pub fn place_monster(
+        &mut self,
+        position: MapgenCellCoordinates,
+        monster: impl Into<MappedCDDAId>,
+    ) {
+        let tile = self.get_or_create_tile_at_position(position);
+        tile.monster = Some(monster.into());
+    }
+
+    pub fn place_field(
+        &mut self,
+        position: MapgenCellCoordinates,
+        field: impl Into<MappedCDDAId>,
+    ) {
+        let tile = self.get_or_create_tile_at_position(position);
+        tile.field = Some(field.into());
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct InstantiatedOvermap {
+    pub config: InstancedOvermapConfig,
+    pub instantiated_mapgens:
+        HashMap<OvermapCoordinates, InstantiatedMapgen<ParametersCalculated>>,
+}
+
+impl InstantiatedOvermap {
+    fn to_overmap_coordinates(&self, position: &UVec2) -> OvermapCoordinates {
+        OvermapCoordinates {
+            x: position.x / MAX_MAPGEN_WIDTH,
+            y: position.y / MAX_MAPGEN_HEIGHT,
+        }
+    }
+
+    fn get_id_from_mapped_sprites(
+        &self,
+        coords: &UVec2,
+        layer: &TileLayer,
+    ) -> Option<CDDAIdentifier> {
+        let overmap_coordinates = self.to_overmap_coordinates(coords);
+        let mapgen = self.instantiated_mapgens.get(&overmap_coordinates)?;
+
+        let local_mapgen_coordinates = UVec2::new(
+            coords.x % MAX_MAPGEN_WIDTH,
+            coords.y % MAX_MAPGEN_HEIGHT,
+        );
+        let tile = mapgen
+            .instantiated_tiles
+            .get(&MapgenCellCoordinates::from(local_mapgen_coordinates))?;
+
+        match layer {
+            TileLayer::Terrain => {
+                tile.terrain.clone().map(|v| v.tilesheet_id.id)
+            },
+            TileLayer::Furniture => {
+                tile.furniture.clone().map(|v| v.tilesheet_id.id)
+            },
+            TileLayer::Monster => {
+                tile.monster.clone().map(|v| v.tilesheet_id.id)
+            },
+            TileLayer::Field => tile.field.clone().map(|v| v.tilesheet_id.id),
+        }
+    }
+
+    pub fn get_adjacent_tile_identifiers(
+        &self,
+        tile_overmap_coordinates: &UVec2,
+        layer: &TileLayer,
+    ) -> AdjacentTiles {
+        let top_cords = tile_overmap_coordinates + UVec2::new(0, 1);
+        let top = self.get_id_from_mapped_sprites(&top_cords, &layer);
+
+        let right_cords = tile_overmap_coordinates + UVec2::new(1, 0);
+        let right = self.get_id_from_mapped_sprites(&right_cords, &layer);
+
+        let bottom = match tile_overmap_coordinates.y == 0 {
+            true => None,
+            false => {
+                let bottom_cords = tile_overmap_coordinates - UVec2::new(0, 1);
+                self.get_id_from_mapped_sprites(&bottom_cords, &layer)
+            },
+        };
+
+        let left = match tile_overmap_coordinates.x == 0 {
+            true => None,
+            false => {
+                let left_cords = tile_overmap_coordinates - UVec2::new(1, 0);
+                self.get_id_from_mapped_sprites(&left_cords, &layer)
+            },
+        };
+
+        AdjacentTiles {
+            top,
+            right,
+            bottom,
+            left,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, Default)]
+pub struct InstantiatedOvermapStack {
+    pub instantiated_overmaps: HashMap<ZLevel, InstantiatedOvermap>,
 }

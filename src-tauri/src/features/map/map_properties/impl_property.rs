@@ -9,6 +9,7 @@ use crate::features::map::map_properties::{
 };
 use crate::features::map::*;
 use crate::util::GetRandom;
+use anyhow::{anyhow, Error};
 use cdda_lib::{NULL_FIELD, NULL_NESTED, NULL_TRAP};
 use log::error;
 use num_traits::real::Real;
@@ -19,29 +20,35 @@ use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 impl Property for TerrainProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        _mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        let ident = self
-            .mapgen_value
-            .get_random_identifier(&mut rng(), &map_data.calculated_parameters)
-            .ok()?;
+    ) -> Result<(), anyhow::Error> {
+        let ident = self.mapgen_value.get_random_identifier(
+            &mut rng(),
+            &instantiation.calculated_parameters.0,
+        )?;
 
         if ident == CDDAIdentifier::from(NULL_TERRAIN) {
-            return None;
+            instantiation.place_terrain(
+                position.into(),
+                TilesheetCDDAId::simple(NULL_TERRAIN),
+            );
+
+            return Ok(());
         }
 
-        let command = SetTile::terrain(
-            TilesheetCDDAId::simple(ident),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
+        instantiation.place_terrain(
+            MapgenCellCoordinates::from(position),
+            MappedCDDAId::simple(TilesheetCDDAId::simple(
+                json_data.replace_possible_region_settings(ident),
+            )),
         );
 
-        Some(vec![command])
+        Ok(())
     }
 
     fn representation(
@@ -65,12 +72,13 @@ impl Property for TerrainProperty {
 }
 
 impl Property for MonstersProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), anyhow::Error> {
         let monster = self.monster.get_random();
 
         let mut rng = rng();
@@ -79,58 +87,50 @@ impl Property for MonstersProperty {
             .chance
             .clone()
             .unwrap_or(NumberOrRange::Number(1))
-            .is_random_hit(100)
+            .is_random_hit(&mut rng, 100)
         {
             true => match &monster.id {
                 MapGenMonsterType::Monster { monster } => monster
                     .get_random_identifier(
                         &mut rng,
-                        &map_data.calculated_parameters,
+                        &instantiation.calculated_parameters.0,
                     )
                     .ok(),
                 MapGenMonsterType::MonsterGroup { group } => {
-                    let id = group
-                        .get_random_identifier(
-                            &mut rng,
-                            &map_data.calculated_parameters,
-                        )
-                        .ok()?;
-                    let mon_group = json_data.monster_groups.get(&id)?;
+                    let id = group.get_random_identifier(
+                        &mut rng,
+                        &instantiation.calculated_parameters.0,
+                    )?;
+                    let mon_group = json_data.monster_groups.get(&id).ok_or(
+                        anyhow::anyhow!("Could not find monster group {}", id),
+                    )?;
 
-                    let rand_monster = mon_group
-                        .get_random_monster(
-                            &mut rng,
-                            &json_data.monster_groups,
-                            &map_data.calculated_parameters,
-                        )
-                        .ok();
+                    let rand_monster = mon_group.get_random_monster(
+                        &mut rng,
+                        &json_data.monster_groups,
+                        &instantiation.calculated_parameters.0,
+                    )?;
 
-                    rand_monster?
-                        .get_random_identifier(
-                            &mut rng,
-                            &map_data.calculated_parameters,
-                        )
-                        .ok()
+                    Some(rand_monster.get_random_identifier(
+                        &mut rng,
+                        &instantiation.calculated_parameters.0,
+                    )?)
                 },
             },
             false => None,
         };
 
         match ident {
-            None => {},
+            None => Ok(()),
             Some(ident) => {
-                let command = SetTile::monster(
+                instantiation.place_monster(
+                    position.into(),
                     TilesheetCDDAId::simple(ident),
-                    position.clone(),
-                    Rotation::Deg0,
-                    TileState::Normal,
                 );
 
-                return Some(vec![command]);
+                Ok(())
             },
         }
-
-        None
     }
 
     fn representation(
@@ -160,31 +160,28 @@ impl Property for MonstersProperty {
 }
 
 impl Property for FurnitureProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let mut rng = rng();
 
-        let ident = self
-            .mapgen_value
-            .get_random_identifier(&mut rng, &map_data.calculated_parameters)
-            .ok()?;
+        let ident = self.mapgen_value.get_random_identifier(
+            &mut rng,
+            &instantiation.calculated_parameters.0,
+        )?;
 
         if ident == CDDAIdentifier::from(NULL_FURNITURE) {
-            return None;
+            return Ok(());
         }
 
-        let command = SetTile::furniture(
-            TilesheetCDDAId::simple(ident),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
-        );
+        instantiation
+            .place_furniture(position.into(), TilesheetCDDAId::simple(ident));
 
-        Some(vec![command])
+        Ok(())
     }
 
     fn representation(
@@ -214,19 +211,19 @@ struct SignRepresentation {
 }
 
 impl Property for SignsProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        let command = SetTile::furniture(
+    ) -> Result<(), Error> {
+        instantiation.place_furniture(
+            position.into(),
             TilesheetCDDAId::simple("f_sign"),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
         );
-        Some(vec![command])
+
+        Ok(())
     }
 
     fn representation(
@@ -242,72 +239,46 @@ impl Property for SignsProperty {
 }
 
 impl Property for NestedProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let mut rng = rng();
         let nested_chunk = self.nested.get_random();
 
-        let should_place = match &nested_chunk.neighbors {
-            None => true,
-            Some(neighbors) => {
-                neighbors.iter().all(|(dir, om_terrain_match)| {
-                    let simulated_neighbor = map_data
-                        .config
-                        .simulated_neighbors
-                        .get(dir)
-                        .expect("Simulated neighbor must always exist");
-
-                    om_terrain_match.iter().all(|om_terrain| {
-                        if simulated_neighbor.is_empty() {
-                            return false;
-                        }
-
-                        simulated_neighbor
-                            .iter()
-                            .all(|id| om_terrain.matches_identifier(id))
-                    })
-                })
-            },
-        };
-
-        if nested_chunk.invert_condition {
-            if should_place {
-                return None;
-            }
-        } else if !should_place {
-            return None;
-        }
-
-        let selected_chunk = nested_chunk
-            .chunks
-            .get_random()
-            .get_random_identifier(&mut rng, &map_data.calculated_parameters)
-            .ok()?;
+        let selected_chunk =
+            nested_chunk.chunks.get_random().get_random_identifier(
+                &mut rng,
+                &instantiation.calculated_parameters.0,
+            )?;
 
         if selected_chunk == CDDAIdentifier::from(NULL_NESTED) {
-            return None;
+            return Ok(());
         }
 
         let nested_mapgen = match json_data.map_data.get(&selected_chunk) {
             None => {
-                error!("Nested Mapgen {} not found", selected_chunk);
-                return None;
+                return Err(anyhow!(
+                    "Nested Mapgen {} not found",
+                    selected_chunk
+                ));
             },
             Some(v) => v,
         };
 
-        let mut commands = nested_mapgen.get_commands(&mut rng, json_data);
+        let instantiated_mapgen = InstantiatedMapgen::new()
+            .calculate_parameters(
+                CalculateRandomParameters,
+                nested_mapgen,
+                json_data,
+            )?;
 
-        commands.iter_mut().for_each(|c| {
-            c.coordinates.x += position.x;
-            c.coordinates.y = position.y + c.coordinates.y;
-        });
+        instantiation.place_nested(position.into(), instantiated_mapgen);
 
-        Some(commands)
+        Ok(())
     }
 
     fn representation(
@@ -323,25 +294,25 @@ impl Property for NestedProperty {
 }
 
 impl Property for FieldsProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let field = self.field.get_random();
 
         if field.field == CDDAIdentifier::from(NULL_FIELD) {
-            return None;
+            return Ok(());
         }
 
-        let command = SetTile::field(
+        instantiation.place_field(
+            position.into(),
             TilesheetCDDAId::simple(field.field.clone()),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
         );
-        Some(vec![command])
+
+        Ok(())
     }
 
     fn representation(
@@ -357,12 +328,13 @@ impl Property for FieldsProperty {
 }
 
 impl Property for GaspumpsProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let gaspump = self.gaspumps.get_random();
 
         let id = match &gaspump.fuel {
@@ -375,13 +347,10 @@ impl Property for GaspumpsProperty {
             },
         };
 
-        let command = SetTile::furniture(
-            TilesheetCDDAId::simple(id),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
-        );
-        Some(vec![command])
+        instantiation
+            .place_furniture(position.into(), TilesheetCDDAId::simple(id));
+
+        Ok(())
     }
 
     fn representation(
@@ -397,20 +366,19 @@ impl Property for GaspumpsProperty {
 }
 
 impl Property for ComputersProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        let command = SetTile::furniture(
+    ) -> Result<(), Error> {
+        instantiation.place_furniture(
+            position.into(),
             TilesheetCDDAId::simple("f_console"),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
         );
 
-        Some(vec![command])
+        Ok(())
     }
 
     fn representation(
@@ -426,20 +394,19 @@ impl Property for ComputersProperty {
 }
 
 impl Property for ToiletsProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        let command = SetTile::furniture(
+    ) -> Result<(), Error> {
+        instantiation.place_furniture(
+            position.into(),
             TilesheetCDDAId::simple("f_toilet"),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
         );
 
-        Some(vec![command])
+        Ok(())
     }
 
     fn representation(
@@ -455,30 +422,28 @@ impl Property for ToiletsProperty {
 }
 
 impl Property for TrapsProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let mut rng = rng();
         let trap = self.trap.get_random();
-        let ident = trap
-            .get_random_identifier(&mut rng, &map_data.calculated_parameters)
-            .ok()?;
+        let ident = trap.get_random_identifier(
+            &mut rng,
+            &instantiation.calculated_parameters.0,
+        )?;
 
         if ident == CDDAIdentifier::from(NULL_TRAP) {
-            return None;
+            return Ok(());
         }
 
-        let command = SetTile::furniture(
-            TilesheetCDDAId::simple(ident),
-            position.clone(),
-            Rotation::Deg0,
-            TileState::Normal,
-        );
+        instantiation
+            .place_furniture(position.into(), TilesheetCDDAId::simple(ident));
 
-        Some(vec![command])
+        Ok(())
     }
 
     fn representation(
@@ -513,23 +478,24 @@ impl Display for VehiclePartSpriteVariant {
 }
 
 impl Property for VehiclesProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let mapgen_vehicle = self.vehicles.get_random();
 
         let vehicle = match json_data.vehicles.get(&mapgen_vehicle.vehicle) {
             None => {
-                warn!("Vehicle {} not found", mapgen_vehicle.vehicle);
-                return None;
+                return Err(anyhow!(
+                    "Vehicle {} not found",
+                    mapgen_vehicle.vehicle
+                ));
             },
             Some(v) => v,
         };
-
-        let mut commands = Vec::new();
 
         let mut highest_priority_parts: HashMap<
             IVec2,
@@ -650,19 +616,22 @@ impl Property for VehiclesProperty {
                 },
             };
 
-            commands.push(SetTile::furniture(
-                TilesheetCDDAId {
-                    id: part.id.clone(),
-                    prefix: Some("vp".to_string()),
-                    postfix: ty.map(|t| t.variant),
+            instantiation.place_furniture(
+                (position.as_ivec2() + pos).as_uvec2().into(),
+                MappedCDDAId {
+                    tilesheet_id: TilesheetCDDAId {
+                        id: part.id.clone(),
+                        prefix: Some("vp".to_string()),
+                        postfix: ty.map(|t| t.variant),
+                    },
+                    rotation,
+                    is_broken: tile_state == TileState::Broken,
+                    is_open: false,
                 },
-                position + pos,
-                rotation,
-                tile_state,
-            ));
+            );
         }
 
-        Some(commands)
+        Ok(())
     }
 
     fn representation(
@@ -678,19 +647,22 @@ impl Property for VehiclesProperty {
 }
 
 impl Property for CorpsesProperty {
-    fn get_commands(
+    fn apply_to_instantiation(
         &self,
-        position: &IVec2,
-        map_data: &MapGen,
+        mapgen: &MapGen,
+        instantiation: &mut InstantiatedMapgen<ParametersCalculated>,
+        position: UVec2,
         json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
+    ) -> Result<(), Error> {
         let mut rng = rng();
         let mapgen_corpse = self.corpses.get_random();
 
         let group = match json_data.monster_groups.get(&mapgen_corpse.group) {
             None => {
-                warn!("Could not find monstergroup {}", mapgen_corpse.group);
-                return None;
+                return Err(anyhow!(
+                    "Could not find monstergroup {}",
+                    mapgen_corpse.group
+                ));
             },
             Some(g) => g,
         };
@@ -698,26 +670,24 @@ impl Property for CorpsesProperty {
         let monster = match group.get_random_monster(
             &mut rng,
             &json_data.monster_groups,
-            &map_data.calculated_parameters,
+            &instantiation.calculated_parameters.0,
         ) {
             Ok(m) => m,
             Err(e) => {
-                warn!("Could not get random monster {}", e);
-                return None;
+                return Err(anyhow!("Could not get random monster {}", e));
             },
         };
 
-        Some(vec![SetTile {
-            id: TilesheetCDDAId {
-                id: monster,
+        instantiation.place_monster(
+            position.into(),
+            TilesheetCDDAId {
+                id: monster.clone(),
                 prefix: Some("corpse".into()),
                 postfix: None,
             },
-            layer: TileLayer::Monster,
-            coordinates: position.clone(),
-            rotation: Rotation::Deg0,
-            state: TileState::Normal,
-        }])
+        );
+
+        Ok(())
     }
 
     fn representation(

@@ -17,8 +17,8 @@ use crate::data::vehicle_parts::{
     CDDAVehiclePart, CDDAVehiclePartIntermediate,
 };
 use crate::data::vehicles::{CDDAVehicle, CDDAVehicleIntermediate};
-use crate::data::{CDDAJsonEntry, TileLayer};
-use crate::features::map::MapGen;
+use crate::data::{replace_region_setting, CDDAJsonEntry, TileLayer};
+use crate::features::map::{GetMappedCDDAIdsError, MapGen};
 use crate::features::program_data::io::{ProgramDataLoader, ProjectLoader};
 use crate::features::program_data::{Overmap, ProgramData, Project};
 use crate::util::Load;
@@ -27,7 +27,7 @@ use async_walkdir::WalkDir;
 use cdda_lib::types::{
     CDDAIdentifier, DistributionInner, ImportCDDAObject, MeabyVec,
 };
-use cdda_lib::{NULL_FURNITURE, NULL_TERRAIN};
+use cdda_lib::{DEFAULT_REGION_SETTING_ENTRY, NULL_FURNITURE, NULL_TERRAIN};
 use directories::ProjectDirs;
 use futures_lite::stream::StreamExt;
 use glam::UVec2;
@@ -97,6 +97,19 @@ pub enum GetConnectsToError {
 }
 
 impl DeserializedCDDAJsonData {
+    pub fn replace_possible_region_settings(
+        &self,
+        id: CDDAIdentifier,
+    ) -> CDDAIdentifier {
+        match self
+            .region_settings
+            .get(&CDDAIdentifier(DEFAULT_REGION_SETTING_ENTRY.into()))
+        {
+            None => id,
+            Some(settings) => replace_region_setting(&id, settings),
+        }
+    }
+
     pub fn get_connect_groups(
         &self,
         id: CDDAIdentifier,
@@ -502,8 +515,7 @@ pub fn replace_data_in_cdda_data(
         if let Some(om_terrain) = mapgen.om_terrain.clone() {
             match om_terrain {
                 OmTerrain::Single(id) => {
-                    let mut map_data_collection: Overmap =
-                        mapgen.try_into()?;
+                    let mut map_data_collection: Overmap = mapgen.try_into()?;
 
                     cdda_data.map_data.insert(
                         CDDAIdentifier(id.clone()),
@@ -514,8 +526,7 @@ pub fn replace_data_in_cdda_data(
                     );
                 },
                 OmTerrain::Duplicate(duplicate) => {
-                    let map_data_collection: Overmap =
-                        mapgen.try_into()?;
+                    let map_data_collection: Overmap = mapgen.try_into()?;
 
                     for id in duplicate.iter() {
                         cdda_data.map_data.insert(
@@ -529,8 +540,7 @@ pub fn replace_data_in_cdda_data(
                     }
                 },
                 OmTerrain::Nested(nested) => {
-                    let map_data_collection: Overmap =
-                        mapgen.try_into()?;
+                    let map_data_collection: Overmap = mapgen.try_into()?;
 
                     for (coords, map_data) in map_data_collection.maps {
                         let om_terrain = nested
@@ -547,8 +557,7 @@ pub fn replace_data_in_cdda_data(
                 },
             }
         } else if let Some(nested_mapgen) = mapgen.nested_mapgen_id.clone() {
-            let mut map_data_collection: Overmap =
-                mapgen.try_into()?;
+            let mut map_data_collection: Overmap = mapgen.try_into()?;
 
             cdda_data.map_data.insert(
                 nested_mapgen.clone(),
@@ -558,8 +567,7 @@ pub fn replace_data_in_cdda_data(
                     .unwrap(),
             );
         } else if let Some(update_mapgen) = mapgen.update_mapgen_id.clone() {
-            let mut map_data_collection: Overmap =
-                mapgen.try_into()?;
+            let mut map_data_collection: Overmap = mapgen.try_into()?;
 
             cdda_data.map_data.insert(
                 update_mapgen.clone(),

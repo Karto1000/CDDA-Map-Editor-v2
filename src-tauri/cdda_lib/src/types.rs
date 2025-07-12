@@ -1,5 +1,6 @@
 use derive_more::Display;
 use num_traits::int::PrimInt;
+use num_traits::CheckedSub;
 use rand::distr::uniform::SampleUniform;
 use rand::{rng, Rng};
 use serde::de;
@@ -9,7 +10,7 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Debug;
-use std::ops::{Add, Deref, Rem, Sub};
+use std::ops::{Add, Deref, Mul, Rem, Sub};
 use std::path::PathBuf;
 
 #[derive(Deserialize)]
@@ -415,7 +416,11 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
         }
     }
 
-    pub fn is_random_hit(&self, default_upper_bound: T) -> bool {
+    pub fn is_random_hit(
+        &self,
+        rng: &mut impl Rng,
+        default_upper_bound: T,
+    ) -> bool {
         match self.clone() {
             NumberOrRange::Number(n) => {
                 // This will always be true
@@ -423,15 +428,11 @@ impl<T: PrimInt + Clone + SampleUniform> NumberOrRange<T> {
                     return true;
                 }
 
-                let mut rng = rng();
-                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(n..default_upper_bound);
 
                 num == n
             },
             NumberOrRange::Range((from, to)) => {
-                let mut rng = rng();
-                //let mut rng = RANDOM.write().unwrap();
                 let num = rng.random_range(from..to);
 
                 num == from

@@ -6,7 +6,8 @@ use crate::features::map::map_properties::{
     FurnitureProperty, MonstersProperty, TerrainProperty,
 };
 use crate::features::map::{
-    CalculateParametersError, MapGen, MappingKind, Property, SetTile,
+    CalculateParametersError, InstantiatedMapgen, MapGen, MappingKind,
+    ParametersCalculated, Property, SetTile,
 };
 use cdda_lib::types::{
     CDDADistributionInner, CDDAIdentifier, Comment, Distribution, MapGenValue,
@@ -240,37 +241,43 @@ impl CDDAPalette {
         Ok(calculated_parameters)
     }
 
-    pub fn get_visible_mapping(
+    pub fn get_random_property_from_character_recursive(
         &self,
-        mapping_kind: impl Borrow<MappingKind>,
-        character: impl Borrow<char>,
-        position: &IVec2,
-        map_data: &MapGen,
-        json_data: &DeserializedCDDAJsonData,
-    ) -> Option<Vec<SetTile>> {
-        let mapping = self.properties.get(mapping_kind.borrow())?;
-
-        if let Some(id) = mapping.get(character.borrow()) {
-            return id.get_commands(position, map_data, json_data);
+        rng: &mut impl Rng,
+        instantiation: &InstantiatedMapgen<ParametersCalculated>,
+        character: char,
+        mapping_kind: &MappingKind,
+        cdda_data: &DeserializedCDDAJsonData,
+    ) -> Option<Arc<dyn Property>> {
+        match self.properties.get(&mapping_kind) {
+            None => {},
+            Some(p) => match p.get(&character) {
+                None => {},
+                Some(p) => return Some(Arc::clone(p)),
+            },
         }
 
+        // If we don't find it, search the palettes from top to bottom
         for mapgen_value in self.palettes.iter() {
             let palette_id = mapgen_value
                 .get_random_identifier(
-                    &mut rng(),
-                    &map_data.calculated_parameters,
+                    rng,
+                    &instantiation.calculated_parameters.0,
                 )
                 .ok()?;
-            let palette = json_data.palettes.get(&palette_id)?;
 
-            if let Some(id) = palette.get_visible_mapping(
-                mapping_kind.borrow(),
-                character.borrow(),
-                position,
-                map_data,
-                json_data,
-            ) {
-                return Some(id);
+            let palette = cdda_data.palettes.get(&palette_id)?;
+
+            if let Some(p) = palette
+                .get_random_property_from_character_recursive(
+                    rng,
+                    instantiation,
+                    character,
+                    mapping_kind,
+                    cdda_data,
+                )
+            {
+                return Some(p);
             }
         }
 
