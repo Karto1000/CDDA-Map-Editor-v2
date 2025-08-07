@@ -27,6 +27,7 @@ use crate::data::terrain::{CDDATerrain, CDDATerrainIntermediate};
 use crate::data::vehicle_parts::CDDAVehiclePartIntermediate;
 use crate::data::vehicles::CDDAVehicleIntermediate;
 use crate::events::{UPDATE_CDDA_DATA, UPDATE_LIVE_VIEWER};
+use crate::features::map::MappingKind;
 use crate::util::GetRandom;
 use crate::{events, CDDADataFileWatcher};
 use cdda_lib::types::{
@@ -40,7 +41,7 @@ use log::info;
 use notify_debouncer_full::new_debouncer;
 use rand::distr::weighted::WeightedIndex;
 use rand::rand_core::impls;
-use rand::{rng, Rng, RngCore};
+use rand::{random, rng, Rng, RngCore};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -134,29 +135,36 @@ where
 }
 
 pub fn replace_region_setting(
+    rng: &mut dyn RngCore,
     id: &CDDAIdentifier,
     region_setting: &CDDARegionSettings,
 ) -> CDDAIdentifier {
     // If it starts with t_region, we know it is a regional setting
     if id.starts_with(REGION_SETTING_PREFIX) {
         if id.starts_with(FURNITURE_PREFIX) {
+            let random_region_furniture_setting = region_setting
+                .region_terrain_and_furniture
+                .furniture
+                .get(&RegionIdentifier(id.0.clone()))
+                .expect("Furniture Region identifier to exist")
+                .get_random(rng);
+
             return replace_region_setting(
-                region_setting
-                    .region_terrain_and_furniture
-                    .furniture
-                    .get(&RegionIdentifier(id.0.clone()))
-                    .expect("Furniture Region identifier to exist")
-                    .get_random(),
+                rng,
+                random_region_furniture_setting,
                 region_setting,
             );
         } else if id.0.starts_with(TERRAIN_PREFIX) {
+            let random_region_terrain_setting = region_setting
+                .region_terrain_and_furniture
+                .terrain
+                .get(&RegionIdentifier(id.0.clone()))
+                .expect("Terrain Region identifier to exist")
+                .get_random(rng);
+
             return replace_region_setting(
-                region_setting
-                    .region_terrain_and_furniture
-                    .terrain
-                    .get(&RegionIdentifier(id.0.clone()))
-                    .expect("Terrain Region identifier to exist")
-                    .get_random(),
+                rng,
+                random_region_terrain_setting,
                 region_setting,
             );
         }
@@ -318,12 +326,32 @@ impl<T: Clone + GetIdentifier> GetIdentifier for MeabyVec<MeabyWeighted<T>> {
     EnumIter,
     Deserialize,
     Serialize,
+    Copy,
 )]
 pub enum TileLayer {
     Terrain = 0,
     Furniture = 1,
     Monster = 2,
     Field = 3,
+}
+
+impl From<MappingKind> for TileLayer {
+    fn from(value: MappingKind) -> Self {
+        match value {
+            MappingKind::Terrain => TileLayer::Terrain,
+            MappingKind::Furniture
+            | MappingKind::Trap
+            | MappingKind::Computer
+            | MappingKind::Sign
+            | MappingKind::Toilet
+            | MappingKind::Gaspump
+            | MappingKind::Vehicle
+            | MappingKind::Nested
+            | MappingKind::Corpse => TileLayer::Furniture,
+            MappingKind::Monsters | MappingKind::Monster => TileLayer::Monster,
+            MappingKind::Field => TileLayer::Field,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]

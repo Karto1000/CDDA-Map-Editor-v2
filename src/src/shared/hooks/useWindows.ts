@@ -11,6 +11,7 @@ export type UseWindowsRet = {
     welcomeWindowRef: RefObject<Webview>,
     globalPalettesWindowRef: RefObject<Webview>,
     globalCharacterSelectWindowRef: RefObject<Webview>,
+    tileSearchWindowRef: RefObject<Webview>,
 }
 
 export function useWindows(): UseWindowsRet {
@@ -24,6 +25,7 @@ export function useWindows(): UseWindowsRet {
     const welcomeWindowRef = useRef<Webview>(null)
     const globalPalettesWindowRef = useRef<Webview>(null)
     const globalCharacterSelectWindowRef = useRef<Webview>(null)
+    const tileSearchWindowRef = useRef<Webview>(null)
 
     return {
         newMapWindowRef,
@@ -34,6 +36,7 @@ export function useWindows(): UseWindowsRet {
         chunkInfoWindowRef,
         welcomeWindowRef,
         globalPalettesWindowRef,
-        globalCharacterSelectWindowRef
+        globalCharacterSelectWindowRef,
+        tileSearchWindowRef
     }
 }

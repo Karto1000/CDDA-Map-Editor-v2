@@ -12,9 +12,12 @@ use crate::features::program_data::{
     SavedProject, Tab, TabType,
 };
 use crate::features::tileset::legacy_tileset::{
-    LegacyTilesheet, Rotated, SpriteIndex, TilesheetCDDAId,
+    Rotated, SpriteIndex, Tilesheet, TilesheetCDDAId,
 };
-use crate::features::tileset::{ForeBackIds, Tilesheet};
+use crate::features::tileset::{
+    FgBgIds, GetSprite, PickSpriteIndex, RepresentativeSpritePicker,
+    SpriteLayer,
+};
 use crate::util::{
     get_current_project_mut, get_json_data, get_size, CDDADataError,
     GetCurrentProjectError, Save, SaveError,
@@ -347,7 +350,7 @@ impl_serialize_for_error!(GetGlobalPalettesRepresentationError);
 #[derive(Debug, Serialize)]
 pub struct CharacterMapping {
     pub id: TilesheetCDDAId,
-    pub ids: ForeBackIds<Option<u32>, Option<u32>>,
+    pub ids: FgBgIds<Option<SpriteIndex>, Option<SpriteIndex>>,
 }
 
 #[derive(Debug, Serialize, Default)]
@@ -363,8 +366,8 @@ pub async fn get_global_palette_representations(
     program_data: State<'_, Mutex<ProgramData>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
-    fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
+    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
+    fallback_tilesheet: State<'_, Arc<Tilesheet>>,
 ) -> Result<
     HashMap<char, CharacterMappingCollection>,
     GetGlobalPalettesRepresentationError,
@@ -409,43 +412,37 @@ pub async fn get_global_palette_representations(
                 let mapped_cdda_id = MappedCDDAId::simple(repr.id.clone());
 
                 let index = match tilesheet_lock.deref() {
-                    None => ForeBackIds::new(
-                        Some(
-                            fallback_tilesheet
-                                .get_fallback(&mapped_cdda_id, json_data),
-                        ),
-                        None,
-                    ),
+                    // TODO: Fix all the fallbacks
+                    None => FgBgIds::new(None, None),
                     Some(t) => t
                         .get_sprite(&mapped_cdda_id, json_data)
                         .map(|s| {
-                            let fg_id = s
-                                .get_fg_id(
-                                    &mapped_cdda_id,
-                                    &repr.tile_layer,
-                                    &AdjacentTiles::none(),
+                            let mut representative_sprite_picker =
+                                RepresentativeSpritePicker;
+
+                            let fg_id = representative_sprite_picker
+                                .pick(
+                                    (),
+                                    s,
+                                    SpriteLayer::Fg,
+                                    kind.into(),
                                     json_data,
                                 )
                                 .map(|i| i.data.into_single().unwrap());
 
-                            let bg_id = s
-                                .get_bg_id(
-                                    &mapped_cdda_id,
-                                    &repr.tile_layer,
-                                    &AdjacentTiles::none(),
+                            let bg_id = representative_sprite_picker
+                                .pick(
+                                    (),
+                                    s,
+                                    SpriteLayer::Bg,
+                                    kind.into(),
                                     json_data,
                                 )
                                 .map(|i| i.data.into_single().unwrap());
 
-                            ForeBackIds::new(fg_id, bg_id)
+                            FgBgIds::new(fg_id, bg_id)
                         })
-                        .unwrap_or(ForeBackIds::new(
-                            Some(
-                                fallback_tilesheet
-                                    .get_fallback(&mapped_cdda_id, json_data),
-                            ),
-                            None,
-                        )),
+                        .unwrap_or(FgBgIds::new(None, None)),
                 };
 
                 match repr.tile_layer {

@@ -8,6 +8,7 @@ export type TilesheetSpriteProps = {
     spritesheetConfig: RefObject<SpritesheetConfig>
     index: number
     scale: number
+    isFallback?: boolean
     className?: string
 }
 
@@ -24,24 +25,26 @@ export function TilesheetSprite(props: TilesheetSpriteProps) {
     const tileInfo = props.spritesheetConfig.current.tile_info[0]
 
     const {url, range, size, offset} = useMemo(() => {
-        for (const key of Object.keys(props.tilesheets.tilesheets)) {
-            const tilesheet = props.tilesheets.tilesheets[key]
+        if (!props.isFallback) {
+            for (const key of Object.keys(props.tilesheets.tilesheets)) {
+                const tilesheet = props.tilesheets.tilesheets[key]
 
-            const tileEntry = props.spritesheetConfig.current["tiles-new"].find(s => s.file === key)
-            const spriteWidth = tileEntry.sprite_width || tileInfo.width
-            const spriteHeight = tileEntry.sprite_height || tileInfo.height
-            const spriteOffsetX = -tileEntry.sprite_offset_x || 0
-            const spriteOffsetY = -tileEntry.sprite_offset_y || 0
+                const tileEntry = props.spritesheetConfig.current["tiles-new"].find(s => s.file === key)
+                const spriteWidth = tileEntry.sprite_width || tileInfo.width
+                const spriteHeight = tileEntry.sprite_height || tileInfo.height
+                const spriteOffsetX = -tileEntry.sprite_offset_x || 0
+                const spriteOffsetY = -tileEntry.sprite_offset_y || 0
 
-            if (isWithinRange(tilesheet, props.index)) {
-                return {
-                    url: `url(${tilesheet.objectURL})`,
-                    range: tilesheet.range,
-                    size: [spriteWidth, spriteHeight],
-                    offset: [
-                        spriteOffsetX,
-                        spriteOffsetY
-                    ]
+                if (isWithinRange(tilesheet, props.index)) {
+                    return {
+                        url: `url(${tilesheet.objectURL})`,
+                        range: tilesheet.range,
+                        size: [spriteWidth, spriteHeight],
+                        offset: [
+                            spriteOffsetX,
+                            spriteOffsetY
+                        ]
+                    }
                 }
             }
         }

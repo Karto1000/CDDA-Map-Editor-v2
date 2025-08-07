@@ -13,7 +13,7 @@ use crate::features::map::importing::{
 use crate::features::map::{
     CalculateParameters, CalculateParametersError, CalculateRandomParameters,
     GetMappedCDDAIdsError, InstantiatedOvermap, InstantiatedTile,
-    MapGen, MAX_MAP_DATA_SIZE,
+    MapGen, MappedCDDAId, MAX_MAP_DATA_SIZE,
 };
 use crate::features::program_data::keybinds::{Keybind, KeybindAction};
 use crate::features::viewer::{LiveViewerData, MapViewer};
@@ -326,12 +326,12 @@ pub struct Tab {
     pub tab_type: TabType,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct AdjacentTiles {
-    pub top: Option<CDDAIdentifier>,
-    pub right: Option<CDDAIdentifier>,
-    pub bottom: Option<CDDAIdentifier>,
-    pub left: Option<CDDAIdentifier>,
+    pub top: Option<MappedCDDAId>,
+    pub right: Option<MappedCDDAId>,
+    pub bottom: Option<MappedCDDAId>,
+    pub left: Option<MappedCDDAId>,
 }
 
 impl AdjacentTiles {

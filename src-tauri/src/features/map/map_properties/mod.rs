@@ -188,7 +188,6 @@ pub fn value_to_property(
                 serde_json::from_value::<Vec<Weighted<MapGenValue>>>(value)?;
             Ok(Arc::new(TrapsProperty { trap }))
         },
-        MappingKind::ItemGroups => unimplemented!(),
         MappingKind::Computer => {
             let computer =
                 serde_json::from_value::<Vec<Weighted<MapGenComputer>>>(value)?;

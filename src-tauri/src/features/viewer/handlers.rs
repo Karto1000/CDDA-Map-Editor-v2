@@ -24,9 +24,9 @@ use crate::features::program_data::{ProgramData, SavedProject};
 use crate::features::sprites::{
     InstancedFallbackSprite, InstancedSprite, InstancedSprites,
 };
-use crate::features::tileset::legacy_tileset::LegacyTilesheet;
+use crate::features::tileset::legacy_tileset::Tilesheet;
 use crate::features::tileset::legacy_tileset::TilesheetCDDAId;
-use crate::features::tileset::Tilesheet;
+use crate::features::tileset::GetSprite;
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::util;
 use crate::util::GetCurrentProjectError;
@@ -102,8 +102,8 @@ impl_serialize_for_error!(GetSpritesError);
 
 #[tauri::command]
 pub async fn get_sprites(
-    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
-    fallback_tilesheet: State<'_, Arc<LegacyTilesheet>>,
+    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
+    fallback_tilesheet: State<'_, Arc<Tilesheet>>,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
     existing_instantiation: State<'_, Mutex<Option<InstantiatedOvermapStack>>>,

@@ -8,9 +8,7 @@ use crate::features::program_data::{
     ProjectName, ProjectType, SavedProject, Tab,
     TabType,
 };
-use crate::features::tileset::legacy_tileset::{
-    load_tilesheet, LegacyTilesheet,
-};
+use crate::features::tileset::legacy_tileset::{load_tilesheet, Tilesheet};
 use crate::features::toast::ToastMessage;
 use crate::features::viewer::{LiveViewerData, MapViewer};
 use crate::util::{
@@ -179,7 +177,7 @@ pub async fn tileset_picked(
     tileset: String,
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
-    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
+    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
 ) -> Result<(), TilesetPickedError> {
     let mut editor_data_lock = editor_data.lock().await;
     let mut tilesheet_lock = tilesheet.lock().await;

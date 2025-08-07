@@ -1,4 +1,4 @@
-import {AnimatedSprite, FallbackSprite, StaticSprite} from "../types/map_data.js";
+import {AnimatedSprite, CDDAIdentifier, FallbackSprite, StaticSprite} from "../types/map_data.js";
 import {KeybindAction, ProgramData} from "../types/editor.js";
 import {TabTypeKind} from "../../shared/hooks/useTabs.js";
 import {Vector2, Vector3} from "three";
@@ -67,7 +67,8 @@ export enum TauriCommand {
     ABOUT = "about",
     CLOSE_APP = "close_app",
     NEW_MAP_EDITOR = "new_map_editor",
-    GET_PALETTES = "get_palettes",
+    GET_CDDA_DATA_FIELD = "get_cdda_data_field",
+    GET_REPRESENTATIONS_FOR_TERRAIN_IDS = "get_representations_for_terrain_ids",
     MODIFY_PALETTE = "modify_palette",
     MODIFY_GLOBAL_PALETTE = "modify_global_palette",
     GET_GLOBAL_PALETTES = "get_global_palettes",
@@ -188,7 +189,9 @@ export interface TauriCommandMap {
         zLevels: [number, number],
         mapSize: [number, number],
     },
-    [TauriCommand.GET_PALETTES]: {},
+    [TauriCommand.GET_CDDA_DATA_FIELD]: {
+        fieldName: string
+    },
     [TauriCommand.MODIFY_PALETTE]: {
         coordinates: [number, number, number]
         action: ModifyPaletteAction
@@ -199,6 +202,9 @@ export interface TauriCommandMap {
     [TauriCommand.UPDATE_CDDA_DATA_AT]: { paths: string[] },
     [TauriCommand.GET_GLOBAL_PALETTES]: {};
     [TauriCommand.GET_GLOBAL_PALETTE_REPRESENTATIONS]: {};
+    [TauriCommand.GET_REPRESENTATIONS_FOR_TERRAIN_IDS]: {
+        ids: CDDAIdentifier[]
+    }
 }
 
 export enum TauriEvent {
@@ -224,6 +230,7 @@ export enum TauriEvent {
     OPEN_MAPGEN_INFO_WINDOW = "open-mapgen-info-window",
     OPEN_GLOBAL_PALETTES_WINDOW = "open-global-palettes-window",
     OPEN_GLOBAL_SELECT_WINDOW = "open-global-select-window",
+    OPEN_TILE_SEARCH_WINDOW = "open-tile-search-window",
     KEYBIND_PRESSED = "keybind-pressed",
     CHANGE_EDITOR_MODE = "change-editor-mode",
     MAPGEN_CHUNK_SELECTED = "mapgen-chunk-selected",
@@ -275,5 +282,6 @@ export interface TauriEventMap {
     [TauriEvent.UPDATE_CDDA_DATA]: string[],
     [TauriEvent.CLOSE_ALL_TABS]: {},
     [TauriEvent.OPEN_GLOBAL_SELECT_WINDOW]: {},
+    [TauriEvent.OPEN_TILE_SEARCH_WINDOW]: {},
     [TauriEvent.CHARACTER_SELECTED]: { character: string }
 }

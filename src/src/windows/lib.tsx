@@ -16,7 +16,8 @@ export enum WindowLabel {
     Chunk = "chunk",
     AddPalette = "add-palette",
     GlobalPalettes = "global-palettes",
-    GlobalCharacterSelect = "global-character-select"
+    GlobalCharacterSelect = "global-character-select",
+    TileSearch = "tile-search"
 }
 
 export type WindowOptions = {

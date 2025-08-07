@@ -1,11 +1,12 @@
 use crate::features::tileset::data::FALLBACK_TILE_MAPPING;
 use crate::features::tileset::legacy_tileset::data::{
-    LegacyTileConfig, Spritesheet,
+    get_multitile_sprite_from_additional_tiles, to_weighted_vec, LegacyTileConfig,
+    Spritesheet,
 };
-use crate::features::tileset::legacy_tileset::LegacyTilesheet;
-use crate::features::tileset::{
-    legacy_tileset, ForeBackIds, SingleSprite, Sprite,
+use crate::features::tileset::legacy_tileset::{
+    FallbackSpriteIndex, Tilesheet,
 };
+use crate::features::tileset::{FgBgIds, SingleSprite, Sprite};
 use crate::util::Load;
 use anyhow::{anyhow, Error};
 use serde_json::Value;
@@ -44,8 +45,8 @@ impl Load<LegacyTileConfig> for TileConfigLoader {
     }
 }
 
-impl Load<LegacyTilesheet> for LegacyTilesheetLoader {
-    async fn load(&mut self) -> Result<LegacyTilesheet, Error> {
+impl Load<Tilesheet> for LegacyTilesheetLoader {
+    async fn load(&mut self) -> Result<Tilesheet, Error> {
         let mut id_map = HashMap::new();
         let mut fallback_map = HashMap::new();
 
@@ -65,14 +66,14 @@ impl Load<LegacyTilesheet> for LegacyTilesheetLoader {
                     && tile.additional_tiles.is_some();
 
                 if !is_multitile {
-                    let fg = legacy_tileset::to_weighted_vec(tile.fg.clone());
-                    let bg = legacy_tileset::to_weighted_vec(tile.bg.clone());
+                    let fg = to_weighted_vec(tile.fg.clone());
+                    let bg = to_weighted_vec(tile.bg.clone());
 
                     tile.id.for_each(|id| {
                         id_map.insert(
                             id.clone(),
                             Sprite::Single(SingleSprite {
-                                ids: ForeBackIds::new(fg.clone(), bg.clone()),
+                                ids: FgBgIds::new(fg.clone(), bg.clone()),
                                 animated: tile.animated.unwrap_or(false),
                                 rotates: tile.rotates.unwrap_or(false),
                             }),
@@ -89,7 +90,7 @@ impl Load<LegacyTilesheet> for LegacyTilesheetLoader {
                     tile.id.for_each(|id| {
                         id_map.insert(
                             id.clone(),
-                            legacy_tileset::get_multitile_sprite_from_additional_tiles(
+                            get_multitile_sprite_from_additional_tiles(
                                 tile,
                                 additional_tiles,
                             )
@@ -107,12 +108,12 @@ impl Load<LegacyTilesheet> for LegacyTilesheetLoader {
             for (character, offset) in FALLBACK_TILE_MAPPING {
                 fallback_map.insert(
                     format!("{}_{}", character, ascii_group.color),
-                    ascii_group.offset as u32 + offset,
+                    FallbackSpriteIndex(ascii_group.offset as u32 + offset.0),
                 );
             }
         }
 
-        Ok(LegacyTilesheet {
+        Ok(Tilesheet {
             id_map,
             fallback_map,
         })

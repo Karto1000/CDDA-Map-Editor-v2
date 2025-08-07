@@ -5,7 +5,9 @@ mod util;
 
 use crate::data::io::{load_cdda_json_data, DeserializedCDDAJsonData};
 use crate::data::spawn_cdda_watcher;
-use crate::features::cdda_data::handler::{get_palettes, update_cdda_data_at};
+use crate::features::cdda_data::handler::{
+    get_cdda_data_field, update_cdda_data_at,
+};
 use crate::features::editor::handler::{
     get_global_palette_representations, get_global_palettes,
     modify_global_palette, modify_palette, new_map_editor,
@@ -25,11 +27,12 @@ use crate::features::program_data::{
     get_map_data_collection_from_map_viewer, LoadedProjects, ProgramData, Project, ProjectName, ProjectType,
     ZLevel,
 };
+use crate::features::sprites::handlers::get_representations_for_terrain_ids;
 use crate::features::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
 };
 use crate::features::tileset::legacy_tileset::fallback::get_fallback_tilesheet;
-use crate::features::tileset::legacy_tileset::LegacyTilesheet;
+use crate::features::tileset::legacy_tileset::Tilesheet;
 use crate::features::viewer::handlers::{
     create_viewer, get_project_cell_data, get_sprites,
     new_nested_mapgen_viewer, new_single_mapgen_viewer,
@@ -116,7 +119,7 @@ async fn frontend_ready(
     app: AppHandle,
     editor_data: State<'_, Mutex<ProgramData>>,
     json_data: State<'_, Mutex<Option<DeserializedCDDAJsonData>>>,
-    tilesheet: State<'_, Mutex<Option<LegacyTilesheet>>>,
+    tilesheet: State<'_, Mutex<Option<Tilesheet>>>,
     loaded_projects: State<'_, Mutex<LoadedProjects>>,
     cdda_watcher_handle: State<'_, Mutex<Option<CDDADataFileWatcher>>>,
 ) -> Result<(), ()> {
@@ -311,7 +314,7 @@ pub fn run() -> () {
             app.manage::<Mutex<Option<DeserializedCDDAJsonData>>>(Mutex::new(
                 None,
             ));
-            app.manage::<Mutex<Option<LegacyTilesheet>>>(Mutex::new(None));
+            app.manage::<Mutex<Option<Tilesheet>>>(Mutex::new(None));
 
             // File watcher lock for the current project
             app.manage::<Mutex<Option<ProjectFileWatcher>>>(Mutex::new(None));
@@ -348,7 +351,7 @@ pub fn run() -> () {
             about,
             close_app,
             new_map_editor,
-            get_palettes,
+            get_cdda_data_field,
             modify_palette,
             update_cdda_data_at,
             remove_recent_project,
@@ -356,7 +359,8 @@ pub fn run() -> () {
             restore_default_config,
             modify_global_palette,
             get_global_palettes,
-            get_global_palette_representations
+            get_global_palette_representations,
+            get_representations_for_terrain_ids
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

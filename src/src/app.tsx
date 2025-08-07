@@ -35,6 +35,7 @@ function App() {
     const canvasContainerRef = useRef<HTMLDivElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const showGridRef = useRef<boolean>(true)
+    const tileSearchUnlistenFn = useRef<UnlistenFn | null>(null)
 
     const {threeConfigRef} = useThreeSetup(theme, canvasRef, canvasContainerRef)
     const editorData = useProgramData()[0]
@@ -49,7 +50,8 @@ function App() {
         chunkInfoWindowRef,
         welcomeWindowRef,
         globalPalettesWindowRef,
-        globalCharacterSelectWindowRef
+        globalCharacterSelectWindowRef,
+        tileSearchWindowRef
     } = useWindows()
 
     const [isAppReady, setIsAppReady] = useState<boolean>(false)
@@ -101,6 +103,32 @@ function App() {
             }
         },
         []
+    )
+
+    useTauriEvent(
+        TauriEvent.OPEN_TILE_SEARCH_WINDOW,
+        () => {
+            if (!isAppReady) return
+
+            (async () => {
+                const [window, close] = await openWindow(
+                    WindowLabel.TileSearch,
+                    theme,
+                    tileSearchWindowRef,
+                    {},
+                    {
+                        slimTilesheets: tilesheets.current.toSlimTilesheets(),
+                        spritesheetConfig: spritesheetConfig,
+                    }
+                )
+                tileSearchUnlistenFn.current = close
+            })()
+
+            return () => {
+                tileSearchUnlistenFn.current?.()
+            }
+        },
+        [isAppReady]
     )
 
     function getMainBasedOnTab(): React.JSX.Element {

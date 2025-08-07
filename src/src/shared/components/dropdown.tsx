@@ -140,6 +140,9 @@ export function Dropdown(
         </div>
     }
 
+    const firstChar = name.charAt(0)
+    const nameRest = name.slice(1)
+
     return (
         <div className={"dropdown"} ref={dropdownRef}>
             <button className={`dropdown-button ${isDropdownOpen ? "is-dropdown-open" : ""}`}
@@ -151,7 +154,7 @@ export function Dropdown(
                         if (onDropdownButtonHover) onDropdownButtonHover()
                     }}
             >
-                {name}
+                <u>{firstChar}</u>{nameRest}
             </button>
 
             {

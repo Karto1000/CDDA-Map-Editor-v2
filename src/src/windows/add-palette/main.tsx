@@ -5,11 +5,9 @@ import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {Tooltip} from "react-tooltip";
 import {ImguiSelect, ImguiSelectOption} from "../../shared/components/imguilike/imguiSelect.js";
 import {tauriBridge} from "../../tauri/events/tauriBridge.js";
-import {Palette} from "../../tauri/types/palettes.js";
-import {BackendResponseType, ModifyPaletteActionKind, TauriCommand} from "../../tauri/events/types.js";
+import {CDDADataField, Palettes} from "../../tauri/types/cdda_data.js";
+import {BackendResponseType, TauriCommand} from "../../tauri/events/types.js";
 import {FormError} from "../../shared/components/form-error.js";
-import {useInitialData} from "../useInitialData.js";
-import {Vector3} from "three";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 
 export const __PALETTE_ADDED = "__palette-added"
@@ -21,7 +19,10 @@ function Main() {
 
     useEffect(() => {
         (async () => {
-            const response = await tauriBridge.invoke<{ [id: string]: Palette }, string>(TauriCommand.GET_PALETTES, {})
+            const response = await tauriBridge.invoke<Palettes, string>(
+                TauriCommand.GET_CDDA_DATA_FIELD,
+                {fieldName: CDDADataField.PALETTES}
+            )
 
             if (response.type === BackendResponseType.Error) {
                 return
@@ -29,7 +30,7 @@ function Main() {
 
             const newOptions: ImguiSelectOption[] = []
             for (const key of Object.keys(response.data)) {
-                const palette  = response.data[key]
+                const palette = response.data[key]
                 newOptions.push(
                     {
                         value: palette.id,
@@ -51,7 +52,7 @@ function Main() {
         if (!selectedOption) return
 
         const window = getCurrentWindow()
-        await window.emit(__PALETTE_ADDED, selectedOption )
+        await window.emit(__PALETTE_ADDED, selectedOption)
         await window.close()
     }
 

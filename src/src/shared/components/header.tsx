@@ -35,7 +35,9 @@ export function Header(props: Props) {
 
     useTauriEvent(
         TauriEvent.CLOSE_ALL_TABS,
-        () => { onCloseAll() },
+        () => {
+            onCloseAll()
+        },
         [tabs]
     )
 
@@ -149,7 +151,10 @@ export function Header(props: Props) {
     }
 
     async function onTabCreate() {
-        await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef, {defaultWidth: 800, defaultHeight: 500})
+        await openWindow(WindowLabel.ImportMap, theme, props.importMapWindowRef, {
+            defaultWidth: 800,
+            defaultHeight: 500
+        })
     }
 
     async function onTabOpen(name: string) {
@@ -534,6 +539,41 @@ export function Header(props: Props) {
                                     }
                                 }
                             ],
+                            [
+                                {
+                                    name: "Tile Search",
+                                    onClick: async (ref) => {
+                                        await emit(TauriEvent.OPEN_TILE_SEARCH_WINDOW)
+                                        ref.current.closeMenu()
+                                    }
+                                },
+                                ...tabs.getCurrentTab()?.tab_type === TabTypeKind.MapEditor ?
+                                    [
+                                        {
+                                            name: "Mapgen Info",
+                                            onClick: async (ref) => {
+                                                await emit(TauriEvent.OPEN_MAPGEN_INFO_WINDOW)
+                                                ref.current.closeMenu()
+                                            }
+                                        },
+                                        {
+                                            name: "Global Palettes",
+                                            onClick: async (ref) => {
+                                                await emit(TauriEvent.OPEN_GLOBAL_PALETTES_WINDOW)
+                                                ref.current.closeMenu()
+                                            }
+                                        },
+                                        {
+                                            name: "Global Select",
+                                            onClick: async (ref) => {
+                                                await emit(TauriEvent.OPEN_GLOBAL_SELECT_WINDOW)
+                                                ref.current.closeMenu()
+                                            }
+                                        }
+                                    ]
+                                    :
+                                    []
+                            ],
                         ]}/>
                         <Dropdown name={"Help"} groups={[
                             [
@@ -562,40 +602,6 @@ export function Header(props: Props) {
                                 }
                             ]
                         ]}/>
-
-                        <Dropdown
-                            name={"Windows"}
-                            groups={
-                                [
-                                    tabs.getCurrentTab()?.tab_type === TabTypeKind.MapEditor ?
-                                        [
-                                            {
-                                                name: "Mapgen Info",
-                                                onClick: async (ref) => {
-                                                    await emit(TauriEvent.OPEN_MAPGEN_INFO_WINDOW)
-                                                    ref.current.closeMenu()
-                                                }
-                                            },
-                                            {
-                                                name: "Global Palettes",
-                                                onClick: async (ref) => {
-                                                    await emit(TauriEvent.OPEN_GLOBAL_PALETTES_WINDOW)
-                                                    ref.current.closeMenu()
-                                                }
-                                            },
-                                            {
-                                                name: "Global Select",
-                                                onClick: async (ref) => {
-                                                    await emit(TauriEvent.OPEN_GLOBAL_SELECT_WINDOW)
-                                                    ref.current.closeMenu()
-                                                }
-                                            }
-                                        ]
-                                        :
-                                        []
-                                ]
-                            }
-                        />
                     </DropdownGroup>
                 </div>
             </div>

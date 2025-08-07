@@ -9,7 +9,7 @@ use glam::UVec2;
 use indexmap::IndexMap;
 use rand::distr::weighted::WeightedIndex;
 use rand::prelude::Distribution as RandDistribution;
-use rand::rng;
+use rand::RngCore;
 use serde::de::{Error as SerdeError, MapAccess, Visitor};
 use serde::ser::SerializeMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -221,27 +221,23 @@ pub fn get_json_data_mut<'a>(
 }
 
 pub trait GetRandom<T> {
-    fn get_random(&self) -> &T;
+    fn get_random(&self, rng: &mut dyn RngCore) -> &T;
 }
 
 impl<T> GetRandom<T> for Vec<Weighted<T>> {
-    fn get_random(&self) -> &T {
+    fn get_random(&self, rng: &mut dyn RngCore) -> &T {
         let mut weights = vec![];
         self.iter().for_each(|v| weights.push(v.weight));
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
-
-        let mut rng = rng();
-        //let mut rng = RANDOM.write().unwrap();
-
-        let chosen_index = weighted_index.sample(&mut rng);
+        let chosen_index = weighted_index.sample(rng);
 
         &self.get(chosen_index).unwrap().data
     }
 }
 
 impl<T> GetRandom<T> for IndexMap<T, i32> {
-    fn get_random(&self) -> &T {
+    fn get_random(&self, rng: &mut dyn RngCore) -> &T {
         let mut weights = vec![];
 
         let mut vec = self.iter().collect::<Vec<(&T, &i32)>>();
@@ -249,10 +245,7 @@ impl<T> GetRandom<T> for IndexMap<T, i32> {
 
         let weighted_index = WeightedIndex::new(weights).expect("No Error");
 
-        let mut rng = rng();
-        //let mut rng = RANDOM.write().unwrap();
-
-        let chosen_index = weighted_index.sample(&mut rng);
+        let chosen_index = weighted_index.sample(rng);
         let item = vec.remove(chosen_index);
 
         &item.0

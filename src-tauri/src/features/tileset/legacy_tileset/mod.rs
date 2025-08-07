@@ -1,30 +1,57 @@
 use crate::data::io::DeserializedCDDAJsonData;
-use crate::data::vehicle_parts::CDDAVehiclePart;
 use crate::features::map::MappedCDDAId;
 use crate::features::program_data::ProgramData;
 use crate::features::tileset::data::{
     AdditionalTileType, FALLBACK_TILE_MAPPING,
 };
 use crate::features::tileset::legacy_tileset::io::TileConfigLoader;
-use crate::features::tileset::{ForeBackIds, SingleSprite, Sprite, Tilesheet};
+use crate::features::tileset::{FgBgIds, GetSprite, SingleSprite, Sprite};
 use crate::util::{CardinalDirection, Load, Rotation};
 use anyhow::{anyhow, Error};
 use cdda_lib::types::{CDDAIdentifier, MeabyVec, MeabyWeighted, Weighted};
 use data::{AdditionalTile, Tile};
+use derive_more::{Add, Deref, Div, From, Mul, Sub};
 use io::LegacyTilesheetLoader;
 use log::{debug, info, warn};
 use paste::paste;
 use rand::distr::Distribution;
+use serde::de::value::BoolDeserializer;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::json;
 use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
+use std::ops::Add;
 
 mod data;
 pub mod fallback;
 pub mod io;
 
-pub type SpriteIndex = u32;
+#[derive(
+    Deref, Debug, Clone, Serialize, Deserialize, From, Copy, Add, Sub, Div, Mul,
+)]
+pub struct SpriteIndex(pub u32);
+
+impl Add<u32> for SpriteIndex {
+    type Output = Self;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        SpriteIndex(self.0 + rhs)
+    }
+}
+
+#[derive(
+    Deref, Debug, Clone, Serialize, Deserialize, From, Copy, Add, Sub, Div, Mul,
+)]
+pub struct FallbackSpriteIndex(pub u32);
+
+impl Add<u32> for FallbackSpriteIndex {
+    type Output = Self;
+
+    fn add(self, rhs: u32) -> Self::Output {
+        FallbackSpriteIndex(self.0 + rhs)
+    }
+}
+
 pub type FinalIds = Option<Vec<Weighted<Rotates>>>;
 
 #[derive(Debug, Clone)]
@@ -71,6 +98,43 @@ impl Rotates {
             },
         }
     }
+
+    /// Turn a Predefined rotation into a concrete rotation based on the should_rotate flag and the
+    /// self state
+    pub fn get_index_with_rotation(
+        &self,
+        mapped_sprite_rotation: Rotation,
+        rotation_offset: Rotation,
+        should_rotate: bool,
+    ) -> (SpriteIndex, Rotation) {
+        match self {
+            Rotates::Auto(i) => match should_rotate {
+                false => (i.clone(), Rotation::Deg0),
+                true => (i.clone(), mapped_sprite_rotation + rotation_offset),
+            },
+            Rotates::Pre2((a, b)) => {
+                let chosen_index =
+                    match mapped_sprite_rotation + rotation_offset {
+                        // TODO: I don't know if these are actually the same or if this is different
+                        Rotation::Deg0 | Rotation::Deg180 => a,
+                        Rotation::Deg90 | Rotation::Deg270 => b,
+                    };
+
+                (chosen_index.clone(), Rotation::Deg0)
+            },
+            Rotates::Pre4((a, b, c, d)) => {
+                let chosen_index =
+                    match mapped_sprite_rotation + rotation_offset {
+                        Rotation::Deg0 => a,
+                        Rotation::Deg90 => b,
+                        Rotation::Deg180 => c,
+                        Rotation::Deg270 => d,
+                    };
+
+                (chosen_index.clone(), Rotation::Deg0)
+            },
+        }
+    }
 }
 
 impl TryFrom<Vec<SpriteIndex>> for Rotates {
@@ -98,7 +162,7 @@ impl TryFrom<Vec<SpriteIndex>> for Rotates {
     }
 }
 
-#[derive(Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Debug, Default, Eq, PartialEq, Hash)]
 pub struct TilesheetCDDAId {
     pub id: CDDAIdentifier,
     pub prefix: Option<String>,
@@ -190,115 +254,17 @@ impl TilesheetCDDAId {
     }
 }
 
-fn to_weighted_vec(
-    indices: Option<MeabyVec<MeabyWeighted<MeabyVec<SpriteIndex>>>>,
-) -> Option<Vec<Weighted<Rotates>>> {
-    let mut mapped_indices = Vec::new();
-
-    for fg_indices_outer in indices?.into_vec() {
-        let (indices_vec, weight) = match fg_indices_outer {
-            MeabyWeighted::NotWeighted(nw) => (nw.into_vec(), 1),
-            MeabyWeighted::Weighted(w) => (w.data.into_vec(), w.weight),
-        };
-
-        match Rotates::try_from(indices_vec) {
-            Ok(v) => {
-                mapped_indices.push(Weighted::new(v, weight));
-            },
-            Err(e) => {
-                // TODO: This happens when the supplied fg or bg is an empty array
-                info!(
-                    "{}, this is probably due to an empty array. Ignoring this entry ",
-                    e
-                );
-                continue;
-            },
-        }
-    }
-
-    Some(mapped_indices)
-}
-
-fn get_multitile_sprite_from_additional_tiles(
-    tile: &Tile,
-    additional_tiles: &Vec<AdditionalTile>,
-) -> Result<Sprite, Error> {
-    let mut additional_tile_ids = HashMap::new();
-    // Special cases for open and broken
-    let mut broken: Option<SingleSprite> = None;
-    let mut open: Option<SingleSprite> = None;
-
-    for additional_tile in additional_tiles {
-        match additional_tile.id {
-            AdditionalTileType::Broken => {
-                let fg = to_weighted_vec(additional_tile.fg.clone());
-                let bg = to_weighted_vec(additional_tile.bg.clone());
-
-                broken = Some(SingleSprite {
-                    ids: ForeBackIds::new(fg, bg),
-                    animated: false,
-                    rotates: false,
-                });
-            },
-            AdditionalTileType::Open => {
-                let fg = to_weighted_vec(additional_tile.fg.clone());
-                let bg = to_weighted_vec(additional_tile.bg.clone());
-
-                open = Some(SingleSprite {
-                    ids: ForeBackIds::new(fg, bg),
-                    animated: false,
-                    rotates: false,
-                });
-            },
-            _ => {
-                let fg = to_weighted_vec(additional_tile.fg.clone());
-                let bg = to_weighted_vec(additional_tile.bg.clone());
-
-                additional_tile_ids.insert(
-                    additional_tile.id.clone(),
-                    SingleSprite {
-                        ids: ForeBackIds::new(fg, bg),
-                        animated: additional_tile.animated.unwrap_or(false),
-                        rotates: additional_tile.rotates.unwrap_or(true),
-                    },
-                );
-            },
-        }
-    }
-
-    let fg = to_weighted_vec(tile.fg.clone());
-    let bg = to_weighted_vec(tile.bg.clone());
-
-    Ok(Sprite::Multitile {
-        fallback: SingleSprite {
-            ids: ForeBackIds::new(fg, bg),
-            rotates: tile.rotates.unwrap_or(false),
-            animated: tile.animated.unwrap_or(false),
-        },
-        center: additional_tile_ids.remove(&AdditionalTileType::Center),
-        corner: additional_tile_ids.remove(&AdditionalTileType::Corner),
-        edge: additional_tile_ids.remove(&AdditionalTileType::Edge),
-        t_connection: additional_tile_ids
-            .remove(&AdditionalTileType::TConnection),
-        unconnected: additional_tile_ids
-            .remove(&AdditionalTileType::Unconnected),
-        end_piece: additional_tile_ids.remove(&AdditionalTileType::EndPiece),
-        broken,
-        open,
-    })
-}
-
-pub struct LegacyTilesheet {
+pub struct Tilesheet {
     id_map: HashMap<CDDAIdentifier, Sprite>,
-    fallback_map: HashMap<String, SpriteIndex>,
+    fallback_map: HashMap<String, FallbackSpriteIndex>,
 }
 
-impl Tilesheet for LegacyTilesheet {
+impl GetSprite for Tilesheet {
     fn get_fallback(
         &self,
         id: &MappedCDDAId,
         json_data: &DeserializedCDDAJsonData,
-    ) -> SpriteIndex {
+    ) -> &FallbackSpriteIndex {
         match json_data.terrain.get(&id.tilesheet_id.id) {
             None => {},
             Some(t) => {
@@ -324,11 +290,10 @@ impl Tilesheet for LegacyTilesheet {
                     Some(_) => {},
                 }
 
-                return self
+                return &self
                     .fallback_map
                     .get(&fallback_id)
-                    .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
-                    .clone();
+                    .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1);
             },
         }
 
@@ -357,15 +322,14 @@ impl Tilesheet for LegacyTilesheet {
                     Some(_) => {},
                 }
 
-                return self
+                return &self
                     .fallback_map
                     .get(&fallback_id)
-                    .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1)
-                    .clone();
+                    .unwrap_or(&FALLBACK_TILE_MAPPING.first().unwrap().1);
             },
         }
 
-        FALLBACK_TILE_MAPPING.first().unwrap().1
+        &FALLBACK_TILE_MAPPING.first().unwrap().1
     }
     fn get_sprite(
         &self,
@@ -410,7 +374,7 @@ impl Tilesheet for LegacyTilesheet {
     }
 }
 
-impl LegacyTilesheet {
+impl Tilesheet {
     fn get_looks_like_sprite(
         &self,
         id: &CDDAIdentifier,
@@ -477,7 +441,7 @@ impl LegacyTilesheet {
 
 pub async fn load_tilesheet(
     editor_data: &ProgramData,
-) -> Result<Option<LegacyTilesheet>, Error> {
+) -> Result<Option<Tilesheet>, Error> {
     let tileset = match &editor_data.config.selected_tileset {
         None => return Ok(None),
         Some(t) => t.clone(),

@@ -33,6 +33,7 @@ use futures_lite::stream::StreamExt;
 use glam::UVec2;
 use log::kv::Source;
 use log::{debug, error, info, warn};
+use rand::RngCore;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -99,6 +100,7 @@ pub enum GetConnectsToError {
 impl DeserializedCDDAJsonData {
     pub fn replace_possible_region_settings(
         &self,
+        rng: &mut dyn RngCore,
         id: CDDAIdentifier,
     ) -> CDDAIdentifier {
         match self
@@ -106,7 +108,7 @@ impl DeserializedCDDAJsonData {
             .get(&CDDAIdentifier(DEFAULT_REGION_SETTING_ENTRY.into()))
         {
             None => id,
-            Some(settings) => replace_region_setting(&id, settings),
+            Some(settings) => replace_region_setting(rng, &id, settings),
         }
     }
 

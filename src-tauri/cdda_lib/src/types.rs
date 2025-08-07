@@ -1,4 +1,4 @@
-use derive_more::Display;
+use derive_more::{Deref, Display};
 use num_traits::int::PrimInt;
 use num_traits::CheckedSub;
 use rand::distr::uniform::SampleUniform;
@@ -6,6 +6,7 @@ use rand::{rng, Rng};
 use serde::de;
 use serde::de::{Deserialize, Deserializer, Error, Visitor};
 use serde_derive::{Deserialize, Serialize};
+use std::any::{Any, TypeId};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::fmt;
@@ -57,17 +58,18 @@ pub struct Distribution {
 }
 
 #[derive(
-    Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Hash, Display, Default,
+    Debug,
+    Clone,
+    Serialize,
+    Deserialize,
+    Eq,
+    PartialEq,
+    Hash,
+    Display,
+    Default,
+    Deref,
 )]
 pub struct CDDAIdentifier(pub String);
-
-impl Deref for CDDAIdentifier {
-    type Target = String;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
 
 impl From<&str> for CDDAIdentifier {
     fn from(value: &str) -> Self {

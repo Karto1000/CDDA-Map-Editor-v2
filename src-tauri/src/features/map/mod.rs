@@ -98,6 +98,7 @@ impl_downcast!(sync Property);
 #[derive(
     Debug,
     Clone,
+    Copy,
     Serialize,
     Deserialize,
     Hash,
@@ -113,7 +114,6 @@ pub enum MappingKind {
     Terrain,
     Furniture,
     Trap,
-    ItemGroups,
     Computer,
     Sign,
     Toilet,
@@ -525,6 +525,8 @@ impl MapGen {
         let fill_terrain_sprite = match &self.fill {
             None => None,
             Some(id) => Some(replace_region_setting(
+                // TODO: Meaby turn this into a single rng()
+                &mut rng(),
                 &id.get_random_identifier(
                     &mut rng(),
                     &instantiation.calculated_parameters.0,
@@ -587,7 +589,11 @@ impl MapGen {
 
                     mapped_ids.terrain = fill_terrain_sprite.clone().map(|s| {
                         MappedCDDAId::simple(TilesheetCDDAId::simple(
-                            replace_region_setting(&s, region_settings),
+                            replace_region_setting(
+                                &mut rng(),
+                                &s,
+                                region_settings,
+                            ),
                         ))
                     });
 
@@ -600,7 +606,11 @@ impl MapGen {
                         mapped_ids.terrain =
                             fill_terrain_sprite.clone().map(|s| {
                                 MappedCDDAId::simple(TilesheetCDDAId::simple(
-                                    replace_region_setting(&s, region_settings),
+                                    replace_region_setting(
+                                        &mut rng(),
+                                        &s,
+                                        region_settings,
+                                    ),
                                 ))
                             })
                     }
@@ -961,11 +971,11 @@ impl InstantiatedOvermap {
         }
     }
 
-    fn get_id_from_mapped_sprites(
+    fn get_tile_from_coordinates(
         &self,
         coords: &UVec2,
         layer: &TileLayer,
-    ) -> Option<CDDAIdentifier> {
+    ) -> Option<MappedCDDAId> {
         let overmap_coordinates = self.to_overmap_coordinates(coords);
         let mapgen = self.instantiated_mapgens.get(&overmap_coordinates)?;
 
@@ -978,16 +988,10 @@ impl InstantiatedOvermap {
             .get(&MapgenCellCoordinates::from(local_mapgen_coordinates))?;
 
         match layer {
-            TileLayer::Terrain => {
-                tile.terrain.clone().map(|v| v.tilesheet_id.id)
-            },
-            TileLayer::Furniture => {
-                tile.furniture.clone().map(|v| v.tilesheet_id.id)
-            },
-            TileLayer::Monster => {
-                tile.monster.clone().map(|v| v.tilesheet_id.id)
-            },
-            TileLayer::Field => tile.field.clone().map(|v| v.tilesheet_id.id),
+            TileLayer::Terrain => tile.terrain.clone(),
+            TileLayer::Furniture => tile.furniture.clone(),
+            TileLayer::Monster => tile.monster.clone(),
+            TileLayer::Field => tile.field.clone(),
         }
     }
 
@@ -997,16 +1001,16 @@ impl InstantiatedOvermap {
         layer: &TileLayer,
     ) -> AdjacentTiles {
         let top_cords = tile_overmap_coordinates + UVec2::new(0, 1);
-        let top = self.get_id_from_mapped_sprites(&top_cords, &layer);
+        let top = self.get_tile_from_coordinates(&top_cords, &layer);
 
         let right_cords = tile_overmap_coordinates + UVec2::new(1, 0);
-        let right = self.get_id_from_mapped_sprites(&right_cords, &layer);
+        let right = self.get_tile_from_coordinates(&right_cords, &layer);
 
         let bottom = match tile_overmap_coordinates.y == 0 {
             true => None,
             false => {
                 let bottom_cords = tile_overmap_coordinates - UVec2::new(0, 1);
-                self.get_id_from_mapped_sprites(&bottom_cords, &layer)
+                self.get_tile_from_coordinates(&bottom_cords, &layer)
             },
         };
 
@@ -1014,7 +1018,7 @@ impl InstantiatedOvermap {
             true => None,
             false => {
                 let left_cords = tile_overmap_coordinates - UVec2::new(1, 0);
-                self.get_id_from_mapped_sprites(&left_cords, &layer)
+                self.get_tile_from_coordinates(&left_cords, &layer)
             },
         };
 

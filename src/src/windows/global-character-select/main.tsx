@@ -16,6 +16,7 @@ import {useMouseTooltip} from "../../shared/hooks/useMouseTooltip.js";
 import {TilesheetSprite} from "../../shared/components/tilesheetSprite.js";
 import {emit} from "@tauri-apps/api/event";
 import {clsx} from "clsx";
+import {MultiMenu} from "../../shared/components/imguilike/multimenu.js";
 
 type GlobalPaletteReprResponseData = { [char: string]: CharacterMappingContainer }
 
@@ -100,136 +101,143 @@ function Main() {
                      noArrow={true} className="tooltip" opacity={1} offset={20} place={"bottom-end"}
                      style={{zIndex: 2}}/>
 
-            <div className={"character-mapping"}>
-                {
-                    initialData &&
-                    Object.keys(globalPaletteReprs)
-                        .filter(key => {
-                            const characterMapping = globalPaletteReprs[key]
+            <MultiMenu tabs={
+                [
+                    {
+                        name: "Terrain",
+                        content: <div className={"character-mapping"}>
+                            {
+                                initialData &&
+                                Object.keys(globalPaletteReprs)
+                                    .filter(key => {
+                                        const characterMapping = globalPaletteReprs[key]
 
-                            let doesMatch = key.toLowerCase().includes(query.toLowerCase())
+                                        let doesMatch = key.toLowerCase().includes(query.toLowerCase())
 
-                            if (characterMapping.terrain) {
-                                doesMatch ||= characterMapping.terrain.id.toLowerCase().includes(query.toLowerCase())
-                            }
+                                        if (characterMapping.terrain) {
+                                            doesMatch ||= characterMapping.terrain.id.toLowerCase().includes(query.toLowerCase())
+                                        }
 
-                            if (characterMapping.furniture) {
-                                doesMatch ||= characterMapping.furniture.id.toLowerCase().includes(query.toLowerCase())
-                            }
+                                        if (characterMapping.furniture) {
+                                            doesMatch ||= characterMapping.furniture.id.toLowerCase().includes(query.toLowerCase())
+                                        }
 
-                            if (characterMapping.field) {
-                                doesMatch ||= characterMapping.field.id.toLowerCase().includes(query.toLowerCase())
-                            }
+                                        if (characterMapping.field) {
+                                            doesMatch ||= characterMapping.field.id.toLowerCase().includes(query.toLowerCase())
+                                        }
 
-                            if (characterMapping.monster) {
-                                doesMatch ||= characterMapping.monster.id.toLowerCase().includes(query.toLowerCase())
-                            }
+                                        if (characterMapping.monster) {
+                                            doesMatch ||= characterMapping.monster.id.toLowerCase().includes(query.toLowerCase())
+                                        }
 
-                            return doesMatch
-                        })
-                        .map(key => {
-                            const characterMapping = globalPaletteReprs[key]
+                                        return doesMatch
+                                    })
+                                    .map(key => {
+                                        const characterMapping = globalPaletteReprs[key]
 
-                            return <div
-                                className={clsx("character-mapping-container", selectedCharacter === key && "selected")}
-                                onClick={() => onCharacterSelected(key)}
-                                key={key}
-                                data-tooltip-id={"info-tooltip"}
-                                data-tooltip-html={`
+                                        return <div
+                                            className={clsx("character-mapping-container", selectedCharacter === key && "selected")}
+                                            onClick={() => onCharacterSelected(key)}
+                                            key={key}
+                                            data-tooltip-id={"info-tooltip"}
+                                            data-tooltip-html={`
                                         Character: "${key}"<br/>
                                         ${
-                                    characterMapping.terrain ?
-                                        `Shown Terrain: ${characterMapping.terrain?.id}<br/>`
-                                        :
-                                        ""
-                                }
+                                                characterMapping.terrain ?
+                                                    `Shown Terrain: ${characterMapping.terrain?.id}<br/>`
+                                                    :
+                                                    ""
+                                            }
                                         ${
-                                    characterMapping.furniture ?
-                                        `Shown Furniture: ${characterMapping.furniture.id}<br/>`
-                                        :
-                                        ""
-                                }
+                                                characterMapping.furniture ?
+                                                    `Shown Furniture: ${characterMapping.furniture.id}<br/>`
+                                                    :
+                                                    ""
+                                            }
                                         ${
-                                    characterMapping.field ?
-                                        `Shown Field: ${characterMapping.field.id}<br/>`
-                                        :
-                                        ""
-                                }
+                                                characterMapping.field ?
+                                                    `Shown Field: ${characterMapping.field.id}<br/>`
+                                                    :
+                                                    ""
+                                            }
                                         ${
-                                    characterMapping.monster ?
-                                        `Shown Monster: ${characterMapping.monster.id}`
-                                        :
-                                        ""
-                                }`}
-                                onMouseMove={handleMouseMove}
-                            >
-                                {
-                                    characterMapping.terrain?.ids.bg &&
-                                    <TilesheetSprite
-                                        className={"character-mapping-sprite"}
-                                        tilesheets={initialData.slimTilesheets}
-                                        spritesheetConfig={initialData.spritesheetConfig}
-                                        index={characterMapping.terrain.ids.bg}
-                                        scale={2}
-                                    />
-                                }
-                                {
-                                    characterMapping.terrain?.ids.fg &&
-                                    <TilesheetSprite
-                                        className={"character-mapping-sprite"}
-                                        tilesheets={initialData.slimTilesheets}
-                                        spritesheetConfig={initialData.spritesheetConfig}
-                                        index={characterMapping.terrain.ids.fg}
-                                        scale={2}
-                                    />
-                                }
-                                {
-                                    characterMapping.furniture?.ids.bg &&
-                                    <TilesheetSprite
-                                        className={"character-mapping-sprite"}
-                                        tilesheets={initialData.slimTilesheets}
-                                        spritesheetConfig={initialData.spritesheetConfig}
-                                        index={characterMapping.furniture.ids.bg}
-                                        scale={2}
-                                    />
-                                }
-                                {
-                                    characterMapping.furniture?.ids.fg &&
-                                    <TilesheetSprite
-                                        className={"character-mapping-sprite"}
-                                        tilesheets={initialData.slimTilesheets}
-                                        spritesheetConfig={initialData.spritesheetConfig}
-                                        index={characterMapping.furniture.ids.fg}
-                                        scale={2}
-                                    />
-                                }
-                                {
-                                    characterMapping.monster?.ids.bg &&
-                                    <TilesheetSprite
-                                        className={"character-mapping-sprite"}
-                                        tilesheets={initialData.slimTilesheets}
-                                        spritesheetConfig={initialData.spritesheetConfig}
-                                        index={characterMapping.monster.ids.bg}
-                                        scale={2}
-                                    />
-                                }
-                                {
-                                    characterMapping.monster?.ids.fg &&
-                                    <TilesheetSprite
-                                        className={"character-mapping-sprite"}
-                                        tilesheets={initialData.slimTilesheets}
-                                        spritesheetConfig={initialData.spritesheetConfig}
-                                        index={characterMapping.monster.ids.fg}
-                                        scale={2}
-                                    />
-                                }
-                                {
-                                    <span className={"char-text"}>{key}</span>
-                                }
-                            </div>
-                        })
-                }
-            </div>
+                                                characterMapping.monster ?
+                                                    `Shown Monster: ${characterMapping.monster.id}`
+                                                    :
+                                                    ""
+                                            }`}
+                                            onMouseMove={handleMouseMove}
+                                        >
+                                            {
+                                                characterMapping.terrain?.ids.bg &&
+                                                <TilesheetSprite
+                                                    className={"character-mapping-sprite"}
+                                                    tilesheets={initialData.slimTilesheets}
+                                                    spritesheetConfig={initialData.spritesheetConfig}
+                                                    index={characterMapping.terrain.ids.bg}
+                                                    scale={2}
+                                                />
+                                            }
+                                            {
+                                                characterMapping.terrain?.ids.fg &&
+                                                <TilesheetSprite
+                                                    className={"character-mapping-sprite"}
+                                                    tilesheets={initialData.slimTilesheets}
+                                                    spritesheetConfig={initialData.spritesheetConfig}
+                                                    index={characterMapping.terrain.ids.fg}
+                                                    scale={2}
+                                                />
+                                            }
+                                            {
+                                                characterMapping.furniture?.ids.bg &&
+                                                <TilesheetSprite
+                                                    className={"character-mapping-sprite"}
+                                                    tilesheets={initialData.slimTilesheets}
+                                                    spritesheetConfig={initialData.spritesheetConfig}
+                                                    index={characterMapping.furniture.ids.bg}
+                                                    scale={2}
+                                                />
+                                            }
+                                            {
+                                                characterMapping.furniture?.ids.fg &&
+                                                <TilesheetSprite
+                                                    className={"character-mapping-sprite"}
+                                                    tilesheets={initialData.slimTilesheets}
+                                                    spritesheetConfig={initialData.spritesheetConfig}
+                                                    index={characterMapping.furniture.ids.fg}
+                                                    scale={2}
+                                                />
+                                            }
+                                            {
+                                                characterMapping.monster?.ids.bg &&
+                                                <TilesheetSprite
+                                                    className={"character-mapping-sprite"}
+                                                    tilesheets={initialData.slimTilesheets}
+                                                    spritesheetConfig={initialData.spritesheetConfig}
+                                                    index={characterMapping.monster.ids.bg}
+                                                    scale={2}
+                                                />
+                                            }
+                                            {
+                                                characterMapping.monster?.ids.fg &&
+                                                <TilesheetSprite
+                                                    className={"character-mapping-sprite"}
+                                                    tilesheets={initialData.slimTilesheets}
+                                                    spritesheetConfig={initialData.spritesheetConfig}
+                                                    index={characterMapping.monster.ids.fg}
+                                                    scale={2}
+                                                />
+                                            }
+                                            {
+                                                <span className={"char-text"}>{key}</span>
+                                            }
+                                        </div>
+                                    })
+                            }
+                        </div>
+                    }
+                ]
+            }/>
         </GenericWindow>
     );
 }

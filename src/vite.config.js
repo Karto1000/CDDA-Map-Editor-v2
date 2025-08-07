@@ -33,6 +33,7 @@ export default defineConfig(async () => ({
                 add_palette: resolve( __dirname , "src/windows/add-palette/window.html"),
                 global_palettes: resolve( __dirname , "src/windows/global-palettes/window.html"),
                 global_select: resolve( __dirname , "src/windows/global-character-select/window.html"),
+                tile_search: resolve(__dirname, "src/windows/tile-search/window.html"),
             }
         },
         publicDir: resolve(__dirname, "public"),

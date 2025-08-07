@@ -27,8 +27,10 @@ impl Property for TerrainProperty {
         position: UVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), anyhow::Error> {
+        let mut rng = rng();
+
         let ident = self.mapgen_value.get_random_identifier(
-            &mut rng(),
+            &mut rng,
             &instantiation.calculated_parameters.0,
         )?;
 
@@ -44,7 +46,7 @@ impl Property for TerrainProperty {
         instantiation.place_terrain(
             MapgenCellCoordinates::from(position),
             MappedCDDAId::simple(TilesheetCDDAId::simple(
-                json_data.replace_possible_region_settings(ident),
+                json_data.replace_possible_region_settings(&mut rng, ident),
             )),
         );
 
@@ -79,9 +81,9 @@ impl Property for MonstersProperty {
         position: UVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), anyhow::Error> {
-        let monster = self.monster.get_random();
-
         let mut rng = rng();
+
+        let monster = self.monster.get_random(&mut rng);
 
         let ident = match monster
             .chance
@@ -247,10 +249,12 @@ impl Property for NestedProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), Error> {
         let mut rng = rng();
-        let nested_chunk = self.nested.get_random();
+        let nested_chunk = self.nested.get_random(&mut rng);
 
-        let selected_chunk =
-            nested_chunk.chunks.get_random().get_random_identifier(
+        let selected_chunk = nested_chunk
+            .chunks
+            .get_random(&mut rng)
+            .get_random_identifier(
                 &mut rng,
                 &instantiation.calculated_parameters.0,
             )?;
@@ -301,7 +305,8 @@ impl Property for FieldsProperty {
         position: UVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), Error> {
-        let field = self.field.get_random();
+        let mut rng = rng();
+        let field = self.field.get_random(&mut rng);
 
         if field.field == CDDAIdentifier::from(NULL_FIELD) {
             return Ok(());
@@ -335,7 +340,8 @@ impl Property for GaspumpsProperty {
         position: UVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), Error> {
-        let gaspump = self.gaspumps.get_random();
+        let mut rng = rng();
+        let gaspump = self.gaspumps.get_random(&mut rng);
 
         let id = match &gaspump.fuel {
             None => "t_gas_pump",
@@ -430,7 +436,7 @@ impl Property for TrapsProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), Error> {
         let mut rng = rng();
-        let trap = self.trap.get_random();
+        let trap = self.trap.get_random(&mut rng);
         let ident = trap.get_random_identifier(
             &mut rng,
             &instantiation.calculated_parameters.0,
@@ -485,7 +491,8 @@ impl Property for VehiclesProperty {
         position: UVec2,
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), Error> {
-        let mapgen_vehicle = self.vehicles.get_random();
+        let mut rng = rng();
+        let mapgen_vehicle = self.vehicles.get_random(&mut rng);
 
         let vehicle = match json_data.vehicles.get(&mapgen_vehicle.vehicle) {
             None => {
@@ -506,7 +513,7 @@ impl Property for VehiclesProperty {
             .rotation
             .clone()
             .into_vec()
-            .choose(&mut rng())
+            .choose(&mut rng)
             .map(Clone::clone)
             .unwrap_or(0);
 
@@ -655,7 +662,7 @@ impl Property for CorpsesProperty {
         json_data: &DeserializedCDDAJsonData,
     ) -> Result<(), Error> {
         let mut rng = rng();
-        let mapgen_corpse = self.corpses.get_random();
+        let mapgen_corpse = self.corpses.get_random(&mut rng);
 
         let group = match json_data.monster_groups.get(&mapgen_corpse.group) {
             None => {

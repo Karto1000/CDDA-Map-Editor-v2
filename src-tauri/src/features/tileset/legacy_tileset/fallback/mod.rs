@@ -2,7 +2,9 @@ use crate::features::tileset::data::FALLBACK_TILE_MAPPING;
 use crate::features::tileset::legacy_tileset::data::{
     FallbackSpritesheet, TileInfo,
 };
-use crate::features::tileset::legacy_tileset::LegacyTilesheet;
+use crate::features::tileset::legacy_tileset::{
+    FallbackSpriteIndex, Tilesheet,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -23,7 +25,7 @@ pub fn get_fallback_config() -> FallbackTileConfig {
     serde_json::from_slice(FALLBACK_TILESHEET_CONFIG).unwrap()
 }
 
-pub fn get_fallback_tilesheet() -> LegacyTilesheet {
+pub fn get_fallback_tilesheet() -> Tilesheet {
     let mut config = get_fallback_config();
     let mut fallback_map = HashMap::new();
 
@@ -36,12 +38,12 @@ pub fn get_fallback_tilesheet() -> LegacyTilesheet {
         for (character, offset) in FALLBACK_TILE_MAPPING {
             fallback_map.insert(
                 format!("{}_{}", character, ascii_group.color),
-                ascii_group.offset as u32 + offset,
+                FallbackSpriteIndex(ascii_group.offset as u32 + offset.0),
             );
         }
     }
 
-    LegacyTilesheet {
+    Tilesheet {
         id_map: HashMap::new(),
         fallback_map,
     }
