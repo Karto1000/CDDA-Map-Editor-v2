@@ -27,7 +27,7 @@ use crate::features::program_data::{
     get_map_data_collection_from_map_viewer, LoadedProjects, ProgramData, Project, ProjectName, ProjectType,
     ZLevel,
 };
-use crate::features::sprites::handlers::get_representations_for_terrain_ids;
+use crate::features::sprites::handlers::get_representations_for_ids;
 use crate::features::tileset::handlers::{
     download_spritesheet, get_info_of_current_tileset,
 };
@@ -360,7 +360,7 @@ pub fn run() -> () {
             modify_global_palette,
             get_global_palettes,
             get_global_palette_representations,
-            get_representations_for_terrain_ids
+            get_representations_for_ids
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

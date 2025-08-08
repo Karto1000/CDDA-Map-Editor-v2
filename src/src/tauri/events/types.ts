@@ -9,7 +9,6 @@ import {MapEditorMode} from "../../features/editor/mapEditor.js";
 export const __TAB_CHANGED = "__project_changed"
 
 export function serializedVec2ToVector2(serializedVec2: string): Vector2 {
-    console.log(serializedVec2)
     const parts = serializedVec2.split(",")
 
     const x = parseInt(parts[0])
@@ -68,7 +67,7 @@ export enum TauriCommand {
     CLOSE_APP = "close_app",
     NEW_MAP_EDITOR = "new_map_editor",
     GET_CDDA_DATA_FIELD = "get_cdda_data_field",
-    GET_REPRESENTATIONS_FOR_TERRAIN_IDS = "get_representations_for_terrain_ids",
+    GET_REPRESENTATIONS_FOR_IDS = "get_representations_for_ids",
     MODIFY_PALETTE = "modify_palette",
     MODIFY_GLOBAL_PALETTE = "modify_global_palette",
     GET_GLOBAL_PALETTES = "get_global_palettes",
@@ -202,7 +201,7 @@ export interface TauriCommandMap {
     [TauriCommand.UPDATE_CDDA_DATA_AT]: { paths: string[] },
     [TauriCommand.GET_GLOBAL_PALETTES]: {};
     [TauriCommand.GET_GLOBAL_PALETTE_REPRESENTATIONS]: {};
-    [TauriCommand.GET_REPRESENTATIONS_FOR_TERRAIN_IDS]: {
+    [TauriCommand.GET_REPRESENTATIONS_FOR_IDS]: {
         ids: CDDAIdentifier[]
     }
 }

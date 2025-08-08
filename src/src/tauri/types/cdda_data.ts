@@ -12,7 +12,18 @@ export type Terrain = {
     id: string
 }
 
+export type Furniture = {
+    id: string
+}
+
 export type Palettes = {[id: string]: Palette}
 
-// TODO: I know this is not valid english but shudup
-export type Terrains = {[id: string]: Terrain}
+export type TerrainData = {[id: string]: Terrain}
+export type FurnitureData = {[id: string]: Furniture}
+
+export enum TileLayer {
+    Terrain = "Terrain",
+    Furniture = "Furniture",
+    Monster = "Monster",
+    Field = "Field"
+}

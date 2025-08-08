@@ -6,6 +6,16 @@ export type TileNew = {
     sprite_offset_x?: number;
     sprite_offset_y?: number;
 };
+
+export type FallbackSheet = {
+    file: string,
+    ascii: {
+        offset: number,
+        bold: boolean,
+        color: string
+    }[]
+}
+
 export type TileInfo = {
     pixelscale: number;
     width: number;
@@ -15,8 +25,9 @@ export type TileInfo = {
     retract_dist_min: number;
     retract_dist_max: number;
 };
+
 export type SpritesheetConfig = {
-    'tiles-new': TileNew[];
+    'tiles-new': (TileNew | FallbackSheet)[];
     tile_info: TileInfo[];
 };
 

@@ -1,7 +1,7 @@
 import {AtlasMaterial, AtlasMaterialConfig} from "./atlasMaterial.ts";
 import {
     InstancedMesh,
-    LinearMipMapNearestFilter, Material,
+    LinearMipMapNearestFilter,
     NearestFilter,
     Object3D,
     SRGBColorSpace,
@@ -10,8 +10,8 @@ import {
     Vector2,
     Vector3
 } from "three";
-import {TileInfo, TileNew} from "../../tauri/types/spritesheet.js";
-import {SlimTilesheet} from "./slimTilesheets.js";
+import {FallbackSheet, TileInfo, TileNew} from "../../tauri/types/spritesheet.js";
+import {SlimFallbackTilesheet, SlimTilesheet} from "./slimTilesheets.js";
 
 export type InstanceNumber = number;
 
@@ -31,7 +31,7 @@ export class Tilesheet {
     public readonly range: [number, number] | null
     public readonly material: AtlasMaterial
     public readonly yLayer: number
-    public readonly spritesheetInfo: TileNew
+    public readonly spritesheetInfo: TileNew | FallbackSheet
     public readonly objectURL: string
     public mappedTiles: Map<string, InstanceNumber>
     public mesh: InstancedMesh
@@ -40,15 +40,26 @@ export class Tilesheet {
     constructor(
         texture: Texture,
         tilesetInfo: TileInfo,
-        spritesheetInfo: TileNew,
+        spritesheetInfo: TileNew | FallbackSheet,
         objectUrl: string
     ) {
         this.objectURL = objectUrl
 
         const maxInstances = 200_000
 
-        const tileWidth = spritesheetInfo.sprite_width || tilesetInfo.width
-        const tileHeight = spritesheetInfo.sprite_height || tilesetInfo.height
+        let tileWidth: number;
+        let tileHeight: number;
+        this.spritesheetInfo = spritesheetInfo
+
+        // TODO: Hardcoded name no good
+        if (this.isFallbackTilesheet()) {
+            tileWidth = tilesetInfo.width
+            tileHeight = tilesetInfo.height
+        } else {
+            let tilesheetConfig = spritesheetInfo as TileNew
+            tileWidth =  tilesheetConfig.sprite_width || tilesetInfo.width
+            tileHeight = tilesheetConfig.sprite_height || tilesetInfo.height
+        }
 
         let range: [number, number];
         if (spritesheetInfo["//"]) range = spritesheetInfo["//"]
@@ -68,7 +79,6 @@ export class Tilesheet {
             texture,
             atlasMaterialConfig
         )
-        this.spritesheetInfo = spritesheetInfo
         this.atlasConfig = atlasMaterialConfig
         this.mesh = new InstancedMesh(
             this.material.geometry,
@@ -88,6 +98,15 @@ export class Tilesheet {
         }
     }
 
+    private isFallbackTilesheet(): boolean {
+        return this.spritesheetInfo.file === "fallback.png"
+    }
+
+    public toSlimFallbackTilesheet(): SlimFallbackTilesheet {
+        if (!this.isFallbackTilesheet()) throw new Error("Not a fallback tilesheet")
+        return {...this.spritesheetInfo as FallbackSheet, objectURL: this.objectURL}
+    }
+
     public toSlimTilesheet(): SlimTilesheet {
         return {
             objectURL: this.objectURL,
@@ -98,7 +117,7 @@ export class Tilesheet {
     public static async fromURL(
         url: string,
         tilesetInfo: TileInfo,
-        spritesheetInfo: TileNew
+        spritesheetInfo: TileNew | FallbackSheet
     ): Promise<Tilesheet> {
         const texture = await new TextureLoader()
             .loadAsync(url, () => console.log(`Loading ${url}`))
@@ -143,9 +162,15 @@ export class Tilesheet {
             const transform = new Object3D()
             transform.rotateZ(degreesToRadians(drawSprite.rotation))
 
+            let spriteOffsetY = 0;
+            if (!this.isFallbackTilesheet() ) {
+                let tilesheetInfo = this.spritesheetInfo as TileNew
+                spriteOffsetY = tilesheetInfo.sprite_offset_y || 0
+            }
+
             transform.position.set(
                 drawSprite.position.x,
-                drawSprite.position.y - (this.spritesheetInfo.sprite_offset_y || 0) / 2,
+                drawSprite.position.y - spriteOffsetY / 2,
                 drawSprite.position.z
             )
             transform.updateMatrix()

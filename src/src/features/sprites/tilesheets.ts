@@ -61,7 +61,7 @@ export class Tilesheets {
 
     public toSlimTilesheets(): SlimTilesheets {
         return {
-            fallback: this.fallback.toSlimTilesheet(),
+            fallback: this.fallback.toSlimFallbackTilesheet(),
             tilesheets: Object.fromEntries(
                 Object.entries(this.tilesheets)
                     .map(([name, tilesheet]) => [name, tilesheet.toSlimTilesheet()])

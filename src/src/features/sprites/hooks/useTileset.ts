@@ -1,6 +1,6 @@
 import {RefObject, useRef} from "react";
 import {Tilesheets} from "../tilesheets.js";
-import {SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
+import {FallbackSheet, SpritesheetConfig, TileInfo} from "../../../tauri/types/spritesheet.js";
 import {useTauriEvent} from "../../../shared/hooks/useTauriEvent.js";
 import {tauriBridge} from "../../../tauri/events/tauriBridge.js";
 import {BackendResponse, BackendResponseType, TauriCommand, TauriEvent} from "../../../tauri/events/types.js";
@@ -103,7 +103,8 @@ export function useTileset(threeConfig: RefObject<ThreeConfig>): UseTilesetRet {
                         logRender(`[RENDERING] Created URL for ${spritesheetInfo.file}: ${url}`)
 
                         if (spritesheetInfo.file === "fallback.png") {
-                            fallback = await Tilesheet.fromURL(url, infoResponse.data.tile_info[0], spritesheetInfo)
+                            const fallbackInfo = spritesheetInfo as FallbackSheet;
+                            fallback = await Tilesheet.fromURL(url, infoResponse.data.tile_info[0], fallbackInfo)
                             continue
                         }
 

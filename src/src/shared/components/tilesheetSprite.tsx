@@ -1,5 +1,5 @@
 import React, {RefObject, useMemo} from "react"
-import {SpritesheetConfig} from "../../tauri/types/spritesheet.js";
+import {SpritesheetConfig, TileNew} from "../../tauri/types/spritesheet.js";
 import {SlimTilesheet, SlimTilesheets} from "../../features/sprites/slimTilesheets.js";
 import {clsx} from "clsx";
 
@@ -29,7 +29,7 @@ export function TilesheetSprite(props: TilesheetSpriteProps) {
             for (const key of Object.keys(props.tilesheets.tilesheets)) {
                 const tilesheet = props.tilesheets.tilesheets[key]
 
-                const tileEntry = props.spritesheetConfig.current["tiles-new"].find(s => s.file === key)
+                const tileEntry = props.spritesheetConfig.current["tiles-new"].find(s => s.file === key) as TileNew
                 const spriteWidth = tileEntry.sprite_width || tileInfo.width
                 const spriteHeight = tileEntry.sprite_height || tileInfo.height
                 const spriteOffsetX = -tileEntry.sprite_offset_x || 0

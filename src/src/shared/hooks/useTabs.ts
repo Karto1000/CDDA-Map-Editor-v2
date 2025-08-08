@@ -55,7 +55,6 @@ export function useTabs(): UseTabsReturn {
     useTauriEvent(
         TauriEvent.REMOVE_TAB,
         (data) => {
-            console.log(data)
             if (openedTab === data.name) {
                 if (!tabs[data.name]) return
                 setOpenedTab(() => null)
