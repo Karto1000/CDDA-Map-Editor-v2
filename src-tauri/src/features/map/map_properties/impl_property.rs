@@ -593,6 +593,10 @@ impl Property for VehiclesProperty {
 
         // Generate visible mapping commands
         for (pos, (part, ty, _)) in highest_priority_parts {
+            if pos.x == 0 && pos.y == -3 {
+                dbg!("NOW");
+            }
+
             let rotation = match random_rotation % 360 {
                 0..90 => Rotation::Deg270,
                 180..270 => Rotation::Deg90,

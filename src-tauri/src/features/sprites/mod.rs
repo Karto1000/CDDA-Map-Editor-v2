@@ -38,7 +38,7 @@ pub fn instantiate_sprite(
                 position: position.clone(),
                 layer: (tile_layer.clone() as u32) * 2 + sprite_layer as u32,
                 indices: indices.data.into_vec(),
-                rotate_deg: indices.rotation.deg() + id.rotation.deg(),
+                rotate_deg: indices.rotation.deg(),
                 z,
             };
 

@@ -203,7 +203,7 @@ pub(crate) fn get_multitile_sprite_from_additional_tiles(
                 broken = Some(SingleSprite {
                     ids: FgBgIds::new(fg, bg),
                     animated: false,
-                    rotates: false,
+                    rotates: true,
                 });
             },
             AdditionalTileType::Open => {
@@ -213,7 +213,7 @@ pub(crate) fn get_multitile_sprite_from_additional_tiles(
                 open = Some(SingleSprite {
                     ids: FgBgIds::new(fg, bg),
                     animated: false,
-                    rotates: false,
+                    rotates: true,
                 });
             },
             _ => {

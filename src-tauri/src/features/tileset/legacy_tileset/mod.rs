@@ -110,7 +110,7 @@ impl Rotates {
         match self {
             Rotates::Auto(i) => match should_rotate {
                 false => (i.clone(), Rotation::Deg0),
-                true => (i.clone(), mapped_sprite_rotation + rotation_offset),
+                true => (i.clone(), rotation_offset + mapped_sprite_rotation),
             },
             Rotates::Pre2((a, b)) => {
                 let chosen_index =

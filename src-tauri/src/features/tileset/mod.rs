@@ -262,13 +262,13 @@ impl<'a> PickSpriteIndex for RandomSpritePicker<'a> {
                 open,
             } => {
                 let random_fallback_index = fallback
-                    .clone()
                     .ids
-                    .fg
-                    .map(|fg| {
+                    .of_sprite_layer(sprite_layer)
+                    .clone()
+                    .map(|ids| {
                         Some(self.pick_random_sprite_from_indices(
                             &context,
-                            &fg,
+                            &ids,
                             fallback.rotates,
                         ))
                     })
@@ -277,15 +277,17 @@ impl<'a> PickSpriteIndex for RandomSpritePicker<'a> {
                 if context.mapped_cdda_id.is_broken {
                     return match broken {
                         None => random_fallback_index,
-                        Some(broken) => match &broken.ids.fg {
-                            None => None,
-                            Some(indices) => {
-                                Some(self.pick_random_sprite_from_indices(
-                                    &context,
-                                    indices,
-                                    broken.rotates,
-                                ))
-                            },
+                        Some(broken) => {
+                            match broken.ids.of_sprite_layer(sprite_layer) {
+                                None => None,
+                                Some(indices) => {
+                                    Some(self.pick_random_sprite_from_indices(
+                                        &context,
+                                        indices,
+                                        broken.rotates,
+                                    ))
+                                },
+                            }
                         },
                     };
                 }
@@ -293,15 +295,17 @@ impl<'a> PickSpriteIndex for RandomSpritePicker<'a> {
                 if context.mapped_cdda_id.is_open {
                     return match open {
                         None => random_fallback_index,
-                        Some(open) => match &open.ids.fg {
-                            None => None,
-                            Some(indices) => {
-                                Some(self.pick_random_sprite_from_indices(
-                                    &context,
-                                    indices,
-                                    open.rotates,
-                                ))
-                            },
+                        Some(open) => {
+                            match open.ids.of_sprite_layer(sprite_layer) {
+                                None => None,
+                                Some(indices) => {
+                                    Some(self.pick_random_sprite_from_indices(
+                                        &context,
+                                        indices,
+                                        open.rotates,
+                                    ))
+                                },
+                            }
                         },
                     };
                 }
@@ -536,7 +540,7 @@ impl<Ids> FgBgIds<Ids, Ids> {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Copy, Deserialize, Serialize)]
 pub enum SpriteLayer {
     Bg = 0,
     Fg = 1,
