@@ -1,5 +1,7 @@
 use crate::data::io::DeserializedCDDAJsonData;
-use crate::data::{GetIdentifier, TileLayer};
+use crate::data::{
+    replace_region_setting, ConstantRng, GetIdentifier, TileLayer,
+};
 use crate::features::editor::data::ZLevels;
 use crate::features::editor::{MapEditor, MapSize};
 use crate::features::map::map_properties::TerrainProperty;
@@ -409,7 +411,13 @@ pub async fn get_global_palette_representations(
                     Some(c) => c,
                 };
 
-                let mapped_cdda_id = MappedCDDAId::simple(repr.id.clone());
+                let mapped_cdda_id =
+                    MappedCDDAId::simple(TilesheetCDDAId::simple(
+                        json_data.replace_possible_region_settings(
+                            &mut ConstantRng,
+                            repr.id.full().clone(),
+                        ),
+                    ));
 
                 let index = match tilesheet_lock.deref() {
                     // TODO: Fix all the fallbacks
